@@ -1,0 +1,65 @@
+<nav id="sidebarMenu" class="col-md-3 col-lg-2 offcanvas-md offcanvas-start sidebar p-3 position-fixed" tabindex="-1" aria-labelledby="sidebarMenuLabel">
+    <div class="d-flex d-md-none align-items-center justify-content-between mb-4 px-2">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="sidebar-brand fs-5" id="sidebarMenuLabel">Restaurante Bahía</span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#sidebarMenu" aria-label="Close"></button>
+    </div>
+
+    <div class="d-none d-md-flex align-items-center gap-2 mb-4 px-2">
+        <a href="/admin/dashboard" class="d-flex align-items-center gap-2 text-decoration-none text-dark" style="cursor: pointer;">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="sidebar-brand fs-5">Restaurante Bahía</span>
+        </a>
+    </div>
+
+    <ul class="nav flex-column gap-1">
+    <li class="nav-item">
+        <a class="nav-link p-2<% if(locals.view !== undefined && locals.view =='admin_dashboard'){ %> active<% } %>" href="/admin/dashboard">
+            <i class="fa-solid fa-gauge-high me-2 text-dark"></i> Panel Inicio
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'user'){ %> active<% } %>" href="/admin/usuarios">
+            <i class="fa-solid fa-user-group me-2 text-dark"></i> Personal / Usuarios
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'table'){ %> active<% } %>" href="/admin/mesas">
+            <i class="fa-solid fa-table-cells me-2 text-dark"></i> Monitoreo de Mesas
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'dishes'){ %> active<% } %>" href="/admin/menu">
+            <i class="fa-solid fa-plate-wheat me-2 text-dark"></i> Menú / Platillos
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link p-2" href="/admin/pedidos">
+            <i class="fa-solid fa-file-invoice me-2 text-dark"></i> Pedidos / Ventas
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'warehouse'){ %> active<% } %>" href="/admin/almacenes">
+            <i class="fa-solid fa-warehouse me-2 text-dark"></i> Inventario / Almacenes
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'productos'){ %> active<% } %>" href="/admin/productos">
+            <i class="fa-solid fa-boxes-packing me-2 text-dark"></i> Catálogo de Productos
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'stock'){ %> active<% } %>" href="/admin/inventario/stock">
+            <i class="fa-solid fa-cubes-stacked me-2 text-dark"></i> Stock / Existencias
+        </a>
+    </li>
+</ul>
+
+    <div class="position-absolute bottom-0 start-0 w-100 p-3 mb-md-0 mb-5">
+        <a href="/logout" class="btn btn-sm btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> Cerrar Sesión
+        </a>
+    </div>
+</nav>

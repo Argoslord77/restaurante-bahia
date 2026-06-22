@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { 
+            background-color: #f3f4f6; 
+            min-height: 100vh;
+        }
+        .card-login {
+            background: #ffffff;
+            border-radius: 0.75rem; 
+            border: 1px solid #e5e7eb;
+            max-width: 420px;
+            width: 100%;
+        }
+        /* Ajuste para que el logotipo luzca nítido y proporcionado */
+        .brand-logo {
+            max-width: 240px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        .toast-container-custom {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2050;
+        }
+    </style>
+</head>
+<body class="d-flex align-items-center justify-content-center p-3">
+
+    <div class="toast-container-custom">
+        <% if (typeof error_msg !== 'undefined' && error_msg && error_msg.length > 0) { %>
+            <div class="toast show align-items-center text-white bg-danger border-0 shadow-lg js-toast-msg" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body d-flex align-items-center gap-2 fw-semibold">
+                        <i class="fa-solid fa-circle-xmark fs-5"></i> <%= error_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+        
+        <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
+            <div class="toast show align-items-center text-white bg-success border-0 shadow-lg js-toast-msg" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body d-flex align-items-center gap-2 fw-semibold">
+                        <i class="fa-solid fa-circle-check fs-5"></i> <%= success_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+    </div>
+
+    <div class="card card-login shadow-sm p-4 p-sm-5">
+        
+        <div class="text-center mb-4">
+            <img src="/img/bahia_logotipo.png" alt="Logotipo Restaurante Bahía" class="brand-logo mb-3">
+        </div>
+
+        <form action="/login" method="POST">
+            <div class="mb-3">
+                <label class="form-label fw-semibold text-secondary small">Usuario</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fa-solid fa-user small"></i></span>
+                    <input type="text" name="usuario" class="form-control border-start-0" placeholder="Usuario" required autofocus>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label fw-semibold text-secondary small">Contraseña</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fa-solid fa-lock small"></i></span>
+                    <input type="password" name="password" class="form-control border-start-0" placeholder="Contraseña" required>
+                </div>
+            </div>
+
+            <div class="form-check mb-3">
+                <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                <label class="form-check-label" for="remember">Recu&eacute;rdame</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 py-2 shadow-sm fw-semibold d-flex align-items-center justify-content-center gap-2">
+                <i class="fa-solid fa-right-to-bracket"></i> ENTRAR
+            </button>
+        </form>
+
+        <div class="text-center mt-4 pt-2 border-top">
+            <p class="text-muted mb-0" style="font-size: 0.78rem;">
+                &copy; 2026 Restaurante Bahía. Todos los derechos reservados.
+            </p>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Auto-ocultar todas las notificaciones de forma segura
+        document.addEventListener("DOMContentLoaded", function() {
+            const toasts = document.querySelectorAll('.js-toast-msg');
+            toasts.forEach(toastElement => {
+                setTimeout(() => {
+                    const toast = new bootstrap.Toast(toastElement);
+                    toast.hide();
+                }, 2500);
+            });
+        });
+    </script>
+</body>
+</html>

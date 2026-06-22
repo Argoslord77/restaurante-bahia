@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoreo de Mesas - Restaurante</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+    <input type="hidden" id="serverBaseUrl" value="https://<%= serverIp %>:3000/">
+
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4">
+                <%- include('../includes/header', {encabezado_pagina: 'Control / Mesas', desc_pagina: 'Gestión de áreas y ocupación del salón', add_btn: true, btn_label: "Nueva Mesa", modal: "modalCrearMesa"}) %>
+
+                <div class="row row-cols-1 row-cols-xs-2 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-3">
+                    <% if (tables.length === 0) { %>
+                        <div class="col-12 text-center py-5 card-custom w-100 shadow-sm">
+                            <i class="fa-solid fa-border-none text-muted fs-3 mb-2"></i>
+                            <p class="text-muted mb-0 fs-7">No hay registros de mobiliario configurados en el sistema.</p>
+                        </div>
+                    <% } %>
+
+                    <% tables.forEach(mesa => { %>
+                        <div class="col">
+                            <div class="restaurant-card p-3 border rounded-3 bg-white shadow-sm h-100 d-flex flex-column justify-content-between card-custom">
+                                
+                                <div>
+                                    <div class="card-header-section d-flex justify-content-between align-items-center mb-2">
+                                        <h2 class="table-name fs-5 fw-bold text-dark m-0"><%= mesa.numero %></h2>
+                                        
+                                        <% if (mesa.estado === 'libre') { %>
+                                            <div class="status-badge badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
+                                                <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Libre
+                                            </div>
+                                        <% } else if (mesa.estado === 'ocupada') { %>
+                                            <div class="status-badge badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
+                                                <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Ocupada
+                                            </div>
+                                        <% } else if (mesa.estado === 'atendida') { %>
+                                            <div class="status-badge badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
+                                                <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Atendida
+                                            </div>
+                                        <% } else if (mesa.estado === 'desocupando') { %>
+                                            <div class="status-badge badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
+                                                <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Limpieza
+                                            </div>
+                                        <% } else if (mesa.estado === 'reservada') { %>
+                                            <div class="status-badge badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
+                                                <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Reservada
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                    <p class="waiter-name text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem;">
+                                        <i class="fa-solid fa-location-dot me-1 text-secondary"></i> Ubicación: <%= mesa.ubicacion %>
+                                    </p>
+                                    <% if (mesa.auto_hash) { %>
+                                        <p class="text-muted mb-3" style="font-size: 0.70rem; font-family: monospace;">
+                                            <i class="fa-solid fa-qrcode text-warning me-1"></i> QR vinculada
+                                        </p>
+                                    <% } %>
+                                </div>  
+
+                                <div class="card-middle-section d-flex justify-content-between align-items-center mb-3">
+                                    <button class="btn-products btn btn-light btn-sm border shadow-sm" style="font-size: 12px;">
+                                        <i class="fa-solid fa-hamburger"></i> <strong>--</strong> productos
+                                    </button>
+                                    <div class="btn-status-atendido btn btn-success btn-sm text-white shadow-sm" style="font-size: 11px; font-weight: 500;">
+                                        <i class="fa-solid fa-check text-white"></i> Atendido
+                                    </div>
+                                </div>
+
+                                <div class="card-footer-section d-flex justify-content-between align-items-center text-muted fw-medium pt-2 border-top" style="font-size: 11px;">
+                                    <div class="service-time"><i class="fa-regular fa-clock me-1"></i><span>--</span> min</div>
+                                    <div class="people-count"><i class="fa-solid fa-users me-1"></i><span><strong><%= mesa.capacidad %></strong></span> p.</div>
+                                </div>
+
+                                <% if (user.rol === 'superadministrador' || user.rol === 'administrador') { %>
+                                    <div class="d-flex justify-content-end gap-2 mt-2 pt-2 border-top card-footer-section">
+                                        
+                                        <button class="btn btn-sm d-flex align-items-center justify-content-center btn-editar bg-secondary text-white border-secondary shadow-sm" 
+                                                style="width: 32px; height: 32px;"
+                                                title="Editar Mesa"
+                                                data-bs-toggle="modal" data-bs-target="#modalEditarMesa"
+                                                data-id="<%= mesa.id %>" data-numero="<%= mesa.numero %>" 
+                                                data-capacidad="<%= mesa.capacidad %>" data-estado="<%= mesa.estado %>"
+                                                data-ubicacion="<%= mesa.ubicacion %>" data-hash="<%= mesa.auto_hash %>">
+                                            <i class="fa-solid fa-gear text-white" style="font-size: 14px;"></i>
+                                        </button>
+                                        
+                                        <button class="btn btn-sm d-flex align-items-center justify-content-center bg-danger text-white border-danger shadow-sm" 
+                                                style="width: 32px; height: 32px;"
+                                                title="Quitar Mesa"
+                                                onclick="eliminarMesa('<%= mesa.id %>', '<%= mesa.numero %>')">
+                                            <i class="fa-solid fa-trash text-white" style="font-size: 14px;"></i>
+                                        </button>
+                                        
+                                    </div>
+                                <% } %>
+                                
+                            </div>
+                        </div>
+                    <% }) %>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalCrearMesa" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered px-3">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">Registrar Nueva Mesa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="formCrearMesa">
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold text-secondary small">Código / Número</label>
+                                <input type="text" name="numero" class="form-control" required>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold text-secondary small">Capacidad Máxima</label>
+                                <input type="number" name="capacidad" class="form-control" value="2" min="1" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Ubicación / Área</label>
+                                <input type="text" name="ubicacion" class="form-control" value="Salon Principal" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Estado Inicial</label>
+                                <select name="estado" class="form-select text-capitalize" required>
+                                    <option value="libre" selected>Libre</option>
+                                    <option value="ocupada">Ocupada</option>
+                                    <option value="atendida">Atendida</option>
+                                    <option value="desocupando">Desocupando</option>
+                                    <option value="reservada">Reservada</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top-0">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary px-4">Guardar Mesa</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalEditarMesa" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered px-3">
+            <div class="modal-content border-0 shadow">
+                <form id="formEditar">
+                    <input type="hidden" id="editId">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title fw-bold">Propiedades de Mesa</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold text-secondary small">Código / Número</label>
+                                <input type="text" name="numero" id="editNumero" class="form-control" required>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold text-secondary small">Capacidad</label>
+                                <input type="number" name="capacidad" id="editCapacidad" class="form-control" min="1" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Ubicación / Área</label>
+                                <input type="text" name="ubicacion" id="editUbicacion" class="form-control" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Estado</label>
+                                <select name="estado" id="editEstado" class="form-select" required>
+                                    <option value="libre">Libre</option>
+                                    <option value="ocupada">Ocupada</option>
+                                    <option value="atendida">Atendida</option>
+                                    <option value="desocupando">Desocupando</option>
+                                    <option value="reservada">Reservada</option>
+                                </select>
+                            </div>
+                            <div class="col-12 mt-3 pt-2 border-top">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="editRegenerarHash">
+                                    <label class="form-check-label fw-semibold text-dark small" for="editRegenerarHash">
+                                        Regenerar código QR único (auto_hash)
+                                    </label>
+                                    <span class="d-block text-muted" style="font-size: 11px;">
+                                        Invalida el código QR físico anterior y genera un nuevo identificador basado en timestamp.
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="col-12 text-center mt-3 pt-3 border-top" id="qrContainerWrapper" style="display: none;">
+                                <label class="form-label fw-bold text-dark d-block mb-2 small">
+                                    <i class="fa-solid fa-qrcode text-primary me-1"></i> Código QR de la Mesa
+                                </label>
+                                <div class="d-flex justify-content-center align-items-center bg-light p-3 border rounded-3 mx-auto" style="width: 160px; height: 160px;">
+                                    <div id="qrcode"></div>
+                                </div>
+                                <span class="d-block text-muted mt-2 text-break" id="qrTextLink" style="font-size: 11px; font-family: monospace;"></span>
+                            </div>
+
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top-0">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="submit" class="btn btn-primary px-4">Actualizar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            
+            // MAPEAR DATOS AL MODAL DE EDICIÓN
+            document.querySelectorAll('.btn-editar').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.getElementById('editId').value = this.dataset.id;
+                    document.getElementById('editNumero').value = this.dataset.numero;
+                    document.getElementById('editUbicacion').value = this.dataset.ubicacion;
+                    document.getElementById('editCapacidad').value = this.dataset.capacidad;
+                    document.getElementById('editEstado').value = this.dataset.estado;
+                    document.getElementById('editRegenerarHash').checked = false; // Desmarcado por defecto
+
+                    const autoHash = this.dataset.hash;
+                    const qrContainerWrapper = document.getElementById('qrContainerWrapper');
+                    const qrcodeDiv = document.getElementById('qrcode');
+                    const qrTextLink = document.getElementById('qrTextLink');
+                    const baseServerUrl = document.getElementById('serverBaseUrl').value;
+
+                    // Limpiar el contenedor del QR generado en el clic anterior
+                    qrcodeDiv.innerHTML = "";
+
+                    // Verificar si la mesa cuenta con un auto_hash generado en BD
+                    if (autoHash && autoHash !== 'null' && autoHash.trim() !== '') {
+                        qrContainerWrapper.style.display = 'block';
+                        
+                        // Construcción de la cadena solicitada
+                        const fullQrString = baseServerUrl + autoHash;
+                        qrTextLink.innerText = fullQrString;
+
+                        // Generación del objeto QR gráfico
+                        new QRCode(qrcodeDiv, {
+                            text: fullQrString,
+                            width: 130,
+                            height: 130,
+                            colorDark : "#1e293b",
+                            colorLight : "#ffffff",
+                            correctLevel : QRCode.CorrectLevel.H
+                        });
+                    } else {
+                        // Si no cuenta con hash, ocultar el contenedor por completo
+                        qrContainerWrapper.style.display = 'none';
+                        qrTextLink.innerText = "";
+                    }
+                });
+            });
+
+            // ENVIAR PETICIÓN DE CREACIÓN
+            document.getElementById('formCrearMesa').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const bootstrapModal = bootstrap.Modal.getInstance(document.getElementById('modalCrearMesa'));
+                
+                const formData = {
+                    numero: this.numero.value,
+                    capacidad: this.capacidad.value,
+                    ubicacion: this.ubicacion.value,
+                    estado: this.estado.value
+                };
+
+                fetch('/admin/mesas/crear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    bootstrapModal.hide();
+                    if(data.success) {
+                        Swal.fire('¡Éxito!', data.message, 'success').then(() => window.location.reload());
+                    } else {
+                        Swal.fire('Error', data.message, 'error').then(() => bootstrapModal.show());
+                    }
+                })
+                .catch(() => Swal.fire('Error', 'No se pudo procesar la solicitud en Restaurante Bahía.', 'error'));
+            });
+
+            // ENVIAR PETICIÓN DE EDICIÓN
+            document.getElementById('formEditar').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const bootstrapModal = bootstrap.Modal.getInstance(document.getElementById('modalEditarMesa'));
+                const id = document.getElementById('editId').value;
+                
+                const formData = {
+                    numero: this.numero.value,
+                    capacidad: this.capacidad.value,
+                    ubicacion: this.ubicacion.value,
+                    estado: this.estado.value,
+                    regenerarHash: document.getElementById('editRegenerarHash').checked
+                };
+
+                fetch(`/admin/mesas/editar/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    bootstrapModal.hide();
+                    if(data.success) {
+                        Swal.fire('¡Actualizado!', data.message, 'success').then(() => window.location.reload());
+                    } else {
+                        Swal.fire('Error', data.message, 'error').then(() => bootstrapModal.show());
+                    }
+                })
+                .catch(() => Swal.fire('Error', 'Error de comunicación con el servidor.', 'error'));
+            });
+        });
+
+        // CONFIRMACIÓN Y ELIMINACIÓN DIRECTA
+        function eliminarMesa(id, numero) {
+            Swal.fire({
+                title: '¿Remover mesa?',
+                text: `Se desvinculará permanentemente la Mesa ${numero} de la base de datos.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/admin/mesas/eliminar/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.success) {
+                            Swal.fire('¡Eliminado!', data.message, 'success').then(() => window.location.reload());
+                        } else {
+                            Swal.fire('Error', data.message, 'error');
+                        }
+                    })
+                    .catch(() => Swal.fire('Error', 'No se pudo ejecutar el borrado.', 'error'));
+                }
+            });
+        }
+    </script>
+</body>
+</html>

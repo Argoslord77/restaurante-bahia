@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= typeof title !== 'undefined' ? title : 'Control de Almacenes - Restaurante Bahía' %></title>
+    <link class="js-bootstrap-css" rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css"> 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+
+    <div class="toast-container-custom">
+        <% if (typeof error_msg !== 'undefined' && error_msg && error_msg.length > 0) { %>
+            <div class="toast show text-white bg-danger border-0 shadow" role="alert" id="liveToast">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-xmark me-2"></i><%= error_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+        
+        <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
+            <div class="toast show text-white bg-success border-0 shadow" role="alert" id="liveToast">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-check me-2"></i><%= success_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+    </div>
+
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+                <!-- CORRECCIÓN: El modal ID ahora coincide con el definido abajo (#almacenModal) -->
+                <%- include('../includes/header', {
+                    encabezado_pagina: '📦 Control de Almacenes', 
+                    desc_pagina: 'Configuración de locaciones físicas de inventario para Restaurante Bahía.', 
+                    add_btn: true, 
+                    btn_label: "Nuevo Almacén", 
+                    modal: "#almacenModal" 
+                }) %>
+
+                <div class="toast-container position-fixed top-0 end-0 p-3">
+                    <% if (typeof error_msg !== 'undefined' && error_msg && error_msg.length > 0) { %>
+                        <div class="toast show text-white bg-danger border-0 shadow" role="alert">
+                            <div class="d-flex">
+                                <div class="toast-body fw-semibold small">
+                                    <i class="fa-solid fa-circle-xmark me-2"></i><%= error_msg %>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast"></button>
+                            </div>
+                        </div>
+                    <% } %>
+                    
+                    <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
+                        <div class="toast show text-white bg-success border-0 shadow" role="alert">
+                            <div class="d-flex">
+                                <div class="toast-body fw-semibold small">
+                                    <i class="fa-solid fa-circle-check me-2"></i><%= success_msg %>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast"></button>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+
+                <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-custom-thead text-uppercase fs-7">
+                                <tr>
+                                    <th class="ps-4 py-3">Código</th>
+                                    <th class="py-3">Nombre / Descripción</th>
+                                    <th class="py-3">Tipo Almacén</th>
+                                    <th class="py-3">Ubicación</th>
+                                    <th class="py-3 text-center">Estado</th>
+                                    <th class="text-center py-3" style="width: 220px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (almacenes.length === 0) { %>
+                                    <tr>
+                                        <td colspan="6" class="text-center py-5 text-muted">
+                                            <i class="fa-solid fa-boxes-stacked d-block fs-2 mb-2 text-secondary"></i> No hay almacenes registrados.
+                                        </td>
+                                    </tr>
+                                <% } else { %>
+                                    <% almacenes.forEach(almacen => { %>
+                                        <tr class="<%= !almacen.activo ? 'opacity-50 table-light' : '' %>">
+                                            <td class="ps-4 fw-bold text-dark">
+                                                <span class="badge bg-light text-dark border font-monospace px-2 py-1"><%= almacen.codigo %></span>
+                                            </td>
+                                            <td>
+                                                <div class="fw-semibold text-dark"><%= almacen.nombre %></div>
+                                                <div class="text-muted small"><%= almacen.descripcion || 'Sin descripción' %></div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary text-white text-capitalize px-3 py-1 rounded-pill fs-7">
+                                                    <%= almacen.tipo.replace('_', ' ') %>
+                                                </span>
+                                            </td>
+                                            <td class="text-secondary"><%= almacen.ubicacion || '—' %></td>
+                                            <td class="text-center">
+                                                <% if (almacen.activo) { %>
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fs-7">Activo</span>
+                                                <% } else { %>
+                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 fs-7">Inactivo</span>
+                                                <% } %>
+                                            </td>
+                                            <td class="text-center pe-3">
+                                                <div class="btn-group gap-1">
+                                                    <button class="btn btn-sm btn-outline-secondary border-0" onclick="openEditModal('<%= almacen.id %>')" title="Editar">
+                                                        <i class="fa-solid fa-pen-to-square"></i>
+                                                    </button>
+                                                    <% if (almacen.activo && user && ['superadministrador', 'administrador'].includes(user.rol)) { %>
+                                                        <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteAlmacen('<%= almacen.id %>')" title="Desactivar">
+                                                            <i class="fa-solid fa-power-off"></i>
+                                                        </button>
+                                                    <% } %>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- El modal conserva el ID almacenModal para coincidir con el header -->
+    <div class="modal fade" id="almacenModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <form id="almacenForm" class="modal-content border-0 shadow" onsubmit="saveAlmacen(event)">
+                <input type="hidden" id="almacenId">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold" id="modalTitle">Nuevo Almacén</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-secondary small">Código único</label>
+                            <input type="text" id="codigo" class="form-control shadow-sm" required placeholder="Ej: ALM-PRIN">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-secondary small">Nombre del Almacén</label>
+                            <input type="text" id="nombre" class="form-control shadow-sm" required placeholder="Ej: Barra Principal">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold text-secondary small">Descripción</label>
+                            <textarea id="descripcion" class="form-control shadow-sm" rows="2" placeholder="Detalles opcionales..."></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-secondary small">Tipo</label>
+                            <select id="tipo" class="form-select shadow-sm text-capitalize" required>
+                                <option value="principal">Principal</option>
+                                <option value="cocina">Cocina</option>
+                                <option value="bar">Bar</option>
+                                <option value="congelador">Congelador</option>
+                                <option value="camara_fria">Cámara Fría</option>
+                                <option value="despensa">Despensa</option>
+                                <option value="produccion">Producción</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-secondary small">Ubicación física</label>
+                            <input type="text" id="ubicacion" class="form-control shadow-sm" placeholder="Ej: Planta Baja Trasera">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold text-secondary small">Usuario Responsable</label>
+                            <select id="responsable_usuario_id" class="form-select shadow-sm">
+                                <option value="">-- Seleccionar Responsable --</option>
+                                <% usuarios.forEach(u => { %>
+                                    <option value="<%= u.id %>"><%= u.nombre %> <%= u.apellidos %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-12 mt-3">
+                            <div class="d-flex flex-wrap gap-4 p-3 bg-light rounded border border-dashed">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="permite_ventas">
+                                    <label class="form-check-label small fw-bold text-dark" for="permite_ventas">Permitir Ventas Directas</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="permite_consumo" checked>
+                                    <label class="form-check-label small fw-bold text-dark" for="permite_consumo">Permitir Consumo Interno</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 d-none" id="statusGroup">
+                            <div class="p-2 bg-warning-subtle rounded border border-warning-subtle">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="activo" checked>
+                                    <label class="form-check-label small fw-bold text-warning-emphasis" for="activo">Almacén Activo / Operacional</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top-0">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary px-4 shadow-sm">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Inicializar el modal de Bootstrap una sola vez
+        const elModal = document.getElementById('almacenModal');
+        const bootstrapModal = new bootstrap.Modal(elModal);
+
+        // Escuchar cuando el modal se va a abrir (para limpiar si es nuevo)
+        elModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            // Si el modal se abrió desde el botón "Nuevo" del header
+            if (button && button.innerText.includes('Nuevo')) {
+                document.getElementById('almacenForm').reset();
+                document.getElementById('almacenId').value = '';
+                document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus me-2"></i>Nuevo Almacén';
+                document.getElementById('statusGroup').classList.add('d-none');
+            }
+        });
+
+        async function openEditModal(id) {
+            document.getElementById('almacenForm').reset();
+            document.getElementById('statusGroup').classList.remove('d-none');
+            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square me-2"></i>Editar Almacén';
+            
+            try {
+                const response = await fetch(`/admin/almacen/${id}`);
+                const res = await response.json();
+                if(res.success) {
+                    const d = res.data;
+                    document.getElementById('almacenId').value = d.id;
+                    document.getElementById('codigo').value = d.codigo;
+                    document.getElementById('nombre').value = d.nombre;
+                    document.getElementById('descripcion').value = d.descripcion;
+                    document.getElementById('tipo').value = d.tipo;
+                    document.getElementById('ubicacion').value = d.ubicacion;
+                    document.getElementById('responsable_usuario_id').value = d.responsable_usuario_id || '';
+                    document.getElementById('permite_ventas').checked = d.permite_ventas === 1;
+                    document.getElementById('permite_consumo').checked = d.permite_consumo === 1;
+                    document.getElementById('activo').checked = d.activo === 1;
+                    bootstrapModal.show();
+                } else {
+                    Swal.fire('Error', res.message, 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'No se pudieron precargar los datos del almacén.', 'error');
+            }
+        }
+
+        async function saveAlmacen(e) {
+            e.preventDefault();
+            const id = document.getElementById('almacenId').value;
+            const data = {
+                codigo: document.getElementById('codigo').value,
+                nombre: document.getElementById('nombre').value,
+                descripcion: document.getElementById('descripcion').value,
+                tipo: document.getElementById('tipo').value,
+                ubicacion: document.getElementById('ubicacion').value,
+                responsable_usuario_id: document.getElementById('responsable_usuario_id').value || null,
+                permite_ventas: document.getElementById('permite_ventas').checked ? 1 : 0,
+                permite_consumo: document.getElementById('permite_consumo').checked ? 1 : 0,
+                activo: document.getElementById('activo').checked ? 1 : 0
+            };
+            const url = id ? `/admin/almacen/edit/${id}` : '/admin/almacenes/add';
+            const method = id ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const res = await response.json();
+                if(res.success) {
+                    bootstrapModal.hide();
+                    Swal.fire('¡Éxito!', res.message, 'success').then(() => location.reload());
+                } else {
+                    Swal.fire('Atención', res.message, 'warning');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Ocurrió un error al procesar la solicitud.', 'error');
+            }
+        }
+
+        function deleteAlmacen(id) {
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: "El almacén cambiará a estado inactivo y se restringirá su uso operacional.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, desactivar',
+                cancelButtonText: 'Cancelar'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    try {
+                        const response = await fetch(`/admin/almacen/delete/${id}`, { method: 'DELETE' });
+                        const res = await response.json();
+                        if(res.success) {
+                            Swal.fire('Desactivado', res.message, 'success').then(() => location.reload());
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    } catch (err) {
+                        Swal.fire('Error', 'No se pudo completar la acción de desactivación.', 'error');
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

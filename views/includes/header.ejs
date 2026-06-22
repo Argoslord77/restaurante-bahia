@@ -1,0 +1,34 @@
+<div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+    <div>
+        <h1 class="h2 fw-bold text-dark m-0"><% if(typeof encabezado_pagina !== 'undefined' && encabezado_pagina !== null){%><%- encabezado_pagina %><%}%></h1>
+        <p class="text-muted small mb-0"><% if(typeof desc_pagina !== 'undefined' && desc_pagina !== null){%><%- desc_pagina %><%}%></p>
+    </div>
+    
+    <div class="d-flex align-items-center gap-2">
+        <% if (user.rol === 'superadministrador' || user.rol === 'administrador') { %>
+            <!-- Dynamic btn content and target modal  -->
+            <% if (typeof add_btn !== 'undefined' && add_btn) { %>
+                <button class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 d-flex align-items-center gap-1 text-dark" data-bs-toggle="modal" data-bs-target="<% if(typeof modal !== 'undefined' && modal){%>#<%- modal %><% } else { %>#modalWindow<% } %>">
+                    <i class="fa-solid fa-plus text-secondary"></i> <% if(btn_label !== 'undefined' && btn_label){%><%- btn_label %><%} else {%>Agregar Elemento<%}%>
+                </button>
+            <% } else if(typeof warehouse_menu !== 'undefined' && warehouse_menu) { %>
+                <%- include('../includes/menuAccionesAlmacen') %>
+            <% } %>
+        <% } %>
+        <div class="dropdown">
+            <button class="btn btn-white border shadow-sm dropdown-toggle fw-semibold btn-sm py-2 d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown">
+                <% if (user && user.foto && user.foto !== 'null') { %>
+                    <img src="/uploads/<%= user.foto %>" class="user-avatar-nav" alt="Avatar">
+                <% } else { %>
+                    <i class="fa-solid fa-user-tie text-secondary"></i>
+                <% } %>
+                <span><%= user ? user.nombre : 'Gestor Activo' %></span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                <li><a class="dropdown-item p-2 fs-7" href="/admin/perfil"><i class="fa-solid fa-id-card me-2"></i>Mi Perfil</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item p-2 text-danger fs-7" href="/logout"><i class="fa-solid fa-right-from-bracket me-2"></i>Salir</a></li>
+            </ul>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios - Restaurante</title>
+    <link class="jsbin" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1/themes/base/jquery-ui.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">                
+                <%- include('../includes/header', {encabezado_pagina: 'Personal / Usuarios', desc_pagina: 'Gestión de accesos, roles y personal del restaurante', add_btn: true, btn_label: "Nuevo Usuario", modal: "modalCrearUsuario"}) %>
+                <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-custom-thead text-uppercase fs-7">
+                                <tr>
+                                    <th class="ps-4 py-3">Nombre Completo</th>
+                                    <th class="py-3">Usuario</th>
+                                    <th class="py-3">Email</th>
+                                    <th class="py-3">Rol</th>
+                                    <th class="text-center py-3" style="width: 150px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (usuarios.length === 0) { %>
+                                    <tr>
+                                        <td colspan="5" class="text-center py-5 text-muted">
+                                            <i class="fa-solid fa-user-slash d-block fs-2 mb-2 text-secondary"></i> No hay usuarios registrados.
+                                        </td>
+                                    </tr>
+                                <% } else { %>
+                                    <% usuarios.forEach(user => { %>
+                                        <% if(user.usuario != "_default_user_"){ %>
+                                            <tr>
+                                                <td class="ps-4 fw-semibold text-dark">
+                                                    <div class="d-flex align-items-center gap-3">
+                                                        <% if (user.foto) { %>
+                                                            <img src="/uploads/<%= user.foto %>" alt="Avatar" class="user-avatar">
+                                                        <% } else { %>
+                                                            <img src="https://ui-avatars.com/api/?name=<%= encodeURIComponent(user.nombre + ' ' + user.apellidos) %>&background=374151&color=fff" alt="Avatar" class="user-avatar">
+                                                        <% } %>
+                                                        <span><%= user.nombre %> <%= user.apellidos %></span>
+                                                    </div>
+                                                </td>
+                                                <td><span class="text-secondary bg-light border px-2 py-1 rounded small font-monospace"><%= user.usuario %></span></td>
+                                                <td class="text-secondary fs-7"><%= user.email ? user.email : 'Opcional' %></td>
+                                                <td>
+                                                    <% 
+                                                        let badgeColor = 'bg-secondary text-white';
+                                                        let iconStyle = 'fa-solid fa-user';
+                                                        if (user.rol === 'superadministrador') {
+                                                            badgeColor = 'bg-danger text-white';
+                                                        } else if (user.rol === 'administrador') {
+                                                            badgeColor = 'bg-dark text-white';
+                                                        } else if (user.rol === 'pendiente') {
+                                                            badgeColor = 'bg-secondary text-white fw-semibold';
+                                                            iconStyle = 'fa-solid fa-clock text-white';
+                                                        } else if (user.rol === 'dependiente') {
+                                                            badgeColor = 'bg-primary text-white';
+                                                            iconStyle = 'fa-solid fa-utensils text-white';
+                                                        } else if (user.rol === 'cocinero') {
+                                                            badgeColor = 'bg-success text-white';
+                                                        } else if (user.rol === 'bartender') {
+                                                            badgeColor = 'bg-info text-dark';
+                                                        } else if (user.rol === 'comercial') {
+                                                            badgeColor = 'bg-warning text-dark';
+                                                        }
+                                                    %>
+                                                    <span class="badge <%= badgeColor %> text-capitalize px-3 py-1 rounded-pill fs-7">
+                                                        <i class="<%= iconStyle %> me-1"></i><%= user.rol %>
+                                                    </span>
+                                                </td>
+                                                <td class="text-center pe-4">
+                                                    <div class="d-flex justify-content-center gap-2">
+                                                        <button class="btn btn-sm btn-outline-secondary rounded-circle" 
+                                                                title="Editar Usuario"
+                                                                data-bs-toggle="modal" 
+                                                                data-bs-target="#modalEditarUsuario"
+                                                                data-id="<%= user.id %>"
+                                                                data-nombre="<%= user.nombre %>"
+                                                                data-apellidos="<%= user.apellidos %>"
+                                                                data-usuario="<%= user.usuario %>"
+                                                                data-email="<%= user.email %>"
+                                                                data-rol="<%= user.rol %>"
+                                                                data-foto="<%= user.foto %>"
+                                                                style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                                                            <i class="fa-solid fa-pen-to-square"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger rounded-circle"
+                                                                title="Eliminar Usuario"
+                                                                onclick="confirmDelete('<%= user.id %>', '<%= user.nombre %> <%= user.apellidos %>')"
+                                                                style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <% } %>
+                                    <% }) %>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalCrearUsuario" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">Registrar Nuevo Personal</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="formCrearUsuario" onsubmit="saveUser(event, false)">
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small">Nombre</label>
+                                <input type="text" id="crearNombre" name="nombre" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small">Apellidos</label>
+                                <input type="text" id="crearApellidos" name="apellidos" class="form-control" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Nombre de Usuario (Login)</label>
+                                <input type="text" id="crearUsuario" name="usuario" class="form-control" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Email <span class="text-muted">(Opcional)</span></label>
+                                <input type="email" id="crearEmail" name="email" class="form-control">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Contraseña</label>
+                                <input type="password" id="crearPassword" name="password" class="form-control" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Rol / Puesto</label>
+                                <select id="crearRol" name="rol" class="form-select text-capitalize" required>
+                                    <option value="dependiente" selected>dependiente</option>
+                                    <option value="superadministrador">superadministrador</option>
+                                    <option value="administrador">administrador</option>
+                                    <option value="cocinero">cocinero</option>
+                                    <option value="luncher">luncher</option>
+                                    <option value="bartender">bartender</option>
+                                    <option value="fregador">fregador</option>
+                                    <option value="almacenero">almacenero</option>
+                                    <option value="comercial">comercial</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Foto de Perfil</label>
+                                <input type="file" id="crearFoto" name="foto" class="form-control" accept="image/*">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top-0">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary px-4">Guardar Usuario</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-user-gear me-2"></i>Editar Datos del Personal</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="formEditarUsuario" onsubmit="saveUser(event, true)">
+                    <div class="modal-body p-4">
+                        <div class="row">
+                            <div class="col-12 col-md-4 d-flex flex-column align-items-center justify-content-center border-end pb-3 pb-md-0 mb-3 mb-md-0 text-center">
+                                <span class="form-label fw-semibold text-secondary small mb-2">Foto de Perfil Actual</span>
+                                <div class="preview-container shadow-sm mb-2">
+                                    <img id="editPreviewImg" src="" alt="Vista previa" class="preview-img">
+                                </div>
+                                <span id="previewLabel" class="badge bg-light text-dark border rounded-pill fs-7 px-2 py-1">Imagen guardada</span>
+                            </div>
+
+                            <div class="col-12 col-md-8">
+                                <div class="row g-3">
+                                    <input type="hidden" id="editUserId" name="id">
+                                    <input type="hidden" id="editFotoActual" name="fotoActual">
+
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold text-secondary small">Nombre</label>
+                                        <input type="text" id="editNombre" name="nombre" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold text-secondary small">Apellidos</label>
+                                        <input type="text" id="editApellidos" name="apellidos" class="form-control" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-semibold text-secondary small">Nombre de Usuario</label>
+                                        <input type="text" id="editUsuario" name="usuario" class="form-control" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-semibold text-secondary small">Email</label>
+                                        <input type="email" id="editEmail" name="email" class="form-control">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-semibold text-secondary small">Contraseña <span class="text-muted text-lowercase">(Dejar vacío para no cambiarla)</span></label>
+                                        <input type="password" id="editPassword" name="password" class="form-control" placeholder="••••••••">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-semibold text-secondary small">Rol / Puesto</label>
+                                        <select id="editRol" name="rol" class="form-select text-capitalize" required>
+                                            <option value="dependiente">dependiente</option>
+                                            <option value="superadministrador">superadministrador</option>
+                                            <option value="administrador">administrador</option>
+                                            <option value="cocinero">cocinero</option>
+                                            <option value="luncher">luncher</option>
+                                            <option value="bartender">bartender</option>
+                                            <option value="fregador">fregador</option>
+                                            <option value="almacenero">almacenero</option>
+                                            <option value="comercial">comercial</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-semibold text-secondary small">Cambiar Foto de Perfil</label>
+                                        <input type="file" id="editFotoInput" name="foto" class="form-control" accept="image/*" onchange="previewNewImage(this)">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top-0 fs-11px">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success btn-sm px-4">Actualizar Personal</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const bsModalCrear = new bootstrap.Modal(document.getElementById('modalCrearUsuario'));
+        const bsModalEditar = new bootstrap.Modal(document.getElementById('modalEditarUsuario'));
+
+        document.getElementById('modalCrearUsuario').addEventListener('hidden.bs.modal', () => {
+            document.getElementById('formCrearUsuario').reset();
+        });
+
+        const modalEditarElement = document.getElementById('modalEditarUsuario');
+        if (modalEditarElement) {
+            modalEditarElement.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                const id = button.getAttribute('data-id');
+                const nombre = button.getAttribute('data-nombre');
+                const apellidos = button.getAttribute('data-apellidos');
+                const usuario = button.getAttribute('data-usuario');
+                const email = button.getAttribute('data-email');
+                const rol = button.getAttribute('data-rol');
+                const foto = button.getAttribute('data-foto');
+
+                document.getElementById('editUserId').value = id;
+                document.getElementById('editNombre').value = nombre;
+                document.getElementById('editApellidos').value = apellidos;
+                document.getElementById('editUsuario').value = usuario;
+                document.getElementById('editEmail').value = (!email || email === 'null' || email === 'undefined') ? '' : email;
+                document.getElementById('editRol').value = rol;
+                document.getElementById('editFotoActual').value = foto;
+                document.getElementById('editPassword').value = "";
+                document.getElementById('editFotoInput').value = "";
+                
+                const label = document.getElementById('previewLabel');
+                label.className = "badge bg-light text-dark border rounded-pill fs-7 px-2 py-1";
+                label.textContent = "Imagen guardada";
+
+                const imgPreview = document.getElementById('editPreviewImg');
+                if (foto && foto !== 'null' && foto !== '') {
+                    imgPreview.src = `/uploads/${foto}`;
+                } else {
+                    imgPreview.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre + ' ' + apellidos)}&background=374151&color=fff`;
+                }
+            });
+        }
+
+        function previewNewImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('editPreviewImg').src = e.target.result;
+                    const label = document.getElementById('previewLabel');
+                    label.className = "badge bg-warning text-dark border rounded-pill fs-7 px-2 py-1";
+                    label.textContent = "Nueva por guardar";
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        async function saveUser(e, esEdicion) {
+            e.preventDefault();
+
+            const formElement = esEdicion ? document.getElementById('formEditarUsuario') : document.getElementById('formCrearUsuario');
+            const formData = new FormData(formElement);
+            let url = '/admin/usuarios/crear';
+            
+            if (esEdicion) {
+                const id = document.getElementById('editUserId').value;
+                url = `/admin/usuarios/editar/${id}`;
+                
+                const pass = document.getElementById('editPassword').value;
+                if (!pass) formData.delete('password'); 
+            }
+
+            Swal.fire({
+                title: esEdicion ? 'Actualizando personal...' : 'Guardando nuevo usuario...',
+                text: 'Por favor, espere.',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor.' }));
+
+                if (res.ok && result.success) {
+                    if (esEdicion) bsModalEditar.hide(); else bsModalCrear.hide();
+
+                    Swal.fire({
+                        title: esEdicion ? '¡Actualizado!' : '¡Registrado!',
+                        text: result.message || 'Operación realizada correctamente.',
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false,
+                        willClose: () => { location.reload(); }
+                    });
+                } else {
+                    Swal.fire('No se pudo guardar', result.message || 'Verifica los campos ingresados.', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                Swal.fire('Error de Red', err.message || 'Fallo de conexión con el servidor.', 'error');
+            }
+        }
+
+        function confirmDelete(id, nombreCompleto) {
+            Swal.fire({
+                title: '¿Confirmar Acción?',
+                text: `Se eliminará de forma irreversible al miembro del personal: ${nombreCompleto}. Su foto de perfil también se borrará del servidor.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, Eliminar',
+                cancelButtonText: 'No, Cancelar',
+                reverseButtons: true
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Eliminando...',
+                        allowOutsideClick: false,
+                        didOpen: () => { Swal.showLoading(); }
+                    });
+
+                    try {
+                        const res = await fetch(`/admin/usuarios/eliminar/${id}`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+
+                        const data = await res.json().catch(() => ({ success: false, message: 'Error al interpretar respuesta.' }));
+
+                        if (res.ok && data.success) {
+                            Swal.fire({
+                                title: '¡Eliminado!',
+                                text: data.message || 'El usuario ha sido removido.',
+                                icon: 'success',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => { location.reload(); });
+                        } else {
+                            Swal.fire('Error', data.message || 'No se pudo eliminar al usuario.', 'error');
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        Swal.fire('Error de Red', 'No se pudo conectar con el servidor.', 'error');
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

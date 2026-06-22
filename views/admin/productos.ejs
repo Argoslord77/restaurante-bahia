@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= typeof title !== 'undefined' ? title : 'Catálogo de Productos - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/styles.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+
+    <%- include('../includes/sideBarMenu') %>
+    <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+        
+        <%- include('../includes/header', {
+            encabezado_pagina: 'Catálogo de Productos', 
+            desc_pagina: 'Gestión de insumos, materias primas y suministros operativos.', 
+            add_btn: true, 
+            btn_label: "Nuevo Producto", 
+            modal: "modalProducto"
+        }) %>
+
+        <div class="card card-custom shadow-sm border-0 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-custom-thead text-uppercase fs-7">
+                        <tr>
+                            <th class="ps-4 py-3">Código</th>
+                            <th class="py-3">Nombre del Insumo</th>
+                            <th class="py-3">Categoría</th>
+                            <th class="py-3">U. Inventario</th>
+                            <th class="text-end py-3">Stock Mín.</th>
+                            <th class="text-center py-3">Venta Directa</th>
+                            <th class="text-center py-3">Estado</th>
+                            <th class="text-center py-3">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% productos.forEach(p => { %>
+                            <tr>
+                                <td class="ps-4 fw-bold text-primary font-monospace">#<%= p.codigo %></td>
+                                <td>
+                                    <div class="fw-semibold text-dark"><%= p.nombre %></div>
+                                    <small class="text-muted text-capitalize"><%= p.tipo.replace('_', ' ') %></small>
+                                </td>
+                                <td><span class="badge bg-light text-dark border"><%= p.categoria_nombre %></span></td>
+                                <td><%= p.unidad_nombre %></td>
+                                <td class="text-end fw-bold text-secondary"><%= parseFloat(p.stock_minimo).toFixed(2) %></td>
+                                <td class="text-center">
+                                    <span class="badge <%= p.permitida_venta ? 'bg-info-subtle text-info border border-info' : 'bg-light text-muted border' %> px-2 rounded-pill">
+                                        <%= p.permitida_venta ? 'Sí' : 'No' %>
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge <%= p.activo ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' %> px-3 rounded-pill">
+                                        <%= p.activo ? 'Activo' : 'Inactivo' %>
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group gap-1">
+                                        <button class="btn btn-sm btn-outline-secondary border-0" onclick="openEditModal('<%= p.id %>')" title="Editar">
+                                            <i class="fa-solid fa-pen-to-square"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteProduct('<%= p.id %>')" title="Eliminar">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal fade" id="modalProducto" tabindex="-1" aria-labelledby="modalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <form id="formProducto" class="modal-content border-0 shadow" onsubmit="saveProduct(event)" enctype="multipart/form-data">
+                <input type="hidden" id="productId">
+                
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold" id="modalTitle">Nuevo Producto / Insumo</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-secondary small">Código Interno</label>
+                            <input type="text" id="codigo" class="form-control shadow-sm" required placeholder="Ej: MAT-CAR01">
+                        </div>
+                        
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold text-secondary small">Nombre del Producto</label>
+                            <input type="text" id="nombre" class="form-control shadow-sm" required placeholder="Ej: Solomillo de Res">
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="categoria_id" class="form-label fw-semibold text-secondary small">Categoría</label>
+                            <select class="form-select shadow-sm" name="categoria_id" id="categoria_id" required>
+                                <option value="">Seleccione una categoría...</option>
+                                <% if (typeof categorias !== 'undefined' && categorias.length > 0) { %>
+                                    <% categorias.forEach(cat => { %>
+                                        <option value="<%= cat.id %>"><%= cat.nombre %></option>
+                                    <% }); %>
+                                <% } %>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-secondary small">Tipo de Insumo</label>
+                            <select id="tipo" class="form-select shadow-sm" required>
+                                <option value="materia_prima">Materia Prima / Insumo</option>
+                                <option value="producto_preparado">Producto Preparado (Subproducción)</option>
+                                <option value="producto_venta">Producto de Venta Directa</option>
+                                <option value="material_operativo">Material Operativo / Suministro</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="unidad_inventario_id" class="form-label fw-semibold text-secondary small">Unidad de Medida</label>
+                            <select class="form-select shadow-sm" name="unidad_inventario_id" id="unidad_inventario_id" required>
+                                <option value="">Seleccione una unidad...</option>
+                                <% if (typeof unidades !== 'undefined' && unidades.length > 0) { %>
+                                    <% unidades.forEach(uni => { %>
+                                        <option value="<%= uni.id %>"><%= uni.nombre %> (<%= uni.abreviatura %>)</option>
+                                    <% }); %>
+                                <% } %>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-secondary small">Stock Mínimo</label>
+                            <input type="number" step="0.001" id="stock_minimo" class="form-control shadow-sm" value="0.000">
+                        </div>
+                        
+                        <div class="col-md-4 offset-md-4 d-flex align-items-end pb-1">
+                            <div class="form-check form-switch bg-light p-2 rounded border w-100 ps-5">
+                                <input class="form-check-input" type="checkbox" id="permitida_venta">
+                                <label class="form-check-label small fw-bold text-primary" for="permitida_venta">¿Venta Directa?</label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 d-flex align-items-end pb-1">
+                            <div class="form-check form-switch bg-light p-2 rounded border w-100 ps-5">
+                                <input class="form-check-input" type="checkbox" id="activo" checked>
+                                <label class="form-check-label small fw-bold" for="activo">Activo</label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label for="foto" class="form-label fw-semibold text-secondary small">Foto del Producto (Opcional)</label>
+                            <input class="form-control shadow-sm" type="file" id="foto" name="foto" accept="image/*">
+                            <div id="fotoPreviewContainer" class="mt-2 d-none text-center">
+                                <img id="fotoPreview" src="" alt="Vista previa" class="img-thumbnail" style="max-height: 180px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer bg-light border-top-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary px-4 shadow-sm">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // Inicialización de la instancia del Modal de Bootstrap
+    const productModalElement = document.getElementById('modalProducto');
+    const bsProductModal = new bootstrap.Modal(productModalElement);
+
+    // Escuchador manual para asegurar la apertura desde el Header dinámico
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-bs-target="modalProducto"]') || e.target.closest('[data-bs-target="#modalProducto"]');
+        if (btn) {
+            e.preventDefault();
+            bsProductModal.show();
+        }
+    });
+
+    // CORREGIDO: Resetear el formulario de forma limpia usando classList nativo
+    productModalElement.addEventListener('hidden.bs.modal', () => {
+        document.getElementById('formProducto').reset();
+        document.getElementById('productId').value = '';
+        document.getElementById('modalTitle').innerText = "Nuevo Producto / Insumo";
+        document.getElementById('activo').checked = true;
+        document.getElementById('permitida_venta').checked = false;
+        
+        // Corrección de class_list a classList
+        const previewContainer = document.getElementById('fotoPreviewContainer');
+        if (previewContainer) {
+            previewContainer.classList.add('d-none');
+        }
+        document.getElementById('fotoPreview').src = '';
+    });
+
+    // Guardar / Editar Producto
+    async function saveProduct(e) {
+        e.preventDefault(); // Detiene el envío clásico del HTML
+        const id = document.getElementById('productId').value;
+        const esEdicion = !!id; // Evalúa si es edición (true) o creación (false)
+        
+        // Recolectamos los datos usando FormData
+        const formData = new FormData();
+        formData.append('codigo', document.getElementById('codigo').value);
+        formData.append('nombre', document.getElementById('nombre').value);
+        formData.append('categoria_id', document.getElementById('categoria_id').value);
+        formData.append('tipo', document.getElementById('tipo').value);
+        formData.append('unidad_inventario_id', document.getElementById('unidad_inventario_id').value);
+        formData.append('stock_minimo', document.getElementById('stock_minimo').value);
+        formData.append('activo', document.getElementById('activo').checked ? 1 : 0);
+        formData.append('permitida_venta', document.getElementById('permitida_venta').checked ? 1 : 0);
+        
+        const fileInput = document.getElementById('foto');
+        if (fileInput && fileInput.files[0]) {
+            formData.append('foto', fileInput.files[0]);
+        }
+
+        const url = esEdicion ? `/admin/productos/editar/${id}` : '/admin/productos/crear';
+
+        // Mostramos un spinner de carga temporal mientras el servidor procesa la imagen y los datos
+        Swal.fire({
+            title: esEdicion ? 'Actualizando producto...' : 'Guardando producto...',
+            text: 'Por favor, espere un momento.',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.message || `Error del servidor (Código: ${res.status})`);
+            }
+
+            const result = await res.json();
+            
+            if (result.success) {
+                // Cerramos el modal de Bootstrap antes de mostrar el éxito
+                bsProductModal.hide();
+
+                // Notificación de Éxito estilizada
+                Swal.fire({
+                    title: esEdicion ? '¡Actualizado!' : '¡Creado con éxito!',
+                    text: result.message || (esEdicion ? 'El producto ha sido actualizado correctamente.' : 'El producto ha sido añadido al catálogo.'),
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false,
+                    willClose: () => {
+                        location.reload(); // Recarga la tabla una vez que la alerta se cierra sola
+                    }
+                });
+            } else {
+                Swal.fire({
+                    title: 'No se pudo guardar',
+                    text: result.message || 'Ocurrió un problema en las reglas de negocio.',
+                    icon: 'error',
+                    confirmButtonColor: '#3085d6'
+                });
+            }
+        } catch (err) { 
+            console.error("Error capturado en Fetch:", err);
+            Swal.fire({
+                title: 'Error de Red',
+                text: err.message || 'No se pudo establecer conexión con el servidor.',
+                icon: 'error',
+                confirmButtonColor: '#d33'
+            });
+        }
+    }
+
+    // Función para eliminar un producto con confirmación de SweetAlert2
+    function deleteProduct(id) {
+        Swal.fire({
+            title: '¿Está seguro de eliminar este producto?',
+            text: "Esta acción no se puede deshacer y removerá el insumo de los almacenes.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`/admin/productos/eliminar/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        Swal.fire({
+                            title: '¡Eliminado!',
+                            text: data.message || 'El producto ha sido removido.',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload(); // Recarga la tabla para reflejar el cambio
+                        });
+                    } else {
+                        Swal.fire('Error', data.message || 'No se pudo eliminar el producto.', 'error');
+                    }
+                } catch (error) {
+                    console.error("Error al eliminar:", error);
+                    Swal.fire('Error de red', 'No se pudo conectar con el servidor.', 'error');
+                }
+            }
+        });
+    }
+
+    // Cargar datos en el Modal para Editar
+    async function openEditModal(id) {
+        try {
+            const res = await fetch(`/admin/productos/${id}`);
+            if (!res.ok) throw new Error('No se pudieron recuperar los datos del servidor.');
+            
+            const { data } = await res.json();
+            
+            document.getElementById('productId').value = data.id;
+            document.getElementById('codigo').value = data.codigo;
+            document.getElementById('nombre').value = data.nombre;
+            document.getElementById('categoria_id').value = data.categoria_id;
+            document.getElementById('tipo').value = data.tipo;
+            document.getElementById('unidad_inventario_id').value = data.unidad_inventario_id;
+            document.getElementById('stock_minimo').value = data.stock_minimo;
+            document.getElementById('activo').checked = data.activo === 1;
+            document.getElementById('permitida_venta').checked = data.permitida_venta === 1;
+            
+            // Manejo dinámico del contenedor de la vista previa
+            const previewContainer = document.getElementById('fotoPreviewContainer');
+            const previewImg = document.getElementById('fotoPreview');
+            if (data.foto_url) {
+                previewImg.src = data.foto_url;
+                previewContainer.classList.remove('d-none');
+            } else {
+                previewContainer.classList.add('d-none');
+            }
+            
+            document.getElementById('modalTitle').innerText = "Editar Insumo";
+            bsProductModal.show();
+        } catch (error) {
+            console.error(error);
+            Swal.fire('Error', error.message || 'No se pudieron recuperar los datos del insumo.', 'error');
+        }
+    }
+    </script>
+</body>
+</html>
