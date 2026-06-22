@@ -71,11 +71,9 @@
                                     <p class="waiter-name text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem;">
                                         <i class="fa-solid fa-location-dot me-1 text-secondary"></i> Ubicación: <%= mesa.ubicacion %>
                                     </p>
-                                    <% if (mesa.auto_hash) { %>
-                                        <p class="text-muted mb-3" style="font-size: 0.70rem; font-family: monospace;">
-                                            <i class="fa-solid fa-qrcode text-warning me-1"></i> QR vinculada
-                                        </p>
-                                    <% } %>
+                                    <p class="text-muted mb-3" style="font-size: 0.70rem; font-family: monospace;">
+                                        <i class="fa-solid fa-hashtag text-primary me-1"></i> ID BD: <strong><%= mesa.id %></strong>
+                                    </p>
                                 </div>  
 
                                 <div class="card-middle-section d-flex justify-content-between align-items-center mb-3">
@@ -101,7 +99,7 @@
                                                 data-bs-toggle="modal" data-bs-target="#modalEditarMesa"
                                                 data-id="<%= mesa.id %>" data-numero="<%= mesa.numero %>" 
                                                 data-capacidad="<%= mesa.capacidad %>" data-estado="<%= mesa.estado %>"
-                                                data-ubicacion="<%= mesa.ubicacion %>" data-hash="<%= mesa.auto_hash %>">
+                                                data-ubicacion="<%= mesa.ubicacion %>">
                                             <i class="fa-solid fa-gear text-white" style="font-size: 14px;"></i>
                                         </button>
                                         
@@ -199,21 +197,10 @@
                                     <option value="reservada">Reservada</option>
                                 </select>
                             </div>
-                            <div class="col-12 mt-3 pt-2 border-top">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch" id="editRegenerarHash">
-                                    <label class="form-check-label fw-semibold text-dark small" for="editRegenerarHash">
-                                        Regenerar código QR único (auto_hash)
-                                    </label>
-                                    <span class="d-block text-muted" style="font-size: 11px;">
-                                        Invalida el código QR físico anterior y genera un nuevo identificador basado en timestamp.
-                                    </span>
-                                </div>
-                            </div>
 
-                            <div class="col-12 text-center mt-3 pt-3 border-top" id="qrContainerWrapper" style="display: none;">
+                            <div class="col-12 text-center mt-3 pt-3 border-top" id="qrContainerWrapper">
                                 <label class="form-label fw-bold text-dark d-block mb-2 small">
-                                    <i class="fa-solid fa-qrcode text-primary me-1"></i> Código QR de la Mesa
+                                    <i class="fa-solid fa-qrcode text-primary me-1"></i> Código QR de la Mesa (ID BD)
                                 </label>
                                 <div class="d-flex justify-content-center align-items-center bg-light p-3 border rounded-3 mx-auto" style="width: 160px; height: 160px;">
                                     <div id="qrcode"></div>
@@ -239,44 +226,32 @@
             // MAPEAR DATOS AL MODAL DE EDICIÓN
             document.querySelectorAll('.btn-editar').forEach(btn => {
                 btn.addEventListener('click', function() {
-                    document.getElementById('editId').value = this.dataset.id;
+                    const tableId = this.dataset.id;
+                    
+                    document.getElementById('editId').value = tableId;
                     document.getElementById('editNumero').value = this.dataset.numero;
                     document.getElementById('editUbicacion').value = this.dataset.ubicacion;
                     document.getElementById('editCapacidad').value = this.dataset.capacidad;
                     document.getElementById('editEstado').value = this.dataset.estado;
-                    document.getElementById('editRegenerarHash').checked = false; // Desmarcado por defecto
 
-                    const autoHash = this.dataset.hash;
-                    const qrContainerWrapper = document.getElementById('qrContainerWrapper');
                     const qrcodeDiv = document.getElementById('qrcode');
                     const qrTextLink = document.getElementById('qrTextLink');
-                    const baseServerUrl = document.getElementById('serverBaseUrl').value;
 
-                    // Limpiar el contenedor del QR generado en el clic anterior
+                    // Limpiar el QR generado anteriormente para evitar duplicados gráficos
                     qrcodeDiv.innerHTML = "";
 
-                    // Verificar si la mesa cuenta con un auto_hash generado en BD
-                    if (autoHash && autoHash !== 'null' && autoHash.trim() !== '') {
-                        qrContainerWrapper.style.display = 'block';
-                        
-                        // Construcción de la cadena solicitada
-                        const fullQrString = baseServerUrl + autoHash;
-                        qrTextLink.innerText = fullQrString;
+                    // Generación del código QR limpio usando estrictamente el ID numérico de la BD
+                    const fullQrString = tableId;
+                    qrTextLink.innerText = `Mesa ID: ${fullQrString}`;
 
-                        // Generación del objeto QR gráfico
-                        new QRCode(qrcodeDiv, {
-                            text: fullQrString,
-                            width: 130,
-                            height: 130,
-                            colorDark : "#1e293b",
-                            colorLight : "#ffffff",
-                            correctLevel : QRCode.CorrectLevel.H
-                        });
-                    } else {
-                        // Si no cuenta con hash, ocultar el contenedor por completo
-                        qrContainerWrapper.style.display = 'none';
-                        qrTextLink.innerText = "";
-                    }
+                    new QRCode(qrcodeDiv, {
+                        text: fullQrString,
+                        width: 130,
+                        height: 130,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.Q
+                    });
                 });
             });
 
@@ -319,8 +294,7 @@
                     numero: this.numero.value,
                     capacidad: this.capacidad.value,
                     ubicacion: this.ubicacion.value,
-                    estado: this.estado.value,
-                    regenerarHash: document.getElementById('editRegenerarHash').checked
+                    estado: this.estado.value
                 };
 
                 fetch(`/admin/mesas/editar/${id}`, {

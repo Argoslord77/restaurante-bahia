@@ -1,3 +1,4 @@
+// dashboardDependienteController.js
 const db = require('../config/db');
 
 class DashboardDependienteController {
@@ -6,14 +7,15 @@ class DashboardDependienteController {
      */
     async viewDependienteDashboard(req, res) {
         try {
-            // Consultar todas las mesas junto con el ID del pedido activo si es que tienen uno
+            // Consultar todas las mesas limpias de hashes junto con el ID del pedido activo si tienen uno
+            // Se selecciona tanto 'numero' como un alias de 'nombre' para garantizar compatibilidad con la plantilla
             const [mesas] = await db.query(`
                 SELECT 
                     m.id, 
                     m.numero, 
+                    CONCAT('Mesa ', m.numero) AS nombre,
                     m.capacidad, 
                     m.estado,
-                    m.auto_hash,
                     p.id AS id_pedido_activo
                 FROM mesas m
                 LEFT JOIN pedidos p ON m.id = p.id_mesa AND p.estado_pedido IN ('pendiente', 'preparando', 'listo')
