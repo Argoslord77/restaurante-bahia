@@ -9,7 +9,7 @@ const db = require('../config/db');
 // GET: Renderizar Login
 router.get('/login', (req, res) => {
     //Redireccionar al usuario segun su rol en el Sistema
-    if (req.isAuthenticated()){
+    if (req.isAuthenticated() && typeof req.session.user !== 'undefined'){
         switch(req.session.user.rol){
             case "superadministrador":
                 return res.redirect('/admin/dashboard');

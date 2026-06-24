@@ -70,6 +70,7 @@ const almacenRoutes = require('./routes/almacenRoutes');
 const inventarioRoutes = require('./routes/inventarioRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const posRoutes = require('./routes/posRoutes');
+const pedidoRoutes = require('./routes/pedidoRoutes');
 
 app.use('/', authRoutes);
 app.use('/admin', userRoutes);
@@ -77,6 +78,7 @@ app.use('/admin', adminRoutes);
 app.use('/admin', almacenRoutes);
 app.use('/admin', inventarioRoutes);
 app.use('/admin', productoRoutes);
+app.use('/admin', pedidoRoutes);
 
 app.use(posRoutes);
 

@@ -36,7 +36,7 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link p-2" href="/admin/pedidos">
+        <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'orders'){ %> active<% } %>" href="/admin/pedidos">
             <i class="fa-solid fa-file-invoice me-2 text-dark"></i> Pedidos / Ventas
         </a>
     </li>
