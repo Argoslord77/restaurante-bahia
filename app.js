@@ -7,6 +7,10 @@ const flash = require('connect-flash');
 const path = require('path');
 require('dotenv').config();
 const cookieParser = require('cookie-parser');
+const logger = require('./config/logger');
+const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 // Pasamos la configuración a Passport
@@ -19,6 +23,47 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Middleware para archivos estáticos (CSS/JS local de Bootstrap)
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ==========================================
+// SEGURIDAD - Helmet para headers de seguridad
+// ==========================================
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"],
+        },
+    },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    }
+}));
+
+// ==========================================
+// SEGURIDAD - Rate Limiting
+// ==========================================
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100, // límite de 100 requests por ventana
+    message: {
+        success: false,
+        message: 'Demasiadas solicitudes desde esta IP, por favor intenta más tarde.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Aplicar rate limiting a todas las rutas
+app.use(limiter);
 
 // Middleware para procesar datos de formularios (URL-encoded) y JSON
 app.use(express.urlencoded({ extended: true }));
@@ -86,6 +131,15 @@ app.use(posRoutes);
 app.get('/', (req, res) => {
     res.redirect('/admin/dashboard'); 
 });
+
+// ==========================================
+// MIDDLEWARE DE MANEJO DE ERRORES (Siempre al final)
+// ==========================================
+// Manejo de rutas no encontradas
+app.use(notFoundHandler);
+
+// Manejo centralizado de errores
+app.use(errorHandler);
 
 // 1. Leer los certificados generados por mkcert
 const sslOptions = {

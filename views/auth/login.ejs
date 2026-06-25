@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iniciar Sesión - Restaurante Bahía</title>
     <link rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
     <style>
         body { 
             background-color: #f3f4f6; 
@@ -25,39 +25,9 @@
             display: block;
             margin: 0 auto;
         }
-        .toast-container-custom {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 2050;
-        }
     </style>
 </head>
 <body class="d-flex align-items-center justify-content-center p-3">
-
-    <div class="toast-container-custom">
-        <% if (typeof error_msg !== 'undefined' && error_msg && error_msg.length > 0) { %>
-            <div class="toast show align-items-center text-white bg-danger border-0 shadow-lg js-toast-msg" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="d-flex">
-                    <div class="toast-body d-flex align-items-center gap-2 fw-semibold">
-                        <i class="fa-solid fa-circle-xmark fs-5"></i> <%= error_msg %>
-                    </div>
-                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-            </div>
-        <% } %>
-        
-        <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
-            <div class="toast show align-items-center text-white bg-success border-0 shadow-lg js-toast-msg" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="d-flex">
-                    <div class="toast-body d-flex align-items-center gap-2 fw-semibold">
-                        <i class="fa-solid fa-circle-check fs-5"></i> <%= success_msg %>
-                    </div>
-                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-            </div>
-        <% } %>
-    </div>
 
     <div class="card card-login shadow-sm p-4 p-sm-5">
         
@@ -100,16 +70,35 @@
     </div>
 
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
     <script>
-        // Auto-ocultar todas las notificaciones de forma segura
         document.addEventListener("DOMContentLoaded", function() {
-            const toasts = document.querySelectorAll('.js-toast-msg');
-            toasts.forEach(toastElement => {
-                setTimeout(() => {
-                    const toast = new bootstrap.Toast(toastElement);
-                    toast.hide();
-                }, 2500);
-            });
+            // Inyección controlada y segura de las variables flash del servidor
+            const errorMsg = "<%= (typeof error_msg !== 'undefined' && error_msg) ? error_msg : '' %>";
+            const successMsg = "<%= (typeof success_msg !== 'undefined' && success_msg) ? success_msg : '' %>";
+
+            // Alerta para errores de login
+            if (errorMsg && errorMsg.trim() !== "") {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Acceso Denegado',
+                    text: errorMsg,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Entendido'
+                });
+            }
+
+            // Alerta para mensajes informativos exitosos (Cierre de sesión, etc.)
+            if (successMsg && successMsg.trim() !== "") {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Operación Exitosa!',
+                    text: successMsg,
+                    confirmButtonColor: '#198754',
+                    confirmButtonText: 'Aceptar',
+                    timer: 2500
+                });
+            }
         });
     </script>
 </body>

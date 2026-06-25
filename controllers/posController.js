@@ -18,7 +18,7 @@ exports.viewPOS = async (req, res) => {
             id_pedido,
             detallesActuales: JSON.stringify(detallesActuales),
             user: req.user || { nombre: 'Dependiente', id: 1 },
-            pageTitle: 'Comanda Interactiva - Restaurante Bahía',
+            pageTitle: 'Orden Interactiva - Restaurante Bahía',
             view: 'pos'
         });
     } catch (error) {
@@ -70,11 +70,11 @@ exports.apiSaveOrder = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Comanda sincronizada y guardada con éxito.',
+            message: 'Orden sincronizada y guardada con éxito.',
             financialData
         });
     } catch (error) {
-        console.error('Error al guardar comanda en POS:', error);
+        console.error('Error al guardar la orden en POS:', error);
         return res.status(400).json({ success: false, message: error.message });
     }
 };

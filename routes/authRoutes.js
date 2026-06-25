@@ -5,6 +5,7 @@ const crypto = require('crypto');
 
 // Importar la conexión compartida de la base de datos de Restaurante Bahía
 const db = require('../config/db');
+const { authLimiter } = require('../middlewares/security');
 
 // GET: Renderizar Login
 router.get('/login', (req, res) => {
@@ -30,7 +31,7 @@ router.get('/login', (req, res) => {
 });
 
 // POST: Procesar Login
-router.post('/login', (req, res, next) => {
+router.post('/login', authLimiter, (req, res, next) => {
     passport.authenticate('local', (err, user, info) => {
         if (err) return next(err);
         if (!user) {

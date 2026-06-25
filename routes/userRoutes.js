@@ -6,6 +6,7 @@ const multer = require('multer');
 const bcrypt = require('bcryptjs'); // O 'bcrypt' según uses en tu proyecto
 const Usuario = require('../models/userModel'); // Asegúrate de que apunte a tu modelo de Sequelize/Mongoose
 const path = require('path');
+const { userValidationRules, handleValidationErrors } = require('../middlewares/validator');
 
 // Configuración de almacenamiento de Multer
 const storage = multer.diskStorage({
@@ -32,6 +33,8 @@ router.get('/usuarios',
 
 router.post('/usuarios/crear',
     upload.single('foto'), 
+    userValidationRules.create,
+    handleValidationErrors,
     ensureAuthenticated, 
     checkRole(['superadministrador', 'administrador']), 
     userController.createUser
@@ -39,13 +42,16 @@ router.post('/usuarios/crear',
 
 router.post('/usuarios/editar/:id',
     upload.single('foto'),
+    userValidationRules.update,
+    handleValidationErrors,
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador']),
     userController.updateUser // Asegúrate de tener este método en tu controlador
 );
 
 router.delete('/usuarios/eliminar/:id', 
-    upload.single('foto'),
+    userValidationRules.delete,
+    handleValidationErrors,
     ensureAuthenticated, 
     checkRole(['superadministrador', 'administrador']), 
     userController.deleteUser

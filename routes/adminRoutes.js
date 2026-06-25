@@ -6,6 +6,7 @@ const menuController = require('../controllers/menuController');
 const dashboardController = require('../controllers/dashboardController');
 const path = require('path');
 const multer = require('multer');
+const { menuValidationRules, mesaValidationRules, handleValidationErrors } = require('../middlewares/validator');
 
 // Configuración de almacenamiento de Multer
 const storage = multer.diskStorage({
@@ -34,8 +35,8 @@ router.get('/dashboard', ensureAuthenticated, checkRole(['superadministrador', '
 router.get('/mesas', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'dependiente']), tableController.listTables);
 
 // Acciones CRUD de mesas (Restringido solo a administradores)
-router.post('/mesas/crear', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), tableController.createTable);
-router.post('/mesas/editar/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), tableController.updateTable);
+router.post('/mesas/crear', mesaValidationRules.create, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), tableController.createTable);
+router.post('/mesas/editar/:id', mesaValidationRules.update, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), tableController.updateTable);
 router.delete('/mesas/eliminar/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), tableController.deleteTable);
 
 // ==========================================
@@ -46,8 +47,8 @@ router.delete('/mesas/eliminar/:id', ensureAuthenticated, checkRole(['superadmin
 router.get('/menu', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.listMenu);
 
 // Acciones CRUD de Platillos
-router.post('/menu/crear', upload.single('foto'), ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.createDish);
-router.post('/menu/editar/:id', upload.single('foto'), ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.updateDish);
-router.post('/menu/eliminar/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.deleteDish);
+router.post('/menu/crear', upload.single('foto'), menuValidationRules.create, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.createDish);
+router.post('/menu/editar/:id', upload.single('foto'), menuValidationRules.update, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.updateDish);
+router.post('/menu/eliminar/:id', menuValidationRules.delete, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.deleteDish);
 
 module.exports = router;
