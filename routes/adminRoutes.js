@@ -51,4 +51,7 @@ router.post('/menu/crear', upload.single('foto'), menuValidationRules.create, ha
 router.post('/menu/editar/:id', upload.single('foto'), menuValidationRules.update, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.updateDish);
 router.post('/menu/eliminar/:id', menuValidationRules.delete, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.deleteDish);
 
+// Nueva acción para guardar la distribución por lote (Permite Capitán)
+router.post('/mesas/distribucion', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'capitan']), tableController.saveDistribution);
+
 module.exports = router;

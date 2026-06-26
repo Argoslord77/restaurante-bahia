@@ -218,7 +218,38 @@
             });
         }
 
-        function addToCart(id, nombre, precio) {
+        async function checkStockAvailability(id, nombre) {
+            try {
+                const response = await fetch(`/api/pos/verify-stock?id_platillo=${id}&cantidad=1`);
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error al verificar stock:', error);
+                return { success: true, suficiente: true }; // Permitir continuar si hay error
+            }
+        }
+
+        async function addToCart(id, nombre, precio) {
+            // Verificar stock antes de agregar
+            const stockCheck = await checkStockAvailability(id, nombre);
+            
+            if (!stockCheck.suficiente) {
+                let mensaje = `No hay suficiente stock para ${nombre}`;
+                if (stockCheck.faltantes && stockCheck.faltantes.length > 0) {
+                    const faltantes = stockCheck.faltantes.map(f => `${f.producto_nombre}: falta ${f.cantidad_faltante}`).join(', ');
+                    mensaje += `<br><small class="text-muted">Faltan: ${faltantes}</small>`;
+                }
+                
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Stock Insuficiente',
+                    html: mensaje,
+                    confirmButtonColor: '#dc3545',
+                    confirmButtonText: 'Entendido'
+                });
+                return;
+            }
+
             const itemExistente = carrito.find(prod => prod.id === id);
             if (itemExistente) {
                 itemExistente.cantidad += 1;
@@ -326,6 +357,20 @@
             }).then((result) => {
                 if (result.isConfirmed && result.value.success) {
                     Swal.fire({ icon: 'success', title: 'Guardado', text: result.value.message });
+                } else if (result.isConfirmed && !result.value.success) {
+                    // Manejar error de stock insuficiente
+                    if (result.value.faltantes && result.value.faltantes.length > 0) {
+                        const faltantes = result.value.faltantes.map(f => `${f.producto_nombre}: falta ${f.cantidad_faltante}`).join(', ');
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Stock Insuficiente',
+                            html: `${result.value.message}<br><small class="text-muted">Faltan: ${faltantes}</small>`,
+                            confirmButtonColor: '#dc3545',
+                            confirmButtonText: 'Entendido'
+                        });
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Error', text: result.value.message });
+                    }
                 }
             });
         }

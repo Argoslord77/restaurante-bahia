@@ -116,6 +116,10 @@ const inventarioRoutes = require('./routes/inventarioRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const posRoutes = require('./routes/posRoutes');
 const pedidoRoutes = require('./routes/pedidoRoutes');
+const recetaRoutes = require('./routes/recetaRoutes');
+const transferenciaRoutes = require('./routes/transferenciaRoutes');
+const salidaManualRoutes = require('./routes/salidaManualRoutes');
+const settingRoutes = require('./routes/settingRoutes');
 
 app.use('/', authRoutes);
 app.use('/admin', userRoutes);
@@ -124,6 +128,10 @@ app.use('/admin', almacenRoutes);
 app.use('/admin', inventarioRoutes);
 app.use('/admin', productoRoutes);
 app.use('/admin', pedidoRoutes);
+app.use('/admin', recetaRoutes);
+app.use('/admin', transferenciaRoutes);
+app.use('/admin', salidaManualRoutes);
+app.use('/admin', settingRoutes);
 
 app.use(posRoutes);
 

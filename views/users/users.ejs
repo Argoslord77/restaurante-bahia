@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Usuarios - Restaurante</title>
-    <link class="jsbin" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1/themes/base/jquery-ui.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
@@ -28,7 +28,7 @@
                 <%- include('../includes/header', {encabezado_pagina: 'Personal / Usuarios', desc_pagina: 'Gestión de accesos, roles y personal del restaurante', add_btn: true, btn_label: "Nuevo Usuario", modal: "modalCrearUsuario"}) %>
                 <div class="card card-custom shadow-sm border-0 overflow-hidden">
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
+                        <table class="table table-hover align-middle mb-0" id="tablaUsuarios">
                             <thead class="table-custom-thead text-uppercase fs-7">
                                 <tr>
                                     <th class="ps-4 py-3">Nombre Completo</th>
@@ -102,8 +102,9 @@
                                                                 data-foto="<%= user.foto %>">
                                                             <i class="fa-solid fa-pen-to-square"></i>
                                                         </button>
-                                                        <button class="btn btn-sm btn-outline-danger border-0" 
-                                                                onclick="confirmDelete('<%= user.id %>', '<%= user.nombre %> <%= user.apellidos %>')" 
+                                                        <button class="btn btn-sm btn-outline-danger border-0 btn-eliminar-usuario" 
+                                                                data-id="<%= user.id %>"
+                                                                data-nombre="<%= user.nombre %> <%= user.apellidos %>"
                                                                 title="Eliminar">
                                                             <i class="fa-solid fa-trash"></i>
                                                         </button>
@@ -128,7 +129,7 @@
                     <h5 class="modal-title fw-bold">Registrar Nuevo Personal</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="formCrearUsuario" onsubmit="saveUser(event, false)">
+                <form id="formCrearUsuario">
                     <div class="modal-body p-4">
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -187,7 +188,7 @@
                     <h5 class="modal-title fw-bold"><i class="fa-solid fa-user-gear me-2"></i>Editar Datos del Personal</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="formEditarUsuario" onsubmit="saveUser(event, true)">
+                <form id="formEditarUsuario">
                     <div class="modal-body p-4">
                         <div class="row">
                             <div class="col-12 col-md-4 d-flex flex-column align-items-center justify-content-center border-end pb-3 pb-md-0 mb-3 mb-md-0 text-center">
@@ -239,7 +240,7 @@
                                     </div>
                                     <div class="col-12">
                                         <label class="form-label fw-semibold text-secondary small">Cambiar Foto de Perfil</label>
-                                        <input type="file" id="editFotoInput" name="foto" class="form-control" accept="image/*" onchange="previewNewImage(this)">
+                                        <input type="file" id="editFotoInput" name="foto" class="form-control" accept="image/*">
                                     </div>
                                 </div>
                             </div>
@@ -254,10 +255,44 @@
         </div>
     </div>
 
+    <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
     <script>
         const bsModalCrear = new bootstrap.Modal(document.getElementById('modalCrearUsuario'));
         const bsModalEditar = new bootstrap.Modal(document.getElementById('modalEditarUsuario'));
+
+        // ========================================================
+        // ASIGNACIÓN SEGURA DE EVENTOS DE ESCUCHA (CUMPLIENDO CON CSP)
+        // ========================================================
+        document.addEventListener("DOMContentLoaded", () => {
+            
+            // Envío del Formulario de Creación
+            document.getElementById('formCrearUsuario').addEventListener('submit', (e) => {
+                saveUser(e, false);
+            });
+
+            // Envío del Formulario de Edición
+            document.getElementById('formEditarUsuario').addEventListener('submit', (e) => {
+                saveUser(e, true);
+            });
+
+            // Detección segura de cambio de imagen
+            document.getElementById('editFotoInput').addEventListener('change', function() {
+                previewNewImage(this);
+            });
+
+            // Delegación de eventos para el botón Eliminar Usuario
+            document.getElementById('tablaUsuarios').addEventListener('click', function(e) {
+                const botonEliminar = e.target.closest('.btn-eliminar-usuario');
+                if (botonEliminar) {
+                    const id = botonEliminar.getAttribute('data-id');
+                    const nombre = botonEliminar.getAttribute('data-nombre');
+                    confirmDelete(id, nombre);
+                }
+            });
+        });
 
         document.getElementById('modalCrearUsuario').addEventListener('hidden.bs.modal', () => {
             document.getElementById('formCrearUsuario').reset();

@@ -1,4 +1,6 @@
 const db = require('../config/db');
+const RecetaService = require('./recetaService');
+const logger = require('../config/logger');
 
 const pedidoService = {
     // Obtener pedidos en consumo
@@ -87,7 +89,7 @@ const pedidoService = {
         }
     },
 
-    // Cierre estándar de cuenta
+    // Cierre estándar de cuenta con descuento de inventario
     procesarCierreFinanciero: async (id_pedido, id_usuario_cajero) => {
         const connection = await db.getConnection();
         try {
@@ -95,6 +97,25 @@ const pedidoService = {
 
             const [pedido] = await connection.query("SELECT id_mesa FROM pedidos WHERE id = ?", [id_pedido]);
             if (pedido.length === 0) throw new Error('Pedido no encontrado');
+
+            // Obtener detalles del pedido para descontar inventario
+            const [detalles] = await connection.query(
+                `SELECT id_platillo, cantidad FROM detalles_pedido 
+                 WHERE id_pedido = ? AND estado_item != 'cancelado'`, [id_pedido]
+            );
+
+            // Descontar stock de ingredientes usando el sistema de recetas
+            if (detalles.length > 0) {
+                try {
+                    // Usar almacén principal (id=1) - configurable según necesidades
+                    const almacenId = 1;
+                    await RecetaService.descontarStockPedido(detalles, almacenId);
+                    logger.info(`Stock descontado para pedido ${id_pedido}`);
+                } catch (error) {
+                    logger.error(`Error al descontar stock para pedido ${id_pedido}:`, error);
+                    // No fallar el cierre por error en inventario, pero loggear
+                }
+            }
 
             await connection.query(
                 `UPDATE pedidos 

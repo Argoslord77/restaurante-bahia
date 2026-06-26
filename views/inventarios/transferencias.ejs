@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= typeof title !== 'undefined' ? title : 'Transferencias - Restaurante Bahía' %></title>
+    <link class="js-bootstrap-css" rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css"> 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+
+    <div class="toast-container-custom">
+        <% if (typeof error_msg !== 'undefined' && error_msg && error_msg.length > 0) { %>
+            <div class="toast show text-white bg-danger border-0 shadow" role="alert" id="liveToast">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-xmark me-2"></i><%= error_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+        
+        <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
+            <div class="toast show text-white bg-success border-0 shadow" role="alert" id="liveToast">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-check me-2"></i><%= success_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+    </div>
+
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+                <%- include('../includes/header', {
+                    encabezado_pagina: '🚚 Transferencias entre Almacenes', 
+                    desc_pagina: 'Gestión de movimientos de inventario entre locaciones.', 
+                    add_btn: true, 
+                    btn_label: "Nueva Transferencia", 
+                    modal: "transferenciaModal" 
+                }) %>
+
+                <!-- Filtros de estado -->
+                <div class="card card-custom shadow-sm border-0 mb-4">
+                    <div class="card-body py-3">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a href="/admin/transferencias" class="btn <%= estadoFiltro === 'todos' ? 'btn-primary' : 'btn-outline-secondary' %>">
+                                Todos
+                            </a>
+                            <a href="/admin/transferencias?estado=pendiente" class="btn <%= estadoFiltro === 'pendiente' ? 'btn-warning' : 'btn-outline-secondary' %>">
+                                Pendientes
+                            </a>
+                            <a href="/admin/transferencias?estado=aprobada" class="btn <%= estadoFiltro === 'aprobada' ? 'btn-info' : 'btn-outline-secondary' %>">
+                                Aprobadas
+                            </a>
+                            <a href="/admin/transferencias?estado=completada" class="btn <%= estadoFiltro === 'completada' ? 'btn-success' : 'btn-outline-secondary' %>">
+                                Completadas
+                            </a>
+                            <a href="/admin/transferencias?estado=rechazada" class="btn <%= estadoFiltro === 'rechazada' ? 'btn-danger' : 'btn-outline-secondary' %>">
+                                Rechazadas
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-custom-thead text-uppercase fs-7">
+                                    <tr>
+                                        <th class="ps-4 py-3">Fecha</th>
+                                        <th class="py-3">Origen</th>
+                                        <th class="py-3">Destino</th>
+                                        <th class="py-3">Producto</th>
+                                        <th class="py-3">Cantidad</th>
+                                        <th class="py-3">Solicitante</th>
+                                        <th class="py-3 text-center">Estado</th>
+                                        <th class="text-center py-3" style="width: 200px;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (transferencias.length === 0) { %>
+                                        <tr>
+                                            <td colspan="8" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-truck d-block fs-2 mb-2 text-secondary"></i> 
+                                                No hay transferencias registradas.
+                                            </td>
+                                        </tr>
+                                    <% } else { %>
+                                        <% transferencias.forEach(transferencia => { %>
+                                            <tr>
+                                                <td class="ps-4 fw-medium">
+                                                    <div class="text-dark"><%= new Date(transferencia.fecha_solicitud).toLocaleDateString() %></div>
+                                                    <div class="text-muted small"><%= new Date(transferencia.fecha_solicitud).toLocaleTimeString() %></div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-semibold"><%= transferencia.almacen_origen_nombre %></div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-semibold"><%= transferencia.almacen_destino_nombre %></div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-medium"><%= transferencia.producto_nombre %></div>
+                                                    <div class="text-muted small"><%= transferencia.producto_codigo || '' %></div>
+                                                </td>
+                                                <td class="fw-bold text-dark"><%= transferencia.cantidad %></td>
+                                                <td><%= transferencia.solicitante_nombre || '—' %></td>
+                                                <td class="text-center">
+                                                    <% if (transferencia.estado === 'pendiente') { %>
+                                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-3 py-1 rounded-pill fs-7">Pendiente</span>
+                                                    <% } else if (transferencia.estado === 'aprobada') { %>
+                                                        <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-1 rounded-pill fs-7">Aprobada</span>
+                                                    <% } else if (transferencia.estado === 'completada') { %>
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1 rounded-pill fs-7">Completada</span>
+                                                    <% } else if (transferencia.estado === 'rechazada') { %>
+                                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-1 rounded-pill fs-7">Rechazada</span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-center pe-3">
+                                                    <div class="btn-group gap-1">
+                                                        <% if (transferencia.estado === 'pendiente' && user && ['superadministrador', 'administrador'].includes(user.rol)) { %>
+                                                            <button class="btn btn-sm btn-outline-success border-0" onclick="aprobarTransferencia('<%= transferencia.id %>')" title="Aprobar">
+                                                                <i class="fa-solid fa-check"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm btn-outline-danger border-0" onclick="rechazarTransferencia('<%= transferencia.id %>')" title="Rechazar">
+                                                                <i class="fa-solid fa-xmark"></i>
+                                                            </button>
+                                                        <% } %>
+                                                        <% if (transferencia.estado === 'aprobada' && user && ['superadministrador', 'administrador', 'almacenero'].includes(user.rol)) { %>
+                                                            <button class="btn btn-sm btn-outline-primary border-0" onclick="completarTransferencia('<%= transferencia.id %>')" title="Completar">
+                                                                <i class="fa-solid fa-truck-fast"></i>
+                                                            </button>
+                                                        <% } %>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal Nueva Transferencia -->
+    <div class="modal fade" id="transferenciaModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+           <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fa-solid fa-plus-circle me-2 text-primary"></i>
+                        Nueva Transferencia
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="transferenciaForm">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Almacén Origen <span class="text-danger">*</span></label>
+                                <select class="form-select" id="almacenOrigen" name="almacen_origen_id" required>
+                                    <option value="">Seleccione almacén origen</option>
+                                    <% almacenes.forEach(almacen => { %>
+                                        <option value="<%= almacen.id %>"><%= almacen.nombre %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Almacén Destino <span class="text-danger">*</span></label>
+                                <select class="form-select" id="almacenDestino" name="almacen_destino_id" required>
+                                    <option value="">Seleccione almacén destino</option>
+                                    <% almacenes.forEach(almacen => { %>
+                                        <option value="<%= almacen.id %>"><%= almacen.nombre %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Producto <span class="text-danger">*</span></label>
+                                <select class="form-select" id="producto" name="producto_id" required>
+                                    <option value="">Seleccione producto</option>
+                                    <% productos.forEach(producto => { %>
+                                        <option value="<%= producto.id %>"><%= producto.nombre %> (<%= producto.codigo || 'N/A' %>)</option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Cantidad <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="cantidad" name="cantidad" step="0.001" min="0.001" required>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Motivo</label>
+                                <input type="text" class="form-control" id="motivo" name="motivo" placeholder="Ej: Reabastecimiento de cocina">
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Notas</label>
+                                <textarea class="form-control" id="notas" name="notas" rows="2" placeholder="Información adicional..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa-solid fa-paper-plane me-2"></i>Solicitar Transferencia
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const transferenciaModal = new bootstrap.Modal(document.getElementById('transferenciaModal'));
+        const transferenciaForm = document.getElementById('transferenciaForm');
+
+        function aprobarTransferencia(id) {
+            Swal.fire({
+                title: '¿Aprobar transferencia?',
+                text: 'Esta acción permitirá completar la transferencia',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, aprobar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/admin/api/transferencias/${id}/aprobar`, {
+                        method: 'PUT'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('Aprobada', data.message, 'success').then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', data.message, 'error');
+                        }
+                    })
+                    .catch(error => Swal.fire('Error', 'No se pudo aprobar la transferencia', 'error'));
+                }
+            });
+        }
+
+        function rechazarTransferencia(id) {
+            Swal.fire({
+                title: '¿Rechazar transferencia?',
+                text: 'Esta acción no se puede deshacer',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, rechazar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/admin/api/transferencias/${id}/rechazar`, {
+                        method: 'PUT'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('Rechazada', data.message, 'success').then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', data.message, 'error');
+                        }
+                    })
+                    .catch(error => Swal.fire('Error', 'No se pudo rechazar la transferencia', 'error'));
+                }
+            });
+        }
+
+        function completarTransferencia(id) {
+            Swal.fire({
+                title: '¿Completar transferencia?',
+                text: 'Esto moverá el stock del almacén origen al destino',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, completar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/admin/api/transferencias/${id}/completar`, {
+                        method: 'PUT'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('Completada', data.message, 'success').then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', data.message, 'error');
+                        }
+                    })
+                    .catch(error => Swal.fire('Error', 'No se pudo completar la transferencia', 'error'));
+                }
+            });
+        }
+
+        transferenciaForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const almacenOrigen = document.getElementById('almacenOrigen').value;
+            const almacenDestino = document.getElementById('almacenDestino').value;
+
+            if (almacenOrigen === almacenDestino) {
+                Swal.fire('Error', 'El almacén de origen y destino deben ser diferentes', 'error');
+                return;
+            }
+
+            const data = {
+                almacen_origen_id: formData.get('almacen_origen_id'),
+                almacen_destino_id: formData.get('almacen_destino_id'),
+                producto_id: formData.get('producto_id'),
+                cantidad: formData.get('cantidad'),
+                motivo: formData.get('motivo'),
+                notas: formData.get('notas')
+            };
+
+            fetch('/admin/api/transferencias', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Solicitada', data.message, 'success').then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(error => Swal.fire('Error', 'No se pudo crear la solicitud', 'error'));
+        });
+
+        document.getElementById('transferenciaModal').addEventListener('hidden.bs.modal', function() {
+            transferenciaForm.reset();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= typeof title !== 'undefined' ? title : 'Salidas Manuales - Restaurante Bahía' %></title>
+    <link class="js-bootstrap-css" rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css"> 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+
+    <div class="toast-container-custom">
+        <% if (typeof error_msg !== 'undefined' && error_msg && error_msg.length > 0) { %>
+            <div class="toast show text-white bg-danger border-0 shadow" role="alert" id="liveToast">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-xmark me-2"></i><%= error_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+        
+        <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
+            <div class="toast show text-white bg-success border-0 shadow" role="alert" id="liveToast">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-check me-2"></i><%= success_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+    </div>
+
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+                <%- include('../includes/header', {
+                    encabezado_pagina: '📤 Salidas Manuales de Inventario', 
+                    desc_pagina: 'Registro de mermas, roturas, pérdidas y ajustes de auditoría.', 
+                    add_btn: true, 
+                    btn_label: "Nueva Salida", 
+                    modal: "salidaManualModal" 
+                }) %>
+
+                <!-- Resumen por tipo -->
+                <div class="card card-custom shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="fa-solid fa-chart-pie me-2 text-primary"></i>Resumen por Tipo</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <% if (resumen && resumen.length > 0) { %>
+                                <% resumen.forEach(item => { %>
+                                    <div class="col-md-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <div class="text-muted small text-capitalize"><%= item.tipo %></div>
+                                            <div class="fs-4 fw-bold text-dark"><%= item.total_salidas %></div>
+                                            <div class="text-muted small"><%= item.total_cantidad.toFixed(2) } unidades</div>
+                                        </div>
+                                    </div>
+                                <% }) %>
+                            <% } else { %>
+                                <div class="col-12 text-center text-muted">
+                                    No hay datos de salidas manuales
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtros de tipo -->
+                <div class="card card-custom shadow-sm border-0 mb-4">
+                    <div class="card-body py-3">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a href="/admin/salidas-manuales" class="btn <%= tipoFiltro === 'todos' ? 'btn-primary' : 'btn-outline-secondary' %>">
+                                Todos
+                            </a>
+                            <a href="/admin/salidas-manuales?tipo=merma" class="btn <%= tipoFiltro === 'merma' ? 'btn-warning' : 'btn-outline-secondary' %>">
+                                Mermas
+                            </a>
+                            <a href="/admin/salidas-manuales?tipo=rotura" class="btn <%= tipoFiltro === 'rotura' ? 'btn-danger' : 'btn-outline-secondary' %>">
+                                Roturas
+                            </a>
+                            <a href="/admin/salidas-manuales?tipo=perdida" class="btn <%= tipoFiltro === 'perdida' ? 'btn-secondary' : 'btn-outline-secondary' %>">
+                                Pérdidas
+                            </a>
+                            <a href="/admin/salidas-manuales?tipo=ajuste_auditoria" class="btn <%= tipoFiltro === 'ajuste_auditoria' ? 'btn-info' : 'btn-outline-secondary' %>">
+                                Ajustes Auditoría
+                            </a>
+                            <a href="/admin/salidas-manuales?tipo=caducado" class="btn <%= tipoFiltro === 'caducado' ? 'btn-dark' : 'btn-outline-secondary' %>">
+                                Caducados
+                            </a>
+                            <a href="/admin/salidas-manuales?tipo=otro" class="btn <%= tipoFiltro === 'otro' ? 'btn-light' : 'btn-outline-secondary' %>">
+                                Otros
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-custom-thead text-uppercase fs-7">
+                                    <tr>
+                                        <th class="ps-4 py-3">Fecha</th>
+                                        <th class="py-3">Almacén</th>
+                                        <th class="py-3">Producto</th>
+                                        <th class="py-3">Cantidad</th>
+                                        <th class="py-3">Tipo</th>
+                                        <th class="py-3">Motivo</th>
+                                        <th class="py-3">Usuario</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (salidas.length === 0) { %>
+                                        <tr>
+                                            <td colspan="7" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-box-open d-block fs-2 mb-2 text-secondary"></i> 
+                                                No hay salidas manuales registradas.
+                                            </td>
+                                        </tr>
+                                    <% } else { %>
+                                        <% salidas.forEach(salida => { %>
+                                            <tr>
+                                                <td class="ps-4 fw-medium">
+                                                    <div class="text-dark"><%= new Date(salida.fecha_registro).toLocaleDateString() %></div>
+                                                    <div class="text-muted small"><%= new Date(salida.fecha_registro).toLocaleTimeString() %></div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-semibold"><%= salida.almacen_nombre %></div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-medium"><%= salida.producto_nombre %></div>
+                                                    <div class="text-muted small"><%= salida.producto_codigo || '' %></div>
+                                                </td>
+                                                <td class="fw-bold text-danger"><%= salida.cantidad %></td>
+                                                <td>
+                                                    <span class="badge bg-secondary text-white text-capitalize px-3 py-1 rounded-pill fs-7">
+                                                        <%= salida.tipo.replace('_', ' ') %>
+                                                    </span>
+                                                </td>
+                                                <td><%= salida.motivo || '—' %></td>
+                                                <td><%= salida.usuario_nombre || '—' %></td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal Nueva Salida Manual -->
+    <div class="modal fade" id="salidaManualModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+           <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fa-solid fa-plus-circle me-2 text-primary"></i>
+                        Nueva Salida Manual
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="salidaManualForm">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Almacén <span class="text-danger">*</span></label>
+                                <select class="form-select" id="almacen" name="almacen_id" required>
+                                    <option value="">Seleccione almacén</option>
+                                    <% almacenes.forEach(almacen => { %>
+                                        <option value="<%= almacen.id %>"><%= almacen.nombre %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Producto <span class="text-danger">*</span></label>
+                                <select class="form-select" id="producto" name="producto_id" required>
+                                    <option value="">Seleccione producto</option>
+                                    <% productos.forEach(producto => { %>
+                                        <option value="<%= producto.id %>"><%= producto.nombre %> (<%= producto.codigo || 'N/A' %>)</option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Cantidad <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="cantidad" name="cantidad" step="0.001" min="0.001" required>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Tipo <span class="text-danger">*</span></label>
+                                <select class="form-select" id="tipo" name="tipo" required>
+                                    <option value="">Seleccione tipo</option>
+                                    <option value="merma">Merma</option>
+                                    <option value="rotura">Rotura</option>
+                                    <option value="perdida">Pérdida</option>
+                                    <option value="ajuste_auditoria">Ajuste Auditoría</option>
+                                    <option value="caducado">Caducado</option>
+                                    <option value="otro">Otro</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Motivo</label>
+                                <input type="text" class="form-control" id="motivo" name="motivo" placeholder="Ej: Producto dañado en cocina">
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Notas</label>
+                                <textarea class="form-control" id="notas" name="notas" rows="2" placeholder="Información adicional..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fa-solid fa-minus-circle me-2"></i>Registrar Salida
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const salidaManualModal = new bootstrap.Modal(document.getElementById('salidaManualModal'));
+        const salidaManualForm = document.getElementById('salidaManualForm');
+
+        salidaManualForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+
+            const data = {
+                almacen_id: formData.get('almacen_id'),
+                producto_id: formData.get('producto_id'),
+                cantidad: formData.get('cantidad'),
+                tipo: formData.get('tipo'),
+                motivo: formData.get('motivo'),
+                notas: formData.get('notas')
+            };
+
+            fetch('/admin/api/salidas-manuales', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Registrada', data.message, 'success').then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(error => Swal.fire('Error', 'No se pudo registrar la salida', 'error'));
+        });
+
+        document.getElementById('salidaManualModal').addEventListener('hidden.bs.modal', function() {
+            salidaManualForm.reset();
+        });
+    </script>
+</body>
+</html>

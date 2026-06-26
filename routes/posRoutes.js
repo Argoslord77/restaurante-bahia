@@ -31,4 +31,7 @@ router.get('/pos/:id_pedido', ensureAuthenticated, posController.viewPOS);
 // Guardado y modificación transaccional de los platillos desde la comanda
 router.post('/api/pos/save', posValidationRules.saveOrder, handleValidationErrors, ensureAuthenticated, posController.apiSaveOrder);
 
+// Verificar stock para un platillo específico
+router.get('/api/pos/verify-stock', ensureAuthenticated, posController.apiVerifyStock);
+
 module.exports = router;

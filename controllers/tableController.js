@@ -2,23 +2,47 @@
 const tableService = require('../services/tableService');
 const crypto = require('crypto');
 
-// 1. LISTAR TODAS LAS MESAS (Pasamos la IP del Servidor a la vista)
 exports.listTables = async (req, res) => {
     try {
         const tables = await tableService.getAllTables();
+        const waiters = await tableService.getActiveWaiters();
         
-        // Capturar la IP del .env para la construcción de los QR
+        // Capturar áreas únicas del mobiliario actual para segmentar las alertas y distribuciones
+        const areas = [...new Set(tables.map(t => t.ubicacion || 'Salon Principal'))];
+        
+        // Consultar la distribución de la primera área por defecto o procesar el mapa completo de hoy
+        const distributionToday = await tableService.getDistributionToday(areas[0] || 'Salon Principal');
+
         const serverIp = process.env.SERVER_IP || 'localhost';
 
         res.render('admin/tables', {
             tables,
+            waiters,
+            areas,
+            distributionToday: distributionToday || {}, // Enviado como objeto para indexación directa
             user: req.user,
             view: 'table',
-            serverIp // Enviado a la plantilla EJS
+            serverIp
         });
     } catch (error) {
-        console.error('Error crítico al listar mesas:', error);
+        console.error('Error crítico al listar mesas con distribución:', error);
         res.status(500).send('Error interno al obtener el salón de mesas');
+    }
+};
+
+// Guardar la distribución enviada en formato JSON
+exports.saveDistribution = async (req, res) => {
+    try {
+        const { ubicacion, asignaciones } = req.body;
+        if (!ubicacion || !Array.isArray(asignaciones)) {
+            return res.status(400).json({ success: false, message: 'Parámetros de distribución inválidos.' });
+        }
+
+        await tableService.saveDistribution(ubicacion, asignaciones);
+        return res.status(200).json({ success: true, message: 'Distribución del salón guardada correctamente para el día de hoy.' });
+    } catch (error) {
+        console.error('Error al guardar distribución:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al procesar la distribución.' });
     }
 };
 

@@ -1,6 +1,8 @@
 const menuService = require('../services/menuService');
 const orderService = require('../services/orderService');
 const orderModel = require('../models/orderModel');
+const RecetaService = require('../services/recetaService');
+const logger = require('../config/logger');
 
 /**
  * Acceso directo al POS pasándole obligatoriamente el ID del pedido previamente inicializado
@@ -66,6 +68,32 @@ exports.initOrderQR = async (req, res) => {
 exports.apiSaveOrder = async (req, res) => {
     try {
         const { id_pedido, items } = req.body;
+
+        // Verificar stock de ingredientes antes de guardar la orden
+        if (items && items.length > 0) {
+            try {
+                // Usar almacén principal (id=1) - configurable según necesidades
+                const almacenId = 1;
+                const stockVerification = await RecetaService.verificarStockParaPedido(items, almacenId);
+                
+                if (!stockVerification.suficiente) {
+                    logger.warn(`Stock insuficiente para pedido ${id_pedido}:`, stockVerification.faltantes);
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Stock insuficiente para completar la orden',
+                        faltantes: stockVerification.faltantes,
+                        requiereAprobacion: false
+                    });
+                }
+                
+                logger.info(`Stock verificado exitosamente para pedido ${id_pedido}`);
+            } catch (error) {
+                logger.error(`Error al verificar stock para pedido ${id_pedido}:`, error);
+                // No fallar el guardado por error en verificación de stock, pero loggear
+                // Esto permite que el sistema siga funcionando si hay un error en el servicio de recetas
+            }
+        }
+
         const financialData = await orderService.syncPosOrder(id_pedido, items);
 
         return res.status(200).json({
@@ -76,5 +104,33 @@ exports.apiSaveOrder = async (req, res) => {
     } catch (error) {
         console.error('Error al guardar la orden en POS:', error);
         return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Verificar stock para un platillo específico
+ */
+exports.apiVerifyStock = async (req, res) => {
+    try {
+        const { id_platillo, cantidad } = req.query;
+        
+        if (!id_platillo) {
+            return res.status(400).json({ success: false, message: 'ID de platillo requerido' });
+        }
+
+        const cantidadSolicitada = parseInt(cantidad) || 1;
+        const almacenId = 1; // Almacén principal configurable
+
+        const items = [{ id_platillo: parseInt(id_platillo), cantidad: cantidadSolicitada }];
+        const stockVerification = await RecetaService.verificarStockParaPedido(items, almacenId);
+
+        return res.status(200).json({
+            success: true,
+            suficiente: stockVerification.suficiente,
+            faltantes: stockVerification.faltantes || []
+        });
+    } catch (error) {
+        logger.error('Error al verificar stock de platillo:', error);
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
