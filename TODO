@@ -75,3 +75,151 @@ Sistema de migraciones y configuración por ambiente implementado
   * config/index.js - Módulo centralizado
 - config/db.js actualizado para usar configuración centralizada
 - .env.example creado con todas las variables necesarias
+
+7. Sistema de Recetas (Prioridad Alta) ✅ COMPLETADO
+Sistema de recetas para descuento automático de inventario en platillos, tragos y cocteles
+- migrations/20240625000002_add_recetas.js creada:
+  * Tabla recetas con relación platillo-ingrediente
+  * Campos: platillo_id, producto_id, cantidad_requerida, unidad_medida, tipo_platillo, activo
+- migrations/20240625000003_add_movimientos_inventario.js creada:
+  * Tabla movimientos_inventario para trazabilidad
+  * Campos: lote_id, tipo (entrada/salida/ajuste/transferencia), cantidad, motivo, usuario_id, fecha
+- models/recetaModel.js creado:
+  * getByPlatillo, getByPlatilloAndAlmacen, getAll
+  * create, update, delete (lógico y físico)
+  * verificarStock, getPlatillosByProducto
+- services/recetaService.js creado:
+  * CRUD completo de recetas
+  * verificarStockParaPedido - Valida stock antes de procesar pedido
+  * descontarStockPedido - Descuenta ingredientes usando FIFO por vencimiento
+  * Registro automático de movimientos de inventario
+- controllers/recetaController.js creado:
+  * viewRecetas, viewConfigurarReceta
+  * getIngredientesByPlatillo, createReceta, updateReceta, deleteReceta
+  * verificarStock, getPlatillosByProducto
+- routes/recetaRoutes.js creado:
+  * Protegidas con autenticación y roles
+  * Validación con express-validator aplicada
+- Integración con pedidoService.js:
+  * procesarCierreFinanciero ahora descontar stock automáticamente
+  * Usa almacén principal (id=1) - configurable
+  * Logging de movimientos de inventario
+- Vistas creadas:
+  * views/inventarios/recetas.ejs - Lista completa de recetas
+  * views/inventarios/configurar-receta.ejs - Configuración por platillo
+  * Resumen de stock disponible por ingrediente
+- middlewares/validator.js actualizado:
+  * recetaValidationRules para create, update, verificarStock
+  * Validación de tipos de platillo: comida, trago, coctel
+  * Validación de unidades de medida: kg, g, l, ml, unidad, pieza, caja, botella
+
+8. Sistema de Transferencias entre Almacenes (Prioridad Alta) ✅ COMPLETADO
+Sistema para gestionar movimientos de inventario entre locaciones
+- migrations/20240625000004_add_transferencias.js creada:
+  * Tabla transferencias con flujo de aprobación
+  * Campos: almacen_origen_id, almacen_destino_id, producto_id, cantidad, estado
+  * Estados: pendiente, aprobada, rechazada, completada
+  * Campos de trazabilidad: solicitante_id, aprobador_id, fechas de solicitud/aprobación/completado
+- models/transferenciaModel.js creado:
+  * getAll, getByEstado, getById
+  * create, updateEstado
+  * verificarStockOrigen, obtenerLotesOrigen (FIFO por vencimiento)
+  * getByAlmacen (origen, destino o todos)
+- services/transferenciaService.js creado:
+  * crearSolicitud - Valida stock antes de crear solicitud
+  * aprobarTransferencia - Verifica stock y aprueba
+  * rechazarTransferencia - Rechaza solicitud pendiente
+  * completarTransferencia - Ejecuta movimiento físico con transacción:
+    * Descuenta de lotes origen usando FIFO
+    * Agrega a lote existente o crea nuevo en destino
+    * Registra movimientos de entrada/salida
+  * listarPorAlmacen - Filtra por almacén
+- controllers/transferenciaController.js creado:
+  * viewTransferencias - Vista con filtros por estado
+  * createSolicitud, aprobarTransferencia, rechazarTransferencia, completarTransferencia
+  * getTransferencia, getTransferenciasByAlmacen
+- routes/transferenciaRoutes.js creado:
+  * Protegidas con autenticación y roles
+  * Validación con express-validator aplicada
+  * Roles: almacenero puede solicitar, admin aprueba/completa
+- Vistas creadas:
+  * views/inventarios/transferencias.ejs - Lista con filtros de estado
+  * Modal para nueva transferencia
+  * Acciones: aprobar, rechazar, completar según estado y rol
+- Integración en app.js:
+  * Rutas de transferencias agregadas
+- Sidebar actualizado:
+  * views/includes/sideBarMenu.ejs - Link "Transferencias" agregado
+- middlewares/validator.js actualizado:
+  * transferenciaValidationRules para create
+  * Validación de almacenes origen/destino diferentes
+  * Validación de cantidad mayor a 0
+
+9. Sistema de Salidas Manuales de Inventario (Prioridad Alta) ✅ COMPLETADO
+Sistema para registrar mermas, roturas, pérdidas y ajustes de auditoría
+- migrations/20240625000005_add_salidas_manuales.js creada:
+  * Tabla salidas_manuales con tipos de salidas
+  * Campos: almacen_id, producto_id, cantidad, tipo, motivo, notas, usuario_id
+  * Tipos: merma, rotura, perdida, ajuste_auditoria, caducado, otro
+- models/salidaManualModel.js creado:
+  * getAll, getByTipo, getByAlmacen, getById
+  * create
+  * verificarStock, obtenerLotes (FIFO por vencimiento)
+  * getResumenPorTipo, getByPeriodo
+- services/salidaManualService.js creado:
+  * registrarSalida - Valida stock y registra con transacción:
+    * Descuenta de lotes usando FIFO
+    * Registra movimientos de inventario
+  * listarPorTipo, listarPorAlmacen
+  * obtenerResumenPorTipo, listarPorPeriodo
+- controllers/salidaManualController.js creado:
+  * viewSalidasManuales - Vista con filtros por tipo y resumen
+  * createSalida, getSalida
+  * getResumen, getSalidasPorPeriodo
+- routes/salidaManualRoutes.js creado:
+  * Protegidas con autenticación y roles
+  * Validación con express-validator aplicada
+  * Roles: almacenero, admin, superadmin
+- Vistas creadas:
+  * views/inventarios/salidas-manuales.ejs - Lista con filtros de tipo
+  * Resumen por tipo (mermas, roturas, pérdidas, etc.)
+  * Modal para nueva salida manual
+- Integración en app.js:
+  * Rutas de salidas manuales agregadas
+- Sidebar actualizado:
+  * views/includes/sideBarMenu.ejs - Link "Salidas Manuales" agregado
+- middlewares/validator.js actualizado:
+  * salidaManualValidationRules para create
+  * Validación de tipos de salida válidos
+  * Validación de cantidad mayor a 0
+
+10. Integración de Recetas con POS (Prioridad Media) ✅ COMPLETADO
+Integración del sistema de recetas con el punto de venta para verificación de stock en tiempo real
+- controllers/posController.js actualizado:
+  * Importación de RecetaService y logger
+  * apiSaveOrder - Verificación de stock antes de guardar orden:
+    * Valida stock de ingredientes usando RecetaService.verificarStockParaPedido
+    * Bloquea guardado si stock insuficiente
+    * Retorna lista de ingredientes faltantes
+    * Logging de verificaciones exitosas y fallidas
+  * apiVerifyStock - Nuevo endpoint para verificar stock de platillo individual:
+    * Verifica disponibilidad de ingredientes para un platillo específico
+    * Retorna estado de suficiencia y lista de faltantes
+- routes/posRoutes.js actualizado:
+  * Nueva ruta GET /api/pos/verify-stock
+  * Protegida con autenticación
+- views/pos.ejs actualizado:
+  * checkStockAvailability - Función asíncrona para verificar stock antes de agregar
+  * addToCart - Verificación de stock antes de agregar al carrito:
+    * Alerta visual con SweetAlert2 si stock insuficiente
+    * Muestra lista de ingredientes faltantes
+    * Bloquea agregado de platillo sin stock
+  * saveOrderToServer - Manejo mejorado de errores de stock:
+    * Muestra alerta detallada si stock insuficiente al guardar
+    * Despliega lista de ingredientes faltantes
+- Funcionalidades implementadas:
+  * Verificación de stock en tiempo real al agregar platillos
+  * Bloqueo preventivo de ventas sin stock suficiente
+  * Alertas visuales informativas sobre ingredientes faltantes
+  * Integración con almacén principal (id=1) - configurable
+  * Manejo robusto de errores para no interrumpir operación del POS

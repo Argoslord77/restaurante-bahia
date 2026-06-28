@@ -7,7 +7,7 @@ const Almacen = {
     },
 
     getById: async (id) => {
-        const [rows] = await db.query('SELECT * FROM almacenes WHERE id = ?', [id]);
+        const [rows] = await db.query('SELECT *, responsable_usuario_id AS responsable_id FROM almacenes WHERE id = ?', [id]);
         return rows[0];
     },
 

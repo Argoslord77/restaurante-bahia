@@ -25,7 +25,7 @@
 
         <div class="card card-custom shadow-sm border-0 overflow-hidden">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0" id="tablaProductos">
                     <thead class="table-custom-thead text-uppercase fs-7">
                         <tr>
                             <th class="ps-4 py-3">Código</th>
@@ -61,10 +61,10 @@
                                 </td>
                                 <td class="text-center">
                                     <div class="btn-group gap-1">
-                                        <button class="btn btn-sm btn-outline-secondary border-0" onclick="openEditModal('<%= p.id %>')" title="Editar">
+                                        <button class="btn btn-sm btn-outline-secondary border-0 btn-editar-producto" data-id="<%= p.id %>" title="Editar">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteProduct('<%= p.id %>')" title="Eliminar">
+                                        <button class="btn btn-sm btn-outline-danger border-0 btn-eliminar-producto" data-id="<%= p.id %>" title="Eliminar">
                                             <i class="fa-solid fa-trash"></i>
                                         </button>
                                     </div>
@@ -79,7 +79,7 @@
 
     <div class="modal fade" id="modalProducto" tabindex="-1" aria-labelledby="modalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <form id="formProducto" class="modal-content border-0 shadow" onsubmit="saveProduct(event)" enctype="multipart/form-data">
+            <form id="formProducto" class="modal-content border-0 shadow" enctype="multipart/form-data">
                 <input type="hidden" id="productId">
                 
                 <div class="modal-header bg-dark text-white">
@@ -100,7 +100,7 @@
                         </div>
                         
                         <div class="col-md-6">
-                            <label for="categoria_id" class="form-label fw-semibold text-secondary small">Categoría</label>
+                            <label class="form-label fw-semibold text-secondary small">Categoría</label>
                             <select class="form-select shadow-sm" name="categoria_id" id="categoria_id" required>
                                 <option value="">Seleccione una categoría...</option>
                                 <% if (typeof categorias !== 'undefined' && categorias.length > 0) { %>
@@ -115,14 +115,14 @@
                             <label class="form-label fw-semibold text-secondary small">Tipo de Insumo</label>
                             <select id="tipo" class="form-select shadow-sm" required>
                                 <option value="materia_prima">Materia Prima / Insumo</option>
-                                <option value="producto_preparado">Producto Preparado (Subproducción)</option>
+                                <option value="producto_preparado">Producto Prepared (Subproducción)</option>
                                 <option value="producto_venta">Producto de Venta Directa</option>
                                 <option value="material_operativo">Material Operativo / Suministro</option>
                             </select>
                         </div>
                         
                         <div class="col-md-4">
-                            <label for="unidad_inventario_id" class="form-label fw-semibold text-secondary small">Unidad de Medida</label>
+                            <label class="form-label fw-semibold text-secondary small">Unidad de Medida</label>
                             <select class="form-select shadow-sm" name="unidad_inventario_id" id="unidad_inventario_id" required>
                                 <option value="">Seleccione una unidad...</option>
                                 <% if (typeof unidades !== 'undefined' && unidades.length > 0) { %>
@@ -153,7 +153,7 @@
                         </div>
 
                         <div class="col-md-4">
-                            <label for="foto" class="form-label fw-semibold text-secondary small">Foto del Producto (Opcional)</label>
+                            <label class="form-label fw-semibold text-secondary small">Foto del Producto (Opcional)</label>
                             <input class="form-control shadow-sm" type="file" id="foto" name="foto" accept="image/*">
                             <div id="fotoPreviewContainer" class="mt-2 d-none text-center">
                                 <img id="fotoPreview" src="" alt="Vista previa" class="img-thumbnail" style="max-height: 180px;">
@@ -170,7 +170,9 @@
         </div>
     </div>
 
+    <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
     <script>
     // Inicialización de la instancia del Modal de Bootstrap
@@ -194,7 +196,6 @@
         document.getElementById('activo').checked = true;
         document.getElementById('permitida_venta').checked = false;
         
-        // Corrección de class_list a classList
         const previewContainer = document.getElementById('fotoPreviewContainer');
         if (previewContainer) {
             previewContainer.classList.add('d-none');
@@ -202,13 +203,31 @@
         document.getElementById('fotoPreview').src = '';
     });
 
+    // CORREGIDO: Asignación limpia del evento submit del formulario
+    document.getElementById('formProducto').addEventListener('submit', saveProduct);
+
+    // CORREGIDO: Delegación de eventos clic en la tabla de productos para Editar y Eliminar
+    document.getElementById('tablaProductos').addEventListener('click', function(e) {
+        const btnEditar = e.target.closest('.btn-editar-producto');
+        if (btnEditar) {
+            const id = btnEditar.getAttribute('data-id');
+            openEditModal(id);
+            return;
+        }
+
+        const btnEliminar = e.target.closest('.btn-eliminar-producto');
+        if (btnEliminar) {
+            const id = btnEliminar.getAttribute('data-id');
+            deleteProduct(id);
+        }
+    });
+
     // Guardar / Editar Producto
     async function saveProduct(e) {
-        e.preventDefault(); // Detiene el envío clásico del HTML
+        e.preventDefault(); 
         const id = document.getElementById('productId').value;
-        const esEdicion = !!id; // Evalúa si es edición (true) o creación (false)
+        const esEdicion = !!id; 
         
-        // Recolectamos los datos usando FormData
         const formData = new FormData();
         formData.append('codigo', document.getElementById('codigo').value);
         formData.append('nombre', document.getElementById('nombre').value);
@@ -226,7 +245,6 @@
 
         const url = esEdicion ? `/admin/productos/editar/${id}` : '/admin/productos/crear';
 
-        // Mostramos un spinner de carga temporal mientras el servidor procesa la imagen y los datos
         Swal.fire({
             title: esEdicion ? 'Actualizando producto...' : 'Guardando producto...',
             text: 'Por favor, espere un momento.',
@@ -250,10 +268,8 @@
             const result = await res.json();
             
             if (result.success) {
-                // Cerramos el modal de Bootstrap antes de mostrar el éxito
                 bsProductModal.hide();
 
-                // Notificación de Éxito estilizada
                 Swal.fire({
                     title: esEdicion ? '¡Actualizado!' : '¡Creado con éxito!',
                     text: result.message || (esEdicion ? 'El producto ha sido actualizado correctamente.' : 'El producto ha sido añadido al catálogo.'),
@@ -261,7 +277,7 @@
                     timer: 2000,
                     showConfirmButton: false,
                     willClose: () => {
-                        location.reload(); // Recarga la tabla una vez que la alerta se cierra sola
+                        location.reload(); 
                     }
                 });
             } else {
@@ -313,7 +329,7 @@
                             timer: 1500,
                             showConfirmButton: false
                         }).then(() => {
-                            location.reload(); // Recarga la tabla para reflejar el cambio
+                            location.reload(); 
                         });
                     } else {
                         Swal.fire('Error', data.message || 'No se pudo eliminar el producto.', 'error');
@@ -344,7 +360,6 @@
             document.getElementById('activo').checked = data.activo === 1;
             document.getElementById('permitida_venta').checked = data.permitida_venta === 1;
             
-            // Manejo dinámico del contenedor de la vista previa
             const previewContainer = document.getElementById('fotoPreviewContainer');
             const previewImg = document.getElementById('fotoPreview');
             if (data.foto_url) {

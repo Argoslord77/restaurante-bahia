@@ -315,7 +315,7 @@ const mesaValidationRules = {
     ]
 };
 
-// Validaciones para Recetas (Actualizado para arquitectura Maestro-Detalle Dinámica)
+// Validaciones para Recetas
 const recetaValidationRules = {
     create: [
         body('codigo')
@@ -357,7 +357,6 @@ const recetaValidationRules = {
             .optional()
             .isBoolean().withMessage('El campo activa debe ser un booleano'),
 
-        // Validación del Detalle (Ingredientes de la receta)
         body('detalles')
             .isArray({ min: 1 }).withMessage('La receta debe contener al menos un ingrediente'),
 
@@ -516,15 +515,59 @@ const salidaManualValidationRules = {
     ]
 };
 
+// Validaciones para Entradas de Almacén e Ingreso de Lotes (AGREGADO Y CORREGIDO)
+const entradaValidationRules = {
+    create: [
+        body('almacen_id')
+            .exists().withMessage('El almacén de destino es obligatorio')
+            .bail()
+            .notEmpty().withMessage('El almacén de destino no puede estar vacío')
+            .isInt().withMessage('El ID del almacén debe ser un número entero'),
+        
+        body('producto_id')
+            .exists().withMessage('El producto/insumo es obligatorio')
+            .bail()
+            .notEmpty().withMessage('El producto/insumo no puede estar vacío')
+            .isInt().withMessage('El ID del producto debe ser un número entero'),
+        
+        body('fecha_ingreso')
+            .exists().withMessage('La fecha de ingreso es obligatoria')
+            .bail()
+            .notEmpty().withMessage('La fecha de ingreso no puede estar vacía')
+            .isDate().withMessage('La fecha de ingreso debe tener un formato válido (AAAA-MM-DD)'),
+        
+        body('fecha_vencimiento')
+            .optional({ checkFalsy: true })
+            .customSanitizer(value => (value === '' ? null : value))
+            .isDate().withMessage('La fecha de vencimiento debe tener un formato válido (AAAA-MM-DD)'),
+        
+        body('cantidad')
+            .exists().withMessage('La cantidad ingresada es obligatoria')
+            .bail()
+            .notEmpty().withMessage('La cantidad no puede estar vacía')
+            .customSanitizer(value => String(value).trim())
+            .isFloat({ min: 0.001 }).withMessage('La cantidad debe ser un número mayor a 0'),
+        
+        body('costo_unitario')
+            .exists().withMessage('El costo unitario es obligatorio')
+            .bail()
+            .notEmpty().withMessage('El costo unitario no puede estar vacío')
+            .customSanitizer(value => String(value).trim())
+            .isFloat({ min: 0.000001 }).withMessage('El costo unitario debe ser un número positivo')
+    ]
+};
+
+// Al final de tu validator.js, asegúrate de que el module.exports luzca así:
 module.exports = {
     handleValidationErrors,
     userValidationRules,
     menuValidationRules,
     pedidoValidationRules,
     posValidationRules,
-    almacenValidationRules,
+    almacenValidationRules, // <-- Agregado a la exportación para que tus rutas lo consuman si decides agregarlo
     mesaValidationRules,
     recetaValidationRules,
     transferenciaValidationRules,
-    salidaManualValidationRules
+    salidaManualValidationRules,
+    entradaValidationRules
 };

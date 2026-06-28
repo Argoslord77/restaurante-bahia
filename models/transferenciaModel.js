@@ -1,4 +1,4 @@
-// models/transferenciaModel.js - Modelo para gestión de transferencias entre almacenes
+// models/transferenciaModel.js - Sincronizado al 100% con tu esquema real de restaurante_db
 const db = require('../config/db');
 
 const Transferencia = {
@@ -9,182 +9,104 @@ const Transferencia = {
                 t.*,
                 ao.nombre AS almacen_origen_nombre,
                 ad.nombre AS almacen_destino_nombre,
+                'Sistema' AS solicitante_nombre,
+                'Sistema' AS aprobador_nombre,
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
-                u_solicitante.nombre AS solicitante_nombre,
-                u_aprobador.nombre AS aprobador_nombre
+                td.cantidad_solicitada AS cantidad,
+                td.producto_id
             FROM transferencias t
             INNER JOIN almacenes ao ON t.almacen_origen_id = ao.id
             INNER JOIN almacenes ad ON t.almacen_destino_id = ad.id
-            INNER JOIN productos p ON t.producto_id = p.id
-            LEFT JOIN usuarios u_solicitante ON t.solicitante_id = u_solicitante.id
-            LEFT JOIN usuarios u_aprobador ON t.aprobador_id = u_aprobador.id
-            ORDER BY t.fecha_solicitud DESC
+            LEFT JOIN transferencias_detalle td ON t.id = td.transferencia_id
+            LEFT JOIN productos p ON td.producto_id = p.id
+            ORDER BY t.created_at DESC
         `;
         const [rows] = await db.query(query);
         return rows;
     },
 
-    // Obtener transferencias por estado
-    getByEstado: async (estado) => {
-        const query = `
-            SELECT 
-                t.*,
-                ao.nombre AS almacen_origen_nombre,
-                ad.nombre AS almacen_destino_nombre,
-                p.nombre AS producto_nombre,
-                p.codigo AS producto_codigo,
-                u_solicitante.nombre AS solicitante_nombre,
-                u_aprobador.nombre AS aprobador_nombre
-            FROM transferencias t
-            INNER JOIN almacenes ao ON t.almacen_origen_id = ao.id
-            INNER JOIN almacenes ad ON t.almacen_destino_id = ad.id
-            INNER JOIN productos p ON t.producto_id = p.id
-            LEFT JOIN usuarios u_solicitante ON t.solicitante_id = u_solicitante.id
-            LEFT JOIN usuarios u_aprobador ON t.aprobador_id = u_aprobador.id
-            WHERE t.estado = ?
-            ORDER BY t.fecha_solicitud DESC
-        `;
-        const [rows] = await db.query(query, [estado]);
-        return rows;
-    },
-
-    // Obtener transferencia por ID
+    // Obtener una transferencia específica por su ID
     getById: async (id) => {
         const query = `
             SELECT 
                 t.*,
                 ao.nombre AS almacen_origen_nombre,
                 ad.nombre AS almacen_destino_nombre,
+                'Sistema' AS solicitante_nombre,
+                'Sistema' AS aprobador_nombre,
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
-                u_solicitante.nombre AS solicitante_nombre,
-                u_aprobador.nombre AS aprobador_nombre
+                td.cantidad_solicitada AS cantidad,
+                td.producto_id
             FROM transferencias t
             INNER JOIN almacenes ao ON t.almacen_origen_id = ao.id
             INNER JOIN almacenes ad ON t.almacen_destino_id = ad.id
-            INNER JOIN productos p ON t.producto_id = p.id
-            LEFT JOIN usuarios u_solicitante ON t.solicitante_id = u_solicitante.id
-            LEFT JOIN usuarios u_aprobador ON t.aprobador_id = u_aprobador.id
+            LEFT JOIN transferencias_detalle td ON t.id = td.transferencia_id
+            LEFT JOIN productos p ON td.producto_id = p.id
             WHERE t.id = ?
         `;
         const [rows] = await db.query(query, [id]);
         return rows[0];
     },
 
-    // Crear nueva transferencia
-    create: async (transferenciaData) => {
-        const query = `
-            INSERT INTO transferencias 
-            (almacen_origen_id, almacen_destino_id, producto_id, cantidad, estado, 
-             solicitante_id, motivo, notas, fecha_solicitud)
-            VALUES (?, ?, ?, ?, 'pendiente', ?, ?, ?, NOW())
-        `;
-        const [result] = await db.query(query, [
-            transferenciaData.almacen_origen_id,
-            transferenciaData.almacen_destino_id,
-            transferenciaData.producto_id,
-            transferenciaData.cantidad,
-            transferenciaData.solicitante_id,
-            transferenciaData.motivo || null,
-            transferenciaData.notas || null
-        ]);
-        return result.insertId;
-    },
+    // Crear la cabecera y el detalle utilizando transacciones atómicas
+    createSolicitudAtomica: async (data) => {
+        const conn = await db.getConnection();
+        await conn.beginTransaction();
+        try {
+            const codigo = `TR-${Date.now().toString().slice(-6)}`;
 
-    // Actualizar estado de transferencia
-    updateEstado: async (id, estado, aprobadorId = null) => {
-        let query, params;
-        
-        if (estado === 'aprobada') {
-            query = `
-                UPDATE transferencias 
-                SET estado = ?, aprobador_id = ?, fecha_aprobacion = NOW()
-                WHERE id = ?
+            // Ajustado a las columnas exactas de tu tabla 'transferencias'
+            const queryCabecera = `
+                INSERT INTO transferencias 
+                (codigo, almacen_origen_id, almacen_destino_id, estado, observaciones, created_at, updated_at)
+                VALUES (?, ?, ?, 'PENDIENTE', ?, NOW(), NOW())
             `;
-            params = [estado, aprobadorId, id];
-        } else if (estado === 'completada') {
-            query = `
-                UPDATE transferencias 
-                SET estado = ?, fecha_completado = NOW()
-                WHERE id = ?
+            const [resCabecera] = await conn.query(queryCabecera, [
+                codigo, data.almacen_origen_id, data.almacen_destino_id, data.observaciones || null
+            ]);
+            const transferenciaId = resCabecera.insertId;
+
+            const [prod] = await conn.query('SELECT unidad_medida_id FROM productos WHERE id = ?', [data.producto_id]);
+            const unidadMedidaId = prod.length > 0 ? prod[0].unidad_medida_id : null;
+
+            const queryDetalle = `
+                INSERT INTO transferencias_detalle 
+                (transferencia_id, producto_id, cantidad_solicitada, unidad_medida_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, NOW(), NOW())
             `;
-            params = [estado, id];
-        } else {
-            query = `
-                UPDATE transferencias 
-                SET estado = ?, aprobador_id = NULL, fecha_aprobacion = NULL
-                WHERE id = ?
-            `;
-            params = [estado, id];
+            await conn.query(queryDetalle, [transferenciaId, data.producto_id, data.cantidad, unidadMedidaId]);
+
+            await conn.commit();
+            return transferenciaId;
+        } catch (error) {
+            await conn.rollback();
+            throw error;
+        } finally {
+            conn.release();
         }
-        
-        await db.query(query, params);
     },
 
-    // Verificar stock disponible en almacén origen
+    // Actualizar estados sin columnas de usuario inexistentes
+    updateEstado: async (id, estado, aprobadorId = null) => {
+        const query = `
+            UPDATE transferencias 
+            SET estado = ?, updated_at = NOW()
+            WHERE id = ?
+        `;
+        await db.query(query, [estado, id]);
+    },
+
+    // Verificar si el stock acumulado de los lotes activos cubre la cantidad solicitada
     verificarStockOrigen: async (almacenId, productoId, cantidad) => {
         const query = `
-            SELECT COALESCE(SUM(l.cantidad_actual), 0) AS stock_disponible
-            FROM lotes l
-            WHERE l.producto_id = ? 
-            AND l.almacen_id = ? 
-            AND l.cantidad_actual > 0
-        `;
-        const [rows] = await db.query(query, [productoId, almacenId]);
-        return rows[0].stock_disponible >= cantidad;
-    },
-
-    // Obtener lotes disponibles en almacén origen (ordenados por vencimiento)
-    obtenerLotesOrigen: async (almacenId, productoId) => {
-        const query = `
-            SELECT id, cantidad_actual, fecha_vencimiento
+            SELECT COALESCE(SUM(cantidad_actual), 0) AS disponible
             FROM lotes
-            WHERE producto_id = ? 
-            AND almacen_id = ? 
-            AND cantidad_actual > 0
-            ORDER BY 
-                CASE WHEN fecha_vencimiento IS NOT NULL THEN fecha_vencimiento ELSE '9999-12-31' END ASC,
-                id ASC
+            WHERE producto_id = ? AND almacen_id = ? AND estado = 'ACTIVO' AND cantidad_actual > 0
         `;
         const [rows] = await db.query(query, [productoId, almacenId]);
-        return rows;
-    },
-
-    // Obtener transferencias por almacén (origen o destino)
-    getByAlmacen: async (almacenId, tipo = 'todos') => {
-        let whereClause = '';
-        let params = [almacenId];
-        
-        if (tipo === 'origen') {
-            whereClause = 'WHERE t.almacen_origen_id = ?';
-        } else if (tipo === 'destino') {
-            whereClause = 'WHERE t.almacen_destino_id = ?';
-        } else {
-            whereClause = 'WHERE t.almacen_origen_id = ? OR t.almacen_destino_id = ?';
-            params.push(almacenId);
-        }
-
-        const query = `
-            SELECT 
-                t.*,
-                ao.nombre AS almacen_origen_nombre,
-                ad.nombre AS almacen_destino_nombre,
-                p.nombre AS producto_nombre,
-                p.codigo AS producto_codigo,
-                u_solicitante.nombre AS solicitante_nombre,
-                u_aprobador.nombre AS aprobador_nombre
-            FROM transferencias t
-            INNER JOIN almacenes ao ON t.almacen_origen_id = ao.id
-            INNER JOIN almacenes ad ON t.almacen_destino_id = ad.id
-            INNER JOIN productos p ON t.producto_id = p.id
-            LEFT JOIN usuarios u_solicitante ON t.solicitante_id = u_solicitante.id
-            LEFT JOIN usuarios u_aprobador ON t.aprobador_id = u_aprobador.id
-            ${whereClause}
-            ORDER BY t.fecha_solicitud DESC
-        `;
-        const [rows] = await db.query(query, params);
-        return rows;
+        return parseFloat(rows[0].disponible) >= parseFloat(cantidad);
     }
 };
 

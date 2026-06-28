@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-light">
+
+    <div class="container py-5">
+        <div class="row justify-content-center py-5">
+            <div class="col-md-7 text-center">
+                <div class="card shadow-sm border-0 p-5 rounded-4">
+                    <div class="card-body">
+                        <i class="fa-solid fa-triangle-exclamation text-danger display-1 mb-4"></i>
+                        <h1 class="fw-bold text-dark mb-3">Ocurrió un error inesperado</h1>
+                        <p class="text-secondary fs-5 mb-4">
+                            <%= typeof message !== 'undefined' ? message : 'No pudimos procesar tu solicitud en este momento.' %>
+                        </p>
+
+                        <% if (typeof error !== 'undefined' && typeof error.status !== 'undefined') { %>
+                            <div class="alert alert-secondary font-monospace small mb-4">
+                                <strong>Código del Estado:</strong> <%= error.status %>
+                            </div>
+                        <% } %>
+
+                        <% if (typeof error !== 'undefined' && typeof error.stack !== 'undefined') { %>
+                            <div class="text-start mb-4">
+                                <label class="form-label text-muted fw-bold small text-uppercase">Traza del error (Desarrollo):</label>
+                                <pre class="bg-dark text-warning p-3 rounded font-monospace small overflow-auto" style="max-height: 250px;"><%= error.stack %></pre>
+                            </div>
+                        <% } %>
+
+                        <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+                            <a href="/admin/dashboard" class="btn btn-dark px-4 py-2 shadow-sm">
+                                <i class="fa-solid fa-house me-2"></i>Ir al Panel Principal
+                            </a>
+                            <button onclick="window.history.back()" class="btn btn-outline-secondary px-4 py-2">
+                                <i class="fa-solid fa-arrow-left me-2"></i>Volver atrás
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

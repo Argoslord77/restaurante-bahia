@@ -51,6 +51,12 @@
                 <i class="fa-solid fa-boxes-packing me-2 text-dark"></i> Catálogo de Productos
             </a>
         </li>
+        <!-- Módulo de Entradas / Registro de Lotes Integrado de manera oficial -->
+        <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'entradas'){ %> active<% } %>" href="/admin/almacenes/entradas">
+                <i class="fa-solid fa-arrow-right-to-bracket me-2 text-dark"></i> Entradas / Lotes
+            </a>
+        </li>
         <!-- Enlace Integrado Completamente: Fichas Técnicas / Recetas Maestro-Detalle -->
         <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'recetas'){ %> active<% } %>" href="/admin/recetas">

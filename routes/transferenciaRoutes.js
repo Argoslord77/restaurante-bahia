@@ -12,48 +12,39 @@ router.get('/transferencias',
     transferenciaController.viewTransferencias
 );
 
-// API: Crear nueva solicitud de transferencia
+// API: Crear nueva solicitud de transferencia (Pendiente)
 router.post('/api/transferencias',
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador', 'almacenero']),
-    transferenciaValidationRules.create,
-    handleValidationErrors,
     transferenciaController.createSolicitud
 );
 
-// API: Aprobar transferencia
+// API: Aprobar transferencia (Pasa a Aprobada)
 router.put('/api/transferencias/:id/aprobar',
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador']),
     transferenciaController.aprobarTransferencia
 );
 
-// API: Rechazar transferencia
+// API: Rechazar transferencia (Pasa a Rechazada)
 router.put('/api/transferencias/:id/rechazar',
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador']),
     transferenciaController.rechazarTransferencia
 );
 
-// API: Completar transferencia
+// API: Completar transferencia (Afecta stock físico en lotes)
 router.put('/api/transferencias/:id/completar',
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador', 'almacenero']),
     transferenciaController.completarTransferencia
 );
 
-// API: Obtener transferencia por ID
+// API: Obtener transferencia detallada por ID
 router.get('/api/transferencias/:id',
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador', 'almacenero']),
     transferenciaController.getTransferencia
-);
-
-// API: Obtener transferencias por almacén
-router.get('/api/transferencias/almacen/:almacenId',
-    ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador', 'almacenero']),
-    transferenciaController.getTransferenciasByAlmacen
 );
 
 module.exports = router;

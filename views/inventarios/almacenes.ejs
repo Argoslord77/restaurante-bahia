@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= typeof title !== 'undefined' ? title : 'Control de Almacenes - Restaurante Bahía' %></title>
-    <link class="js-bootstrap-css" rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/styles.css"> 
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link class="component-css" rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link class="component-css" rel="stylesheet" href="/css/bootstrap.min.css">
+    <link class="component-css" rel="stylesheet" href="/css/all.min.css">
+    <link class="component-css" rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link class="component-css" rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
 
@@ -49,7 +50,6 @@
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
             <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
-                <!-- CORRECCIÓN: El modal ID ahora coincide con el definido abajo (#almacenModal) -->
                 <%- include('../includes/header', {
                     encabezado_pagina: '📦 Control de Almacenes', 
                     desc_pagina: 'Configuración de locaciones físicas de inventario para Restaurante Bahía.', 
@@ -84,7 +84,7 @@
 
                 <div class="card card-custom shadow-sm border-0 overflow-hidden">
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
+                        <table class="table table-hover align-middle mb-0" id="tablaAlmacenes">
                             <thead class="table-custom-thead text-uppercase fs-7">
                                 <tr>
                                     <th class="ps-4 py-3">Código</th>
@@ -103,8 +103,10 @@
                                         </td>
                                     </tr>
                                 <% } else { %>
-                                    <% almacenes.forEach(almacen => { %>
-                                        <tr class="<%= !almacen.activo ? 'opacity-50 table-light' : '' %>">
+                                    <% almacenes.forEach(almacen => { 
+                                        const esActivo = (almacen.activo == 1 || almacen.activo === true || almacen.activa == 1 || almacen.activa === true);
+                                    %>
+                                        <tr class="<%= !esActivo ? 'opacity-50 table-light' : '' %>">
                                             <td class="ps-4 fw-bold text-dark">
                                                 <span class="badge bg-light text-dark border font-monospace px-2 py-1"><%= almacen.codigo %></span>
                                             </td>
@@ -114,12 +116,12 @@
                                             </td>
                                             <td>
                                                 <span class="badge bg-secondary text-white text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                    <%= almacen.tipo.replace('_', ' ') %>
+                                                    <%= almacen.tipo ? almacen.tipo.replace('_', ' ') : 'otro' %>
                                                 </span>
                                             </td>
                                             <td class="text-secondary"><%= almacen.ubicacion || '—' %></td>
                                             <td class="text-center">
-                                                <% if (almacen.activo) { %>
+                                                <% if (esActivo) { %>
                                                     <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fs-7">Activo</span>
                                                 <% } else { %>
                                                     <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 fs-7">Inactivo</span>
@@ -127,11 +129,11 @@
                                             </td>
                                             <td class="text-center pe-3">
                                                 <div class="btn-group gap-1">
-                                                    <button class="btn btn-sm btn-outline-secondary border-0" onclick="openEditModal('<%= almacen.id %>')" title="Editar">
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary border-0 btn-editar-almacen" data-id="<%= almacen.id %>" title="Editar">
                                                         <i class="fa-solid fa-pen-to-square"></i>
                                                     </button>
-                                                    <% if (almacen.activo && user && ['superadministrador', 'administrador'].includes(user.rol)) { %>
-                                                        <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteAlmacen('<%= almacen.id %>')" title="Desactivar">
+                                                    <% if (esActivo && (typeof user === 'undefined' || !user || ['superadministrador', 'administrador'].includes(user.rol))) { %>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger border-0 btn-eliminar-almacen" data-id="<%= almacen.id %>" title="Desactivar">
                                                             <i class="fa-solid fa-power-off"></i>
                                                         </button>
                                                     <% } %>
@@ -148,13 +150,12 @@
         </div>
     </div>
 
-    <!-- El modal conserva el ID almacenModal para coincidir con el header -->
     <div class="modal fade" id="almacenModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <form id="almacenForm" class="modal-content border-0 shadow" onsubmit="saveAlmacen(event)">
+            <form id="almacenForm" class="modal-content border-0 shadow">
                 <input type="hidden" id="almacenId">
                 <div class="modal-header bg-dark text-white">
-                    <h5 class="modal-title fw-bold" id="modalTitle">Nuevo Almacén</h5>
+                    <h5 class="modal-title fw-bold" id="modalTitle"><i class="fa-solid fa-plus me-2"></i>Nuevo Almacén</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -193,7 +194,7 @@
                             <select id="responsable_usuario_id" class="form-select shadow-sm">
                                 <option value="">-- Seleccionar Responsable --</option>
                                 <% usuarios.forEach(u => { %>
-                                    <option value="<%= u.id %>"><%= u.nombre %> <%= u.apellidos %></option>
+                                    <option value="<%= u.id %>"><%= u.nombre_completo %></option>
                                 <% }) %>
                             </select>
                         </div>
@@ -212,8 +213,8 @@
                         <div class="col-12 d-none" id="statusGroup">
                             <div class="p-2 bg-warning-subtle rounded border border-warning-subtle">
                                 <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="activo" checked>
-                                    <label class="form-check-label small fw-bold text-warning-emphasis" for="activo">Almacén Activo / Operacional</label>
+                                    <input class="form-check-input" type="checkbox" id="activa" checked>
+                                    <label class="form-check-label small fw-bold text-warning-emphasis" for="activa">Almacén Activo / Operacional</label>
                                 </div>
                             </div>
                         </div>
@@ -227,21 +228,41 @@
         </div>
     </div>
 
+    <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
     <script>
-        // Inicializar el modal de Bootstrap una sola vez
-        const elModal = document.getElementById('almacenModal');
-        const bootstrapModal = new bootstrap.Modal(elModal);
-
-        // Escuchar cuando el modal se va a abrir (para limpiar si es nuevo)
-        elModal.addEventListener('show.bs.modal', function (event) {
+        // Inicialización y referencia segura del modal
+        const almacenModalEl = document.getElementById('almacenModal');
+        
+        almacenModalEl.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
-            // Si el modal se abrió desde el botón "Nuevo" del header
-            if (button && button.innerText.includes('Nuevo')) {
+            if (button && button.getAttribute('data-bs-target') === '#almacenModal') {
                 document.getElementById('almacenForm').reset();
                 document.getElementById('almacenId').value = '';
                 document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus me-2"></i>Nuevo Almacén';
                 document.getElementById('statusGroup').classList.add('d-none');
+                document.getElementById('activa').checked = true;
+            }
+        });
+
+        // ASIGNACIÓN SEGURO DE EVENTOS (Evita errores de CSP directiva script-src-attr)
+        document.getElementById('almacenForm').addEventListener('submit', saveAlmacen);
+
+        // Delegación de eventos en la tabla para manejar clics en Editar y Eliminar de forma dinámica
+        document.getElementById('tablaAlmacenes').addEventListener('click', function(e) {
+            const btnEditar = e.target.closest('.btn-editar-almacen');
+            if (btnEditar) {
+                const id = btnEditar.getAttribute('data-id');
+                openEditModal(id);
+                return;
+            }
+
+            const btnEliminar = e.target.closest('.btn-eliminar-almacen');
+            if (btnEliminar) {
+                const id = btnEliminar.getAttribute('data-id');
+                deleteAlmacen(id);
             }
         });
 
@@ -253,23 +274,37 @@
             try {
                 const response = await fetch(`/admin/almacen/${id}`);
                 const res = await response.json();
-                if(res.success) {
-                    const d = res.data;
+                
+                // CORRECCIÓN: Leemos 'res.almacen' en lugar de 'res.data'
+                if(res.success && res.almacen) {
+                    const d = res.almacen;
+                    
                     document.getElementById('almacenId').value = d.id;
-                    document.getElementById('codigo').value = d.codigo;
-                    document.getElementById('nombre').value = d.nombre;
-                    document.getElementById('descripcion').value = d.descripcion;
-                    document.getElementById('tipo').value = d.tipo;
-                    document.getElementById('ubicacion').value = d.ubicacion;
-                    document.getElementById('responsable_usuario_id').value = d.responsable_usuario_id || '';
-                    document.getElementById('permite_ventas').checked = d.permite_ventas === 1;
-                    document.getElementById('permite_consumo').checked = d.permite_consumo === 1;
-                    document.getElementById('activo').checked = d.activo === 1;
-                    bootstrapModal.show();
+                    document.getElementById('codigo').value = d.codigo || '';
+                    document.getElementById('nombre').value = d.nombre || '';
+                    document.getElementById('descripcion').value = d.descripcion || '';
+                    document.getElementById('tipo').value = d.tipo || 'principal';
+                    document.getElementById('ubicacion').value = d.ubicacion || '';
+                    
+                    // Fallback automático por si el backend usa responsable_usuario_id o responsable_id
+                    document.getElementById('responsable_usuario_id').value = d.responsable_usuario_id || d.responsable_id || '';
+                    
+                    document.getElementById('permite_ventas').checked = d.permite_ventas === 1 || d.permite_ventas === true;
+                    document.getElementById('permite_consumo').checked = d.permite_consumo === 1 || d.permite_consumo === true;
+                    
+                    const esActivo = (d.activo === 1 || d.activo === true || d.activa === 1 || d.activa === true);
+                    document.getElementById('activa').checked = esActivo;
+                    
+                    let modalInstance = bootstrap.Modal.getInstance(almacenModalEl);
+                    if (!modalInstance) {
+                        modalInstance = new bootstrap.Modal(almacenModalEl);
+                    }
+                    modalInstance.show();
                 } else {
-                    Swal.fire('Error', res.message, 'error');
+                    Swal.fire('Error', res.message || 'No se pudieron recuperar los datos.', 'error');
                 }
             } catch (err) {
+                console.error(err); // Te ayuda a debuggear en la consola del navegador
                 Swal.fire('Error', 'No se pudieron precargar los datos del almacén.', 'error');
             }
         }
@@ -277,16 +312,18 @@
         async function saveAlmacen(e) {
             e.preventDefault();
             const id = document.getElementById('almacenId').value;
+            const estadoCheckbox = document.getElementById('activa').checked ? 1 : 0;
             const data = {
-                codigo: document.getElementById('codigo').value,
-                nombre: document.getElementById('nombre').value,
-                descripcion: document.getElementById('descripcion').value,
+                codigo: document.getElementById('codigo').value.trim(),
+                nombre: document.getElementById('nombre').value.trim(),
+                descripcion: document.getElementById('descripcion').value.trim(),
                 tipo: document.getElementById('tipo').value,
-                ubicacion: document.getElementById('ubicacion').value,
+                ubicacion: document.getElementById('ubicacion').value.trim(),
                 responsable_usuario_id: document.getElementById('responsable_usuario_id').value || null,
                 permite_ventas: document.getElementById('permite_ventas').checked ? 1 : 0,
                 permite_consumo: document.getElementById('permite_consumo').checked ? 1 : 0,
-                activo: document.getElementById('activo').checked ? 1 : 0
+                activo: estadoCheckbox,
+                activa: estadoCheckbox
             };
             const url = id ? `/admin/almacen/edit/${id}` : '/admin/almacenes/add';
             const method = id ? 'PUT' : 'POST';
@@ -299,7 +336,8 @@
                 });
                 const res = await response.json();
                 if(res.success) {
-                    bootstrapModal.hide();
+                    const modalInstance = bootstrap.Modal.getInstance(almacenModalEl);
+                    if (modalInstance) modalInstance.hide();
                     Swal.fire('¡Éxito!', res.message, 'success').then(() => location.reload());
                 } else {
                     Swal.fire('Atención', res.message, 'warning');

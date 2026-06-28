@@ -3,160 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= typeof title !== 'undefined' ? title : 'Registrar Entrada de Inventario - Restaurante Bahía' %></title>
+    <title><%= typeof title !== 'undefined' ? title : 'Entradas de Almacén - Restaurante Bahía' %></title>
     <link rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/css/styles.css"> 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
 
     <%- include('../includes/sideBarMenu') %>
-
-    <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 bg-light">
+    
+    <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+        
         <%- include('../includes/header', {
-            encabezado_pagina: 'Registrar Entrada de Inventario', 
-            desc_pagina: 'Carga stock directamente al almacén generando traza transaccional y control de lotes.',
-            add_btn: false,
-            warehouse_menu: false
+            encabezado_pagina: 'Entradas de Almacén e Ingreso de Lotes', 
+            desc_pagina: 'Registra compras, stock inicial e ingresos físicos de mercadería directo al inventario FIFO.', 
+            add_btn: true, 
+            btn_label: "Registrar Entrada", 
+            modal: "modalEntrada"
         }) %>
 
-        <div class="container-fluid py-2 px-0">
-            <div class="row justify-content-center">
-                <div class="col-xl-10 col-lg-12">
-                    <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-5">
-                        <div class="card-header bg-dark py-3 px-4">
-                            <h6 class="text-white mb-0 fw-bold"><i class="fa-solid fa-file-invoice me-2"></i>Datos de la Operación de Ingreso</h6>
-                        </div>
-                        <div class="card-body p-4">
-                            <form id="formRegistrarEntrada" onsubmit="enviarEntrada(event)">
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold text-secondary fs-7">Almacén Destino</label>
-                                        <select class="form-select form-select-sm shadow-sm" id="almacen_id" required>
-                                            <option value="" disabled selected>Seleccione el almacén...</option>
-                                            <% almacenes.forEach(al => { %>
-                                                <option value="<%= al.id %>"><%= al.nombre %> (<%= al.codigo %>)</option>
-                                            <% }) %>
-                                        </select>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold text-secondary fs-7">Nº Documento / Referencia</label>
-                                        <input type="text" class="form-control form-control-sm shadow-sm" id="documento_numero" placeholder="Ej: FAC-2026-0019" required>
-                                    </div>
-
-                                    <div class="col-12">
-                                        <label class="form-label fw-semibold text-secondary fs-7">Producto / Materia Prima</label>
-                                        <select class="form-select form-select-sm shadow-sm" id="producto_id" required onchange="evaluarLoteProducto()">
-                                            <option value="" disabled selected>Seleccione el insumo...</option>
-                                            <% productos.forEach(p => { %>
-                                                <option value="<%= p.id %>" data-tipo="<%= p.tipo %>">#<%= p.codigo %> — <%= p.nombre %></option>
-                                            <% }) %>
-                                        </select>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold text-secondary fs-7">Cantidad a Ingresar</label>
-                                        <input type="number" step="0.001" min="0.001" class="form-control form-control-sm shadow-sm fw-bold text-primary" id="cantidad" placeholder="0.000" required>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold text-secondary fs-7">Costo Unitario ($)</label>
-                                        <input type="number" step="0.0001" min="0.0000" class="form-control form-control-sm shadow-sm text-success" id="costo_unitario" placeholder="0.00" required>
-                                    </div>
-
-                                    <div class="col-12" id="seccion_lote_checkbox">
-                                        <div class="form-check form-switch bg-light p-3 rounded border shadow-sm mt-2">
-                                            <input class="form-check-input ms-1 me-2" type="checkbox" id="maneja_lote" onchange="toggleCamposLote()">
-                                            <label class="form-check-label fw-bold text-dark fs-7" for="maneja_lote">¿Este ingreso requiere trazabilidad por Lote / Vencimiento?</label>
+        <div class="card card-custom shadow-sm border-0 overflow-hidden mt-4">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-custom-thead text-uppercase fs-7 bg-light">
+                        <tr>
+                            <th class="ps-4 py-3">Fecha Ingreso</th>
+                            <th class="py-3">Producto</th>
+                            <th class="py-3">Almacén Destino</th>
+                            <th class="py-3">Nº Lote</th>
+                            <th class="text-end py-3">Cant. Inicial</th>
+                            <th class="text-end py-3">Cant. Actual (Stock)</th>
+                            <th class="text-end py-3">Costo Unit.</th>
+                            <th class="text-center py-3">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (typeof entradas !== 'undefined' && entradas.length > 0) { %>
+                            <% entradas.forEach(e => { %>
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="fw-bold text-dark">
+                                            <%= new Date(e.fecha_ingreso).toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'}) %>
                                         </div>
-                                    </div>
-
-                                    <div class="col-md-6 campos-lote" style="display: none;">
-                                        <label class="form-label fw-semibold text-danger fs-7">Número de Lote</label>
-                                        <input type="text" class="form-control form-control-sm shadow-sm" id="numero_lote" placeholder="Ej: LOT-2026-M1">
-                                    </div>
-
-                                    <div class="col-md-6 campos-lote" style="display: none;">
-                                        <label class="form-label fw-semibold text-danger fs-7">Fecha de Vencimiento</label>
-                                        <input type="date" class="form-control form-control-sm shadow-sm" id="fecha_vencimiento">
-                                    </div>
-
-                                    <div class="col-12">
-                                        <label class="form-label fw-semibold text-secondary fs-7">Observaciones</label>
-                                        <textarea class="form-control form-control-sm shadow-sm" id="observaciones" rows="3"></textarea>
-                                    </div>
-                                </div>
-
-                                <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-                                    <a href="/admin/inventario/movimientos" class="btn btn-light btn-sm fw-semibold border px-4">Volver al Historial</a>
-                                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4 shadow">Procesar Entrada</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
+                                        <% if(e.fecha_vencimiento) { %>
+                                            <small class="text-danger fs-7">Vence: <%= new Date(e.fecha_vencimiento).toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'}) %></small>
+                                        <% } else { %>
+                                            <small class="text-muted fs-7">Sin vencimiento</small>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold text-dark"><%= e.producto_nombre %></div>
+                                        <small class="font-monospace text-primary">#<%= e.producto_codigo %></small>
+                                    </td>
+                                    <td><span class="badge bg-light text-dark border"><i class="fa-solid fa-warehouse me-1 text-secondary"></i><%= e.almacen_nombre %></span></td>
+                                    <td><span class="font-monospace fw-bold text-secondary"><%= e.numero_lote %></span></td>
+                                    <td class="text-end font-monospace"><%= parseFloat(e.cantidad_inicial).toFixed(2) %></td>
+                                    <td class="text-end font-monospace fw-bold text-success"><%= parseFloat(e.cantidad_actual).toFixed(2) %></td>
+                                    <td class="text-end font-monospace text-dark">$<%= parseFloat(e.costo_unitario).toFixed(2) %></td>
+                                    <td class="text-center">
+                                        <% if (parseFloat(e.cantidad_actual) <= 0) { %>
+                                            <span class="badge bg-secondary-subtle text-secondary px-3 rounded-pill fw-semibold">AGOTADO</span>
+                                        <% } else { %>
+                                            <span class="badge bg-success-subtle text-success px-3 rounded-pill fw-semibold">ACTIVO</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        <% } else { %>
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">
+                                    <i class="fa-solid fa-box-open d-block fs-3 mb-2 text-secondary"></i>
+                                    No se registran lotes o entradas en este momento.
+                                </td>
+                            </tr>
+                        <% } %>
+                    </tbody>
+                </table>
             </div>
         </div>
     </main>
 
+    <div class="modal fade" id="modalEntrada" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <form id="formEntrada" class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-square-plus me-2"></i>Registrar Entrada de Mercadería</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="almacen_id" class="form-label fw-semibold text-secondary small">Almacén de Destino</label>
+                            <select class="form-select shadow-sm" id="almacen_id" required>
+                                <option value="">Seleccione almacén...</option>
+                                <% if (typeof almacenes !== 'undefined') { %>
+                                    <% almacenes.forEach(a => { %>
+                                        <option value="<%= a.id %>"><%= a.nombre %> (<%= a.codigo %>)</option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="producto_id" class="form-label fw-semibold text-secondary small">Producto / Insumo</label>
+                            <select class="form-select shadow-sm" id="producto_id" required>
+                                <option value="">Seleccione el insumo...</option>
+                                <% if (typeof productos !== 'undefined') { %>
+                                    <% productos.forEach(p => { %>
+                                        <option value="<%= p.id %>">[<%= p.codigo %>] <%= p.nombre %></option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="numero_lote" class="form-label fw-semibold text-secondary small">Número de Lote / Consecutivo</label>
+                            <input type="text" id="numero_lote" class="form-control shadow-sm font-monospace bg-light text-muted" disabled placeholder="Autogenerado (LOT-2026-XXX)">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="fecha_ingreso" class="form-label fw-semibold text-secondary small">Fecha de Ingreso</label>
+                            <input type="date" id="fecha_ingreso" class="form-control shadow-sm" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="fecha_vencimiento" class="form-label fw-semibold text-secondary small">Fecha Vencimiento (Opcional)</label>
+                            <input type="date" id="fecha_vencimiento" class="form-control shadow-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="cantidad" class="form-label fw-semibold text-secondary small">Cantidad Ingresada</label>
+                            <input type="number" step="0.001" id="cantidad" class="form-control shadow-sm" required min="0.001" placeholder="0.000">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="costo_unitario" class="form-label fw-semibold text-secondary small">Costo Unitario ($)</label>
+                            <input type="number" step="0.000001" id="costo_unitario" class="form-control shadow-sm" required min="0.000001" placeholder="0.00">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success px-4 shadow-sm">Guardar Stock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    
     <script>
-        function toggleCamposLote() {
-            const checkLote = document.getElementById('maneja_lote').checked;
-            const campos = document.querySelectorAll('.campos-lote');
-            campos.forEach(c => {
-                c.style.display = checkLote ? 'block' : 'none';
-                const input = c.querySelector('input');
-                if (input) input.required = checkLote;
-            });
-        }
+    document.addEventListener('DOMContentLoaded', () => {
+        const modalElement = document.getElementById('modalEntrada');
+        const bsModal = new bootstrap.Modal(modalElement);
 
-        function evaluarLoteProducto() {
-            const selector = document.getElementById('producto_id');
-            const opcionSeleccionada = selector.options[selector.selectedIndex];
-            const tipoProducto = opcionSeleccionada.getAttribute('data-tipo');
-            const checkLote = document.getElementById('maneja_lote');
-            checkLote.checked = (tipoProducto === 'materia_prima' || tipoProducto === 'producto_preparado');
-            toggleCamposLote();
-        }
+        // Forzar por defecto la fecha de hoy
+        document.getElementById('fecha_ingreso').value = new Date().toISOString().split('T')[0];
 
-        async function enviarEntrada(e) {
+        // Manejo dinámico para abrir el modal desde el Header adaptativo
+        document.addEventListener('click', (e) => {
+            const tgt = e.target.closest('[data-bs-target="modalEntrada"]') || e.target.closest('[data-bs-target="#modalEntrada"]');
+            if (tgt) {
+                e.preventDefault();
+                bsModal.show();
+            }
+        });
+
+        // Limpiar el modal tras su cierre
+        modalElement.addEventListener('hidden.bs.modal', () => {
+            document.getElementById('formEntrada').reset();
+            document.getElementById('fecha_ingreso').value = new Date().toISOString().split('T')[0];
+        });
+
+        // Envío AJAX asíncrono controlado
+        document.getElementById('formEntrada').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const data = {
+            
+            const payload = {
                 almacen_id: document.getElementById('almacen_id').value,
                 producto_id: document.getElementById('producto_id').value,
+                fecha_ingreso: document.getElementById('fecha_ingreso').value,
+                fecha_vencimiento: document.getElementById('fecha_vencimiento').value || '', 
                 cantidad: document.getElementById('cantidad').value,
-                costo_unitario: document.getElementById('costo_unitario').value,
-                documento_numero: document.getElementById('documento_numero').value.trim(),
-                observaciones: document.getElementById('observaciones').value.trim(),
-                maneja_lote: document.getElementById('maneja_lote').checked,
-                numero_lote: document.getElementById('numero_lote').value.trim(),
-                fecha_vencimiento: document.getElementById('fecha_vencimiento').value
+                costo_unitario: document.getElementById('costo_unitario').value
             };
 
-            Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-
             try {
-                const response = await fetch('/admin/inventario/entradas/registrar', {
+                const response = await fetch('/admin/almacenes/entradas/api', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(payload)
                 });
-                const res = await response.json();
-                if (res.success) {
-                    Swal.fire('¡Éxito!', res.message, 'success').then(() => {
-                        document.getElementById('formRegistrarEntrada').reset();
-                        toggleCamposLote();
-                    });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    bsModal.hide();
+                    Swal.fire({
+                        title: '¡Ingreso Exitoso!',
+                        text: data.message,
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => { location.reload(); });
                 } else {
-                    Swal.fire('Error', res.message, 'error');
+                    // Desglose responsivo de errores si falla express-validator
+                    let errorMsg = data.message;
+                    if (data.errors && data.errors.length > 0) {
+                        errorMsg = data.errors.map(err => `• ${err.message}`).join('<br>');
+                    }
+                    Swal.fire({
+                        title: 'Validación Incompleta',
+                        html: `<div class="text-start">${errorMsg}</div>`,
+                        icon: 'warning'
+                    });
                 }
-            } catch (err) {
-                Swal.fire('Error', 'No se pudo procesar la transacción.', 'error');
+            } catch (error) {
+                Swal.fire('Error Operativo', 'No se pudo comunicar con el servidor central de inventarios.', 'error');
             }
-        }
+        });
+    });
     </script>
 </body>
 </html>

@@ -4,7 +4,7 @@ const UnidadMedida = {
     // Obtener todas las unidades de medida activas
     getActivas: async () => {
         const query = `
-            SELECT id, codigo, nombre 
+            SELECT id, codigo, nombre, abreviatura
             FROM unidades_medida 
             WHERE activa = 1 
             ORDER BY nombre ASC

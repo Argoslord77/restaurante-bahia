@@ -180,7 +180,14 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label fw-semibold">Unidad Rendimiento <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="recetaUnidadRendimiento" name="unidad_rendimiento" placeholder="Ej: Porciones, Kg" required>
+                                <select class="form-select" id="recetaUnidadRendimiento" name="unidad_rendimiento" required>
+                                    <option value="" disabled selected>Seleccione...</option>
+                                    <% if (typeof unidades !== 'undefined' && unidades.length > 0) { %>
+                                        <% unidades.forEach(uni => { %>
+                                            <option value="<%= uni.codigo %>"><%= uni.nombre %> (<%= uni.abreviatura %>)</option>
+                                        <% }) %>
+                                    <% } %>
+                                </select>
                             </div>
 
                             <div class="col-md-4">
@@ -320,7 +327,10 @@
                         document.getElementById('productoResultanteId').value = item.producto_resultante_id || '';
                         document.getElementById('recetaTipo').value = item.tipo || 'VENTA';
                         document.getElementById('recetaRendimiento').value = item.rendimiento || '1.000';
+                        
+                        // Mapea perfectamente la unidad guardada en la base de datos hacia el nuevo select
                         document.getElementById('recetaUnidadRendimiento').value = item.unidad_rendimiento || '';
+                        
                         document.getElementById('recetaCostoEstimado').value = item.costo_estimado || '';
                         document.getElementById('recetaPrecioSugerido').value = item.precio_sugerido || '';
                         document.getElementById('recetaTiempo').value = item.tiempo_preparacion_minutos || '';
@@ -438,7 +448,10 @@
                 producto_resultante_id: parseInt(document.getElementById('productoResultanteId').value),
                 tipo: document.getElementById('recetaTipo').value,
                 rendimiento: parseFloat(document.getElementById('recetaRendimiento').value),
-                unidad_rendimiento: document.getElementById('recetaUnidadRendimiento').value.trim(),
+                
+                // Captura el valor seleccionado del dropdown de manera natural
+                unidad_rendimiento: document.getElementById('recetaUnidadRendimiento').value,
+                
                 costo_estimado: document.getElementById('recetaCostoEstimado').value ? parseFloat(document.getElementById('recetaCostoEstimado').value) : 0.00,
                 precio_sugerido: document.getElementById('recetaPrecioSugerido').value ? parseFloat(document.getElementById('recetaPrecioSugerido').value) : 0.00,
                 tiempo_preparacion_minutos: document.getElementById('recetaTiempo').value ? parseInt(document.getElementById('recetaTiempo').value) : 0,
