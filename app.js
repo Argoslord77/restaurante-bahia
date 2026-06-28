@@ -120,6 +120,7 @@ const transferenciaRoutes = require('./routes/transferenciaRoutes');
 const salidaManualRoutes = require('./routes/salidaManualRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const entradaRoutes = require('./routes/entradaRoutes');
+const inventarioRoutes = require('./routes/inventarioRoutes');
 
 app.use('/', authRoutes);
 app.use('/admin', userRoutes);
@@ -133,6 +134,7 @@ app.use('/admin', salidaManualRoutes);
 app.use('/admin', settingRoutes);
 app.use('/admin', transferenciaRoutes);
 app.use('/admin', entradaRoutes);
+app.use('/admin', inventarioRoutes);
 
 app.use(posRoutes);
 

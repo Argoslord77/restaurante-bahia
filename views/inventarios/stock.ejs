@@ -3,208 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= title %></title>
-    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <title><%= title || 'Monitoreo de Stock - Restaurante Bahía' %></title>
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
-    <link rel="stylesheet" href="/css/sweetalert2.min.css">
-    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        /* Estilos armonizados para reducir fatiga visual en administración */
+        .bg-success-soft { background-color: rgba(40, 167, 69, 0.15); color: #28a745; }
+        .bg-warning-soft { background-color: rgba(255, 193, 7, 0.15); color: #ffc107; }
+        .bg-danger-soft { background-color: rgba(220, 53, 69, 0.15); color: #dc3545; }
+        .card-table th { font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; }
+        .fila-producto { transition: background-color 0.2s ease; }
+    </style>
 </head>
 <body class="bg-light">
 
-    <%- include('../includes/sideBarMenu') %>
-
-    <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
-        <%- include('../includes/header', {
-            encabezado_pagina: 'Control de Stock Actual', 
-            desc_pagina: 'Monitoreo de existencias en tiempo real y gestión preventiva de mermas.',
-            add_btn: false ,
-            warehouse_menu: false
-        }) %>
-
-        <div class="container-fluid px-0">
-            <div class="d-flex flex-column flex-md-row justify-content-end align-items-md-center gap-3 mb-4 bg-white p-3 rounded shadow-sm border">
-                <div class="d-flex align-items-center gap-2">
-                    <label for="almacenSelector" class="fw-semibold text-secondary text-nowrap mb-0 fs-7">Cambiar Almacén:</label>
-                    <select id="almacenSelector" class="form-select form-select-sm fw-semibold border shadow-sm" onchange="cambiarAlmacen(this.value)">
+    <div class="container-fluid py-4">
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="h4 mb-0 text-gray-800">Monitoreo de Stock por Almacén</h2>
+                <p class="text-muted small mb-0">Visualiza y filtra las existencias de productos en tiempo real.</p>
+            </div>
+            
+            <div class="col-md-4 col-lg-3">
+                <label for="selectAlmacenStock" class="form-label small text-muted fw-bold mb-1">Seleccionar Almacén:</label>
+                <select class="form-select form-select-sm shadow-sm" id="selectAlmacenStock" name="almacen_id">
+                    <% if (almacenes && almacenes.length > 0) { %>
                         <% almacenes.forEach(almacen => { %>
-                            <option value="<%= almacen.id %>" <%= almacenSeleccionado && almacenSeleccionado.id == almacen.id ? 'selected' : '' %>><%= almacen.nombre %> (<%= almacen.tipo %>)</option>
+                            <option value="<%= almacen.id %>" <%= (typeof almacenSeleccionado !== 'undefined' && almacenSeleccionado == almacen.id) ? 'selected' : '' %>>
+                                <%= almacen.nombre %> <%= almacen.codigo ? `(${almacen.codigo})` : '' %>
+                            </option>
                         <% }) %>
-                    </select>
+                    <% } else { %>
+                        <option value="">No hay almacenes disponibles</option>
+                    <% } %>
+                </select>
+            </div>
+        </div>
+
+        <div class="card mb-3 shadow-sm border-0">
+            <div class="card-body py-2 px-3 bg-white rounded">
+                <div class="row align-items-center">
+                    <div class="col-md-6 col-lg-4 ms-auto">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0 text-muted">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="text" id="buscarProductoStock" class="form-control bg-light border-start-0 ps-0" placeholder="Buscar por código o producto...">
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <% if (!almacenSeleccionado) { %>
-                <div class="alert alert-warning text-center shadow-sm">
-                    <i class="fa-solid fa-triangle-exclamation me-2 fs-5"></i> No se encontraron almacenes configurados en el sistema.
-                </div>
-            <% } else { %>
-                <% 
-                    let totalProductos = stock.length;
-                    let productosBajoMinimo = stock.filter(item => item.stock_actual <= item.stock_minimo).length;
-                    let lotesCriticosVencimiento = alertasVencimiento.filter(l => l.dias_para_vencer <= 7).length;
-                %>
-                <div class="row g-3 mb-4">
-                    <div class="col-12 col-sm-6 col-md-4">
-                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div>
-                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Ítems Registrados</h6>
-                                    <h3 class="fw-bold mb-0 text-dark"><%= totalProductos %></h3>
-                                </div>
-                                <div class="bg-primary-subtle text-primary p-3 rounded-circle"><i class="fa-solid fa-list-check fs-4"></i></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-sm-6 col-md-4">
-                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div>
-                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Stock Bajo el Mínimo</h6>
-                                    <h3 class="fw-bold mb-0 text-warning"><%= productosBajoMinimo %></h3>
-                                </div>
-                                <div class="bg-warning-subtle text-warning p-3 rounded-circle"><i class="fa-solid fa-triangle-exclamation fs-4"></i></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-danger border-4">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div>
-                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Alertas Críticas Vencimiento (≤7 días)</h6>
-                                    <h3 class="fw-bold mb-0 text-danger"><%= lotesCriticosVencimiento %></h3>
-                                </div>
-                                <div class="bg-danger-subtle text-danger p-3 rounded-circle"><i class="fa-solid fa-hourglass-half fs-4"></i></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card border-0 shadow-sm rounded bg-white">
-                    <div class="card-header bg-white border-bottom pt-3">
-                        <ul class="nav nav-tabs card-header-tabs" id="inventarioTabs" role="tablist">
-                            <li class="nav-item">
-                                <button class="nav-link active fw-semibold text-secondary" id="general-tab" data-bs-toggle="tab" data-bs-target="#general-panel" type="button" role="tab">
-                                    <i class="fa-solid fa-warehouse me-2"></i>Existencias Generales
-                                </button>
-                            </li>
-                            <li class="nav-item">
-                                <button class="nav-link fw-semibold text-secondary position-relative" id="vencimiento-tab" data-bs-toggle="tab" data-bs-target="#vencimiento-panel" type="button" role="tab">
-                                    <i class="fa-solid fa-calendar-times me-2"></i>Alertas de Vencimiento
-                                    <% if(alertasVencimiento.length > 0) { %>
-                                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"><%= alertasVencimiento.length %></span>
-                                    <% } %>
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="tab-content" id="inventarioTabsContent">
-                            <div class="tab-pane fade show active p-3" id="general-panel" role="tabpanel">
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-light fs-7 text-uppercase text-secondary">
-                                            <tr>
-                                                <th>Código</th>
-                                                <th>Producto / Insumo</th>
-                                                <th>Categoría</th>
-                                                <th class="text-end">Stock Mínimo</th>
-                                                <th class="text-end">Stock Actual</th>
-                                                <th class="text-center">Estado</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="fs-7">
-                                            <% if(stock.length === 0) { %>
-                                                <tr>
-                                                    <td colspan="6" class="text-center text-muted py-4">No hay productos registrados en este almacén.</td>
-                                                </tr>
-                                            <% } else { %>
-                                                <% stock.forEach(item => { %>
-                                                    <tr>
-                                                        <td class="fw-semibold text-secondary">#<%= item.producto_codigo %></td>
-                                                        <td>
-                                                            <span class="fw-bold text-dark d-block"><%= item.producto_nombre %></span>
-                                                            <small class="text-muted">Medida: <%= item.unidad_medida || 'Unidades' %></small>
-                                                        </td>
-                                                        <td><span class="badge bg-light text-dark border"><%= item.categoria %></span></td>
-                                                        <td class="text-end fw-semibold text-muted"><%= parseFloat(item.stock_minimo).toFixed(2) %></td>
-                                                        <td class="text-end fw-bold <%= item.stock_actual <= item.stock_minimo ? 'text-danger fs-6' : 'text-success' %>">
-                                                            <%= parseFloat(item.stock_actual).toFixed(2) %>
-                                                        </td>
-                                                        <td class="text-center">
-                                                            <% if(item.stock_actual <= 0) { %>
-                                                                <span class="badge bg-danger text-white px-2 py-1"><i class="fa-solid fa-circle-xmark me-1"></i>Agotado</span>
-                                                            <% } else if (item.stock_actual <= item.stock_minimo) { %>
-                                                                <span class="badge bg-warning text-dark px-2 py-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Bajo Mínimo</span>
-                                                            <% } else { %>
-                                                                <span class="badge bg-success text-white px-2 py-1"><i class="fa-solid fa-circle-check me-1"></i>Óptimo</span>
-                                                            <% } %>
-                                                        </td>
-                                                    </tr>
-                                                <% }) %>
-                                            <% } %>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <div class="tab-pane fade p-3" id="vencimiento-panel" role="tabpanel">
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-light fs-7 text-uppercase text-secondary">
-                                            <tr>
-                                                <th>Lote</th>
-                                                <th>Producto</th>
-                                                <th class="text-end">Cantidad</th>
-                                                <th>Vencimiento</th>
-                                                <th>Estado / Diagnóstico</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="fs-7">
-                                            <% if(alertasVencimiento.length === 0) { %>
-                                                <tr>
-                                                    <td colspan="5" class="text-center text-muted py-4"><i class="fa-solid fa-shield-halved text-success me-2"></i>Todos los lotes se encuentran estables.</td>
-                                                </tr>
-                                            <% } else { %>
-                                                <% alertasVencimiento.forEach(lote => { %>
-                                                    <tr class="<%= lote.dias_para_vencer < 0 ? 'table-danger-custom' : '' %>">
-                                                        <td class="fw-semibold text-primary">#<%= lote.lote_codigo %></td>
-                                                        <td class="fw-bold text-dark"><%= lote.producto_nombre %></td>
-                                                        <td class="text-end fw-bold text-secondary"><%= parseFloat(lote.cantidad_actual).toFixed(2) %></td>
-                                                        <td>
-                                                            <span class="fw-semibold"><%= new Date(lote.fecha_vencimiento).toLocaleDateString('es-ES') %></span>
-                                                        </td>
-                                                        <td>
-                                                            <% if (lote.dias_para_vencer < 0) { %>
-                                                                <span class="text-danger fw-bold"><i class="fa-solid fa-skull-crossbones me-1"></i> Vencido hace <%= Math.abs(lote.dias_para_vencer) %> días</span>
-                                                            <% } else if (lote.dias_para_vencer <= 7) { %>
-                                                                <span class="text-warning fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i> Crítico: <%= lote.dias_para_vencer %> días</span>
-                                                            <% } else { %>
-                                                                <span class="text-secondary fw-semibold"><i class="fa-solid fa-clock me-1"></i> Próximo (<%= lote.dias_para_vencer %> días)</span>
-                                                            <% } %>
-                                                        </td>
-                                                    </tr>
-                                                <% }) %>
-                                            <% } %>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            <% } %>
         </div>
-    </main>
 
-    <script src="/js/jquery-4.0.0.js"></script>
-    <script src="/js/bootstrap.bundle.min.js"></script>
-    <script src="/js/jquery-ui.min.js"></script>
-    <script src="/js/sweetalert2.all.min.js"></script>
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle card-table mb-0" id="tablaStockProductos">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Código</th>
+                                <th>Producto</th>
+                                <th>Categoría</th>
+                                <th class="text-center">Stock Actual</th>
+                                <th class="text-center">Stock Mínimo</th>
+                                <th class="pe-4">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (productos && productos.length > 0) { %>
+                                <% productos.forEach(prod => { %>
+                                    <tr class="fila-producto" data-codigo="<%= prod.codigo ? prod.codigo.toLowerCase() : '' %>" data-nombre="<%= prod.nombre ? prod.nombre.toLowerCase() : '' %>">
+                                        <td class="ps-4 fw-bold text-secondary"><%= prod.codigo %></td>
+                                        <td><%= prod.nombre %></td>
+                                        <td><%= prod.categoria_nombre || 'General' %></td>
+                                        <td class="text-center fw-bold <%= (parseFloat(prod.stock_actual) <= parseFloat(prod.stock_minimo)) ? 'text-danger' : 'text-success' %>">
+                                            <%= prod.stock_actual %>
+                                        </td>
+                                        <td class="text-center text-muted"><%= prod.stock_minimo %></td>
+                                        <td class="pe-4">
+                                            <% if (parseFloat(prod.stock_actual) <= 0) { %>
+                                                <span class="badge bg-danger-soft text-danger py-1 px-2">Agotado</span>
+                                            <% } else if (parseFloat(prod.stock_actual) <= parseFloat(prod.stock_minimo)) { %>
+                                                <span class="badge bg-warning-soft text-warning py-1 px-2">Stock Crítico</span>
+                                            <% } else { %>
+                                                <span class="badge bg-success-soft text-success py-1 px-2">Disponible</span>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            <% } else { %>
+                                <tr id="filaNoDatos">
+                                    <td colspan="6" class="text-center py-5 text-muted">
+                                        <i class="fas fa-box-open d-block mb-2 fs-3 text-secondary opacity-50"></i>
+                                        No hay productos registrados o con existencias en este almacén.
+                                    </td>
+                                </tr>
+                            <% } %>
+                            
+                            <tr id="filaNoCoincidencias" style="display: none;">
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="fas fa-filter d-block mb-2 fs-3 text-secondary opacity-50"></i>
+                                    No se encontraron productos que coincidan con la búsqueda.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
     <script>
-        function cambiarAlmacen(id) {
-            window.location.href = `/admin/inventario/stock?almacenId=${id}`;
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // ==========================================
+        // 1. BUSCADOR FILTRADO EN TIEMPO REAL (FRONT)
+        // ==========================================
+        const inputBuscar = document.getElementById('buscarProductoStock');
+        const filasProductos = document.querySelectorAll('.fila-producto');
+        const filaNoCoincidencias = document.getElementById('filaNoCoincidencias');
+
+        if (inputBuscar) {
+            inputBuscar.addEventListener('input', function(e) {
+                const termino = e.target.value.toLowerCase().trim();
+                let coincidencias = 0;
+
+                filasProductos.forEach(fila => {
+                    const codigo = fila.getAttribute('data-codigo') || '';
+                    const nombre = fila.getAttribute('data-nombre') || '';
+
+                    if (codigo.includes(termino) || nombre.includes(termino)) {
+                        fila.style.display = '';
+                        coincidencias++;
+                    } else {
+                        fila.style.display = 'none';
+                    }
+                });
+
+                if (filasProductos.length > 0) {
+                    if (coincidencias === 0) {
+                        filaNoCoincidencias.style.display = '';
+                    } else {
+                        filaNoCoincidencias.style.display = 'none';
+                    }
+                }
+            });
         }
+
+        // ==========================================
+        // 2. REDIRECCIÓN POR CAMBIO DE ALMACÉN
+        // ==========================================
+        const selectAlmacen = document.getElementById('selectAlmacenStock');
+        if (selectAlmacen) {
+            selectAlmacen.addEventListener('change', function() {
+                const almacenId = this.value;
+                if (almacenId) {
+                    // Usamos la ruta base actual de la ventana eliminando los query params antiguos
+                    // Esto preserva automáticamente los prefijos como /admin o /admin/inventario
+                    const urlBase = window.location.pathname;
+                    window.location.href = `${urlBase}?almacenId=${almacenId}`;
+                }
+            });
+        }
+    });
     </script>
 </body>
 </html>

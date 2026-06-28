@@ -44,8 +44,6 @@ exports.createEntrada = async (req, res) => {
         
         // 3. Formatear el correlativo a 3 dígitos (LOT-2026-XXX)
         const siguienteCorrelativo = String(countResult[0].total + 1).padStart(3, '0');
-        console.log("DEPURANDO SIGUIENTE COSNECUTIVO: ");
-        console.log(siguienteCorrelativo);
         const numero_lote_autogenerado = `LOT-${anoActual}-${siguienteCorrelativo}`;
 
         // 4. Ejecución atómica en el Modelo

@@ -50,26 +50,35 @@ const Transferencia = {
         return rows[0];
     },
 
-    // Crear la cabecera y el detalle utilizando transacciones atómicas
+    // models/transferenciaModel.js (Sección createSolicitudAtomica)
     createSolicitudAtomica: async (data) => {
         const conn = await db.getConnection();
         await conn.beginTransaction();
         try {
-            const codigo = `TR-${Date.now().toString().slice(-6)}`;
-
-            // Ajustado a las columnas exactas de tu tabla 'transferencias'
-            const queryCabecera = `
+            // FIX: Se añade 'solicitado_por' al string y se remueve 'estado' (ya que va fijo en VALUES)
+            const queryTrans = `
                 INSERT INTO transferencias 
-                (codigo, almacen_origen_id, almacen_destino_id, estado, observaciones, created_at, updated_at)
-                VALUES (?, ?, ?, 'PENDIENTE', ?, NOW(), NOW())
+                (almacen_origen_id, almacen_destino_id, solicitado_por, observaciones, estado, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'PENDIENTE', NOW(), NOW())
             `;
-            const [resCabecera] = await conn.query(queryCabecera, [
-                codigo, data.almacen_origen_id, data.almacen_destino_id, data.observaciones || null
+            
+            // FIX: Se ordenan los valores en estricta correspondencia con los '?' de arriba:
+            // 1. almacen_origen_id -> ?
+            // 2. almacen_destino_id -> ?
+            // 3. solicitado_por -> ?
+            // 4. observaciones -> ?
+            const [resultTrans] = await conn.query(queryTrans, [
+                data.almacen_origen_id,
+                data.almacen_destino_id,
+                data.solicitado_por,      // <-- ID numérico del usuario (ej: 3)
+                data.observaciones || null
             ]);
-            const transferenciaId = resCabecera.insertId;
 
-            const [prod] = await conn.query('SELECT unidad_medida_id FROM productos WHERE id = ?', [data.producto_id]);
-            const unidadMedidaId = prod.length > 0 ? prod[0].unidad_medida_id : null;
+            const transferenciaId = resultTrans.insertId;
+
+            // Obtener unidad_medida_id base del producto (manteniendo tu lógica atómica)
+            const [prodRows] = await conn.query("SELECT unidad_inventario_id FROM productos WHERE id = ?", [data.producto_id]);
+            const unidadMedidaId = prodRows.length > 0 ? prodRows[0].unidad_inventario_id : null;
 
             const queryDetalle = `
                 INSERT INTO transferencias_detalle 

@@ -25,9 +25,23 @@ exports.viewTransferencias = async (req, res) => {
 
 exports.createSolicitud = async (req, res) => {
     const { almacen_origen_id, almacen_destino_id, producto_id, cantidad, observaciones } = req.body;
-    const solicitante_id = req.session?.user?.id || req.user?.id || 1;
+    
+    // 1. Corregimos el nombre para que coincida exactamente con lo que el Modelo y la BD esperan
+    const solicitado_por =  req.user?.id || req.session?.user?.id;
 
     try {
+        // Validación de seguridad por si no hay sesión activa
+        if (!solicitado_por) {
+            return res.status(401).json({ 
+                success: false, 
+                message: "Sesión inválida o expirada. Por favor, inicie sesión de nuevo." 
+            });
+        }
+
+        if (!almacen_origen_id || !almacen_destino_id || !producto_id || !cantidad) {
+            return res.status(400).json({ success: false, message: "Todos los campos obligatorios deben ser completados." });
+        }
+
         if (parseInt(almacen_origen_id) === parseInt(almacen_destino_id)) {
             return res.status(400).json({ success: false, message: "El almacén origen y destino no pueden coincidir." });
         }
@@ -37,17 +51,19 @@ exports.createSolicitud = async (req, res) => {
             return res.status(400).json({ success: false, message: "El almacén de origen no cuenta con suficiente stock disponible." });
         }
 
+        // 2. Enviamos el objeto con la propiedad 'solicitado_por' perfectamente mapeada
         const insertId = await Transferencia.createSolicitudAtomica({
             almacen_origen_id,
             almacen_destino_id,
             producto_id,
             cantidad,
-            solicitante_id,
+            solicitado_por, // <-- CAMBIADO AQUÍ (de solicitante_id a solicitado_por)
             observaciones
         });
 
         return res.status(201).json({ success: true, message: "Solicitud registrada con éxito.", id: insertId });
     } catch (error) {
+        console.error("Error en createSolicitud:", error);
         return res.status(500).json({ success: false, message: error.message });
     }
 };
