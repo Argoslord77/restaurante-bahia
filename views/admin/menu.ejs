@@ -25,84 +25,90 @@
     <div class="container-fluid">
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
-            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+            
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
                 <%- include('../includes/header', {encabezado_pagina: 'Menú / Platillos', desc_pagina: 'Gestión de la oferta gastronómica y platos del restaurante', add_btn: true, btn_label: "Nuevo Platillo", modal: "modalCrearPlatillo"}) %>
-                <div class="card card-custom shadow-sm border-0 overflow-hidden">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-custom-thead text-uppercase fs-7">
-                                <tr>
-                                    <th class="ps-4 py-3">Nombre del Platillo</th>
-                                    <th class="py-3">Categoría</th>
-                                    <th class="py-3">Precio Principal</th>
-                                    <th class="py-3">Precio Alt.</th>
-                                    <th class="text-center py-3" style="width: 200px;">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <% if (platillos.length === 0) { %>
+                
+                <div class="flex-grow-1 my-3">
+                    <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-custom-thead text-uppercase fs-7">
                                     <tr>
-                                        <td colspan="5" class="text-center py-5 text-muted">
-                                            <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i> No hay platillos registrados en el menú.
-                                        </td>
+                                        <th class="ps-4 py-3">Nombre del Platillo</th>
+                                        <th class="py-3">Categoría</th>
+                                        <th class="py-3">Precio Principal</th>
+                                        <th class="py-3">Precio Alt.</th>
+                                        <th class="text-center py-3" style="width: 200px;">Acciones</th>
                                     </tr>
-                                <% } else { %>
-                                    <% platillos.forEach(platillo => { %>
-                                        <tr id="row-<%= platillo.id %>">
-                                            <td class="ps-4 fw-semibold text-dark">
-                                                <div class="d-flex align-items-center gap-3">
-                                                    <% if (platillo.foto) { %>
-                                                        <img src="/uploads/<%= platillo.foto %>" alt="Foto Platillo" class="user-avatar rounded">
-                                                    <% } else { %>
-                                                        <div class="user-avatar rounded bg-light border d-flex align-items-center justify-content-center text-secondary">
-                                                            <i class="fa-solid fa-bowl-food"></i>
-                                                        </div>
-                                                    <% } %>
-                                                    <div class="d-flex flex-column">
-                                                        <span><%= platillo.nombre %></span>
-                                                        <span class="text-muted small fw-normal"><%= platillo.descripcion || 'Sin descripción' %></span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-light text-secondary border text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                    <%= platillo.categoria %>
-                                                </span>
-                                            </td>
-                                            <td class="text-dark fw-bold">$<%= parseFloat(platillo.precio).toFixed(2) %></td>
-                                            <td class="text-secondary small">
-                                                <%= (platillo.precio_alt) ? '$' + parseFloat(platillo.precio_alt).toFixed(2) : '-' %>
-                                            </td>
-                                            <td class="text-center">
-                                                <div class="btn-group gap-1">
-                                                    <button class="btn btn-sm btn-outline-secondary border-0"
-                                                        title="Editar"
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#modalEditarPlatillo"
-                                                        data-id="<%= platillo.id %>"
-                                                        data-nombre="<%= platillo.nombre %>"
-                                                        data-descripcion="<%= platillo.descripcion %>"
-                                                        data-precio="<%= platillo.precio %>"
-                                                        data-categoria="<%= platillo.categoria %>"
-                                                        data-precio_alt="<%= platillo.precio_alt %>"
-                                                        data-foto="<%= platillo.foto %>">
-                                                        <i class="fa-solid fa-pen-to-square"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-outline-danger border-0 btn-eliminar-dish" 
-                                                            title="Eliminar"
-                                                            data-id="<%= platillo.id %>"
-                                                            data-nombre="<%= platillo.nombre %>">
-                                                        <i class="fa-solid fa-trash"></i>
-                                                    </button>
-                                                </div>
+                                </thead>
+                                <tbody>
+                                    <% if (platillos.length === 0) { %>
+                                        <tr>
+                                            <td colspan="5" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i> No hay platillos registrados en el menú.
                                             </td>
                                         </tr>
-                                    <% }) %>
-                                <% } %>
-                            </tbody>
-                        </table>
+                                    <% } else { %>
+                                        <% platillos.forEach(platillo => { %>
+                                            <tr id="row-<%= platillo.id %>">
+                                                <td class="ps-4 fw-semibold text-dark">
+                                                    <div class="d-flex align-items-center gap-3">
+                                                        <% if (platillo.foto) { %>
+                                                            <img src="/uploads/<%= platillo.foto %>" alt="Foto Platillo" class="user-avatar rounded">
+                                                        <% } else { %>
+                                                            <div class="user-avatar rounded bg-light border d-flex align-items-center justify-content-center text-secondary">
+                                                                <i class="fa-solid fa-bowl-food"></i>
+                                                            </div>
+                                                        <% } %>
+                                                        <div class="d-flex flex-column">
+                                                            <span><%= platillo.nombre %></span>
+                                                            <span class="text-muted small fw-normal"><%= platillo.descripcion || 'Sin descripción' %></span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-light text-secondary border text-capitalize px-3 py-1 rounded-pill fs-7">
+                                                        <%= platillo.categoria %>
+                                                    </span>
+                                                </td>
+                                                <td class="text-dark fw-bold">$<%= parseFloat(platillo.precio).toFixed(2) %></td>
+                                                <td class="text-secondary small">
+                                                    <%= (platillo.precio_alt) ? '$' + parseFloat(platillo.precio_alt).toFixed(2) : '-' %>
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="btn-group gap-1">
+                                                        <button class="btn btn-sm btn-outline-secondary border-0"
+                                                            title="Editar"
+                                                            data-bs-toggle="modal" 
+                                                            data-bs-target="#modalEditarPlatillo"
+                                                            data-id="<%= platillo.id %>"
+                                                            data-nombre="<%= platillo.nombre %>"
+                                                            data-descripcion="<%= platillo.descripcion %>"
+                                                            data-precio="<%= platillo.precio %>"
+                                                            data-categoria="<%= platillo.categoria %>"
+                                                            data-precio_alt="<%= platillo.precio_alt %>"
+                                                            data-foto="<%= platillo.foto %>">
+                                                            <i class="fa-solid fa-pen-to-square"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger border-0 btn-eliminar-dish" 
+                                                                title="Eliminar"
+                                                                data-id="<%= platillo.id %>"
+                                                                data-nombre="<%= platillo.nombre %>">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
+
+                <%- include('../includes/footer') %>
             </main>
         </div>
     </div>
@@ -217,7 +223,9 @@
         </div>
     </div>
 
+    <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
     
     <script>
@@ -260,10 +268,6 @@
                 }
             });
         }
-
-        // ==========================================
-        //  PETICIONES AJAX / FETCH CON SWEETALERT2
-        // ==========================================
 
         // 1. CREAR PLATILLO VIA FETCH
         const formCrear = document.getElementById('formCrearPlatillo');
@@ -362,7 +366,6 @@
                                 text: resData.message,
                                 confirmButtonColor: '#212529'
                             }).then(() => {
-                                // Elimina la fila de la interfaz sin recargar para mayor fluidez
                                 document.getElementById(`row-${id}`).remove();
                             });
                         } else {

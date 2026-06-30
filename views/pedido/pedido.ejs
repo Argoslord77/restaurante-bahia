@@ -24,62 +24,67 @@
     <div class="container-fluid">
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
-            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">                
+            
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
                 <%- include('../includes/header', {encabezado_pagina: 'Ventas / Pedidos', desc_pagina: 'Monitoreo de órdenes en consumo y apertura de mesas', add_btn: true, btn_label: "Crear Orden", modal: "modalCrearPedido"}) %>
                 
-                <div class="card card-custom shadow-sm border-0 overflow-hidden">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-custom-thead text-uppercase fs-7">
-                                <tr>
-                                    <th class="ps-4 py-3">ID Pedido</th>
-                                    <th class="py-3">Ubicación / Mesa</th>
-                                    <th class="py-3">Mesero Responsable</th>
-                                    <th class="py-3">Estado</th>
-                                    <th class="text-center py-3" style="width: 180px;">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <% if (lista.length === 0) { %>
+                <div class="flex-grow-1 my-3">
+                    <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-custom-thead text-uppercase fs-7">
                                     <tr>
-                                        <td colspan="5" class="text-center py-5 text-muted">
-                                            <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i> No hay pedidos activos en este momento.
-                                        </td>
+                                        <th class="ps-4 py-3">ID Pedido</th>
+                                        <th class="py-3">Ubicación / Mesa</th>
+                                        <th class="py-3">Mesero Responsable</th>
+                                        <th class="py-3">Estado</th>
+                                        <th class="text-center py-3" style="width: 180px;">Acciones</th>
                                     </tr>
-                                <% } else { %>
-                                    <% lista.forEach(item => { %>
+                                </thead>
+                                <tbody>
+                                    <% if (lista.length === 0) { %>
                                         <tr>
-                                            <td class="ps-4 fw-bold text-dark">#<%= item.id %></td>
-                                            <td>
-                                                <span class="fw-semibold text-dark"><%= item.numero_mesa %></span>
-                                            </td>
-                                            <td class="text-secondary fs-7">
-                                                <i class="fa-solid fa-user me-1 text-muted"></i> <%= item.mesero || 'Por asignar' %>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-warning text-dark text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                    <i class="fa-solid fa-clock me-1"></i>En Consumo
-                                                </span>
-                                            </td>
-                                            <td class="text-center">
-                                                <div class="btn-group gap-1">
-                                                    <a href="/admin/pedido/<%= item.id %>" class="btn btn-sm btn-outline-secondary border-0" title="Ver Detalle / Gestionar Caja">
-                                                        <i class="fa-solid fa-eye text-primary"></i>
-                                                    </a>
-                                                    <% if (typeof user !== 'undefined' && user && ['superadministrador', 'administrador', 'cajero'].includes(user.role)) { %>
-                                                        <button class="btn btn-sm btn-outline-secondary border-0" title="Anular Pedido Completo" onclick="cancelarPedidoInmediato('<%= item.id %>')">
-                                                            <i class="fa-solid fa-trash-can text-danger"></i>
-                                                        </button>
-                                                    <% } %>
-                                                </div>
+                                            <td colspan="5" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i> No hay pedidos activos en este momento.
                                             </td>
                                         </tr>
-                                    <% }) %>
-                                <% } %>
-                            </tbody>
-                        </table>
+                                    <% } else { %>
+                                        <% lista.forEach(item => { %>
+                                            <tr>
+                                                <td class="ps-4 fw-bold text-dark">#<%= item.id %></td>
+                                                <td>
+                                                    <span class="fw-semibold text-dark"><%= item.numero_mesa %></span>
+                                                </td>
+                                                <td class="text-secondary fs-7">
+                                                    <i class="fa-solid fa-user me-1 text-muted"></i> <%= item.mesero || 'Por asignar' %>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-warning text-dark text-capitalize px-3 py-1 rounded-pill fs-7">
+                                                        <i class="fa-solid fa-clock me-1"></i>En Consumo
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="btn-group gap-1">
+                                                        <a href="/admin/pedido/<%= item.id %>" class="btn btn-sm btn-outline-secondary border-0" title="Ver Detalle / Gestionar Caja">
+                                                            <i class="fa-solid fa-eye text-primary"></i>
+                                                        </a>
+                                                        <% if (typeof user !== 'undefined' && user && ['superadministrador', 'administrador', 'cajero'].includes(user.role)) { %>
+                                                            <button class="btn btn-sm btn-outline-secondary border-0" title="Anular Pedido Completo" onclick="cancelarPedidoInmediato('<%= item.id %>')">
+                                                                <i class="fa-solid fa-trash-can text-danger"></i>
+                                                            </button>
+                                                        <% } %>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
+                
+                <%- include('../includes/footer') %>
             </main>
         </div>
     </div>
@@ -113,9 +118,15 @@
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
+
     <script>
-        document.getElementById('modalCrearPedido').addEventListener('hidden.bs.modal', () => {
-            document.getElementById('formCrearPedido').reset();
+        document.addEventListener("DOMContentLoaded", function() {
+            const modalCrear = document.getElementById('modalCrearPedido');
+            if (modalCrear) {
+                modalCrear.addEventListener('hidden.bs.modal', () => {
+                    document.getElementById('formCrearPedido').reset();
+                });
+            }
         });
 
         function cancelarPedidoInmediato(idPedido) {

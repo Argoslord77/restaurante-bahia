@@ -4,47 +4,72 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= title || 'Monitoreo de Stock - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
-    <style>
-        /* Estilos armonizados para reducir fatiga visual en administración */
-        .bg-success-soft { background-color: rgba(40, 167, 69, 0.15); color: #28a745; }
-        .bg-warning-soft { background-color: rgba(255, 193, 7, 0.15); color: #ffc107; }
-        .bg-danger-soft { background-color: rgba(220, 53, 69, 0.15); color: #dc3545; }
-        .card-table th { font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; }
-        .fila-producto { transition: background-color 0.2s ease; }
-    </style>
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body class="bg-light">
 
-    <div class="container-fluid py-4">
-        
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="h4 mb-0 text-gray-800">Monitoreo de Stock por Almacén</h2>
-                <p class="text-muted small mb-0">Visualiza y filtra las existencias de productos en tiempo real.</p>
-            </div>
+    <div class="container-fluid">
+        <div class="row">
             
-            <div class="col-md-4 col-lg-3">
-                <label for="selectAlmacenStock" class="form-label small text-muted fw-bold mb-1">Seleccionar Almacén:</label>
-                <select class="form-select form-select-sm shadow-sm" id="selectAlmacenStock" name="almacen_id">
-                    <% if (almacenes && almacenes.length > 0) { %>
-                        <% almacenes.forEach(almacen => { %>
-                            <option value="<%= almacen.id %>" <%= (typeof almacenSeleccionado !== 'undefined' && almacenSeleccionado == almacen.id) ? 'selected' : '' %>>
-                                <%= almacen.nombre %> <%= almacen.codigo ? `(${almacen.codigo})` : '' %>
-                            </option>
-                        <% }) %>
-                    <% } else { %>
-                        <option value="">No hay almacenes disponibles</option>
-                    <% } %>
-                </select>
-            </div>
-        </div>
+            <%- include('../includes/sideBarMenu') %>
 
-        <div class="card mb-3 shadow-sm border-0">
-            <div class="card-body py-2 px-3 bg-white rounded">
-                <div class="row align-items-center">
-                    <div class="col-md-6 col-lg-4 ms-auto">
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                
+                <%- include('../includes/header', {encabezado_pagina: 'Control de Stock Actual', desc_pagina: 'Monitoreo de existencias en tiempo real y gestión preventiva de mermas.', add_btn: false}) %>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-4">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Ítems Registrados</h6>
+                                    <h3 class="fw-bold mb-0 text-dark" id="cardTotalItems">0</h3>
+                                </div>
+                                <div class="bg-primary-subtle text-primary p-3 rounded-circle" style="background-color: #e3f2fd !important;"><i class="fa-solid fa-list-check fs-4"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-4">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Stock Bajo el Mínimo</h6>
+                                    <h3 class="fw-bold mb-0 text-warning" id="cardStockMinimo">0</h3>
+                                </div>
+                                <div class="bg-warning-subtle text-warning p-3 rounded-circle" style="background-color: #fff3e0 !important;"><i class="fa-solid fa-triangle-exclamation fs-4"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-danger border-4">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Lotes Vencidos / Críticos</h6>
+                                    <h3 class="fw-bold mb-0 text-danger" id="cardLotesCriticos">0</h3>
+                                </div>
+                                <div class="bg-danger-subtle text-danger p-3 rounded-circle" style="background-color: #ffebee !important;"><i class="fa-solid fa-hourglass-half fs-4"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4 bg-white p-3 rounded shadow-sm border">
+                    <div class="col-12 col-sm-5 col-md-4 col-lg-3 m-0">
+                        <select id="selectAlmacenStock" class="form-select form-select-sm bg-light text-secondary fw-semibold">
+                            <option value="">Seleccione un almacén...</option>
+                            <% if (typeof almacenes !== 'undefined') { %>
+                                <% almacenes.forEach(almacen => { %>
+                                    <option value="<%= almacen.id %>"><%= almacen.nombre %></option>
+                                <% }) %>
+                            <% } %>
+                        </select>
+                    </div>
+
+                    <div class="col-12 col-sm-5 col-md-4 m-0">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text bg-light border-end-0 text-muted">
                                 <i class="fas fa-search"></i>
@@ -53,81 +78,112 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle card-table mb-0" id="tablaStockProductos">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-4">Código</th>
-                                <th>Producto</th>
-                                <th>Categoría</th>
-                                <th class="text-center">Stock Actual</th>
-                                <th class="text-center">Stock Mínimo</th>
-                                <th class="pe-4">Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% if (productos && productos.length > 0) { %>
-                                <% productos.forEach(prod => { %>
-                                    <tr class="fila-producto" data-codigo="<%= prod.codigo ? prod.codigo.toLowerCase() : '' %>" data-nombre="<%= prod.nombre ? prod.nombre.toLowerCase() : '' %>">
-                                        <td class="ps-4 fw-bold text-secondary"><%= prod.codigo %></td>
-                                        <td><%= prod.nombre %></td>
-                                        <td><%= prod.categoria_nombre || 'General' %></td>
-                                        <td class="text-center fw-bold <%= (parseFloat(prod.stock_actual) <= parseFloat(prod.stock_minimo)) ? 'text-danger' : 'text-success' %>">
-                                            <%= prod.stock_actual %>
-                                        </td>
-                                        <td class="text-center text-muted"><%= prod.stock_minimo %></td>
-                                        <td class="pe-4">
-                                            <% if (parseFloat(prod.stock_actual) <= 0) { %>
-                                                <span class="badge bg-danger-soft text-danger py-1 px-2">Agotado</span>
-                                            <% } else if (parseFloat(prod.stock_actual) <= parseFloat(prod.stock_minimo)) { %>
-                                                <span class="badge bg-warning-soft text-warning py-1 px-2">Stock Crítico</span>
-                                            <% } else { %>
-                                                <span class="badge bg-success-soft text-success py-1 px-2">Disponible</span>
-                                            <% } %>
-                                        </td>
-                                    </tr>
-                                <% }) %>
-                            <% } else { %>
-                                <tr id="filaNoDatos">
-                                    <td colspan="6" class="text-center py-5 text-muted">
-                                        <i class="fas fa-box-open d-block mb-2 fs-3 text-secondary opacity-50"></i>
-                                        No hay productos registrados o con existencias en este almacén.
-                                    </td>
-                                </tr>
-                            <% } %>
+                <div class="card border-0 shadow-sm rounded bg-white mb-auto">
+                    <div class="card-header bg-white border-bottom pt-3">
+                        <ul class="nav nav-tabs card-header-tabs" id="inventarioTabs" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link active fw-semibold text-secondary" id="general-tab" data-bs-toggle="tab" data-bs-target="#general-panel" type="button" role="tab">
+                                    <i class="fa-solid fa-warehouse me-2"></i>Existencias Generales
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link fw-semibold text-secondary" id="vencimiento-tab" data-bs-toggle="tab" data-bs-target="#vencimiento-panel" type="button" role="tab">
+                                    <i class="fa-solid fa-calendar-times me-2"></i>Alertas de Vencimiento
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="tab-content" id="inventarioTabsContent">
                             
-                            <tr id="filaNoCoincidencias" style="display: none;">
-                                <td colspan="6" class="text-center py-5 text-muted">
-                                    <i class="fas fa-filter d-block mb-2 fs-3 text-secondary opacity-50"></i>
-                                    No se encontraron productos que coincidan con la búsqueda.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+                            <div class="tab-pane fade show active p-3" id="general-panel" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" id="tablaStockProductos">
+                                        <thead class="table-light fs-7 text-uppercase text-secondary">
+                                            <tr>
+                                                <th>Código</th>
+                                                <th>Producto / Insumo</th>
+                                                <th>Categoría</th>
+                                                <th class="text-end">Stock Mínimo</th>
+                                                <th class="text-end">Stock Actual</th>
+                                                <th class="text-center">Estado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyStock" class="fs-7">
+                                            <tr id="filaNoDatos">
+                                                <td colspan="6" class="text-center py-5 text-muted">
+                                                    <i class="fas fa-box-open d-block mb-2 fs-3 text-secondary opacity-50"></i>
+                                                    Selecciona un almacén del menú superior para cargar las existencias físicas.
+                                                </td>
+                                            </tr>
+                                            <tr id="filaNoCoincidencias" style="display: none;">
+                                                <td colspan="6" class="text-center py-5 text-muted">
+                                                    <i class="fas fa-filter d-block mb-2 fs-3 text-secondary opacity-50"></i>
+                                                    No se encontraron productos que coincidan con la búsqueda.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
 
+                            <div class="tab-pane fade p-3" id="vencimiento-panel" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light fs-7 text-uppercase text-secondary">
+                                            <tr>
+                                                <th>Producto</th>
+                                                <th class="text-center">Lotes Activos</th>
+                                                <th class="text-end">Costo Promedio</th>
+                                                <th class="text-end">Valor Total Almacén</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyVencimiento" class="fs-7">
+                                            <tr>
+                                                <td colspan="4" class="text-center text-muted py-4">
+                                                    <i class="fa-solid fa-shield-halved text-success me-2"></i>Selecciona un almacén para auditar las alertas de lotes.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
     </div>
 
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         
-        // ==========================================
-        // 1. BUSCADOR FILTRADO EN TIEMPO REAL (FRONT)
-        // ==========================================
-        const inputBuscar = document.getElementById('buscarProductoStock');
-        const filasProductos = document.querySelectorAll('.fila-producto');
-        const filaNoCoincidencias = document.getElementById('filaNoCoincidencias');
+        // 1. Manejador de eventos seguro para cambiar de almacén
+        const selectAlmacenStock = document.getElementById('selectAlmacenStock');
+        if (selectAlmacenStock) {
+            selectAlmacenStock.addEventListener('change', function(e) {
+                const almacenId = e.target.value;
+                if (almacenId) {
+                    selectAlmacen(almacenId);
+                }
+            });
+        }
 
+        // 2. Buscador en tiempo real por término (Front-End)
+        const inputBuscar = document.getElementById('buscarProductoStock');
         if (inputBuscar) {
             inputBuscar.addEventListener('input', function(e) {
                 const termino = e.target.value.toLowerCase().trim();
+                const filasProductos = document.querySelectorAll('.fila-producto');
+                const filaNoCoincidencias = document.getElementById('filaNoCoincidencias');
                 let coincidencias = 0;
 
                 filasProductos.forEach(fila => {
@@ -142,32 +198,133 @@
                     }
                 });
 
-                if (filasProductos.length > 0) {
-                    if (coincidencias === 0) {
-                        filaNoCoincidencias.style.display = '';
-                    } else {
-                        filaNoCoincidencias.style.display = 'none';
-                    }
-                }
-            });
-        }
-
-        // ==========================================
-        // 2. REDIRECCIÓN POR CAMBIO DE ALMACÉN
-        // ==========================================
-        const selectAlmacen = document.getElementById('selectAlmacenStock');
-        if (selectAlmacen) {
-            selectAlmacen.addEventListener('change', function() {
-                const almacenId = this.value;
-                if (almacenId) {
-                    // Usamos la ruta base actual de la ventana eliminando los query params antiguos
-                    // Esto preserva automáticamente los prefijos como /admin o /admin/inventario
-                    const urlBase = window.location.pathname;
-                    window.location.href = `${urlBase}?almacenId=${almacenId}`;
+                if (filaNoCoincidencias) {
+                    filaNoCoincidencias.style.display = (filasProductos.length > 0 && coincidencias === 0) ? '' : 'none';
                 }
             });
         }
     });
+
+    // 3. Procesamiento Asíncrono de la API mediante AJAX
+    async function selectAlmacen(almacenId) {
+        if (!almacenId) return;
+
+        const tbodyStock = document.getElementById('tbodyStock');
+        const tbodyVencimiento = document.getElementById('tbodyVencimiento');
+        const filaNoDatos = document.getElementById('filaNoDatos');
+        const filaNoCoincidencias = document.getElementById('filaNoCoincidencias');
+        
+        const inputBuscar = document.getElementById('buscarProductoStock');
+        if (inputBuscar) inputBuscar.value = '';
+
+        Swal.fire({
+            title: 'Consultando Inventario',
+            text: 'Cargando y consolidando existencias en tiempo real...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            const response = await fetch(`/admin/inventario/api/stock/${almacenId}`);
+            const resData = await response.json();
+
+            if (!resData.success) {
+                throw new Error(resData.message || 'Error al obtener datos de stock.');
+            }
+
+            // Limpieza de estados anteriores
+            const filasPrevias = tbodyStock.querySelectorAll('.fila-producto');
+            filasPrevias.forEach(f => f.remove());
+            tbodyVencimiento.innerHTML = '';
+
+            const stockArr = resData.stock || [];
+
+            if (stockArr.length === 0) {
+                if (filaNoDatos) filaNoDatos.style.display = '';
+                document.getElementById('cardTotalItems').textContent = '0';
+                document.getElementById('cardStockMinimo').textContent = '0';
+                document.getElementById('cardLotesCriticos').textContent = '0';
+                tbodyVencimiento.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4"><i class="fa-solid fa-box-open me-2"></i>No hay lotes activos en este almacén.</td></tr>`;
+                Swal.close();
+                return;
+            }
+
+            if (filaNoDatos) filaNoDatos.style.display = 'none';
+            if (filaNoCoincidencias) filaNoCoincidencias.style.display = 'none';
+
+            let itemsContados = stockArr.length;
+            let stockBajoMinimoContador = 0;
+            let lotesCriticosContador = 0;
+
+            stockArr.forEach(item => {
+                const stockNum = parseFloat(item.stock_actual);
+                const minNum = parseFloat(item.stock_minimo || 10.00); 
+                const lotesActivos = parseInt(item.lotes_activos || 0);
+                
+                let stockClass = 'text-success';
+                let badgeHTML = '<span class="badge bg-success text-white px-2 py-1"><i class="fa-solid fa-circle-check me-1"></i>Disponible</span>';
+
+                if (stockNum <= 0) {
+                    stockClass = 'text-danger fw-bold fs-6';
+                    badgeHTML = '<span class="badge bg-danger text-white px-2 py-1"><i class="fa-solid fa-circle-xmark me-1"></i>Agotado</span>';
+                    stockBajoMinimoContador++;
+                } else if (stockNum <= minNum) {
+                    stockClass = 'text-warning fw-bold fs-6';
+                    badgeHTML = '<span class="badge bg-warning text-dark px-2 py-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Stock Crítico</span>';
+                    stockBajoMinimoContador++;
+                }
+
+                if (lotesActivos === 0 && stockNum > 0) {
+                    lotesCriticosContador++;
+                }
+
+                // Inyección en el Panel 1: Existencias Físicas
+                const filaGeneral = `
+                    <tr class="fila-producto" data-codigo="${item.producto_codigo ? item.producto_codigo.toLowerCase() : ''}" data-nombre="${item.producto_nombre ? item.producto_nombre.toLowerCase() : ''}">
+                        <td class="fw-semibold text-secondary">#${item.producto_codigo}</td>
+                        <td>
+                            <span class="fw-bold text-dark d-block">${item.producto_nombre}</span>
+                            <small class="text-muted">Medida: ${item.unidad_medida || 'U.M.'}</small>
+                        </td>
+                        <td><span class="badge bg-light text-dark border">${item.categoria_nombre || 'General'}</span></td>
+                        <td class="text-end fw-semibold text-muted">${minNum.toFixed(2)}</td>
+                        <td class="text-end ${stockClass}">${stockNum.toFixed(2)}</td>
+                        <td class="text-center">${badgeHTML}</td>
+                    </tr>
+                `;
+                tbodyStock.insertAdjacentHTML('beforeend', filaGeneral);
+
+                // Inyección en el Panel 2: Auditoría de Lotes
+                const filaVencimiento = `
+                    <tr>
+                        <td>
+                            <span class="fw-bold text-dark d-block">${item.producto_nombre}</span>
+                            <small class="text-muted">Código: #${item.producto_codigo}</small>
+                        </td>
+                        <td class="text-center fw-bold text-secondary">${lotesActivos}</td>
+                        <td class="text-end text-muted fw-semibold">$${parseFloat(item.costo_promedio || 0).toFixed(2)}</td>
+                        <td class="text-end fw-bold text-dark">$${parseFloat(item.valor_inventario || 0).toFixed(2)}</td>
+                    </tr>
+                `;
+                tbodyVencimiento.insertAdjacentHTML('beforeend', filaVencimiento);
+            });
+
+            // Sincronización final de contadores
+            document.getElementById('cardTotalItems').textContent = itemsContados;
+            document.getElementById('cardStockMinimo').textContent = stockBajoMinimoContador;
+            document.getElementById('cardLotesCriticos').textContent = lotesCriticosContador;
+
+            Swal.close();
+
+        } catch (error) {
+            console.error('Error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Sincronización',
+                text: error.message || 'No se pudo procesar la consolidación del Almacén.'
+            });
+        }
+    }
     </script>
 </body>
 </html>

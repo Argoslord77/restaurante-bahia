@@ -49,7 +49,8 @@
     <div class="container-fluid">
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
-            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+            
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
                 <%- include('../includes/header', {
                     encabezado_pagina: '📦 Control de Almacenes', 
                     desc_pagina: 'Configuración de locaciones físicas de inventario para Restaurante Bahía.', 
@@ -82,70 +83,74 @@
                     <% } %>
                 </div>
 
-                <div class="card card-custom shadow-sm border-0 overflow-hidden">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0" id="tablaAlmacenes">
-                            <thead class="table-custom-thead text-uppercase fs-7">
-                                <tr>
-                                    <th class="ps-4 py-3">Código</th>
-                                    <th class="py-3">Nombre / Descripción</th>
-                                    <th class="py-3">Tipo Almacén</th>
-                                    <th class="py-3">Ubicación</th>
-                                    <th class="py-3 text-center">Estado</th>
-                                    <th class="text-center py-3" style="width: 220px;">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <% if (almacenes.length === 0) { %>
+                <div class="flex-grow-1 my-3">
+                    <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="tablaAlmacenes">
+                                <thead class="table-custom-thead text-uppercase fs-7">
                                     <tr>
-                                        <td colspan="6" class="text-center py-5 text-muted">
-                                            <i class="fa-solid fa-boxes-stacked d-block fs-2 mb-2 text-secondary"></i> No hay almacenes registrados.
-                                        </td>
+                                        <th class="ps-4 py-3">Código</th>
+                                        <th class="py-3">Nombre / Descripción</th>
+                                        <th class="py-3">Tipo Almacén</th>
+                                        <th class="py-3">Ubicación</th>
+                                        <th class="py-3 text-center">Estado</th>
+                                        <th class="text-center py-3" style="width: 220px;">Acciones</th>
                                     </tr>
-                                <% } else { %>
-                                    <% almacenes.forEach(almacen => { 
-                                        const esActivo = (almacen.activo == 1 || almacen.activo === true || almacen.activa == 1 || almacen.activa === true);
-                                    %>
-                                        <tr class="<%= !esActivo ? 'opacity-50 table-light' : '' %>">
-                                            <td class="ps-4 fw-bold text-dark">
-                                                <span class="badge bg-light text-dark border font-monospace px-2 py-1"><%= almacen.codigo %></span>
-                                            </td>
-                                            <td>
-                                                <div class="fw-semibold text-dark"><%= almacen.nombre %></div>
-                                                <div class="text-muted small"><%= almacen.descripcion || 'Sin descripción' %></div>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-secondary text-white text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                    <%= almacen.tipo ? almacen.tipo.replace('_', ' ') : 'otro' %>
-                                                </span>
-                                            </td>
-                                            <td class="text-secondary"><%= almacen.ubicacion || '—' %></td>
-                                            <td class="text-center">
-                                                <% if (esActivo) { %>
-                                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fs-7">Activo</span>
-                                                <% } else { %>
-                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 fs-7">Inactivo</span>
-                                                <% } %>
-                                            </td>
-                                            <td class="text-center pe-3">
-                                                <div class="btn-group gap-1">
-                                                    <button type="button" class="btn btn-sm btn-outline-secondary border-0 btn-editar-almacen" data-id="<%= almacen.id %>" title="Editar">
-                                                        <i class="fa-solid fa-pen-to-square"></i>
-                                                    </button>
-                                                    <% if (esActivo && (typeof user === 'undefined' || !user || ['superadministrador', 'administrador'].includes(user.rol))) { %>
-                                                        <button type="button" class="btn btn-sm btn-outline-danger border-0 btn-eliminar-almacen" data-id="<%= almacen.id %>" title="Desactivar">
-                                                            <i class="fa-solid fa-power-off"></i>
-                                                        </button>
-                                                    <% } %>
-                                                </div>
+                                </thead>
+                                <tbody>
+                                    <% if (almacenes.length === 0) { %>
+                                        <tr>
+                                            <td colspan="6" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-boxes-stacked d-block fs-2 mb-2 text-secondary"></i> No hay almacenes registrados.
                                             </td>
                                         </tr>
-                                    <% }) %>
-                                <% } %>
-                            </tbody>
-                        </table>
+                                    <% } else { %>
+                                        <% almacenes.forEach(almacen => { 
+                                            const esActivo = (almacen.activo == 1 || almacen.activo === true || almacen.activa == 1 || almacen.activa === true);
+                                        %>
+                                            <tr class="<%= !esActivo ? 'opacity-50 table-light' : '' %>">
+                                                <td class="ps-4 fw-bold text-dark">
+                                                    <span class="badge bg-light text-dark border font-monospace px-2 py-1"><%= almacen.codigo %></span>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-semibold text-dark"><%= almacen.nombre %></div>
+                                                    <div class="text-muted small"><%= almacen.descripcion || 'Sin descripción' %></div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-secondary text-white text-capitalize px-3 py-1 rounded-pill fs-7">
+                                                        <%= almacen.tipo ? almacen.tipo.replace('_', ' ') : 'otro' %>
+                                                    </span>
+                                                </td>
+                                                <td class="text-secondary"><%= almacen.ubicacion || '—' %></td>
+                                                <td class="text-center">
+                                                    <% if (esActivo) { %>
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fs-7">Activo</span>
+                                                    <% } else { %>
+                                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 fs-7">Inactivo</span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-center pe-3">
+                                                    <div class="btn-group gap-1">
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary border-0 btn-editar-almacen" data-id="<%= almacen.id %>" title="Editar">
+                                                            <i class="fa-solid fa-pen-to-square"></i>
+                                                        </button>
+                                                        <% if (esActivo && (typeof user === 'undefined' || !user || ['superadministrador', 'administrador'].includes(user.rol))) { %>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger border-0 btn-eliminar-almacen" data-id="<%= almacen.id %>" title="Desactivar">
+                                                                <i class="fa-solid fa-power-off"></i>
+                                                            </button>
+                                                        <% } %>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
+                
+                <%- include('../includes/footer') %>
             </main>
         </div>
     </div>
@@ -233,7 +238,6 @@
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
     <script>
-        // Inicialización y referencia segura del modal
         const almacenModalEl = document.getElementById('almacenModal');
         
         almacenModalEl.addEventListener('show.bs.modal', function (event) {
@@ -247,10 +251,8 @@
             }
         });
 
-        // ASIGNACIÓN SEGURO DE EVENTOS (Evita errores de CSP directiva script-src-attr)
         document.getElementById('almacenForm').addEventListener('submit', saveAlmacen);
 
-        // Delegación de eventos en la tabla para manejar clics en Editar y Eliminar de forma dinámica
         document.getElementById('tablaAlmacenes').addEventListener('click', function(e) {
             const btnEditar = e.target.closest('.btn-editar-almacen');
             if (btnEditar) {
@@ -275,7 +277,6 @@
                 const response = await fetch(`/admin/almacen/${id}`);
                 const res = await response.json();
                 
-                // CORRECCIÓN: Leemos 'res.almacen' en lugar de 'res.data'
                 if(res.success && res.almacen) {
                     const d = res.almacen;
                     
@@ -286,7 +287,6 @@
                     document.getElementById('tipo').value = d.tipo || 'principal';
                     document.getElementById('ubicacion').value = d.ubicacion || '';
                     
-                    // Fallback automático por si el backend usa responsable_usuario_id o responsable_id
                     document.getElementById('responsable_usuario_id').value = d.responsable_usuario_id || d.responsable_id || '';
                     
                     document.getElementById('permite_ventas').checked = d.permite_ventas === 1 || d.permite_ventas === true;
@@ -304,7 +304,7 @@
                     Swal.fire('Error', res.message || 'No se pudieron recuperar los datos.', 'error');
                 }
             } catch (err) {
-                console.error(err); // Te ayuda a debuggear en la consola del navegador
+                console.error(err);
                 Swal.fire('Error', 'No se pudieron precargar los datos del almacén.', 'error');
             }
         }

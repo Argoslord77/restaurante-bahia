@@ -16,10 +16,17 @@ body { background-color: #f3f4f6; }
     transition: all 0.2s; 
 }
 
+/* MODIFICADO: Indicador de selección gris más oscuro con texto marfil/blanco */
 .sidebar .nav-link:hover, 
 .sidebar .nav-link.active { 
-    color: #111827; 
-    background-color: #d1d5db; 
+    color: #f9fafb !important;        /* Color marfil / blanco suave */
+    background-color: #696b6d;       /* Gris más oscuro para un contraste limpio */
+}
+
+/* Asegura que los iconos cambien de color armónicamente junto al texto */
+.sidebar .nav-link:hover i,
+.sidebar .nav-link.active i {
+    color: #f9fafb !important;
 }
 
 .sidebar-brand { font-weight: 700; color: #111827; }

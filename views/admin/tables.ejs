@@ -38,7 +38,7 @@
     <div class="container-fluid">
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
-            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4">
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
                 <%- include('../includes/header', {encabezado_pagina: 'Control / Mesas', desc_pagina: 'Gestión de áreas y ocupación del salón', add_btn: true, btn_label: "Nueva Mesa", modal: "modalCrearMesa"}) %>
 
                 <% 
@@ -161,6 +161,10 @@
                         </div>
                     <% }) %>
                 </div>
+                
+                <div class="mt-auto">
+                    <%- include('../includes/footer') %>
+                </div>
             </main>
         </div>
     </div>
@@ -263,8 +267,11 @@
         </div>
     </div>
 
+    <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
+
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             let modoPintura = false;
@@ -276,7 +283,6 @@
             const btnCancelarDistribucion = document.getElementById('btnCancelarDistribucion');
             const btnAlertaAsignar = document.getElementById('btnAlertaAsignar');
 
-            // 1. MANEJO COMPORTAMIENTO MODO PINTURA (BOTONES)
             if (btnAlertaAsignar) {
                 btnAlertaAsignar.addEventListener('click', function() {
                     selectPintarDependiente.focus();
@@ -318,14 +324,11 @@
                 window.location.reload();
             }
 
-            // 2. ESCUCHADOR DE CLICKS CENTRALIZADO EN EL CONTENEDOR (DELEGACIÓN SEGURA PARA CSP)
             if (contenedorMesas) {
                 contenedorMesas.addEventListener('click', function(e) {
                     
-                    // --- CASO A: MODO PINTURA ACTIVO (CLICK EN LA TARJETA) ---
                     const cardElement = e.target.closest('.restaurant-card');
                     if (cardElement && modoPintura) {
-                        // Si el click fue en los botones de editar/eliminar, no pintar
                         if (e.target.closest('.action-crud-buttons')) return;
 
                         const dependienteId = selectPintarDependiente.value;
@@ -344,26 +347,22 @@
                         return;
                     }
 
-                    // --- CASO B: CLICK EN EL BOTÓN DE EDITAR MESA (ENGRANAJE) ---
                     const botonEditar = e.target.closest('.btn-editar');
                     if (botonEditar) {
-                        e.preventDefault(); // Prevenir comportamientos extraños
+                        e.preventDefault();
                         
-                        // Recolectar datos desde el botón pulsado
                         const tableId = botonEditar.getAttribute('data-id');
                         const numero = botonEditar.getAttribute('data-numero');
                         const ubicacion = botonEditar.getAttribute('data-ubicacion');
                         const capacidad = botonEditar.getAttribute('data-capacidad');
                         const estado = botonEditar.getAttribute('data-estado');
 
-                        // Rellenar los campos del formulario del Modal de Edición
                         document.getElementById('editId').value = tableId;
                         document.getElementById('editNumero').value = numero;
                         document.getElementById('editUbicacion').value = ubicacion;
                         document.getElementById('editCapacidad').value = capacidad;
                         document.getElementById('editEstado').value = estado;
 
-                        // Regenerar el código QR de la mesa de forma segura
                         const qrcodeDiv = document.getElementById('qrcode');
                         qrcodeDiv.innerHTML = "";
                         document.getElementById('qrTextLink').innerText = `Mesa ID: ${tableId}`;
@@ -377,13 +376,11 @@
                             correctLevel : QRCode.CorrectLevel.Q
                         });
 
-                        // Disparar la apertura manual del modal de Bootstrap de forma segura
                         const modalEditar = new bootstrap.Modal(document.getElementById('modalEditarMesa'));
                         modalEditar.show();
                         return;
                     }
 
-                    // --- CASO C: CLICK EN EL BOTÓN DE ELIMINAR MESA ---
                     const botonEliminar = e.target.closest('.btn-eliminar-mesa');
                     if (botonEliminar) {
                         const id = botonEliminar.getAttribute('data-id');
@@ -419,7 +416,6 @@
                 .catch(() => Swal.fire('Error', 'No se pudo comunicar el mapa al servidor.', 'error'));
             }
 
-            // 3. SUBMITS DE FORMULARIOS (CREACIÓN / EDICIÓN)
             document.getElementById('formCrearMesa').addEventListener('submit', function(e) {
                 e.preventDefault();
                 const bootstrapModal = bootstrap.Modal.getInstance(document.getElementById('modalCrearMesa'));
@@ -476,7 +472,6 @@
             });
         });
 
-        // 4. CONFIRMACIÓN Y ELIMINACIÓN DIRECTA (FUERA DEL DOMCONTENTLOADED)
         function eliminarMesa(id, numero) {
             Swal.fire({
                 title: '¿Remover mesa?',

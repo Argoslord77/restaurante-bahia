@@ -147,7 +147,7 @@ app.get('/', (req, res) => {
 // MIDDLEWARE DE MANEJO DE ERRORES (Siempre al final)
 // ==========================================
 // Manejo de rutas no encontradas
-app.use(notFoundHandler);
+// app.use(notFoundHandler);
 
 // Manejo centralizado de errores
 app.use(errorHandler);

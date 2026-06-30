@@ -6,7 +6,6 @@
     
     <div class="d-flex align-items-center gap-2">
         <% if (user.rol === 'superadministrador' || user.rol === 'administrador') { %>
-            <!-- Dynamic btn content and target modal  -->
             <% if (typeof add_btn !== 'undefined' && add_btn) { %>
                 <button class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 d-flex align-items-center gap-1 text-dark" data-bs-toggle="modal" data-bs-target="<% if(typeof modal !== 'undefined' && modal){%>#<%- modal %><% } else { %>#modalWindow<% } %>">
                     <i class="fa-solid fa-plus text-secondary"></i> <% if(btn_label !== 'undefined' && btn_label){%><%- btn_label %><%} else {%>Agregar Elemento<%}%>
@@ -15,16 +14,29 @@
                 <%- include('../includes/menuAccionesAlmacen') %>
             <% } %>
         <% } %>
+        
         <div class="dropdown">
-            <button class="btn btn-white border shadow-sm dropdown-toggle fw-semibold btn-sm py-2 d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown">
-                <% if (user && user.foto && user.foto !== 'null') { %>
-                    <img src="/uploads/<%= user.foto %>" class="user-avatar-nav" alt="Avatar">
-                <% } else { %>
-                    <i class="fa-solid fa-user-tie text-secondary"></i>
-                <% } %>
-                <span><%= user ? user.nombre : 'Gestor Activo' %></span>
+            <button class="btn btn-white border shadow-sm fw-semibold btn-sm p-0 d-flex align-items-center text-dark overflow-hidden" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="height: 38px;">
+                
+                <div class="d-flex align-items-center gap-2 px-3 h-100">
+                    <% if (user && user.foto && user.foto !== 'null') { %>
+                        <img src="/uploads/<%= user.foto %>" class="user-avatar-nav rounded-circle" alt="Avatar" style="width: 24px; height: 24px; object-fit: cover;">
+                    <% } else { %>
+                        <i class="fa-solid fa-user-tie text-secondary"></i>
+                    <% } %>
+                    <span class="fs-7 fw-semibold"><%= user ? user.nombre : 'Gestor Activo' %></span>
+                </div>
+
+                <div class="border-start h-100" style="border-color: #dee2e6 !important;"></div>
+
+                <div class="bg-dark text-light px-3 h-100 d-flex align-items-center rounded-end align-self-stretch text-uppercase gap-2" style="background-color: #212529 !important; font-size: 0.7rem; letter-spacing: 0.8px;">
+                    <i class="fa-solid fa-shield-halved text-white-50" style="font-size: 0.85rem;"></i>
+                    <span class="fw-bold text-white"><%= user ? user.rol : 'Sin Rol' %></span>
+                    <i class="fa-solid fa-chevron-down ms-1 text-white-50" style="font-size: 0.65rem;"></i>
+                </div>
+
             </button>
-            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
                 <li><a class="dropdown-item p-2 fs-7" href="/admin/perfil"><i class="fa-solid fa-id-card me-2"></i>Mi Perfil</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item p-2 text-danger fs-7" href="/logout"><i class="fa-solid fa-right-from-bracket me-2"></i>Salir</a></li>

@@ -24,99 +24,108 @@
     <div class="container-fluid">
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
-            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">                
-                <%- include('../includes/header', {encabezado_pagina: 'Personal / Usuarios', desc_pagina: 'Gestión de accesos, roles y personal del restaurante', add_btn: true, btn_label: "Nuevo Usuario", modal: "modalCrearUsuario"}) %>
-                <div class="card card-custom shadow-sm border-0 overflow-hidden">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0" id="tablaUsuarios">
-                            <thead class="table-custom-thead text-uppercase fs-7">
-                                <tr>
-                                    <th class="ps-4 py-3">Nombre Completo</th>
-                                    <th class="py-3">Usuario</th>
-                                    <th class="py-3">Email</th>
-                                    <th class="py-3">Rol</th>
-                                    <th class="text-center py-3" style="width: 150px;">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <% if (usuarios.length === 0) { %>
+            
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                
+                <div class="flex-grow-1">
+                    <%- include('../includes/header', {encabezado_pagina: 'Personal / Usuarios', desc_pagina: 'Gestión de accesos, roles y personal del restaurante', add_btn: true, btn_label: "Nuevo Usuario", modal: "modalCrearUsuario"}) %>
+                    
+                    <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="tablaUsuarios">
+                                <thead class="table-custom-thead text-uppercase fs-7">
                                     <tr>
-                                        <td colspan="5" class="text-center py-5 text-muted">
-                                            <i class="fa-solid fa-user-slash d-block fs-2 mb-2 text-secondary"></i> No hay usuarios registrados.
-                                        </td>
+                                        <th class="ps-4 py-3">Nombre Completo</th>
+                                        <th class="py-3">Usuario</th>
+                                        <th class="py-3">Email</th>
+                                        <th class="py-3">Rol</th>
+                                        <th class="text-center py-3" style="width: 150px;">Acciones</th>
                                     </tr>
-                                <% } else { %>
-                                    <% usuarios.forEach(user => { %>
-                                        <% if(user.usuario != "_default_user_"){ %>
-                                            <tr>
-                                                <td class="ps-4 fw-semibold text-dark">
-                                                    <div class="d-flex align-items-center gap-3">
-                                                        <% if (user.foto) { %>
-                                                            <img src="/uploads/<%= user.foto %>" alt="Avatar" class="user-avatar">
-                                                        <% } else { %>
-                                                            <img src="https://ui-avatars.com/api/?name=<%= encodeURIComponent(user.nombre + ' ' + user.apellidos) %>&background=374151&color=fff" alt="Avatar" class="user-avatar">
-                                                        <% } %>
-                                                        <span><%= user.nombre %> <%= user.apellidos %></span>
-                                                    </div>
-                                                </td>
-                                                <td><span class="text-secondary bg-light border px-2 py-1 rounded small font-monospace"><%= user.usuario %></span></td>
-                                                <td class="text-secondary fs-7"><%= user.email ? user.email : 'Opcional' %></td>
-                                                <td>
-                                                    <% 
-                                                        let badgeColor = 'bg-secondary text-white';
-                                                        let iconStyle = 'fa-solid fa-user';
-                                                        if (user.rol === 'superadministrador') {
-                                                            badgeColor = 'bg-danger text-white';
-                                                        } else if (user.rol === 'administrador') {
-                                                            badgeColor = 'bg-dark text-white';
-                                                        } else if (user.rol === 'pendiente') {
-                                                            badgeColor = 'bg-secondary text-white fw-semibold';
-                                                            iconStyle = 'fa-solid fa-clock text-white';
-                                                        } else if (user.rol === 'dependiente') {
-                                                            badgeColor = 'bg-primary text-white';
-                                                            iconStyle = 'fa-solid fa-utensils text-white';
-                                                        } else if (user.rol === 'cocinero') {
-                                                            badgeColor = 'bg-success text-white';
-                                                        } else if (user.rol === 'bartender') {
-                                                            badgeColor = 'bg-info text-dark';
-                                                        } else if (user.rol === 'comercial') {
-                                                            badgeColor = 'bg-warning text-dark';
-                                                        }
-                                                    %>
-                                                    <span class="badge <%= badgeColor %> text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                        <i class="<%= iconStyle %> me-1"></i><%= user.rol %>
-                                                    </span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <div class="btn-group gap-1">
-                                                        <button class="btn btn-sm btn-outline-secondary border-0"
-                                                                title="Editar" 
-                                                                data-bs-toggle="modal" 
-                                                                data-bs-target="#modalEditarUsuario"
-                                                                data-id="<%= user.id %>"
-                                                                data-nombre="<%= user.nombre %>"
-                                                                data-apellidos="<%= user.apellidos %>"
-                                                                data-usuario="<%= user.usuario %>"
-                                                                data-email="<%= user.email %>"
-                                                                data-rol="<%= user.rol %>"
-                                                                data-foto="<%= user.foto %>">
-                                                            <i class="fa-solid fa-pen-to-square"></i>
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-danger border-0 btn-eliminar-usuario" 
-                                                                data-id="<%= user.id %>"
-                                                                data-nombre="<%= user.nombre %> <%= user.apellidos %>"
-                                                                title="Eliminar">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        <% } %>
-                                    <% }) %>
-                                <% } %>
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    <% if (usuarios.length === 0) { %>
+                                        <tr>
+                                            <td colspan="5" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-user-slash d-block fs-2 mb-2 text-secondary"></i> No hay usuarios registrados.
+                                            </td>
+                                        </tr>
+                                    <% } else { %>
+                                        <% usuarios.forEach(user => { %>
+                                            <% if(user.usuario != "_default_user_"){ %>
+                                                <tr>
+                                                    <td class="ps-4 fw-semibold text-dark">
+                                                        <div class="d-flex align-items-center gap-3">
+                                                            <% if (user.foto) { %>
+                                                                <img src="/uploads/<%= user.foto %>" alt="Avatar" class="user-avatar">
+                                                            <% } else { %>
+                                                                <img src="https://ui-avatars.com/api/?name=<%= encodeURIComponent(user.nombre + ' ' + user.apellidos) %>&background=374151&color=fff" alt="Avatar" class="user-avatar">
+                                                            <% } %>
+                                                            <span><%= user.nombre %> <%= user.apellidos %></span>
+                                                        </div>
+                                                    </td>
+                                                    <td><span class="text-secondary bg-light border px-2 py-1 rounded small font-monospace"><%= user.usuario %></span></td>
+                                                    <td class="text-secondary fs-7"><%= user.email ? user.email : 'Opcional' %></td>
+                                                    <td>
+                                                        <% 
+                                                            let badgeColor = 'bg-secondary text-white';
+                                                            let iconStyle = 'fa-solid fa-user';
+                                                            if (user.rol === 'superadministrador') {
+                                                                badgeColor = 'bg-danger text-white';
+                                                            } else if (user.rol === 'administrador') {
+                                                                badgeColor = 'bg-dark text-white';
+                                                            } else if (user.rol === 'pendiente') {
+                                                                badgeColor = 'bg-secondary text-white fw-semibold';
+                                                                iconStyle = 'fa-solid fa-clock text-white';
+                                                            } else if (user.rol === 'dependiente') {
+                                                                badgeColor = 'bg-primary text-white';
+                                                                iconStyle = 'fa-solid fa-utensils text-white';
+                                                            } else if (user.rol === 'cocinero') {
+                                                                badgeColor = 'bg-success text-white';
+                                                            } else if (user.rol === 'bartender') {
+                                                                badgeColor = 'bg-info text-dark';
+                                                            } else if (user.rol === 'comercial') {
+                                                                badgeColor = 'bg-warning text-dark';
+                                                            }
+                                                        %>
+                                                        <span class="badge <%= badgeColor %> text-capitalize px-3 py-1 rounded-pill fs-7">
+                                                            <i class="<%= iconStyle %> me-1"></i><%= user.rol %>
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <div class="btn-group gap-1">
+                                                            <button class="btn btn-sm btn-outline-secondary border-0"
+                                                                    title="Editar" 
+                                                                    data-bs-toggle="modal" 
+                                                                    data-bs-target="#modalEditarUsuario"
+                                                                    data-id="<%= user.id %>"
+                                                                    data-nombre="<%= user.nombre %>"
+                                                                    data-apellidos="<%= user.apellidos %>"
+                                                                    data-usuario="<%= user.usuario %>"
+                                                                    data-email="<%= user.email %>"
+                                                                    data-rol="<%= user.rol %>"
+                                                                    data-foto="<%= user.foto %>">
+                                                                <i class="fa-solid fa-pen-to-square"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm btn-outline-danger border-0 btn-eliminar-usuario" 
+                                                                    data-id="<%= user.id %>"
+                                                                    data-nombre="<%= user.nombre %> <%= user.apellidos %>"
+                                                                    title="Eliminar">
+                                                                <i class="fa-solid fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <% } %>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+                </div>
+
+                <div class="mt-auto">
+                    <%- include('../includes/footer') %>
                 </div>
             </main>
         </div>
@@ -263,27 +272,11 @@
         const bsModalCrear = new bootstrap.Modal(document.getElementById('modalCrearUsuario'));
         const bsModalEditar = new bootstrap.Modal(document.getElementById('modalEditarUsuario'));
 
-        // ========================================================
-        // ASIGNACIÓN SEGURA DE EVENTOS DE ESCUCHA (CUMPLIENDO CON CSP)
-        // ========================================================
         document.addEventListener("DOMContentLoaded", () => {
-            
-            // Envío del Formulario de Creación
-            document.getElementById('formCrearUsuario').addEventListener('submit', (e) => {
-                saveUser(e, false);
-            });
+            document.getElementById('formCrearUsuario').addEventListener('submit', (e) => saveUser(e, false));
+            document.getElementById('formEditarUsuario').addEventListener('submit', (e) => saveUser(e, true));
+            document.getElementById('editFotoInput').addEventListener('change', function() { previewNewImage(this); });
 
-            // Envío del Formulario de Edición
-            document.getElementById('formEditarUsuario').addEventListener('submit', (e) => {
-                saveUser(e, true);
-            });
-
-            // Detección segura de cambio de imagen
-            document.getElementById('editFotoInput').addEventListener('change', function() {
-                previewNewImage(this);
-            });
-
-            // Delegación de eventos para el botón Eliminar Usuario
             document.getElementById('tablaUsuarios').addEventListener('click', function(e) {
                 const botonEliminar = e.target.closest('.btn-eliminar-usuario');
                 if (botonEliminar) {
@@ -302,7 +295,6 @@
         if (modalEditarElement) {
             modalEditarElement.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
-                
                 const id = button.getAttribute('data-id');
                 const nombre = button.getAttribute('data-nombre');
                 const apellidos = button.getAttribute('data-apellidos');
@@ -349,7 +341,6 @@
 
         async function saveUser(e, esEdicion) {
             e.preventDefault();
-
             const formElement = esEdicion ? document.getElementById('formEditarUsuario') : document.getElementById('formCrearUsuario');
             const formData = new FormData(formElement);
             let url = '/admin/usuarios/crear';
@@ -357,7 +348,6 @@
             if (esEdicion) {
                 const id = document.getElementById('editUserId').value;
                 url = `/admin/usuarios/editar/${id}`;
-                
                 const pass = document.getElementById('editPassword').value;
                 if (!pass) formData.delete('password'); 
             }
@@ -370,16 +360,11 @@
             });
 
             try {
-                const res = await fetch(url, {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const res = await fetch(url, { method: 'POST', body: formData });
                 const result = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor.' }));
 
                 if (res.ok && result.success) {
                     if (esEdicion) bsModalEditar.hide(); else bsModalCrear.hide();
-
                     Swal.fire({
                         title: esEdicion ? '¡Actualizado!' : '¡Registrado!',
                         text: result.message || 'Operación realizada correctamente.',
@@ -410,18 +395,9 @@
                 reverseButtons: true
             }).then(async (result) => {
                 if (result.isConfirmed) {
-                    Swal.fire({
-                        title: 'Eliminando...',
-                        allowOutsideClick: false,
-                        didOpen: () => { Swal.showLoading(); }
-                    });
-
+                    Swal.fire({ title: 'Eliminando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
                     try {
-                        const res = await fetch(`/admin/usuarios/eliminar/${id}`, {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json' }
-                        });
-
+                        const res = await fetch(`/admin/usuarios/eliminar/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
                         const data = await res.json().catch(() => ({ success: false, message: 'Error al interpretar respuesta.' }));
 
                         if (res.ok && data.success) {

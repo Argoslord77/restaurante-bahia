@@ -49,125 +49,112 @@
     <div class="container-fluid">
         <div class="row">
            <%- include('../includes/sideBarMenu') %> 
-            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
-                <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
-                    <div>
-                        <h1 class="h2 fw-bold text-dark m-0">Panel de Control</h1>
-                        <p class="text-muted small mb-0">Resumen operativo en tiempo real</p>
-                    </div>
-                    
-                    <div class="dropdown">
-                        <button class="btn btn-white border shadow-sm dropdown-toggle fw-semibold btn-sm py-2 d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown">
-                            <% if (user && user.foto && user.foto !== 'null') { %>
-                                <img src="/uploads/<%= user.foto %>" class="user-avatar-nav" alt="Avatar">
-                            <% } else { %>
-                                <i class="fa-solid fa-user-tie text-secondary"></i>
-                            <% } %>
-                            <span><%= user ? user.nombre : 'Gestor Activo' %></span>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                            <li><a class="dropdown-item p-2 fs-7" href="/admin/perfil"><i class="fa-solid fa-id-card me-2"></i>Mi Perfil</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item p-2 text-danger fs-7" href="/logout"><i class="fa-solid fa-right-from-bracket me-2"></i>Salir</a></li>
-                        </ul>
-                    </div>
-                </div>
+            
+            <!-- SE AGREGARON CLASES FLEXBOX AQUÍ PARA EL FOOTER STICKY -->
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                
+                <!-- Todo el contenido superior se envuelve en este div con mb-auto -->
+                <div class="mb-auto">
+                    <%- include('../includes/header', {encabezado_pagina: 'Panel de Control', desc_pagina: 'Resumen operativo en tiempo real.', add_btn: false}) %>
 
-                <div class="row g-3 mb-4">
-                    <div class="col-12 col-sm-6 col-xl-3">
-                        <div class="card card-custom shadow-sm p-3">
-                            <div class="text-muted text-uppercase fs-7 fw-semibold">Mesas Activas</div>
-                            <div class="d-flex align-items-baseline justify-content-between mt-2">
-                                <span class="fs-2 fw-bold text-dark"><%= metrics.mesasOcupadas %> / <%= metrics.mesasTotales %></span>
-                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">
-                                    <%= metrics.mesasTotales > 0 ? Math.round((metrics.mesasOcupadas / metrics.mesasTotales) * 100) : 0 %>% Ocupación
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-sm-6 col-xl-3">
-                        <div class="card card-custom shadow-sm p-3">
-                            <div class="text-muted text-uppercase fs-7 fw-semibold">Pedidos en Cocina</div>
-                            <div class="d-flex align-items-baseline justify-content-between mt-2">
-                                <span class="fs-2 fw-bold text-dark"><%= metrics.pedidosCocina %></span>
-                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">Pendientes</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-sm-6 col-xl-3">
-                        <div class="card card-custom shadow-sm p-3">
-                            <div class="text-muted text-uppercase fs-7 fw-semibold">Ventas del Día</div>
-                            <div class="d-flex align-items-baseline justify-content-between mt-2">
-                                <span class="fs-2 fw-bold text-dark">$<%= metrics.ventasDia %></span>
-                                <span class="text-muted small fw-medium">Hoy</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-sm-6 col-xl-3">
-                        <div class="card card-custom shadow-sm p-3">
-                            <div class="text-muted text-uppercase fs-7 fw-semibold">Personal de Turno</div>
-                            <div class="d-flex align-items-baseline justify-content-between mt-2">
-                                <span class="fs-2 fw-bold text-dark"><%= metrics.totalPersonal %></span>
-                                <span class="text-muted small fw-medium">Registrados</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row g-4">
-                    <div class="col-12 col-lg-8">
-                        <div class="card card-custom shadow-sm p-4">
-                            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-shop me-2 text-secondary"></i>Distribución de Salón</h5>
-                            <div class="row row-cols-2 row-cols-md-4 g-3">
-                                <div class="col">
-                                    <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                        <div class="fw-bold text-secondary">Mesa 01</div>
-                                        <span class="badge bg-success-subtle text-success mt-1 rounded-pill">Disponible</span>
-                                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="card card-custom shadow-sm p-3">
+                                <div class="text-muted text-uppercase fs-7 fw-semibold">Mesas Activas</div>
+                                <div class="d-flex align-items-baseline justify-content-between mt-2">
+                                    <span class="fs-2 fw-bold text-dark"><%= metrics.mesasOcupadas %> / <%= metrics.mesasTotales %></span>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">
+                                        <%= metrics.mesasTotales > 0 ? Math.round((metrics.mesasOcupadas / metrics.mesasTotales) * 100) : 0 %>% Ocupación
+                                    </span>
                                 </div>
-                                <div class="col">
-                                    <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                        <div class="fw-bold text-secondary">Mesa 02</div>
-                                        <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
-                                    </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="card card-custom shadow-sm p-3">
+                                <div class="text-muted text-uppercase fs-7 fw-semibold">Pedidos en Cocina</div>
+                                <div class="d-flex align-items-baseline justify-content-between mt-2">
+                                    <span class="fs-2 fw-bold text-dark"><%= metrics.pedidosCocina %></span>
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">Pendientes</span>
                                 </div>
-                                <div class="col">
-                                    <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                        <div class="fw-bold text-secondary">Mesa 03</div>
-                                        <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
-                                    </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="card card-custom shadow-sm p-3">
+                                <div class="text-muted text-uppercase fs-7 fw-semibold">Ventas del Día</div>
+                                <div class="d-flex align-items-baseline justify-content-between mt-2">
+                                    <span class="fs-2 fw-bold text-dark">$<%= metrics.ventasDia %></span>
+                                    <span class="text-muted small fw-medium">Hoy</span>
                                 </div>
-                                <div class="col">
-                                    <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                        <div class="fw-bold text-secondary">Mesa 04</div>
-                                        <span class="badge bg-warning-subtle text-warning mt-1 rounded-pill">Atendida</span>
-                                    </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="card card-custom shadow-sm p-3">
+                                <div class="text-muted text-uppercase fs-7 fw-semibold">Personal de Turno</div>
+                                <div class="d-flex align-items-baseline justify-content-between mt-2">
+                                    <span class="fs-2 fw-bold text-dark"><%= metrics.totalPersonal %></span>
+                                    <span class="text-muted small fw-medium">Registrados</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="col-12 col-lg-4">
-                        <div class="card card-custom shadow-sm p-4">
-                            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Últimas Acciones</h5>
-                            <ul class="list-unstyled mb-0 d-flex flex-column gap-3 fs-7">
-                                <li class="d-flex gap-2 align-items-start">
-                                    <i class="fa-solid fa-circle-dot text-primary mt-1 small" style="font-size: 0.6rem;"></i>
-                                    <div><strong>Mesa 02</strong> solicitó la cuenta.</div>
-                                </li>
-                                <li class="d-flex gap-2 align-items-start">
-                                    <i class="fa-solid fa-circle-dot text-warning mt-1 small" style="font-size: 0.6rem;"></i>
-                                    <div>Nuevo pedido enviado a cocina desde <strong>Mesa 03</strong>.</div>
-                                </li>
-                                <li class="d-flex gap-2 align-items-start">
-                                    <i class="fa-solid fa-circle-dot text-success mt-1 small" style="font-size: 0.6rem;"></i>
-                                    <div>El dependiente ingresó al turno de la mañana.</div>
-                                </li>
-                            </ul>
+                    <div class="row g-4">
+                        <div class="col-12 col-lg-8">
+                            <div class="card card-custom shadow-sm p-4">
+                                <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-shop me-2 text-secondary"></i>Distribución de Salón</h5>
+                                <div class="row row-cols-2 row-cols-md-4 g-3">
+                                    <div class="col">
+                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
+                                            <div class="fw-bold text-secondary">Mesa 01</div>
+                                            <span class="badge bg-success-subtle text-success mt-1 rounded-pill">Disponible</span>
+                                        </div>
+                                    </div>
+                                    <div class="col">
+                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
+                                            <div class="fw-bold text-secondary">Mesa 02</div>
+                                            <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
+                                        </div>
+                                    </div>
+                                    <div class="col">
+                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
+                                            <div class="fw-bold text-secondary">Mesa 03</div>
+                                            <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
+                                        </div>
+                                    </div>
+                                    <div class="col">
+                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
+                                            <div class="fw-bold text-secondary">Mesa 04</div>
+                                            <span class="badge bg-warning-subtle text-warning mt-1 rounded-pill">Atendida</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-4">
+                            <div class="card card-custom shadow-sm p-4">
+                                <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Últimas Acciones</h5>
+                                <ul class="list-unstyled mb-0 d-flex flex-column gap-3 fs-7">
+                                    <li class="d-flex gap-2 align-items-start">
+                                        <i class="fa-solid fa-circle-dot text-primary mt-1 small" style="font-size: 0.6rem;"></i>
+                                        <div><strong>Mesa 02</strong> solicitó la cuenta.</div>
+                                    </li >
+                                    <li class="d-flex gap-2 align-items-start">
+                                        <i class="fa-solid fa-circle-dot text-warning mt-1 small" style="font-size: 0.6rem;"></i>
+                                        <div>Nuevo pedido enviado a cocina desde <strong>Mesa 03</strong>.</div>
+                                    </li>
+                                    <li class="d-flex gap-2 align-items-start">
+                                        <i class="fa-solid fa-circle-dot text-success mt-1 small" style="font-size: 0.6rem;"></i>
+                                        <div>El dependiente ingresó al turno de la mañana.</div>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </div> <!-- Fin de mb-auto -->
 
+                <!-- El footer queda fuera de mb-auto para ser empujado limpiamente al final -->
+                <%- include('../includes/footer') %>
             </main>
         </div>
     </div>
