@@ -13,7 +13,7 @@
 
     <%- include('../includes/sideBarMenu') %>
     
-    <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+    <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
         
         <%- include('../includes/header', {
             encabezado_pagina: 'Entradas de Almacén e Ingreso de Lotes', 
@@ -82,6 +82,10 @@
                 </table>
             </div>
         </div>
+        
+        <footer class="mt-auto">
+            <%- include('../includes/footer') %>
+        </footer>
     </main>
 
     <div class="modal fade" id="modalEntrada" tabindex="-1" aria-hidden="true">

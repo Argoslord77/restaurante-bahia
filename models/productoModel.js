@@ -13,7 +13,7 @@ const ProductoModel = {
             FROM productos p
             LEFT JOIN categorias c ON p.categoria_id = c.id
             LEFT JOIN unidades_medida u ON p.unidad_inventario_id = u.id
-            ORDER BY p.nombre ASC`;
+            ORDER BY p.codigo ASC`;
         const [rows] = await db.query(query);
         return rows;
     },

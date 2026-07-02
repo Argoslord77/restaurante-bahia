@@ -49,7 +49,7 @@
     <div class="container-fluid">
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
-            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
                 <%- include('../includes/header', {
                     encabezado_pagina: '🍽️ Fichas Técnicas y Recetas', 
                     desc_pagina: 'Gestión de cabeceras de recetas de platillos, bebidas y elaboraciones internas.', 
@@ -129,6 +129,9 @@
                         </div>
                     </div>
                 </div>
+                <footer class="mt-auto">
+                    <%- include('../includes/footer') %>
+                </footer>
             </main>
         </div>
     </div>

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= typeof title !== 'undefined' ? title : 'Catálogo de Productos - Restaurante Bahía' %></title>
-    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link class="cssdeck" rel="stylesheet" href="/css/jquery-ui.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
@@ -13,68 +13,92 @@
 <body>
 
     <%- include('../includes/sideBarMenu') %>
-    <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+    
+    <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
         
-        <%- include('../includes/header', {
-            encabezado_pagina: 'Catálogo de Productos', 
-            desc_pagina: 'Gestión de insumos, materias primas y suministros operativos.', 
-            add_btn: true, 
-            btn_label: "Nuevo Producto", 
-            modal: "modalProducto"
-        }) %>
+        <div class="flex-grow-1">
+            <%- include('../includes/header', {
+                encabezado_pagina: 'Catálogo de Productos', 
+                desc_pagina: 'Gestión de insumos, materias primas y suministros operativos.', 
+                add_btn: true, 
+                btn_label: "Nuevo Producto", 
+                modal: "modalProducto"
+            }) %>
 
-        <div class="card card-custom shadow-sm border-0 overflow-hidden">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" id="tablaProductos">
-                    <thead class="table-custom-thead text-uppercase fs-7">
-                        <tr>
-                            <th class="ps-4 py-3">Código</th>
-                            <th class="py-3">Nombre del Insumo</th>
-                            <th class="py-3">Categoría</th>
-                            <th class="py-3">U. Inventario</th>
-                            <th class="text-end py-3">Stock Mín.</th>
-                            <th class="text-center py-3">Venta Directa</th>
-                            <th class="text-center py-3">Estado</th>
-                            <th class="text-center py-3">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% productos.forEach(p => { %>
+            <div class="d-flex justify-content-start mb-4 bg-white p-3 rounded shadow-sm border">
+                <div class="col-12 col-sm-5 col-md-4 m-0">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light border-end-0 text-muted">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" id="buscarProductoCatalogo" class="form-control bg-light border-start-0 ps-0" placeholder="Buscar por código o producto...">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="tablaProductos">
+                        <thead class="table-custom-thead text-uppercase fs-7">
                             <tr>
-                                <td class="ps-4 fw-bold text-primary font-monospace">#<%= p.codigo %></td>
-                                <td>
-                                    <div class="fw-semibold text-dark"><%= p.nombre %></div>
-                                    <small class="text-muted text-capitalize"><%= p.tipo.replace('_', ' ') %></small>
-                                </td>
-                                <td><span class="badge bg-light text-dark border"><%= p.categoria_nombre %></span></td>
-                                <td><%= p.unidad_nombre %></td>
-                                <td class="text-end fw-bold text-secondary"><%= parseFloat(p.stock_minimo).toFixed(2) %></td>
-                                <td class="text-center">
-                                    <span class="badge <%= p.permitida_venta ? 'bg-info-subtle text-info border border-info' : 'bg-light text-muted border' %> px-2 rounded-pill">
-                                        <%= p.permitida_venta ? 'Sí' : 'No' %>
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge <%= p.activo ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' %> px-3 rounded-pill">
-                                        <%= p.activo ? 'Activo' : 'Inactivo' %>
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <div class="btn-group gap-1">
-                                        <button class="btn btn-sm btn-outline-secondary border-0 btn-editar-producto" data-id="<%= p.id %>" title="Editar">
-                                            <i class="fa-solid fa-pen-to-square"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger border-0 btn-eliminar-producto" data-id="<%= p.id %>" title="Eliminar">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </div>
+                                <th class="ps-4 py-3">Código</th>
+                                <th class="py-3">Nombre del Insumo</th>
+                                <th class="py-3">Categoría</th>
+                                <th class="py-3">U. Inventario</th>
+                                <th class="text-end py-3">Stock Mín.</th>
+                                <th class="text-center py-3">Venta Directa</th>
+                                <th class="text-center py-3">Estado</th>
+                                <th class="text-center py-3">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% productos.forEach(p => { %>
+                                <tr class="fila-producto-catalogo" data-codigo="<%= p.codigo ? p.codigo.toLowerCase() : '' %>" data-nombre="<%= p.nombre ? p.nombre.toLowerCase() : '' %>">
+                                    <td class="ps-4 fw-bold text-primary font-monospace">#<%= p.codigo %></td>
+                                    <td>
+                                        <div class="fw-semibold text-dark"><%= p.nombre %></div>
+                                        <small class="text-muted text-capitalize"><%= p.tipo.replace('_', ' ') %></small>
+                                    </td>
+                                    <td><span class="badge bg-light text-dark border"><%= p.categoria_nombre %></span></td>
+                                    <td><%= p.unidad_nombre %></td>
+                                    <td class="text-end fw-bold text-secondary"><%= parseFloat(p.stock_minimo).toFixed(2) %></td>
+                                    <td class="text-center">
+                                        <span class="badge <%= p.permitida_venta ? 'bg-info-subtle text-info border border-info' : 'bg-light text-muted border' %> px-2 rounded-pill">
+                                            <%= p.permitida_venta ? 'Sí' : 'No' %>
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge <%= p.activo ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' %> px-3 rounded-pill">
+                                            <%= p.activo ? 'Activo' : 'Inactivo' %>
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group gap-1">
+                                            <button class="btn btn-sm btn-outline-secondary border-0 btn-editar-producto" data-id="<%= p.id %>" title="Editar">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger border-0 btn-eliminar-producto" data-id="<%= p.id %>" title="Eliminar">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                            <tr id="filaNoCoincidenciasCatalogo" style="display: none;">
+                                <td colspan="8" class="text-center py-5 text-muted">
+                                    <i class="fas fa-filter d-block mb-2 fs-3 text-secondary opacity-50"></i>
+                                    No se encontraron productos que coincidan con la búsqueda.
                                 </td>
                             </tr>
-                        <% }) %>
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
+
+        <footer class="mt-auto">
+            <%- include('../includes/footer') %>
+        </footer>
     </main>
 
     <div class="modal fade" id="modalProducto" tabindex="-1" aria-labelledby="modalTitle" aria-hidden="true">
@@ -175,11 +199,37 @@
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
     <script>
-    // Inicialización de la instancia del Modal de Bootstrap
     const productModalElement = document.getElementById('modalProducto');
     const bsProductModal = new bootstrap.Modal(productModalElement);
 
-    // Escuchador manual para asegurar la apertura desde el Header dinámico
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputBuscar = document.getElementById('buscarProductoCatalogo');
+        if (inputBuscar) {
+            inputBuscar.addEventListener('input', function(e) {
+                const termino = e.target.value.toLowerCase().trim();
+                const filasProductos = document.querySelectorAll('.fila-producto-catalogo');
+                const filaNoCoincidencias = document.getElementById('filaNoCoincidenciasCatalogo');
+                let coincidencias = 0;
+
+                filasProductos.forEach(fila => {
+                    const codigo = fila.getAttribute('data-codigo') || '';
+                    const nombre = fila.getAttribute('data-nombre') || '';
+
+                    if (codigo.includes(termino) || nombre.includes(termino)) {
+                        fila.style.display = '';
+                        coincidencias++;
+                    } else {
+                        fila.style.display = 'none';
+                    }
+                });
+
+                if (filaNoCoincidencias) {
+                    filaNoCoincidencias.style.display = (filasProductos.length > 0 && coincidencias === 0) ? '' : 'none';
+                }
+            });
+        }
+    });
+
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('[data-bs-target="modalProducto"]') || e.target.closest('[data-bs-target="#modalProducto"]');
         if (btn) {
@@ -188,7 +238,6 @@
         }
     });
 
-    // CORREGIDO: Resetear el formulario de forma limpia usando classList nativo
     productModalElement.addEventListener('hidden.bs.modal', () => {
         document.getElementById('formProducto').reset();
         document.getElementById('productId').value = '';
@@ -203,10 +252,8 @@
         document.getElementById('fotoPreview').src = '';
     });
 
-    // CORREGIDO: Asignación limpia del evento submit del formulario
     document.getElementById('formProducto').addEventListener('submit', saveProduct);
 
-    // CORREGIDO: Delegación de eventos clic en la tabla de productos para Editar y Eliminar
     document.getElementById('tablaProductos').addEventListener('click', function(e) {
         const btnEditar = e.target.closest('.btn-editar-producto');
         if (btnEditar) {
@@ -222,7 +269,6 @@
         }
     });
 
-    // Guardar / Editar Producto
     async function saveProduct(e) {
         e.preventDefault(); 
         const id = document.getElementById('productId').value;
@@ -299,7 +345,6 @@
         }
     }
 
-    // Función para eliminar un producto con confirmación de SweetAlert2
     function deleteProduct(id) {
         Swal.fire({
             title: '¿Está seguro de eliminar este producto?',
@@ -342,7 +387,6 @@
         });
     }
 
-    // Cargar datos en el Modal para Editar
     async function openEditModal(id) {
         try {
             const res = await fetch(`/admin/productos/${id}`);

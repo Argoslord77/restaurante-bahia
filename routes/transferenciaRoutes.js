@@ -4,6 +4,7 @@ const router = express.Router();
 const transferenciaController = require('../controllers/transferenciaController');
 const { ensureAuthenticated, checkRole } = require('../middlewares/auth');
 const { transferenciaValidationRules, handleValidationErrors } = require('../middlewares/validator');
+const { asegurarTurnoActivo } = require('../middlewares/verificarTurno');
 
 // Vista principal de transferencias
 router.get('/transferencias', 
@@ -14,6 +15,7 @@ router.get('/transferencias',
 
 // API: Crear nueva solicitud de transferencia (Pendiente)
 router.post('/api/transferencias',
+    asegurarTurnoActivo,
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador', 'almacenero']),
     transferenciaController.createSolicitud
@@ -21,6 +23,7 @@ router.post('/api/transferencias',
 
 // API: Aprobar transferencia (Pasa a Aprobada)
 router.put('/api/transferencias/:id/aprobar',
+    asegurarTurnoActivo,
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador']),
     transferenciaController.aprobarTransferencia
@@ -28,6 +31,7 @@ router.put('/api/transferencias/:id/aprobar',
 
 // API: Rechazar transferencia (Pasa a Rechazada)
 router.put('/api/transferencias/:id/rechazar',
+    asegurarTurnoActivo,
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador']),
     transferenciaController.rechazarTransferencia
@@ -35,6 +39,7 @@ router.put('/api/transferencias/:id/rechazar',
 
 // API: Completar transferencia (Afecta stock físico en lotes)
 router.put('/api/transferencias/:id/completar',
+    asegurarTurnoActivo,
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador', 'almacenero']),
     transferenciaController.completarTransferencia

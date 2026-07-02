@@ -24,7 +24,7 @@
     <div class="container-fluid">
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
-            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4">
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
                 <%- include('../includes/header', {encabezado_pagina: 'Sistema / Configuración', desc_pagina: 'Ajustes globales y variables operacionales de Bahía', add_btn: false}) %>
 
                 <div class="row mt-4">
@@ -125,6 +125,9 @@
                         </div>
                     </div>
                 </div>
+                <footer class="mt-auto">
+                    <%- include('../includes/footer') %>
+                </footer>
             </main>
         </div>
     </div>

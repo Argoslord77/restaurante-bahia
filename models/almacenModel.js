@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 const Almacen = {
     getAll: async () => {
-        const [rows] = await db.query('SELECT * FROM almacenes ORDER BY nombre ASC');
+        const [rows] = await db.query('SELECT * FROM almacenes ORDER BY codigo ASC');
         return rows;
     },
 

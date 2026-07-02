@@ -56,7 +56,16 @@
                 <!-- Todo el contenido superior se envuelve en este div con mb-auto -->
                 <div class="mb-auto">
                     <%- include('../includes/header', {encabezado_pagina: 'Panel de Control', desc_pagina: 'Resumen operativo en tiempo real.', add_btn: false}) %>
-
+                    
+                    <% if (mostrarAlertaTurno) { %>
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 5px solid #dc3545;">
+                            <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> ¡Sistema Bloqueado!</h4>
+                            <p>No se ha detectado ningún <strong>Turno de Servicio Activo</strong> en el restaurante. Todas las operaciones críticas de salón, comandas y transferencias de almacén están suspendidas temporalmente.</p>
+                            <hr>
+                            <p class="mb-0">Por favor, diríjase al módulo de cajas y realice la <strong>Apertura de Turno</strong> para restablecer las operaciones del staff.</p>
+                        </div>
+                    <% } %>
+                    
                     <div class="row g-3 mb-4">
                         <div class="col-12 col-sm-6 col-xl-3">
                             <div class="card card-custom shadow-sm p-3">

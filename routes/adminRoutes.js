@@ -7,6 +7,7 @@ const dashboardController = require('../controllers/dashboardController');
 const path = require('path');
 const multer = require('multer');
 const { menuValidationRules, mesaValidationRules, handleValidationErrors } = require('../middlewares/validator');
+const { asegurarTurnoActivo } = require('../middlewares/verificarTurno');
 
 // Configuración de almacenamiento de Multer
 const storage = multer.diskStorage({
@@ -52,6 +53,6 @@ router.post('/menu/editar/:id', upload.single('foto'), menuValidationRules.updat
 router.post('/menu/eliminar/:id', menuValidationRules.delete, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.deleteDish);
 
 // Nueva acción para guardar la distribución por lote (Permite Capitán)
-router.post('/mesas/distribucion', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'capitan']), tableController.saveDistribution);
+router.post('/mesas/distribucion', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'capitan']), asegurarTurnoActivo, tableController.saveDistribution);
 
 module.exports = router;

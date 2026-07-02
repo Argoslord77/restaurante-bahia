@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Turnos - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                
+                <div class="flex-grow-1">
+                    <%- include('../includes/header', {
+                        encabezado_pagina: 'Control de Turnos de Caja', 
+                        desc_pagina: 'Apertura, cuadre operativo diario e historial de auditoría financiera', 
+                        add_btn: false, 
+                        btn_label: "", 
+                        modal: ""
+                    }) %>
+                    
+                    <div class="row mb-5">
+                        <div class="col-12">
+                            <% if (!turnoActivo) { %>
+                                <div class="alert alert-danger d-flex align-items-center p-3 shadow-sm border-0 mb-4 rounded-3" role="alert">
+                                    <i class="fa-solid fa-triangle-exclamation fa-2x text-danger me-3"></i>
+                                    <div>
+                                        <h5 class="alert-heading fw-bold mb-1 fs-6 text-dark">Operaciones en Pausa</h5>
+                                        <p class="mb-0 small text-secondary">No se ha iniciado el turno de servicio del día. Las comandas de salón, la facturación y los movimientos de almacén permanecerán bloqueados por el middleware de seguridad hasta completar la apertura.</p>
+                                    </div>
+                                </div>
+
+                                <div class="card card-custom shadow-sm border-0 mb-4">
+                                    <div class="card-header bg-dark text-white py-3 border-0">
+                                        <h5 class="card-title mb-0 fw-bold fs-6"><i class="fa-solid fa-door-open me-2 text-warning"></i>Apertura de Nuevo Turno</h5>
+                                    </div>
+                                    <form id="formAperturaTurno">
+                                        <div class="card-body p-4">
+                                            <div class="row g-3">
+                                                <div class="col-md-5">
+                                                    <label class="form-label fw-semibold text-secondary small">Fondo de Caja Inicial (Efectivo) *</label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light text-secondary fw-semibold font-monospace">$</span>
+                                                        <input type="number" step="0.01" min="0" id="monto_apertura" class="form-control" placeholder="0.00" required>
+                                                    </div>
+                                                    <div class="form-text text-muted fs-7">Dinero físico asignado al cajero para dar vuelto / cambio.</div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label fw-semibold text-secondary small">Notas de Apertura / Observaciones</label>
+                                                    <textarea id="observaciones" class="form-control" rows="2" placeholder="Ej. Recibe personal matutino, fondo completo sin novedades en el conteo físico..."></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-footer bg-light border-0 py-3 text-end">
+                                            <button type="submit" class="btn btn-primary px-4 fw-semibold small">
+                                                <i class="fa-solid fa-circle-play me-2"></i>Iniciar Turno Operativo
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                            <% } else { %>
+                                <div class="alert alert-success d-flex align-items-center p-3 shadow-sm border-0 mb-4 rounded-3" role="alert">
+                                    <i class="fa-solid fa-circle-check fa-2x text-success me-3"></i>
+                                    <div>
+                                        <h5 class="alert-heading fw-bold mb-1 fs-6 text-dark">Turno Actualmente Activo</h5>
+                                        <p class="mb-0 small text-secondary">ID de Turno en curso: <strong class="font-monospace text-dark">#<%= turnoActivo.id %></strong>. Iniciado en fecha: <span class="badge bg-white text-dark border"><%= new Date(turnoActivo.fecha_apertura).toLocaleString() %></span></p>
+                                    </div>
+                                </div>
+
+                                <div class="card card-custom shadow-sm border-0 mb-4">
+                                    <div class="card-header bg-danger text-white py-3 border-0">
+                                        <h5 class="card-title mb-0 fw-bold fs-6"><i class="fa-solid fa-calculator me-2"></i>Arqueo de Caja y Cierre Financiero</h5>
+                                    </div>
+                                    <form id="formCierreTurno">
+                                        <div class="card-body p-4">
+                                            <div class="alert bg-light border-start border-warning border-3 mb-4 text-secondary small">
+                                                <i class="fa-solid fa-user-shield me-2 text-warning"></i> Al confirmar, el sistema sumará las facturaciones del periodo de forma automática y las confrontará contra el dinero declarado abajo.
+                                            </div>
+                                            <div class="row g-3">
+                                                <div class="col-md-5">
+                                                    <label class="form-label fw-semibold text-secondary small">Monto Real Físico Recabado *</label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light text-secondary fw-semibold font-monospace">$</span>
+                                                        <input type="number" step="0.01" min="0" id="monto_cierre_real" class="form-control" placeholder="0.00" required>
+                                                    </div>
+                                                    <div class="form-text text-muted fs-7">Suma física total en caja (Efectivo + Comprobantes / Váuchers de Tarjeta).</div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label fw-semibold text-secondary small">Novedades u Observaciones de Entrega</label>
+                                                    <textarea id="observaciones_cierre" class="form-control" rows="2" placeholder="Ej. Descuadre menor reportado en mesa 2, cuadre en tarjetas exacto..."></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-footer bg-light border-0 py-3 text-end">
+                                            <button type="submit" class="btn btn-danger px-4 fw-semibold small">
+                                                <i class="fa-solid fa-lock me-2"></i>Efectuar Cierre y Congelar Cuadre
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <h3 class="fs-5 fw-bold text-dark mb-3"><i class="fa-solid fa-folder-open text-secondary me-2"></i>Historial y Auditoría de Turnos Anteriores</h3>
+                    
+                    <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="tablaHistorialTurnos">
+                                <thead class="table-custom-thead text-uppercase fs-7">
+                                    <tr>
+                                        <th class="ps-4 py-3" style="width: 80px;">ID</th>
+                                        <th class="py-3">Apertura (Fondo)</th>
+                                        <th class="py-3">Cierre (Calculado vs Real)</th>
+                                        <th class="py-3">Diferencia</th>
+                                        <th class="py-3">Balance / Estado</th>
+                                        <th class="text-center py-3" style="width: 120px;">Auditar</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (historial.length === 0) { %>
+                                        <tr>
+                                            <td colspan="6" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-clock-rotate-left d-block fs-2 mb-2 text-secondary"></i> No hay registros de turnos anteriores en la base de datos.
+                                            </td>
+                                        </tr>
+                                    <% } else { %>
+                                        <% historial.forEach(t => { %>
+                                            <tr>
+                                                <td class="ps-4 font-monospace fw-bold text-dark">#<%= t.id %></td>
+                                                
+                                                <td>
+                                                    <div class="small fw-semibold text-dark">$<%= parseFloat(t.monto_apertura).toFixed(2) %></div>
+                                                    <div class="text-secondary fs-7"><%= new Date(t.fecha_apertura).toLocaleString() %></div>
+                                                </td>
+                                                
+                                                <td>
+                                                    <% if(t.estado === 'abierto') { %>
+                                                        <span class="text-muted small italic">Turno en curso...</span>
+                                                    <% } else { %>
+                                                        <div class="small text-dark">
+                                                            <span class="text-muted">Esp:</span> $<%= parseFloat(t.monto_cierre_esperado).toFixed(2) %> | 
+                                                            <span class="text-muted">Real:</span> $<%= parseFloat(t.monto_cierre_real).toFixed(2) %>
+                                                        </div>
+                                                        <div class="text-secondary fs-7"><%= new Date(t.fecha_cierre).toLocaleString() %></div>
+                                                    <% } %>
+                                                </td>
+                                                
+                                                <td class="font-monospace fw-semibold fs-7">
+                                                    <% if(t.estado === 'abierto') { %>
+                                                        -
+                                                    <% } else { %>
+                                                        <% let dif = t.monto_cierre_real - t.monto_cierre_esperado; %>
+                                                        <% if (dif === 0) { %>
+                                                            <span class="text-success">$0.00</span>
+                                                        <% } else if (dif > 0) { %>
+                                                            <span class="text-info">+$<%= dif.toFixed(2) %></span>
+                                                        <% } else { %>
+                                                            <span class="text-danger">-$<%= Math.abs(dif).toFixed(2) %></span>
+                                                        <% } %>
+                                                    <% } %>
+                                                </td>
+
+                                                <td>
+                                                    <% if (t.estado === 'abierto') { %>
+                                                        <span class="badge bg-primary px-3 py-1 rounded-pill fs-7 text-capitalize">
+                                                            <i class="fa-solid fa-spinner fa-spin me-1"></i>En Línea
+                                                        </span>
+                                                    <% } else { %>
+                                                        <% 
+                                                            let difCalculada = t.monto_cierre_real - t.monto_cierre_esperado;
+                                                            let balanceText = difCalculada === 0 ? 'cuadrado' : (difCalculada > 0 ? 'sobrante' : 'faltante');
+                                                            let balanceBadge = 'bg-success text-white';
+                                                            if (balanceText === 'faltante') balanceBadge = 'bg-danger text-white fw-bold';
+                                                            if (balanceText === 'sobrante') balanceBadge = 'bg-info text-dark fw-bold';
+                                                        %>
+                                                        <span class="badge <%= balanceBadge %> text-uppercase px-2 py-1 rounded-pill fs-8">
+                                                            <i class="fa-solid fa-scale-balanced me-1"></i><%= balanceText %>
+                                                        </span>
+                                                    <% } %>
+                                                </td>
+
+                                                <td class="text-center">
+                                                    <button class="btn btn-sm btn-outline-secondary border-0 btn-auditar-turno"
+                                                            title="Ver Detalles de Auditoría"
+                                                            data-id="<%= t.id %>"
+                                                            data-apertura="<%= parseFloat(t.monto_apertura).toFixed(2) %>"
+                                                            data-fecha-ap="<%= new Date(t.fecha_apertura).toLocaleString() %>"
+                                                            data-obs-ap="<%= t.observaciones %>"
+                                                            data-sistema="<%= t.estado === 'cerrado' ? parseFloat(t.monto_cierre_esperado).toFixed(2) : '0.00' %>"
+                                                            data-real="<%= t.estado === 'cerrado' ? parseFloat(t.monto_cierre_real).toFixed(2) : '0.00' %>"
+                                                            data-dif="<%= t.estado === 'cerrado' ? (t.monto_cierre_real - t.monto_cierre_esperado).toFixed(2) : '0.00' %>"
+                                                            data-balance="<%= t.estado === 'cerrado' ? (t.monto_cierre_real - t.monto_cierre_esperado === 0 ? 'cuadrado' : (t.monto_cierre_real - t.monto_cierre_esperado > 0 ? 'sobrante' : 'faltante')) : '' %>"
+                                                            data-fecha-cr="<%= t.estado === 'cerrado' ? new Date(t.fecha_cierre).toLocaleString() : '-' %>"
+                                                            data-obs-cr="<%= t.observaciones %>"
+                                                            data-estado="<%= t.estado %>">
+                                                        <i class="fa-solid fa-magnifying-glass-chart fs-6 text-dark"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-auto">
+                    <%- include('../includes/footer') %>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalAuditarTurno" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-file-shield text-warning me-2"></i>Reporte de Auditoría - Turno <span id="auditTitleId"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-4">
+                        <div class="col-md-6 border-end">
+                            <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="fa-solid fa-door-open me-2"></i>Datos de Apertura</h6>
+                            <p class="mb-2 text-secondary small"><strong>Fecha/Hora:</strong> <span id="auditFechaAp" class="text-dark"></span></p>
+                            <p class="mb-2 text-secondary small"><strong>Fondo en Caja:</strong> <span class="font-monospace fw-bold text-dark">$<span id="auditMontoAp"></span></span></p>
+                            <div class="p-2 bg-light border rounded small text-secondary mt-3">
+                                <strong>Notas de apertura:</strong><br>
+                                <span id="auditObsAp" class="fst-italic text-muted">Sin observaciones.</span>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <h6 class="fw-bold text-danger border-bottom pb-2 mb-3"><i class="fa-solid fa-calculator me-2"></i>Cierre y Desglose</h6>
+                            <div id="auditBodyCierre">
+                                <p class="mb-1 text-secondary small"><strong>Fecha/Hora Cierre:</strong> <span id="auditFechaCr" class="text-dark"></span></p>
+                                <p class="mb-1 text-secondary small"><strong>Monto Esperado (Sistema):</strong> <span class="font-monospace text-dark">$<span id="auditMontoSis"></span></span></p>
+                                <p class="mb-1 text-secondary small"><strong>Monto Recibido (Arqueo):</strong> <span class="font-monospace text-dark">$<span id="auditMontoReal"></span></span></p>
+                                <p class="mb-2 text-secondary small"><strong>Diferencia Calculada:</strong> <span id="auditBadgeDif" class="font-monospace fw-bold"></span></p>
+                                <p class="mb-3 text-secondary small"><strong>Balance de Auditoría:</strong> <span id="auditBadgeBalance" class="badge text-uppercase fs-8"></span></p>
+                                <div class="p-2 bg-light border rounded small text-secondary">
+                                    <strong>Notas de entrega/cierre:</strong><br>
+                                    <span id="auditObsCr" class="fst-italic text-muted">Sin observaciones.</span>
+                                </div>
+                            </div>
+                            <div id="auditTurnoAbiertoAlerta" class="text-center py-4 d-none">
+                                <i class="fa-solid fa-spinner fa-spin fa-2x text-primary mb-2"></i>
+                                <p class="text-muted small mb-0">Este turno sigue abierto. Los datos de arqueo y diferencias se generarán al efectuar el cierre.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top-0 fs-11px">
+                    <span class="text-muted me-auto"><i class="fa-solid fa-lock me-1"></i>Documento bloqueado para edición (Modo Lectura/Auditoría)</span>
+                    <button type="button" class="btn btn-secondary btn-sm px-4" data-bs-dismiss="modal">Cerrar Reporte</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        const bsModalAuditar = new bootstrap.Modal(document.getElementById('modalAuditarTurno'));
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const formApertura = document.getElementById('formAperturaTurno');
+            const formCierre = document.getElementById('formCierreTurno');
+
+            if (formApertura) {
+                formApertura.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const data = {
+                        monto_apertura: parseFloat(document.getElementById('monto_apertura').value),
+                        observaciones: document.getElementById('observaciones').value
+                    };
+
+                    Swal.fire({
+                        title: 'Iniciando turno...',
+                        text: 'Por favor, espere un momento.',
+                        allowOutsideClick: false,
+                        didOpen: () => { Swal.showLoading(); }
+                    });
+
+                    try {
+                        const res = await fetch('/admin/turno/apertura', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        const result = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor.' }));
+
+                        if (res.ok && result.success) {
+                            Swal.fire({
+                                title: '¡Turno Abierto!',
+                                text: result.message,
+                                icon: 'success',
+                                timer: 1800,
+                                showConfirmButton: false,
+                                willClose: () => { location.reload(); }
+                            });
+                        } else {
+                            Swal.fire('Error de Apertura', result.message || 'No se pudo abrir el turno.', 'error');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        Swal.fire('Error de Red', 'Fallo en la comunicación con el servidor.', 'error');
+                    }
+                });
+            }
+
+            if (formCierre) {
+                formCierre.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+
+                    Swal.fire({
+                        title: '¿Confirmar Cierre de Turno?',
+                        text: 'Se procederá al balanceo de las ventas y congelación definitiva de la caja actual.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: 'Sí, Cerrar Caja',
+                        cancelButtonText: 'Cancelar',
+                        reverseButtons: true
+                    }).then(async (choice) => {
+                        if (choice.isConfirmed) {
+                            Swal.fire({ title: 'Efectuando cuadre...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                            
+                            const data = {
+                                monto_cierre_real: parseFloat(document.getElementById('monto_cierre_real').value),
+                                observaciones_cierre: document.getElementById('observaciones_cierre').value
+                            };
+
+                            try {
+                                const res = await fetch('/admin/turno/cierre', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(data)
+                                });
+                                const result = await res.json().catch(() => ({ success: false, message: 'Error al procesar el JSON.' }));
+
+                                if (res.ok && result.success) {
+                                    Swal.fire({
+                                        title: '¡Cierre Exitoso!',
+                                        text: 'El turno de servicio se ha cerrado correctamente.',
+                                        icon: 'success',
+                                        confirmButtonText: 'Aceptar'
+                                    }).then(() => { location.reload(); });
+                                } else {
+                                    Swal.fire('Error de Cierre', result.message || 'No se pudo completar el cuadre.', 'error');
+                                }
+                            } catch (err) {
+                                console.error(err);
+                                Swal.fire('Error de Red', 'Fallo en la comunicación con el servidor.', 'error');
+                            }
+                        }
+                    });
+                });
+            }
+
+            document.getElementById('tablaHistorialTurnos').addEventListener('click', function(e) {
+                const btnAuditar = e.target.closest('.btn-auditar-turno');
+                if (btnAuditar) {
+                    const id = btnAuditar.getAttribute('data-id');
+                    const apertura = btnAuditar.getAttribute('data-apertura');
+                    const fechaAp = btnAuditar.getAttribute('data-fecha-ap');
+                    const obsAp = btnAuditar.getAttribute('data-obs-ap');
+                    const sistema = btnAuditar.getAttribute('data-sistema');
+                    const real = btnAuditar.getAttribute('data-real');
+                    const dif = btnAuditar.getAttribute('data-dif');
+                    const balance = btnAuditar.getAttribute('data-balance');
+                    const fechaCr = btnAuditar.getAttribute('data-fecha-cr');
+                    const obsCr = btnAuditar.getAttribute('data-obs-cr');
+                    const estado = btnAuditar.getAttribute('data-estado');
+
+                    document.getElementById('auditTitleId').textContent = `#${id}`;
+                    document.getElementById('auditFechaAp').textContent = fechaAp;
+                    document.getElementById('auditMontoAp').textContent = apertura;
+                    document.getElementById('auditObsAp').textContent = (obsAp && obsAp !== 'null' && obsAp.trim() !== '') ? obsAp : 'Sin notas registradas.';
+
+                    if (estado === 'abierto') {
+                        document.getElementById('auditBodyCierre').classList.add('d-none');
+                        document.getElementById('auditTurnoAbiertoAlerta').classList.remove('d-none');
+                    } else {
+                        document.getElementById('auditBodyCierre').classList.remove('d-none');
+                        document.getElementById('auditTurnoAbiertoAlerta').classList.add('d-none');
+                        
+                        document.getElementById('auditFechaCr').textContent = fechaCr;
+                        document.getElementById('auditMontoSis').textContent = sistema;
+                        document.getElementById('auditMontoReal').textContent = real;
+                        document.getElementById('auditObsCr').textContent = (obsCr && obsCr !== 'null' && obsCr.trim() !== '') ? obsCr : 'Sin notas de cierre registradas.';
+                        
+                        const badgeDif = document.getElementById('auditBadgeDif');
+                        const vDif = parseFloat(dif);
+                        badgeDif.textContent = (vDif >= 0 ? `+$${vDif.toFixed(2)}` : `-$${Math.abs(vDif).toFixed(2)}`);
+                        badgeDif.className = (vDif === 0 ? 'text-success font-monospace fw-bold' : (vDif > 0 ? 'text-info font-monospace fw-bold' : 'text-danger font-monospace fw-bold'));
+
+                        const bBadge = document.getElementById('auditBadgeBalance');
+                        bBadge.textContent = balance;
+                        if(balance === 'cuadrado') bBadge.className = 'badge bg-success text-white text-uppercase fs-8';
+                        if(balance === 'faltante') bBadge.className = 'badge bg-danger text-white fw-bold text-uppercase fs-8';
+                        if(balance === 'sobrante') bBadge.className = 'badge bg-info text-dark fw-bold text-uppercase fs-8';
+                    }
+
+                    bsModalAuditar.show();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

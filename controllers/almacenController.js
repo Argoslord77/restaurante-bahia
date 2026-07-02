@@ -24,7 +24,8 @@ const viewAlmacenes = async (req, res, next) => {
         return res.render('inventarios/almacenes', {
             title: 'Gestión de Almacenes - Restaurante Bahía',
             almacenes: almacenes || [],
-            usuarios: usuarios || []
+            usuarios: usuarios || [],
+            view: "warehouse"
         });
 
     } catch (error) {

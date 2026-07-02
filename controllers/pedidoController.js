@@ -7,7 +7,8 @@ const pedidoController = {
             const lista = await pedidoService.obtenerTodosActivos();
             res.render('pedido/pedido', { 
                 lista, 
-                user: req.user || { role: 'administrador' } 
+                user: req.user || { role: 'administrador' } ,
+                view: "orders"
             });
         } catch (error) {
             console.error('Error al listar pedidos:', error);

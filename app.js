@@ -4,6 +4,7 @@ const fs = require('fs');
 const session = require('express-session');
 const passport = require('passport');
 const flash = require('connect-flash');
+const favicon = require('serve-favicon');
 const path = require('path');
 require('dotenv').config();
 const cookieParser = require('cookie-parser');
@@ -106,6 +107,11 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
+// 3. SERVIR EL FAVICON CON EXPRESS y serve-favicon
+// ==========================================
+app.use(favicon(path.join(__dirname, 'public/img', 'favicon.png')));
+
+// ==========================================
 // 3. VINCULACIÓN DE RUTAS (Siempre al final de los middlewares globales)
 // ==========================================
 const authRoutes = require('./routes/authRoutes');
@@ -121,6 +127,7 @@ const salidaManualRoutes = require('./routes/salidaManualRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const entradaRoutes = require('./routes/entradaRoutes');
 const inventarioRoutes = require('./routes/inventarioRoutes');
+const turnoRoutes = require('./routes/turnoRoutes');
 
 app.use('/', authRoutes);
 app.use('/admin', userRoutes);
@@ -135,6 +142,7 @@ app.use('/admin', settingRoutes);
 app.use('/admin', transferenciaRoutes);
 app.use('/admin', entradaRoutes);
 app.use('/admin', inventarioRoutes);
+app.use('/admin', turnoRoutes);
 
 app.use(posRoutes);
 

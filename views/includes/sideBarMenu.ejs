@@ -1,4 +1,3 @@
-<!-- views/includes/sideBarMenu.ejs -->
 <nav id="sidebarMenu" class="col-md-3 col-lg-2 offcanvas-md offcanvas-start sidebar p-3 position-fixed" tabindex="-1" aria-labelledby="sidebarMenuLabel">
     <div class="d-flex d-md-none align-items-center justify-content-between mb-4 px-2">
         <div class="d-flex align-items-center gap-2">
@@ -27,6 +26,11 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'turnos'){ %> active<% } %>" href="/admin/turnos-servicio">
+                <i class="fa-solid fa-calendar-check me-2 text-dark"></i> Turnos de Servicio
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'table'){ %> active<% } %>" href="/admin/mesas">
                 <i class="fa-solid fa-table-cells me-2 text-dark"></i> Monitoreo de Mesas
             </a>
@@ -51,13 +55,11 @@
                 <i class="fa-solid fa-boxes-packing me-2 text-dark"></i> Catálogo de Productos
             </a>
         </li>
-        <!-- Módulo de Entradas / Registro de Lotes Integrado de manera oficial -->
         <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'entradas'){ %> active<% } %>" href="/admin/almacenes/entradas">
                 <i class="fa-solid fa-arrow-right-to-bracket me-2 text-dark"></i> Entradas / Lotes
             </a>
         </li>
-        <!-- Enlace Integrado Completamente: Fichas Técnicas / Recetas Maestro-Detalle -->
         <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'recetas'){ %> active<% } %>" href="/admin/recetas">
                 <i class="fa-solid fa-clipboard-list me-2 text-dark"></i> Fichas Técnicas / Recetas
