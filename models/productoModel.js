@@ -105,6 +105,82 @@ const ProductoModel = {
         const query = `DELETE FROM productos WHERE id = ?`;
         const [result] = await db.query(query, [id]);
         return result.affectedRows > 0;
+    },
+
+    /**
+     * Obtiene únicamente los productos activos marcados como 'producto_preparado'
+     */
+    getPreparados: async () => {
+        const query = `
+            SELECT 
+                p.id, p.codigo, p.nombre, p.tipo, p.activo, p.foto_url,
+                c.nombre as categoria_nombre,
+                u.nombre as unidad_medida_nombre,
+                u.abreviatura as unidad_nombre
+            FROM productos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN unidades_medida u ON p.unidad_inventario_id = u.id
+            WHERE p.tipo = 'producto_preparado' AND p.activo = 1
+            ORDER BY p.nombre ASC`;
+        const [rows] = await db.query(query);
+        return rows;
+    },
+
+    /**
+     * Obtiene únicamente los productos activos marcados como 'materia_prima'
+     */
+    getMateriasPrimas: async () => {
+        const query = `
+            SELECT 
+                p.id, p.codigo, p.nombre, p.tipo, p.activo, p.foto_url,
+                c.nombre as categoria_nombre,
+                u.nombre as unidad_medida_nombre,
+                u.abreviatura as unidad_nombre
+            FROM productos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN unidades_medida u ON p.unidad_inventario_id = u.id
+            WHERE p.tipo = 'materia_prima' AND p.activo = 1
+            ORDER BY p.nombre ASC`;
+        const [rows] = await db.query(query);
+        return rows;
+    },
+
+    /**
+     * Obtiene únicamente los productos activos marcados como 'producto_venta'
+     */
+    getProductosVenta: async () => {
+        const query = `
+            SELECT 
+                p.id, p.codigo, p.nombre, p.tipo, p.activo, p.foto_url,
+                c.nombre as categoria_nombre,
+                u.nombre as unidad_medida_nombre,
+                u.abreviatura as unidad_nombre
+            FROM productos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN unidades_medida u ON p.unidad_inventario_id = u.id
+            WHERE p.tipo = 'producto_venta' AND p.activo = 1
+            ORDER BY p.nombre ASC`;
+        const [rows] = await db.query(query);
+        return rows;
+    },
+
+    /**
+     * Obtiene únicamente los productos activos marcados como 'material_operativo'
+     */
+    getMaterialOperativo: async () => {
+        const query = `
+            SELECT 
+                p.id, p.codigo, p.nombre, p.tipo, p.activo, p.foto_url,
+                c.nombre as categoria_nombre,
+                u.nombre as unidad_medida_nombre,
+                u.abreviatura as unidad_nombre
+            FROM productos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN unidades_medida u ON p.unidad_inventario_id = u.id
+            WHERE p.tipo = 'material_operativo' AND p.activo = 1
+            ORDER BY p.nombre ASC`;
+        const [rows] = await db.query(query);
+        return rows;
     }
 };
 

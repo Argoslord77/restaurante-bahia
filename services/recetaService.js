@@ -11,7 +11,7 @@ const RecetaService = {
         try {
             const [recetas, productos, unidades] = await Promise.all([
                 Receta.getAll(),
-                Producto.getAll(),         // <-- CORREGIDO: Volvemos a usar tu método real getAll()
+                Producto.getPreparados(),         // <-- MANTENIDO: Usa tu método real getPreparados() para listar solo productos con receta
                 UnidadMedida.getActivas() 
             ]);
             return { recetas, productos, unidades };
@@ -218,7 +218,7 @@ const RecetaService = {
                         await connection.query(
                             `INSERT INTO movimientos_inventario 
                             (lote_id, tipo, cantidad, motivo, usuario_id, fecha) 
-                            VALUES (?, 'salida', ?, 'Venta / Producción Receta', NULL, NOW())`,
+                            VALUES (?, 'salida', ?, 'Venta / Production Receta', NULL, NOW())`,
                             [lote.id, cantidadADescontar]
                         );
 

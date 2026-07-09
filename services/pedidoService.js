@@ -66,8 +66,8 @@ const pedidoService = {
     },
 
     // Procesa el bloque completo de la orden de forma atómica
-    adicionarOrdenLote: async (id_pedido, items) => {
-        const connection = await db.getConnection();
+    adicionarOrdenLote: async (id_pedido, items, externalConn = null) => {
+        const connection = externalConn || await db.getConnection();
         try {
             await connection.beginTransaction();
 

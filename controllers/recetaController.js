@@ -1,5 +1,6 @@
 // controllers/recetaController.js - Controlador para gestión de recetas / fichas técnicas
 const RecetaService = require('../services/recetaService');
+const ProductoModel = require('../models/productoModel'); // Requerido para consultas específicas de insumos
 const MenuModel = require('../models/menuModel');
 const logger = require('../config/logger');
 
@@ -7,12 +8,22 @@ const RecetaController = {
     // Renderizar vista principal de recetas (Consolida catálogos concurrentes)
     viewRecetas: async (req, res) => {
         try {
+            // 1. Obtiene el catálogo base (recetas, unidades y productos preparados para el maestro)
             const catalogos = await RecetaService.obtenerCatalogosAdministracion();
             const platillos = await MenuModel.getAll();
 
+            // 2. Trae de forma concurrente los ingredientes válidos (Materias Primas + Productos Terminados de Venta)
+            const [materiasPrimas, productosVenta] = await Promise.all([
+                ProductoModel.getMateriasPrimas(),
+                ProductoModel.getProductosVenta() // <-- NUEVO: Trae ron, refrescos, vinos, etc.
+            ]);
+
+            // 3. Unifica ambos catálogos en un único arreglo para el select de insumos/ingredientes
+            const insumosValidos = [...materiasPrimas, ...productosVenta];
+
             res.render('inventarios/recetas', {
                 recetas: catalogos.recetas,
-                productos: catalogos.productos,
+                productos: insumosValidos,               // <-- MODIFICADO: Ahora el select dinámico tiene ambos tipos de insumos
                 unidades: catalogos.unidades,
                 platillos,
                 user: req.session.user || { rol: 'administrador' }, 
@@ -151,15 +162,21 @@ const RecetaController = {
         try {
             const { platilloId } = req.params; // id de la receta maestro
             
-            // Reemplaza la búsqueda local por la consulta directa de objeto completo
             const recetaCompleta = await RecetaService.obtenerRecetaCompleta(platilloId);
             const catalogos = await RecetaService.obtenerCatalogosAdministracion();
+
+            // Replicamos la misma lógica de unificación para la interfaz de configuración avanzada
+            const [materiasPrimas, productosVenta] = await Promise.all([
+                ProductoModel.getMateriasPrimas(),
+                ProductoModel.getProductosVenta()
+            ]);
+            const insumosValidos = [...materiasPrimas, ...productosVenta];
 
             res.render('inventarios/configurar-receta', {
                 platillo: recetaCompleta || { nombre: 'Receta No Encontrada' },
                 ingredientes: recetaCompleta ? recetaCompleta.detalles : [],
-                productos: catalogos.productos,
-                unidades: catalogos.unidades, // Soporte dinámico para mapeos UI
+                productos: insumosValidos,               // <-- MODIFICADO: Permite añadir materias primas o productos terminados
+                unidades: catalogos.unidades, 
                 user: req.session.user || { rol: 'administrador' },
                 view: 'recetas'
             });

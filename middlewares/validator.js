@@ -276,7 +276,7 @@ const mesaValidationRules = {
     create: [
         body('numero')
             .notEmpty().withMessage('El número de mesa es obligatorio')
-            .isInt({ min: 1 }).withMessage('El número de mesa debe ser un entero positivo'),
+            .isLength({ min: 1, max: 60 }).withMessage('El número o código de mesa debe tener entre 1 y 60 caracteres'),
         
         body('capacidad')
             .notEmpty().withMessage('La capacidad es obligatoria')
@@ -289,7 +289,7 @@ const mesaValidationRules = {
         
         body('estado')
             .optional()
-            .isIn(['disponible', 'ocupada', 'reservada']).withMessage('Estado no válido')
+            .isIn(['libre', 'ocupada', 'reservada', 'desocupandose', 'mantenimiento']).withMessage('Estado no válido')
     ],
     
     update: [
@@ -298,7 +298,7 @@ const mesaValidationRules = {
         
         body('numero')
             .optional()
-            .isInt({ min: 1 }).withMessage('El número de mesa debe ser un entero positivo'),
+            .isLength({ min: 1, max: 60 }).withMessage('El número o código de mesa debe tener entre 1 y 60 caracteres'),
         
         body('capacidad')
             .optional()
@@ -311,7 +311,7 @@ const mesaValidationRules = {
         
         body('estado')
             .optional()
-            .isIn(['disponible', 'ocupada', 'reservada']).withMessage('Estado no válido')
+            .isIn(['libre', 'ocupada', 'reservada', 'desocupandose', 'mantenimiento']).withMessage('Estado no válido')
     ]
 };
 
@@ -330,7 +330,7 @@ const recetaValidationRules = {
 
         body('tipo')
             .notEmpty().withMessage('El tipo de receta es obligatorio')
-            .isIn(['subreceta', 'platillo_final']).withMessage('El tipo debe ser subreceta o platillo_final'),
+            .isIn(['subreceta', 'platillo_final', 'VENTA']).withMessage('El tipo debe ser subreceta, platillo_final o VENTA'),
 
         body('rendimiento')
             .notEmpty().withMessage('El rendimiento es obligatorio')
@@ -390,7 +390,7 @@ const recetaValidationRules = {
 
         body('tipo')
             .optional()
-            .isIn(['subreceta', 'platillo_final']).withMessage('El tipo debe ser subreceta o platillo_final'),
+            .isIn(['subreceta', 'platillo_final', 'VENTA']).withMessage('El tipo debe ser subreceta, platillo_final o VENTA'),
 
         body('rendimiento')
             .optional()
@@ -515,7 +515,7 @@ const salidaManualValidationRules = {
     ]
 };
 
-// Validaciones para Entradas de Almacén e Ingreso de Lotes (AGREGADO Y CORREGIDO)
+// Validaciones para Entradas de Almacén e Ingreso de Lotes
 const entradaValidationRules = {
     create: [
         body('almacen_id')
@@ -557,14 +557,13 @@ const entradaValidationRules = {
     ]
 };
 
-// Al final de tu validator.js, asegúrate de que el module.exports luzca así:
 module.exports = {
     handleValidationErrors,
     userValidationRules,
     menuValidationRules,
     pedidoValidationRules,
     posValidationRules,
-    almacenValidationRules, // <-- Agregado a la exportación para que tus rutas lo consuman si decides agregarlo
+    almacenValidationRules,
     mesaValidationRules,
     recetaValidationRules,
     transferenciaValidationRules,
