@@ -14,10 +14,12 @@
 
     <div class="container-fluid">
         <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
             
             <%- include('../includes/sideBarMenu') %>
 
-            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
                 
                 <%- include('../includes/header', {encabezado_pagina: 'Control de Stock Actual', desc_pagina: 'Monitoreo de existencias en tiempo real y gestión preventiva de mermas.', add_btn: false}) %>
 
