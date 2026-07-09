@@ -320,119 +320,55 @@ const recetaValidationRules = {
     create: [
         body('codigo')
             .trim()
-            .notEmpty().withMessage('El código de la receta es obligatorio')
-            .isLength({ min: 2, max: 50 }).withMessage('El código debe tener entre 2 y 50 caracteres'),
-
+            .notEmpty().withMessage('El código de la ficha técnica es obligatorio.'),
+        
         body('nombre')
             .trim()
-            .notEmpty().withMessage('El nombre de la receta es obligatorio')
-            .isLength({ min: 2, max: 100 }).withMessage('El nombre debe tener entre 2 y 100 caracteres'),
-
+            .notEmpty().withMessage('El nombre comercial de la receta es obligatorio.')
+            .isLength({ min: 3, max: 100 }).withMessage('El nombre debe tener entre 3 y 100 caracteres.'),
+        
         body('tipo')
-            .notEmpty().withMessage('El tipo de receta es obligatorio')
-            .isIn(['subreceta', 'platillo_final', 'VENTA']).withMessage('El tipo debe ser subreceta, platillo_final o VENTA'),
+            .trim()
+            .isIn(['VENTA', 'PREPARACION_INTERNA', 'PRODUCCION']).withMessage('Tipo de operación no válido.'),
 
+        body('platillo_id')
+            .optional({ checkFalsy: true }) 
+            .isInt({ min: 1 }).withMessage('El producto terminado asociado debe ser un identificador numérico válido.'),
+        
         body('rendimiento')
-            .notEmpty().withMessage('El rendimiento es obligatorio')
-            .isFloat({ min: 0.01 }).withMessage('El rendimiento debe ser un número mayor a 0'),
-
+            .notEmpty().withMessage('El rendimiento es obligatorio.')
+            .isFloat({ min: 0.0001 }).withMessage('El rendimiento debe ser un número mayor a 0.'),
+            
         body('unidad_rendimiento')
             .trim()
-            .notEmpty().withMessage('La unidad de rendimiento es obligatoria')
-            .isLength({ max: 50 }).withMessage('La unidad de rendimiento no puede superar los 50 caracteres'),
-
-        body('producto_resultante_id')
-            .notEmpty().withMessage('El producto o platillo final resultante es obligatorio')
-            .isInt().withMessage('El ID del producto resultante debe ser un número entero'),
-
-        body('costo_estimado')
-            .optional()
-            .isFloat({ min: 0 }).withMessage('El costo estimado debe ser un número positivo'),
-
-        body('precio_sugerido')
-            .optional()
-            .isFloat({ min: 0 }).withMessage('El precio sugerido debe ser un número positivo'),
-
-        body('activa')
-            .optional()
-            .isBoolean().withMessage('El campo activa debe ser un booleano'),
-
-        body('detalles')
-            .isArray({ min: 1 }).withMessage('La receta debe contener al menos un ingrediente'),
-
-        body('detalles.*.producto_id')
-            .notEmpty().withMessage('El ID del insumo/producto es obligatorio')
-            .isInt().withMessage('El ID del insumo debe ser un número entero'),
-
-        body('detalles.*.cantidad_requerida')
-            .notEmpty().withMessage('La cantidad requerida es obligatoria')
-            .isFloat({ min: 0.0001 }).withMessage('La cantidad del ingrediente debe ser mayor a 0'),
-
-        body('detalles.*.unidad_medida')
-            .trim()
-            .notEmpty().withMessage('La unidad de medida del ingrediente es obligatoria')
-            .isLength({ max: 20 }).withMessage('La unidad de medida del ingrediente no puede exceder los 20 caracteres')
+            .notEmpty().withMessage('La unidad de rendimiento es obligatoria.')
     ],
-    
+
     update: [
-        param('id')
-            .isInt().withMessage('El ID debe ser un número entero'),
-        
         body('codigo')
-            .optional()
             .trim()
-            .isLength({ min: 2, max: 50 }).withMessage('El código debe tener entre 2 y 50 caracteres'),
-
+            .notEmpty().withMessage('El código de la ficha técnica es obligatorio.'),
+            
         body('nombre')
-            .optional()
             .trim()
-            .isLength({ min: 2, max: 100 }).withMessage('El nombre debe tener entre 2 y 100 caracteres'),
-
-        body('tipo')
-            .optional()
-            .isIn(['subreceta', 'platillo_final', 'VENTA']).withMessage('El tipo debe ser subreceta, platillo_final o VENTA'),
-
-        body('rendimiento')
-            .optional()
-            .isFloat({ min: 0.01 }).withMessage('El rendimiento debe ser un número mayor a 0'),
-
-        body('unidad_rendimiento')
-            .optional()
-            .trim()
-            .isLength({ max: 50 }).withMessage('La unidad de rendimiento no puede superar los 50 caracteres'),
-
-        body('producto_resultante_id')
-            .optional()
-            .isInt().withMessage('El ID del producto resultante debe ser un número entero'),
-
-        body('costo_estimado')
-            .optional()
-            .isFloat({ min: 0 }).withMessage('El costo estimado debe ser un número positivo'),
-
-        body('precio_sugerido')
-            .optional()
-            .isFloat({ min: 0 }).withMessage('El precio sugerido debe ser un número positivo'),
+            .notEmpty().withMessage('El nombre comercial de la receta es obligatorio.')
+            .isLength({ min: 3, max: 100 }).withMessage('El nombre debe tener entre 3 y 100 caracteres.'),
         
-        body('activa')
-            .optional()
-            .isBoolean().withMessage('El campo activa debe ser un booleano'),
-
-        body('detalles')
-            .optional()
-            .isArray().withMessage('Los detalles deben ser un array de ingredientes'),
-
-        body('detalles.*.producto_id')
-            .optional()
-            .isInt().withMessage('El ID del insumo debe ser un número entero'),
-
-        body('detalles.*.cantidad_requerida')
-            .optional()
-            .isFloat({ min: 0.0001 }).withMessage('La cantidad debe ser mayor a 0'),
-
-        body('detalles.*.unidad_medida')
-            .optional()
+        body('tipo')
             .trim()
-            .isLength({ max: 20 }).withMessage('La unidad de medida del ingrediente no puede exceder los 20 caracteres')
+            .isIn(['VENTA', 'PREPARACION_INTERNA', 'PRODUCCION']).withMessage('Tipo de operación no válido.'),
+
+        body('platillo_id')
+            .optional({ checkFalsy: true })
+            .isInt({ min: 1 }).withMessage('El producto terminado asociado debe ser un identificador numérico válido.'),
+        
+        body('rendimiento')
+            .notEmpty().withMessage('El rendimiento es obligatorio.')
+            .isFloat({ min: 0.0001 }).withMessage('El rendimiento debe ser un número mayor a 0.'),
+            
+        body('unidad_rendimiento')
+            .trim()
+            .notEmpty().withMessage('La unidad de rendimiento es obligatoria.')
     ],
     
     verificarStock: [

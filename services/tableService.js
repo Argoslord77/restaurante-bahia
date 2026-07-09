@@ -5,9 +5,33 @@ const db = require('../config/db');
 
 class TableService {
 
-    // Listar todas las mesas ordenadas por ubicación y número
+    // Listar todas las mesas ordenadas por ubicación y número mapeando el objeto orden_activa
     async getAllTables() {
-        return await TableModel.getAll();
+        const rows = await TableModel.getAll();
+        
+        return rows.map(row => {
+            const mesa = {
+                id: row.id,
+                numero: row.numero,
+                capacidad: row.capacidad,
+                estado: row.estado,
+                ubicacion: row.ubicacion,
+                creado_en: row.creado_en,
+                actualizado_en: row.actualizado_en,
+                orden_activa: null
+            };
+
+            // Si la fila contiene una orden vinculada, estructuramos el objeto orden_activa
+            if (row.orden_id) {
+                mesa.orden_activa = {
+                    id: row.orden_id,
+                    estado: row.orden_estado,
+                    total_productos: parseInt(row.total_productos, 10) || 0
+                };
+            }
+
+            return mesa;
+        });
     }
 
     // Buscar una mesa específica por ID
@@ -54,7 +78,7 @@ class TableService {
         }, {});
     }
 
-    // NUEVA LÓGICA OPTIMIZADA: Guardar o actualizar la distribución diaria de forma incremental (Upsert)
+    // Guardar o actualizar la distribución diaria de forma incremental (Upsert)
     async saveDistribution(ubicacion, asignaciones) {
         const hoy = new Date().toISOString().split('T')[0];
         let asignacionId;

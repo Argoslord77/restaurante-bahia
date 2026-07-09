@@ -102,10 +102,6 @@
                                             <div class="status-badge badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
                                                 <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Ocupada
                                             </div>
-                                        <% } else if (mesa.estado === 'atendida') { %>
-                                            <div class="status-badge badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
-                                                <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Atendida
-                                            </div>
                                         <% } else if (mesa.estado === 'desocupando') { %>
                                             <div class="status-badge badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
                                                 <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Limpieza
@@ -113,6 +109,10 @@
                                         <% } else if (mesa.estado === 'reservada') { %>
                                             <div class="status-badge badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
                                                 <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Reservada
+                                            </div>
+                                        <% } else if (mesa.estado === 'mantenimiento') { %>
+                                            <div class="status-badge badge bg-dark-subtle text-dark border border-dark-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
+                                                <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Mantenimiento
                                             </div>
                                         <% } %>
                                     </div>
@@ -130,12 +130,25 @@
                                 </div>  
 
                                 <div class="card-middle-section d-flex justify-content-between align-items-center mb-3">
-                                    <button class="btn-products btn btn-light btn-sm border shadow-sm" style="font-size: 12px;">
-                                        <i class="fa-solid fa-hamburger"></i> <strong>--</strong> productos
-                                    </button>
-                                    <div class="btn-status-atendido btn btn-success btn-sm text-white shadow-sm" style="font-size: 11px; font-weight: 500;">
-                                        <i class="fa-solid fa-check text-white"></i> Atendido
-                                    </div>
+    
+                                    <% if (mesa.estado === 'ocupada' && mesa.pedido_id) { %>
+                                        <button class="btn-ver-orden btn btn-light btn-sm border shadow-sm" 
+                                                style="font-size: 12px;" 
+                                                data-pedido-id="<%= mesa.pedido_id %>"
+                                                data-numero-mesa="<%= mesa.numero %>">
+                                            <i class="fa-solid fa-hamburger"></i> <strong><%= mesa.total_productos || 0 %></strong> Orden
+                                        </button>
+                                        
+                                        <% if (mesa.pedido_estado) { %>
+                                            <div class="btn-status-atendido btn btn-success btn-sm text-white shadow-sm" style="font-size: 11px; font-weight: 500;">
+                                                <i class="fa-solid fa-check text-white"></i> <%= mesa.pedido_estado %>
+                                            </div>
+                                        <% } %>
+                                    <% } else { %>
+                                        <span class="text-muted" style="font-size: 12px; font-style: italic;">Sin pedidos activos</span>
+                                        <div></div>
+                                    <% } %>
+
                                 </div>
 
                                 <div class="card-footer-section d-flex justify-content-between align-items-center text-muted fw-medium pt-2 border-top" style="font-size: 11px;">
@@ -196,9 +209,9 @@
                                 <select name="estado" class="form-select text-capitalize" required>
                                     <option value="libre" selected>Libre</option>
                                     <option value="ocupada">Ocupada</option>
-                                    <option value="mantenimiento">Mantenimiento</option>
-                                    <option value="desocupandose">Desocupando</option>
+                                    <option value="desocupando">Desocupando</option>
                                     <option value="reservada">Reservada</option>
+                                    <option value="mantenimiento">Mantenimiento</option>
                                 </select>
                             </div>
                         </div>
@@ -240,9 +253,9 @@
                                 <select name="estado" id="editEstado" class="form-select" required>
                                     <option value="libre">Libre</option>
                                     <option value="ocupada">Ocupada</option>
-                                    <option value="mantenimiento">Mantenimiento</option>
-                                    <option value="desocupandose">Desocupando</option>
+                                    <option value="desocupando">Desocupando</option>
                                     <option value="reservada">Reservada</option>
+                                    <option value="mantenimiento">Mantenimiento</option>
                                 </select>
                             </div>
 

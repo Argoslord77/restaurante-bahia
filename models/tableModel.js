@@ -2,11 +2,25 @@
 const db = require('../config/db');
 
 const Table = {
-    // Listar todas las mesas ordenadas por ubicación y número
+    // Listar todas las mesas ordenadas por ubicación y número con su orden activa
     getAll: async () => {
-        const [rows] = await db.query(
-            'SELECT id, numero, capacidad, estado, ubicacion, creado_en, actualizado_en FROM mesas ORDER BY ubicacion ASC, numero ASC'
-        );
+        const queryStr = `
+            SELECT 
+                m.id, 
+                m.numero, 
+                m.capacidad, 
+                m.estado, 
+                m.ubicacion, 
+                m.creado_en, 
+                m.actualizado_en,
+                p.id AS orden_id,
+                p.estado_pedido AS orden_estado,
+                (SELECT COALESCE(SUM(dp.cantidad), 0) FROM detalles_pedido dp WHERE dp.id_pedido = p.id AND dp.estado_item != 'cancelado') AS total_productos
+            FROM mesas m
+            LEFT JOIN pedidos p ON m.id = p.id_mesa AND p.estado_pedido != 'cancelado' AND p.estado_pedido != 'entregado_pagado'
+            ORDER BY m.ubicacion ASC, m.numero ASC
+        `;
+        const [rows] = await db.query(queryStr);
         return rows;
     },
 

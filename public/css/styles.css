@@ -99,3 +99,55 @@ body { background-color: #f3f4f6; }
         padding: 6px 4px !important;
     }
 }
+
+/* Estilos para activar el scroll real en el menú lateral de Restaurante Bahía */
+@media (max-height: 1079px), (max-width: 1079px) {
+    #sidebarMenu {
+        /* Permitir que el contenedor principal sea el que haga scroll */
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        max-height: 100vh;
+        
+        /* Cambiamos el comportamiento flex para que no colapse sus hijos */
+        display: block !important; 
+    }
+
+    /* Modificamos el contenedor del botón "Cerrar Sesión" */
+    #sidebarMenu .position-absolute.bottom-0 {
+        /* Al quitarle la posición absoluta fija, se posiciona de forma natural 
+           al final de la lista de opciones, permitiendo scrollear hasta él */
+        position: relative !important;
+        bottom: auto !important;
+        margin-top: 2rem; /* Espaciado estético después del último elemento */
+        padding-bottom: 1.5rem; /* Margen inferior para que no quede pegado al borde del navegador */
+    }
+}
+
+/* Opcional: Hacer la barra de scroll más limpia y discreta en laptops/monitores pequeños */
+#sidebarMenu::-webkit-scrollbar {
+    width: 6px;
+}
+#sidebarMenu::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+#sidebarMenu::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+/* Estilo complementario para el botón hamburguesa del menú móvil */
+.btn-white {
+    background-color: #ffffff !important;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-white:hover {
+    background-color: #f8f9fa !important;
+}
+
+@media (max-width: 575.98px) {
+    /* En móviles súper pequeños, reduce un poco el padding de la hamburguesa para optimizar espacio */
+    .raw-sidebar-toggle {
+        padding: 6px 10px !important;
+    }
+}

@@ -1,171 +1,165 @@
 // controllers/recetaController.js - Controlador para gestión de recetas / fichas técnicas
 const RecetaService = require('../services/recetaService');
 const ProductoModel = require('../models/productoModel'); // Requerido para consultas específicas de insumos
-const MenuModel = require('../models/menuModel');
 const logger = require('../config/logger');
 
 const RecetaController = {
     // Renderizar vista principal de recetas (Consolida catálogos concurrentes)
     viewRecetas: async (req, res) => {
         try {
-            // 1. Obtiene el catálogo base (recetas, unidades y productos preparados para el maestro)
-            const catalogos = await RecetaService.obtenerCatalogosAdministracion();
-            const platillos = await MenuModel.getAll();
+            // 1. Obtiene el catálogo base (recetas, platillos de la carta y unidades de medida)
+            const { recetas, platillos, unidades } = await RecetaService.obtenerCatalogosAdministracion();
 
             // 2. Trae de forma concurrente los ingredientes válidos (Materias Primas + Productos Terminados de Venta)
             const [materiasPrimas, productosVenta] = await Promise.all([
                 ProductoModel.getMateriasPrimas(),
-                ProductoModel.getProductosVenta() // <-- NUEVO: Trae ron, refrescos, vinos, etc.
+                ProductoModel.getProductosVenta() 
             ]);
 
-            // 3. Unifica ambos catálogos en un único arreglo para el select de insumos/ingredientes
+            // 3. Unifica ambos catálogos en un único arreglo para el select de insumos/ingredientes de la tabla
             const insumosValidos = [...materiasPrimas, ...productosVenta];
 
             res.render('inventarios/recetas', {
-                recetas: catalogos.recetas,
-                productos: insumosValidos,               // <-- MODIFICADO: Ahora el select dinámico tiene ambos tipos de insumos
-                unidades: catalogos.unidades,
-                platillos,
-                user: req.session.user || { rol: 'administrador' }, 
+                recetas: recetas,
+                productos: insumosValidos,               
+                unidades: unidades,
+                platillos: platillos,                    // <-- CORREGIDO: Inyecta el catálogo real del menú obtenido desde el servicio
+                user: req.session.user || { rol: 'administrador' },
                 view: 'recetas'
             });
         } catch (error) {
             logger.error('Error al cargar vista de recetas:', error);
-            // CORREGIDO: Evita buscar la vista "error" inexistente si falla la BD
-            res.status(500).send('<h3>Error Interno (500)</h3><p>Error al cargar las recetas e insumos en el sistema.</p>');
+            res.status(500).render('error', { message: 'Error interno al cargar el catálogo de recetas' });
         }
     },
 
-    // Obtener ingredientes de una receta específica (API)
+    // API: Obtener ingredientes de una receta por su receta_id (platilloId)
     getIngredientesByPlatillo: async (req, res) => {
         try {
-            const { platilloId } = req.params; // Mapea al receta_id real
-            const { almacenId } = req.query;
+            const { platilloId } = req.params; // ID del maestro de la receta
+            const ingredientes = await RecetaService.obtenerPorPlatillo(platilloId);
+            
+            // Mapeo seguro con la propiedad de base de datos unificada
+            const mapeados = ingredientes.map(ing => ({
+                producto_id: ing.producto_id,
+                cantidad_requerida: ing.cantidad_requerida,
+                unidad_medida: ing.unidad_medida,
+                porcentaje_merma: ing.porcentaje_merma
+            }));
 
-            let ingredientes;
-            if (almacenId) {
-                ingredientes = await RecetaService.obtenerPorPlatilloYAlmacen(platilloId, almacenId);
-            } else {
-                ingredientes = await RecetaService.obtenerPorPlatillo(platilloId);
-            }
-
-            res.json({ success: true, data: ingredientes });
+            return res.status(200).json(mapeados);
         } catch (error) {
-            logger.error('Error al obtener ingredientes:', error);
-            res.status(500).json({ success: false, message: error.message });
+            logger.error('Error al obtener ingredientes por platillo:', error);
+            return res.status(500).json({ success: false, message: 'Error al recuperar el detalle de ingredientes' });
         }
     },
 
-    // Crear la receta de forma integral: Cabecera + Desglose de Ingredientes (API)
+    // API: Crear nueva receta Maestro-Detalle con persistencia atómica via AJAX
     createReceta: async (req, res) => {
         try {
-            const usuarioSesion = req.session.user || { id: 1 };
-            
-            const recetaData = {
-                codigo: req.body.codigo,
-                nombre: req.body.nombre,
-                descripcion: req.body.descripcion,
-                tipo: req.body.tipo || 'VENTA',
-                producto_resultante_id: req.body.producto_resultante_id,
-                rendimiento: parseFloat(req.body.rendimiento) || 1.000,
-                unidad_rendimiento: req.body.unidad_rendimiento,
-                tiempo_preparacion_minutos: parseInt(req.body.tiempo_preparacion_minutos) || null,
-                costo_estimado: parseFloat(req.body.costo_estimado) || 0.0000,
-                precio_sugerido: parseFloat(req.body.precio_sugerido) || null,
-                activa: req.body.activa !== undefined ? req.body.activa : 1,
-                version: parseInt(req.body.version) || 1,
-                observaciones: req.body.observaciones,
-                creada_por: usuarioSesion.id,
-                detalles: req.body.detalles || [] // Array estructural mapeado: [{ producto_id, cantidad_requerida, unidad_medida, porcentaje_merma, costo_estimado }]
-            };
-
-            const id = await RecetaService.crearReceta(recetaData);
-            res.json({ success: true, message: 'Ficha técnica de receta creada transaccionalmente', id });
+            //Guardar en el body el id del creador de la receta
+            req.body.creada_por = req.session.user.id;
+            const recetaId = await RecetaService.crearReceta(req.body);
+            return res.status(201).json({
+                success: true,
+                message: 'Ficha técnica maestro-detalle guardada correctamente.',
+                recetaId
+            });
         } catch (error) {
             logger.error('Error al crear receta:', error);
-            res.status(400).json({ success: false, message: error.message });
+            return res.status(500).json({ success: false, message: error.message || 'Error interno al procesar la receta' });
         }
     },
 
-    // Actualizar receta de forma integral: Cabecera + Reemplazo atómico de Ingredientes (API)
+    // API: Actualizar receta Maestro-Detalle con estrategia Delete-Insert transaccional
     updateReceta: async (req, res) => {
         try {
             const { id } = req.params;
-            const recetaData = {
-                codigo: req.body.codigo,
-                nombre: req.body.nombre,
-                descripcion: req.body.descripcion,
-                tipo: req.body.tipo,
-                producto_resultante_id: req.body.producto_resultante_id,
-                rendimiento: parseFloat(req.body.rendimiento),
-                unidad_rendimiento: req.body.unidad_rendimiento,
-                tiempo_preparacion_minutos: parseInt(req.body.tiempo_preparacion_minutos) || null,
-                costo_estimado: parseFloat(req.body.costo_estimado) || 0.0000,
-                precio_sugerido: parseFloat(req.body.precio_sugerido) || null,
-                activa: req.body.activa,
-                version: parseInt(req.body.version) || 1,
-                observaciones: req.body.observaciones,
-                detalles: req.body.detalles || [] // Sobrescribe la composición de ingredientes previa
-            };
-
-            await RecetaService.actualizarReceta(id, recetaData);
-            res.json({ success: true, message: 'Ficha técnica y desglose de insumos actualizados correctamente' });
+            await RecetaService.actualizarReceta(id, req.body);
+            return res.status(200).json({
+                success: true,
+                message: 'Ficha técnica maestro-detalle actualizada con éxito.'
+            });
         } catch (error) {
             logger.error('Error al actualizar receta:', error);
-            res.status(400).json({ success: false, message: error.message });
+            return res.status(500).json({ success: false, message: error.message || 'Error interno al modificar la receta' });
         }
     },
 
-    // Eliminar receta (API - Borrado lógico seguro)
+    // API: Eliminar receta (Baja lógica del sistema)
     deleteReceta: async (req, res) => {
         try {
             const { id } = req.params;
             await RecetaService.eliminarReceta(id);
-            res.json({ success: true, message: 'Receta dada de baja exitosamente' });
+            return res.status(200).json({ success: true, message: 'Receta dada de baja correctamente' });
         } catch (error) {
-            logger.error('Error al eliminar receta:', error);
-            res.status(400).json({ success: false, message: error.message });
+            logger.error('Error al dar de baja la receta:', error);
+            return res.status(500).json({ success: false, message: 'No se pudo procesar la baja de la receta' });
         }
     },
 
-    // Verificar stock crítico de insumos antes de procesar comandas o producciones (API)
+    // API: Verificar stock crítico en un almacén específico antes de confirmar un pedido
     verificarStock: async (req, res) => {
         try {
-            const { items, almacenId } = req.body;
-
-            if (!items || !Array.isArray(items) || items.length === 0) {
-                return res.json({ success: true, suficiente: true });
+            const { items, almacen_id } = req.body;
+            
+            if(!items || !almacen_id) {
+                return res.status(400).json({ success: false, message: 'Parámetros insuficientes para la verificación' });
             }
 
-            const resultado = await RecetaService.verificarStockParaPedido(items, almacenId);
-            res.json(resultado);
+            const resultado = await RecetaService.verificarStockParaPedido(items, almacen_id);
+            return res.status(200).json(resultado);
         } catch (error) {
-            logger.error('Error al verificar stock:', error);
-            res.status(500).json({ success: false, message: error.message });
+            logger.error('Error al verificar stock de ingredientes:', error);
+            return res.status(500).json({ success: false, message: error.message || 'Error en la comprobación' });
         }
     },
 
-    // Obtener las recetas en las que impacta un insumo específico (API)
+    /**
+     * @desc Obtiene los platillos del menú que consumen un producto/insumo específico en sus recetas
+     * @route GET /api/recetas/producto/:productoId
+     * @access Private (superadministrador, administrador, almacenero)
+     */
     getPlatillosByProducto: async (req, res) => {
         try {
             const { productoId } = req.params;
-            const platillos = await RecetaService.obtenerPlatillosPorProducto(productoId);
-            res.json({ success: true, data: platillos });
+
+            // 1. Validación del parámetro de entrada (debe ser un ID numérico válido)
+            if (!productoId || isNaN(productoId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'El ID del producto proporcionado no es válido.'
+                });
+            }
+
+            // 2. Consulta al modelo enviando el ID del producto (insumo)
+            const platillosAfectados = await RecetaService.obtenerPlatillosPorProducto(productoId);
+
+            // 3. Respuesta JSON estructurada
+            return res.status(200).json({
+                success: true,
+                count: platillosAfectados.length,
+                data: platillosAfectados
+            });
+
         } catch (error) {
-            logger.error('Error al obtener platillos por producto:', error);
-            res.status(500).json({ success: false, message: error.message });
+            console.error('Error en recetaController.getPlatillosByProducto:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error interno del servidor al obtener los platillos que consumen este producto.',
+                error: process.env.NODE_ENV === 'development' ? error.message : {}
+            });
         }
     },
 
-    // Vista para configurar los ingredientes de una receta utilizando empaquetado Maestro-Detalle unificado
+    // Vista de configuración avanzada / maestro-detalle unificado (Mantenida por compatibilidad)
     viewConfigurarReceta: async (req, res) => {
         try {
-            const { platilloId } = req.params; // id de la receta maestro
+            const { platilloId } = req.params; // ID de la receta maestro
             
             const recetaCompleta = await RecetaService.obtenerRecetaCompleta(platilloId);
-            const catalogos = await RecetaService.obtenerCatalogosAdministracion();
+            const { unidades } = await RecetaService.obtenerCatalogosAdministracion();
 
-            // Replicamos la misma lógica de unificación para la interfaz de configuración avanzada
             const [materiasPrimas, productosVenta] = await Promise.all([
                 ProductoModel.getMateriasPrimas(),
                 ProductoModel.getProductosVenta()
@@ -175,8 +169,8 @@ const RecetaController = {
             res.render('inventarios/configurar-receta', {
                 platillo: recetaCompleta || { nombre: 'Receta No Encontrada' },
                 ingredientes: recetaCompleta ? recetaCompleta.detalles : [],
-                productos: insumosValidos,               // <-- MODIFICADO: Permite añadir materias primas o productos terminados
-                unidades: catalogos.unidades, 
+                productos: insumosValidos,               
+                unidades: unidades, 
                 user: req.session.user || { rol: 'administrador' },
                 view: 'recetas'
             });

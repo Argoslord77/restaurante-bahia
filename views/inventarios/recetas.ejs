@@ -92,7 +92,7 @@
                                         <small class="text-muted fs-7">v1.0 (Activa)</small>
                                     </td>
                                     <td>
-                                        <div class="fw-bold text-dark"><%= r.nombre %></div>
+                                        <div class="fw-bold text-dark"><%= r.receta_nombre %></div>
                                         <span class="badge bg-light text-secondary border fs-8"><%= r.unidad_rendimiento %></span>
                                     </td>
                                     <td>
@@ -113,10 +113,10 @@
                                             <button class="btn btn-sm btn-outline-secondary edit-btn" 
                                                     data-id="<%= r.id %>" 
                                                     data-codigo="<%= r.codigo %>"
-                                                    data-nombre="<%= r.nombre %>"
+                                                    data-nombre="<%= r.receta_nombre %>"
                                                     data-descripcion="<%= r.descripcion %>"
                                                     data-tipo="<%= r.tipo %>"
-                                                    data-producto="<%= r.producto_resultante_id %>"
+                                                    data-producto="<%= r.platillo_id %>"
                                                     data-rendimiento="<%= r.rendimiento %>"
                                                     data-unidad="<%= r.unidad_rendimiento %>"
                                                     data-tiempo="<%= r.tiempo_preparacion_minutos %>"
@@ -125,7 +125,7 @@
                                                     data-observaciones="<%= r.observaciones %>">
                                                 <i class="fa-solid fa-pen-to-square"></i>
                                             </button>
-                                            <a href="/admin/recetas/configurar/<%= r.id %>" class="btn btn-sm btn-outline-primary" title="Configurar Ingredientes">
+                                            <a href="/recetas/configurar/<%= r.id %>" class="btn btn-sm btn-outline-primary" title="Configurar Ingredientes">
                                                 <i class="fa-solid fa-gears"></i>
                                             </a>
                                         </div>
@@ -180,8 +180,8 @@
                             </div>
                             
                             <div class="col-md-6">
-                                <label for="producto_resultante_id" class="form-label fw-semibold text-secondary small">Producto Terminado / Menú (Buscador)</label>
-                                <select class="form-select shadow-sm select2-producto-maestro" id="producto_resultante_id" name="producto_resultante_id" required>
+                                <label for="platillo_id" class="form-label fw-semibold text-secondary small">Producto Terminado / Menú (Buscador)</label>
+                                <select class="form-select shadow-sm select2-producto-maestro" id="platillo_id" name="platillo_id" required>
                                     <option value="">Escriba el nombre o código del platillo...</option>
                                     <% if (typeof platillos !== 'undefined') { %>
                                         <% platillos.forEach(p => { %>
@@ -239,8 +239,7 @@
                                         <th class="text-center py-2" style="width: 12%;">Remover</th>
                                     </tr>
                                 </thead>
-                                <tbody id="tbodyIngredientes">
-                                    </tbody>
+                                <tbody id="tbodyIngredientes"></tbody>
                             </table>
                         </div>
                     </div>
@@ -325,7 +324,7 @@
                     </select>
                 </td>
                 <td>
-                    <input type="number" step="0.0001" class="form-control form-select-sm font-monospace input-cantidad" value="${datos.cantidad || '0.0000'}" required>
+                    <input type="number" step="0.0001" class="form-control form-select-sm font-monospace input-cantidad" value="${datos.cantidad_requerida || '0.0000'}" required>
                 </td>
                 <td>
                     <select class="form-select form-select-sm combo-unidad select2-unidad-detalle" required>
@@ -340,7 +339,7 @@
                 </td>
             `;
 
-            // Auto-seleccionar la unidad base configurada en el maestro del artículo al cambiar de insumo
+            // Auto-seleccionar la unidad base al cambiar de insumo
             const selectProducto = tr.querySelector('.combo-producto');
             const selectUnidad = tr.querySelector('.combo-unidad');
 
@@ -370,7 +369,6 @@
             const nuevaFila = crearFilaBaseHTML();
             tbodyIngredientes.appendChild(nuevaFila);
             
-            // Inicializar Select2 en los nuevos elementos insertados en la fila
             $(nuevaFila).find('.select2-insumo-detalle, .select2-unidad-detalle').each(function() {
                 const esUnidad = $(this).hasClass('select2-unidad-detalle');
                 $(this).select2({
@@ -397,7 +395,6 @@
                 const filaInicial = crearFilaBaseHTML();
                 tbodyIngredientes.appendChild(filaInicial);
                 
-                // Forzar inicialización de Select2 en la primera fila para modo inserción limpia
                 setTimeout(() => {
                     $(filaInicial).find('.select2-insumo-detalle, .select2-unidad-detalle').each(function() {
                         const esUnidad = $(this).hasClass('select2-unidad-detalle');
@@ -428,15 +425,18 @@
 
                 tbodyIngredientes.innerHTML = '';
 
-                // Cargar ingredientes dinámicos desde el endpoint de la API
+                // Sincronización estricta con endpoint de la API sin fragmentos '/admin'
                 fetch(`/admin/api/recetas/platillo/${this.dataset.id}`)
-                    .then(r => r.json())
+                    .then(r => {
+                        if (!r.ok) throw new Error('Error al obtener ingredientes');
+                        return r.json();
+                    })
                     .then(ingredientes => {
                         if(ingredientes && ingredientes.length > 0) {
                             ingredientes.forEach(ing => {
                                 const fila = crearFilaBaseHTML({
                                     producto_id: ing.producto_id,
-                                    cantidad: ing.cantidad_requerida,
+                                    cantidad_requerida: ing.cantidad_requerida,
                                     unidad_medida: ing.unidad_medida,
                                     porcentaje_merma: ing.porcentaje_merma
                                 });
@@ -446,11 +446,11 @@
                             tbodyIngredientes.appendChild(crearFilaBaseHTML());
                         }
                         
-                        // Inicializar los Select2 de las filas cargadas asíncronamente
                         inicializarSelect2Detalles();
                         bsModal.show();
                     })
                     .catch(err => {
+                        console.error(err);
                         tbodyIngredientes.appendChild(crearFilaBaseHTML());
                         inicializarSelect2Detalles();
                         bsModal.show();
@@ -458,7 +458,7 @@
             });
         });
 
-        // Limpieza y destrucción completa al cerrar el modal
+        // Limpieza al cerrar el modal
         modalElement.addEventListener('hidden.bs.modal', function() {
             $('.select2-insumo-detalle, .select2-unidad-detalle').each(function() {
                 if ($(this).data('select2')) {
@@ -485,7 +485,7 @@
             filas.forEach((fila, index) => {
                 detalles.push({
                     producto_id: fila.querySelector('.combo-producto').value,
-                    cantidad: fila.querySelector('.input-cantidad').value,
+                    cantidad_requerida: fila.querySelector('.input-cantidad').value, // Adaptado al validador y modelo
                     unidad_medida: fila.querySelector('.combo-unidad').value,
                     porcentaje_merma: fila.querySelector('.input-merma').value || 0,
                     orden_preparacion: index + 1
@@ -497,7 +497,7 @@
                 nombre: document.getElementById('nombre').value,
                 descripcion: document.getElementById('descripcion').value,
                 tipo: document.getElementById('tipo').value,
-                producto_resultante_id: document.getElementById('producto_resultante_id').value,
+                platillo_id: document.getElementById('platillo_id').value,
                 rendimiento: document.getElementById('rendimiento').value,
                 unidad_rendimiento: document.getElementById('unidad_rendimiento').value,
                 tiempo_preparacion_minutos: document.getElementById('tiempo_preparacion_minutos').value || null,

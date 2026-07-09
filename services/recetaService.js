@@ -1,7 +1,8 @@
 // services/recetaService.js - Servicio para gestión de recetas
 const Receta = require('../models/recetaModel');
 const UnidadMedida = require('../models/unidadMedidaModel');
-const Producto = require('../models/productoModel'); // Tu ProductoModel original
+const Producto = require('../models/productoModel'); 
+const MenuModel = require('../models/menuModel'); // <-- AGREGADO: Para listar platillos de la carta
 const db = require('../config/db');
 const logger = require('../config/logger');
 
@@ -9,12 +10,12 @@ const RecetaService = {
     // Catálogos agrupados concurrentemente para renderizar la UI
     obtenerCatalogosAdministracion: async () => {
         try {
-            const [recetas, productos, unidades] = await Promise.all([
+            const [recetas, platillos, unidades] = await Promise.all([
                 Receta.getAll(),
-                Producto.getPreparados(),         // <-- MANTENIDO: Usa tu método real getPreparados() para listar solo productos con receta
+                MenuModel.getAll(),               // <-- MODIFICADO: Ahora lista los platillos de la carta en vez de productos preparados
                 UnidadMedida.getActivas() 
             ]);
-            return { recetas, productos, unidades };
+            return { recetas, platillos, unidades };
         } catch (error) {
             logger.error('Error al compilar catálogos de recetas:', error);
             throw new Error('Error al recopilar los catálogos de base de datos');
@@ -31,7 +32,7 @@ const RecetaService = {
         }
     },
 
-    // NUEVO: Obtener la estructura Maestro-Detalle unificada para modales de edición
+    // Obtener la estructura Maestro-Detalle unificada para modales de edición
     obtenerRecetaCompleta: async (id) => {
         try {
             const maestro = await Receta.getById(id);
@@ -65,11 +66,11 @@ const RecetaService = {
         }
     },
 
-    // AJUSTADO: Crear nueva receta Maestro-Detalle con control atómico de transacciones
+    // Crear nueva receta Maestro-Detalle con control atómico de transacciones
     crearReceta: async (recetaData) => {
         if (!recetaData.codigo) throw new Error('El código de la receta es obligatorio');
         if (!recetaData.nombre) throw new Error('El nombre de la receta es obligatorio');
-        if (!recetaData.producto_resultante_id) throw new Error('El producto resultante es obligatorio');
+        if (!recetaData.platillo_id) throw new Error('El producto resultante es obligatorio');
         if (!recetaData.unidad_rendimiento) throw new Error('La unidad de rendimiento es obligatoria');
 
         const connection = await db.getConnection();
@@ -96,7 +97,7 @@ const RecetaService = {
         }
     },
 
-    // AJUSTADO: Actualizar receta Maestro-Detalle con reemplazo seguro de ingredientes
+    // Actualizar receta Maestro-Detalle con reemplazo seguro de ingredientes
     actualizarReceta: async (id, recetaData) => {
         if (!recetaData.nombre) throw new Error('El nombre de la receta es obligatorio');
 

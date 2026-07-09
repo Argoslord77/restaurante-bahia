@@ -53,22 +53,26 @@ const Receta = {
         return rows;
     },
 
-    // Obtener el catálogo completo de cabeceras de recetas
+    // CORREGIDO: Ahora conecta el maestro con la tabla platillos_menu para resolver el nombre del artículo de la carta
     getAll: async () => {
-        const query = `
+    const query = `
             SELECT 
                 r.id,
                 r.codigo,
                 r.nombre AS receta_nombre,
+                r.descripcion,
                 r.tipo,
+                r.platillo_id,
                 r.rendimiento,
                 r.unidad_rendimiento,
+                r.tiempo_preparacion_minutos,
                 r.costo_estimado,
                 r.precio_sugerido,
                 r.activa,
-                p.nombre AS producto_resultante_nombre
+                r.observaciones,
+                pm.nombre AS producto_resultante_nombre
             FROM recetas r
-            INNER JOIN productos p ON r.producto_resultante_id = p.id
+            INNER JOIN platillos_menu pm ON r.platillo_id = pm.id
             ORDER BY r.nombre ASC
         `;
         const [rows] = await db.query(query);
@@ -85,7 +89,7 @@ const Receta = {
     // Crear la cabecera de la nueva receta (Sujeto a Transacción)
     createTransactional: async (connection, recetaData) => {
         const query = `
-            INSERT INTO recetas (codigo, nombre, descripcion, tipo, producto_resultante_id, rendimiento, unidad_rendimiento, tiempo_preparacion_minutos, costo_estimado, precio_sugerido, activa, version, observaciones, creada_por)
+            INSERT INTO recetas (codigo, nombre, descripcion, tipo, platillo_id, rendimiento, unidad_rendimiento, tiempo_preparacion_minutos, costo_estimado, precio_sugerido, activa, version, observaciones, creada_por)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const [result] = await connection.query(query, [
@@ -93,7 +97,7 @@ const Receta = {
             recetaData.nombre,
             recetaData.descripcion || null,
             recetaData.tipo || 'VENTA',
-            recetaData.producto_resultante_id,
+            recetaData.platillo_id,
             recetaData.rendimiento || 1.000,
             recetaData.unidad_rendimiento,
             recetaData.tiempo_preparacion_minutos || null,
@@ -130,7 +134,7 @@ const Receta = {
     updateTransactional: async (connection, id, recetaData) => {
         const query = `
             UPDATE recetas 
-            SET codigo = ?, nombre = ?, descripcion = ?, tipo = ?, producto_resultante_id = ?, rendimiento = ?, unidad_rendimiento = ?, tiempo_preparacion_minutos = ?, costo_estimado = ?, precio_sugerido = ?, activa = ?, version = ?, observaciones = ?
+            SET codigo = ?, nombre = ?, descripcion = ?, tipo = ?, platillo_id = ?, rendimiento = ?, unidad_rendimiento = ?, tiempo_preparacion_minutos = ?, costo_estimado = ?, precio_sugerido = ?, activa = ?, version = ?, observaciones = ?
             WHERE id = ?
         `;
         await connection.query(query, [
@@ -138,7 +142,7 @@ const Receta = {
             recetaData.nombre,
             recetaData.descripcion || null,
             recetaData.tipo || 'VENTA',
-            recetaData.producto_resultante_id,
+            recetaData.platillo_id,
             recetaData.rendimiento || 1.000,
             recetaData.unidad_rendimiento,
             recetaData.tiempo_preparacion_minutos || null,
@@ -163,18 +167,27 @@ const Receta = {
         await db.query(query, [id]);
     },
 
-    // Obtener recetas que consumen un producto/insumo específico
+    /**
+     * Obtiene los platillos de la tabla platillos_menu vinculados a recetas 
+     * que utilicen un producto específico como ingrediente.
+     */
     getPlatillosByProducto: async (productoId) => {
         const query = `
             SELECT 
-                rd.receta_id,
-                r.nombre AS platillo_nombre,
+                pm.id AS platillo_menu_id,
+                pm.nombre AS platillo_menu_nombre,
+                r.id AS receta_id,
+                r.codigo AS receta_codigo,
+                r.nombre AS receta_nombre,
+                r.tipo AS receta_tipo,
                 rd.cantidad AS cantidad_requerida,
-                rd.unidad_medida
+                rd.unidad_medida AS unidad_medida_receta,
+                rd.es_opcional
             FROM receta_detalles rd
             INNER JOIN recetas r ON rd.receta_id = r.id
+            INNER JOIN platillos_menu pm ON r.platillo_id = pm.id
             WHERE rd.producto_id = ? AND r.activa = 1
-            ORDER BY r.nombre ASC
+            ORDER BY pm.nombre ASC;
         `;
         const [rows] = await db.query(query, [productoId]);
         return rows;
