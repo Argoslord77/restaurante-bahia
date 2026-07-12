@@ -151,3 +151,28 @@ body { background-color: #f3f4f6; }
         padding: 6px 10px !important;
     }
 }
+
+/* public/css/impresion-etiquetas.css */
+@media print {
+    @page {
+        size: 101mm 50mm;
+        margin: 0;
+    }
+    
+    body * {
+        visibility: hidden;
+    }
+    
+    #etiqueta-impresion, #etiqueta-impresion * {
+        visibility: visible;
+    }
+    
+    #etiqueta-impresion {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 101mm;
+        height: 50mm;
+        padding: 5mm;
+    }
+}

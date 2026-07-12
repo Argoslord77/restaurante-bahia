@@ -1,0 +1,51 @@
+module.exports = {
+    PEDIDO: {
+
+    ABIERTA: 'ABIERTA',
+
+    ENVIADA_COCINA: 'ENVIADA_COCINA',
+
+    PREPARANDO: 'PREPARANDO',
+
+    LISTA: 'LISTA',
+
+    ENTREGADA: 'ENTREGADA',
+
+    PENDIENTE_PAGO: 'PENDIENTE_PAGO',
+
+    PAGADA: 'PAGADA',
+
+    CERRADA: 'CERRADA',
+
+    CANCELADA: 'CANCELADA'
+
+    },
+
+    ITEM: {
+
+    EN_ESPERA: 'EN_ESPERA',
+
+    PREPARANDO: 'PREPARANDO',
+
+    LISTO: 'LISTO',
+
+    ENTREGADO: 'ENTREGADO',
+
+    CANCELADO: 'CANCELADO'
+
+    },
+
+    MESA: {
+        LIBRE: 'LIBRE',
+
+        OCUPADA: 'OCUPADA',
+
+        RESERVADA: 'RESERVADA',
+
+        DESOCUPANDOSE: 'DESOCUPANDOSE',
+
+        MANTENIMIENTO: 'MANTENIMIENTO'
+
+    }
+
+};

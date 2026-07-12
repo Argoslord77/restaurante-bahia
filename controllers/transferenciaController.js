@@ -6,13 +6,15 @@ const TransferenciaService = require('../services/transferenciaService');
 exports.viewTransferencias = async (req, res) => {
     try {
         const [almacenes] = await db.query("SELECT id, codigo, nombre FROM almacenes WHERE activo = 1 ORDER BY nombre ASC");
-        const [productos] = await db.query("SELECT id, codigo, nombre FROM productos WHERE activo = 1 ORDER BY nombre ASC");
+        const [productos] = await db.query("SELECT id, codigo, nombre, unidad_inventario_id FROM productos WHERE activo = 1 ORDER BY nombre ASC");
+        const [unidades] = await db.query("SELECT id, codigo, nombre, abreviatura FROM unidades_medida WHERE activa = 1 ORDER BY nombre ASC");
         const transferencias = await Transferencia.getAll();
 
         res.render('inventarios/transferencias', {
             title: 'Transferencias Internas - Restaurante Bahía',
             almacenes,
             productos,
+            unidades,
             transferencias,
             user: req.session.user || req.user || null,
             view: 'transferencias'
@@ -24,7 +26,7 @@ exports.viewTransferencias = async (req, res) => {
 };
 
 exports.createSolicitud = async (req, res) => {
-    const { almacen_origen_id, almacen_destino_id, producto_id, cantidad, observaciones } = req.body;
+    const { almacen_origen_id, almacen_destino_id, detalles, observaciones } = req.body;
     
     // 1. Corregimos el nombre para que coincida exactamente con lo que el Modelo y la BD esperan
     const solicitado_por =  req.user?.id || req.session?.user?.id;
@@ -38,7 +40,7 @@ exports.createSolicitud = async (req, res) => {
             });
         }
 
-        if (!almacen_origen_id || !almacen_destino_id || !producto_id || !cantidad) {
+        if (!almacen_origen_id || !almacen_destino_id || !Array.isArray(detalles) || detalles.length === 0) {
             return res.status(400).json({ success: false, message: "Todos los campos obligatorios deben ser completados." });
         }
 
@@ -46,19 +48,24 @@ exports.createSolicitud = async (req, res) => {
             return res.status(400).json({ success: false, message: "El almacén origen y destino no pueden coincidir." });
         }
 
-        const tieneStock = await Transferencia.verificarStockOrigen(almacen_origen_id, producto_id, cantidad);
-        if (!tieneStock) {
-            return res.status(400).json({ success: false, message: "El almacén de origen no cuenta con suficiente stock disponible." });
+        // 2. Verificar stock de origen para CADA producto de la solicitud
+        for (const detalle of detalles) {
+            const tieneStock = await Transferencia.verificarStockOrigen(almacen_origen_id, detalle.producto_id, detalle.cantidad);
+            if (!tieneStock) {
+                return res.status(400).json({
+                    success: false,
+                    message: `El almacén de origen no cuenta con suficiente stock disponible para el producto ID ${detalle.producto_id}.`
+                });
+            }
         }
 
-        // 2. Enviamos el objeto con la propiedad 'solicitado_por' perfectamente mapeada
+        // 3. Enviamos el objeto con la propiedad 'solicitado_por' perfectamente mapeada
         const insertId = await Transferencia.createSolicitudAtomica({
             almacen_origen_id,
             almacen_destino_id,
-            producto_id,
-            cantidad,
             solicitado_por, // <-- CAMBIADO AQUÍ (de solicitante_id a solicitado_por)
-            observaciones
+            observaciones,
+            detalles
         });
 
         return res.status(201).json({ success: true, message: "Solicitud registrada con éxito.", id: insertId });

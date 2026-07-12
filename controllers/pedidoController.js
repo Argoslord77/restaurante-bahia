@@ -1,6 +1,7 @@
 const pedidoService = require('../services/pedidoService');
 const inventarioService = require('../services/inventarioService');
-const db = require('../config/db'); // <-- Requerimos la base de datos para manejar la transacción global
+const db = require('../config/db');
+const Pedido = require('../models/PedidoModel'); // Importación necesaria para usar addDetailWithModifiers
 
 const pedidoController = {
     // Listar todos los pedidos activos en consumo
@@ -57,28 +58,30 @@ const pedidoController = {
     // Procesar la lista de productos enviada en lote para la orden y descontar inventario FIFO
     enviarOrden: async (req, res) => {
         const { id } = req.params;
-        const { items } = req.body; // Array de objetos { id_platillo, cantidad }
+        const { items } = req.body; // Array de objetos { id_platillo, cantidad, modificadores: [] }
 
         if (!items || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No hay elementos en la orden.' });
         }
 
-        // Iniciamos una transacción atómica global para la Base de Datos
         const conn = await db.getConnection();
         await conn.beginTransaction();
 
         try {
-            // 1. Adicionar la orden al flujo de comandas usando la conexión transaccional
-            // NOTA: Es necesario que tu pedidoService.adicionarOrdenLote acepte 'conn' como parámetro opcional
-            await pedidoService.adicionarOrdenLote(id, items, conn);
-
-            // 2. Definir el almacén de donde saldrán por defecto los insumos de cocina (ej: ID 1 - Almacén Central/Cocina)
-            const almacenDefaultId = 1; 
-
-            // 3. Explotar la receta de cada ítem de la comanda y reducir el stock FIFO de sus insumos
+            // Procesar cada ítem incluyendo sus modificadores
             for (const item of items) {
-                // Invocamos el servicio pasándole la conexión activa para que herede la transacción
-                await InventarioService.descontarPorReceta(
+                // Inserción transaccional de detalle + modificadores
+                await Pedido.addDetailWithModifiers(
+                    id, 
+                    item.id_platillo, 
+                    item.cantidad, 
+                    item.modificadores || [], 
+                    conn
+                );
+
+                // Descontar insumos del inventario
+                const almacenDefaultId = 1; 
+                await inventarioService.descontarPorReceta(
                     item.id_platillo, 
                     parseFloat(item.cantidad), 
                     almacenDefaultId, 
@@ -86,21 +89,18 @@ const pedidoController = {
                 );
             }
 
-            // Si todo el bucle se completó con éxito y hay stock suficiente de todo, asentamos los datos
             await conn.commit();
             res.json({ success: true, redirectUrl: `/admin/pedido/${id}` });
 
         } catch (error) {
-            // Si falta un solo insumo o hay error de concurrencia, hacemos ROLLBACK absoluto.
-            // La comanda no se envía a cocina y el inventario no se desajusta.
             await conn.rollback();
-            console.error('Error al enviar orden y descontar inventario:', error);
+            console.error('Error al enviar orden con modificadores:', error);
             res.status(500).json({ 
                 success: false, 
                 message: `No se pudo enviar la orden: ${error.message}` 
             });
         } finally {
-            conn.release(); // Liberamos la conexión de vuelta al pool
+            conn.release();
         }
     },
 

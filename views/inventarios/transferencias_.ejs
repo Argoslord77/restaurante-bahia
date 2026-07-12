@@ -7,29 +7,7 @@
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
-    <link rel="stylesheet" href="/css/select2.min.css"/>
     <link rel="stylesheet" href="/css/styles.css">
-
-    <style>
-        /* Integración estética de Select2 con Bootstrap 5, dentro de las filas de la tabla de productos */
-        .select2-container--default .select2-selection--single {
-            height: calc(2.25rem + 2px);
-            padding: 0.25rem 0.5rem;
-            font-size: 0.875rem;
-            border: 1px solid #dee2e6;
-            border-radius: 0.375rem;
-            display: flex;
-            align-items: center;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 100%;
-            top: 0;
-            right: 8px;
-        }
-        .select2-container {
-            width: 100% !important;
-        }
-    </style>
 </head>
 <body>
 
@@ -154,26 +132,18 @@
                                 <% }) %>
                             </select>
                         </div>
-                        <div class="col-12">
-                            <div class="border rounded overflow-hidden shadow-sm mt-2">
-                                <div class="bg-dark text-white px-3 py-2 d-flex justify-content-between align-items-center">
-                                    <span class="fw-bold small text-uppercase"><i class="fa-solid fa-boxes-stacked me-2 text-warning"></i>Productos a Transferir</span>
-                                    <button type="button" id="btnAgregarFilaProducto" class="btn btn-warning btn-sm fw-bold px-3"><i class="fa-solid fa-plus me-1"></i>Añadir Producto</button>
-                                </div>
-                                <div class="table-responsive" style="max-height: 280px;">
-                                    <table class="table table-sm table-hover align-middle mb-0" id="tablaProductosTransferencia">
-                                        <thead class="bg-light fs-7 text-uppercase border-bottom">
-                                            <tr>
-                                                <th class="ps-3 py-2" style="width: 44%;">Producto / Insumo</th>
-                                                <th class="py-2" style="width: 20%;">Cantidad</th>
-                                                <th class="py-2" style="width: 26%;">Unidad de Medida</th>
-                                                <th class="text-center py-2" style="width: 10%;">Quitar</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="tbodyProductosTransferencia"></tbody>
-                                    </table>
-                                </div>
-                            </div>
+                        <div class="col-md-8">
+                            <label for="producto_id" class="form-label fw-semibold text-secondary small">Producto / Insumo</label>
+                            <select class="form-select shadow-sm" id="producto_id" required>
+                                <option value="">Seleccione un insumo de la lista...</option>
+                                <% productos.forEach(p => { %>
+                                    <option value="<%= p.id %>">[<%= p.codigo %>] <%= p.nombre %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="cantidad" class="form-label fw-semibold text-secondary small">Cantidad a Transferir</label>
+                            <input type="number" step="0.001" id="cantidad" class="form-control shadow-sm" required min="0.001" placeholder="0.000">
                         </div>
                         <div class="col-md-12">
                             <label for="observaciones" class="form-label fw-semibold text-secondary small">Observaciones / Justificación</label>
@@ -189,125 +159,14 @@
         </div>
     </div>
 
-    <div id="data-productos-transferencia-json" style="display: none;" data-json="<%= JSON.stringify(productos || []) %>"></div>
-    <div id="data-unidades-transferencia-json" style="display: none;" data-json="<%= JSON.stringify(unidades || []) %>"></div>
-
     <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
-    <script src="/js/libs/select2.min.js"></script>
     
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         const modalElement = document.getElementById('modalTransferencia');
         const bsModal = new bootstrap.Modal(modalElement);
-
-        // Catálogos parseados de forma segura desde los elementos DOM
-        const productosDisponibles = JSON.parse(document.getElementById('data-productos-transferencia-json').getAttribute('data-json'));
-        const unidadesDisponibles = JSON.parse(document.getElementById('data-unidades-transferencia-json').getAttribute('data-json'));
-
-        const tbodyProductos = document.getElementById('tbodyProductosTransferencia');
-        const btnAgregarFilaProducto = document.getElementById('btnAgregarFilaProducto');
-
-        // Inicializar Select2 acoplado al modal de Bootstrap para los selects de cada fila
-        function inicializarSelect2Fila($fila) {
-            $fila.find('.select2-producto-transferencia, .select2-unidad-transferencia').each(function() {
-                if (!$(this).hasClass('select2-hidden-accessible')) {
-                    const esUnidad = $(this).hasClass('select2-unidad-transferencia');
-                    $(this).select2({
-                        dropdownParent: $(modalElement),
-                        placeholder: esUnidad ? 'Unidad...' : 'Buscar producto...',
-                        allowClear: true
-                    });
-                }
-            });
-        }
-
-        function crearFilaProducto() {
-            const tr = document.createElement('tr');
-
-            let opcionesProductos = '<option value="">Buscar producto...</option>';
-            productosDisponibles.forEach(p => {
-                opcionesProductos += `<option value="${p.id}" data-unidad="${p.unidad_inventario_id || ''}">[${p.codigo}] ${p.nombre}</option>`;
-            });
-
-            let opcionesUnidades = '<option value="">Unidad...</option>';
-            unidadesDisponibles.forEach(u => {
-                opcionesUnidades += `<option value="${u.id}">${u.nombre} (${u.abreviatura})</option>`;
-            });
-
-            tr.innerHTML = `
-                <td class="ps-3">
-                    <select class="form-select form-select-sm combo-producto-transferencia select2-producto-transferencia" required>
-                        ${opcionesProductos}
-                    </select>
-                </td>
-                <td>
-                    <input type="number" step="0.001" min="0.001" class="form-control form-select-sm font-monospace input-cantidad-transferencia" placeholder="0.000" required>
-                </td>
-                <td>
-                    <select class="form-select form-select-sm combo-unidad-transferencia select2-unidad-transferencia" required>
-                        ${opcionesUnidades}
-                    </select>
-                </td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-fila-producto"><i class="fa-solid fa-trash-can"></i></button>
-                </td>
-            `;
-
-            // Auto-seleccionar la unidad de inventario del producto al elegirlo (editable después)
-            const selectProducto = tr.querySelector('.combo-producto-transferencia');
-            const selectUnidad = tr.querySelector('.combo-unidad-transferencia');
-
-            $(selectProducto).on('change', function() {
-                const opcionSeleccionada = this.options[this.selectedIndex];
-                const unidadId = opcionSeleccionada ? opcionSeleccionada.getAttribute('data-unidad') : '';
-                if (unidadId) {
-                    $(selectUnidad).val(unidadId).trigger('change');
-                }
-            });
-
-            tr.querySelector('.btn-eliminar-fila-producto').addEventListener('click', () => {
-                if (tbodyProductos.children.length > 1) {
-                    $(selectProducto).select2('destroy');
-                    $(selectUnidad).select2('destroy');
-                    tr.remove();
-                } else {
-                    Swal.fire('Atención', 'La transferencia debe contener al menos un producto.', 'warning');
-                }
-            });
-
-            return tr;
-        }
-
-        function agregarFilaProducto() {
-            const nuevaFila = crearFilaProducto();
-            tbodyProductos.appendChild(nuevaFila);
-            inicializarSelect2Fila($(nuevaFila));
-        }
-
-        btnAgregarFilaProducto.addEventListener('click', agregarFilaProducto);
-
-        // Evitar que el almacén de origen y destino coincidan: deshabilita en cada select
-        // la opción ya seleccionada en el otro
-        const selectOrigen = document.getElementById('almacen_origen_id');
-        const selectDestino = document.getElementById('almacen_destino_id');
-
-        function sincronizarOpcionesAlmacen() {
-            const origenVal = selectOrigen.value;
-            const destinoVal = selectDestino.value;
-
-            Array.from(selectDestino.options).forEach(opt => {
-                opt.disabled = (opt.value !== '' && opt.value === origenVal);
-            });
-
-            Array.from(selectOrigen.options).forEach(opt => {
-                opt.disabled = (opt.value !== '' && opt.value === destinoVal);
-            });
-        }
-
-        selectOrigen.addEventListener('change', sincronizarOpcionesAlmacen);
-        selectDestino.addEventListener('change', sincronizarOpcionesAlmacen);
 
         // Captura e inicialización limpia desde el botón del Header común
         document.addEventListener('click', (e) => {
@@ -318,63 +177,22 @@
             }
         });
 
-        // Al abrir el modal: inicia siempre con una fila de producto vacía
-        modalElement.addEventListener('shown.bs.modal', () => {
-            if (tbodyProductos.children.length === 0) {
-                agregarFilaProducto();
-            }
-        });
-
         // Resetear formulario al cerrar modal
         modalElement.addEventListener('hidden.bs.modal', () => {
             document.getElementById('formTransferencia').reset();
-            Array.from(selectOrigen.options).forEach(opt => opt.disabled = false);
-            Array.from(selectDestino.options).forEach(opt => opt.disabled = false);
-
-            tbodyProductos.querySelectorAll('.select2-producto-transferencia, .select2-unidad-transferencia').forEach(el => {
-                if ($(el).data('select2')) {
-                    $(el).select2('destroy');
-                }
-            });
-            tbodyProductos.innerHTML = '';
         });
 
         // Manejo del Submit mediante API REST (POST)
         document.getElementById('formTransferencia').addEventListener('submit', async function(e) {
             e.preventDefault();
-
-            const detalles = [];
-            let filasValidas = true;
-
-            tbodyProductos.querySelectorAll('tr').forEach(fila => {
-                const producto_id = fila.querySelector('.combo-producto-transferencia').value;
-                const cantidad = fila.querySelector('.input-cantidad-transferencia').value;
-                const unidad_medida_id = fila.querySelector('.combo-unidad-transferencia').value;
-
-                if (!producto_id || !cantidad || !unidad_medida_id) {
-                    filasValidas = false;
-                    return;
-                }
-
-                detalles.push({ producto_id, cantidad, unidad_medida_id });
-            });
-
-            if (!filasValidas || detalles.length === 0) {
-                Swal.fire('Atención', 'Complete producto, cantidad y unidad de medida en todas las líneas.', 'warning');
-                return;
-            }
-
+            
             const payload = {
                 almacen_origen_id: document.getElementById('almacen_origen_id').value,
                 almacen_destino_id: document.getElementById('almacen_destino_id').value,
-                observaciones: document.getElementById('observaciones').value,
-                detalles: detalles
+                producto_id: document.getElementById('producto_id').value,
+                cantidad: document.getElementById('cantidad').value,
+                observaciones: document.getElementById('observaciones').value
             };
-
-            if (payload.almacen_origen_id === payload.almacen_destino_id) {
-                Swal.fire('Atención', 'El almacén de origen y destino no pueden ser el mismo.', 'warning');
-                return;
-            }
 
             try {
                 const response = await fetch('/admin/api/transferencias', {

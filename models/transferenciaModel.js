@@ -7,6 +7,7 @@ const Transferencia = {
         const query = `
             SELECT 
                 t.*,
+                t.numero_transferencia AS codigo,
                 ao.nombre AS almacen_origen_nombre,
                 ad.nombre AS almacen_destino_nombre,
                 'Sistema' AS solicitante_nombre,
@@ -31,6 +32,7 @@ const Transferencia = {
         const query = `
             SELECT 
                 t.*,
+                t.numero_transferencia AS codigo,
                 ao.nombre AS almacen_origen_nombre,
                 ad.nombre AS almacen_destino_nombre,
                 'Sistema' AS solicitante_nombre,
@@ -55,19 +57,19 @@ const Transferencia = {
         const conn = await db.getConnection();
         await conn.beginTransaction();
         try {
-            // FIX: Se añade 'solicitado_por' al string y se remueve 'estado' (ya que va fijo en VALUES)
+            // FIX: 'numero_transferencia' es NOT NULL + UNIQUE en la BD. Se inserta un
+            // valor temporal único (basado en timestamp) para no violar la restricción,
+            // y luego se reemplaza por un código legible basado en el ID real generado.
+            const numeroTemporal = `TRF-TMP-${Date.now()}`;
+
             const queryTrans = `
                 INSERT INTO transferencias 
-                (almacen_origen_id, almacen_destino_id, solicitado_por, observaciones, estado, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'PENDIENTE', NOW(), NOW())
+                (numero_transferencia, almacen_origen_id, almacen_destino_id, solicitado_por, observaciones, estado, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'PENDIENTE', NOW(), NOW())
             `;
             
-            // FIX: Se ordenan los valores en estricta correspondencia con los '?' de arriba:
-            // 1. almacen_origen_id -> ?
-            // 2. almacen_destino_id -> ?
-            // 3. solicitado_por -> ?
-            // 4. observaciones -> ?
             const [resultTrans] = await conn.query(queryTrans, [
+                numeroTemporal,
                 data.almacen_origen_id,
                 data.almacen_destino_id,
                 data.solicitado_por,      // <-- ID numérico del usuario (ej: 3)
@@ -76,16 +78,32 @@ const Transferencia = {
 
             const transferenciaId = resultTrans.insertId;
 
-            // Obtener unidad_medida_id base del producto (manteniendo tu lógica atómica)
-            const [prodRows] = await conn.query("SELECT unidad_inventario_id FROM productos WHERE id = ?", [data.producto_id]);
-            const unidadMedidaId = prodRows.length > 0 ? prodRows[0].unidad_inventario_id : null;
+            // Código final legible y único, basado en el ID autoincremental real
+            const numeroTransferencia = `TRF-${String(transferenciaId).padStart(6, '0')}`;
+            await conn.query(
+                "UPDATE transferencias SET numero_transferencia = ? WHERE id = ?",
+                [numeroTransferencia, transferenciaId]
+            );
+
+            // Insertar el detalle de productos: ahora soporta múltiples líneas por solicitud,
+            // cada una con su propia unidad de medida seleccionada en el formulario
+            const detalles = Array.isArray(data.detalles) ? data.detalles : [];
+            if (detalles.length === 0) {
+                throw new Error('La transferencia debe contener al menos un producto.');
+            }
 
             const queryDetalle = `
                 INSERT INTO transferencias_detalle 
-                (transferencia_id, producto_id, cantidad_solicitada, unidad_medida_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, NOW(), NOW())
+                (transferencia_id, producto_id, cantidad_solicitada, unidad_medida_id) 
+                VALUES ?
             `;
-            await conn.query(queryDetalle, [transferenciaId, data.producto_id, data.cantidad, unidadMedidaId]);
+            const valoresDetalle = detalles.map(d => [
+                transferenciaId,
+                d.producto_id,
+                d.cantidad,
+                d.unidad_medida_id
+            ]);
+            await conn.query(queryDetalle, [valoresDetalle]);
 
             await conn.commit();
             return transferenciaId;

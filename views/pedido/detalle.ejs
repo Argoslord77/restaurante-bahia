@@ -94,7 +94,20 @@
                                                     <td class="col-cancelar d-none text-center">
                                                         <input type="checkbox" class="form-check-input chk-item-cancelar" onchange="evaluarSeleccion()">
                                                     </td>
-                                                    <td class="ps-4 fw-semibold text-dark"><%= item.nombre_platillo %></td>
+                                                    <td class="ps-4 fw-semibold text-dark">
+                                                        <%= item.nombre_platillo %>
+                                                        
+                                                        <!-- Bloque de modificadores -->
+                                                        <% if (item.modificadores && item.modificadores.length > 0) { %>
+                                                            <div class="mt-1">
+                                                                <% item.modificadores.forEach(mod => { %>
+                                                                    <span class="badge <%= mod.tipo === 'exclusion' ? 'bg-danger' : 'bg-primary' %> bg-opacity-10 text-<%= mod.tipo === 'exclusion' ? 'danger' : 'primary' %> me-1" style="font-size: 0.75rem;">
+                                                                        <%= mod.tipo === 'exclusion' ? 'Sin:' : 'Extra:' %> <%= mod.nombre %>
+                                                                    </span>
+                                                                <% }) %>
+                                                            </div>
+                                                        <% } %>
+                                                    </td>
                                                     <td class="text-center fw-bold text-secondary font-monospace"><%= item.cantidad %></td>
                                                     <td class="text-center">
                                                         <% if (item.estado_item === 'en_espera') { %>

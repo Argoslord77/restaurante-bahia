@@ -106,7 +106,9 @@ router.get('/logout', async (req, res, next) => {
     // 3. Destruir la sesión de Passport de manera normal
     req.logout((err) => {
         if (err) return next(err);
-        req.flash('success_msg', 'Sesión cerrada correctamente.');
+        console.log(req.flash('error_msg'));
+        let flash_msg = (typeof req.flash('error_msg') !== 'undefined') ? req.flash('error_msg') : req.flash('success_msg');
+        req.flash('success_msg', flash_msg.length > 0 ? flash_msg : 'Sesión cerrada correctamente.');
         res.redirect('/login');
     });
 });

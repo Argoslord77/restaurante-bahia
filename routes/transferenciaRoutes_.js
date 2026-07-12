@@ -18,8 +18,6 @@ router.post('/api/transferencias',
     asegurarTurnoActivo,
     ensureAuthenticated,
     checkRole(['superadministrador', 'administrador', 'almacenero']),
-    transferenciaValidationRules.create,
-    handleValidationErrors,
     transferenciaController.createSolicitud
 );
 

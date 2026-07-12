@@ -398,25 +398,33 @@ const transferenciaValidationRules = {
         
         body('almacen_destino_id')
             .notEmpty().withMessage('El almacén de destino es obligatorio')
-            .isInt().withMessage('El ID del almacén de destino debe ser un número entero'),
+            .isInt().withMessage('El ID del almacén de destino debe ser un número entero')
+            .custom((value, { req }) => {
+                if (parseInt(value) === parseInt(req.body.almacen_origen_id)) {
+                    throw new Error('El almacén de destino no puede ser el mismo que el de origen');
+                }
+                return true;
+            }),
         
-        body('producto_id')
-            .notEmpty().withMessage('El producto es obligatorio')
+        body('detalles')
+            .isArray({ min: 1 }).withMessage('Debe agregar al menos un producto a la transferencia'),
+        
+        body('detalles.*.producto_id')
+            .notEmpty().withMessage('El producto es obligatorio en cada línea')
             .isInt().withMessage('El ID del producto debe ser un número entero'),
         
-        body('cantidad')
-            .notEmpty().withMessage('La cantidad es obligatoria')
+        body('detalles.*.cantidad')
+            .notEmpty().withMessage('La cantidad es obligatoria en cada línea')
             .isFloat({ min: 0.001 }).withMessage('La cantidad debe ser mayor a 0'),
         
-        body('motivo')
-            .optional()
-            .trim()
-            .isLength({ max: 255 }).withMessage('El motivo no puede exceder 255 caracteres'),
+        body('detalles.*.unidad_medida_id')
+            .notEmpty().withMessage('La unidad de medida es obligatoria en cada línea')
+            .isInt().withMessage('El ID de la unidad de medida debe ser un número entero'),
         
-        body('notas')
+        body('observaciones')
             .optional()
             .trim()
-            .isLength({ max: 1000 }).withMessage('Las notas no pueden exceder 1000 caracteres')
+            .isLength({ max: 1000 }).withMessage('Las observaciones no pueden exceder 1000 caracteres')
     ]
 };
 

@@ -1,11 +1,17 @@
 // dashboardDependienteController.js
 const db = require('../config/db');
+const turnoService = require('../services/turnoService');
 
 class DashboardDependienteController {
     /**
      * Renderiza el panel principal del dependiente con el estado de las mesas
      */
     async viewDependienteDashboard(req, res) {
+        const turnoActivo = await turnoService.obtenerTurnoActivo();
+        if (!turnoActivo && req.user?.rol === 'dependiente') {
+            req.flash('error_msg', 'No hay un turno de servicio abierto. Por favor, espere hasta que inicie el turno de trabajo.');
+            return res.redirect('/logout'); // Sacar al usuario del sistema
+        }
         try {
             // Consultar todas las mesas limpias de hashes junto con el ID del pedido activo si tienen uno
             // Se selecciona tanto 'numero' como un alias de 'nombre' para garantizar compatibilidad con la plantilla

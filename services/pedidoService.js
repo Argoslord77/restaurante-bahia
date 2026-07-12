@@ -1,8 +1,61 @@
 const db = require('../config/db');
 const RecetaService = require('./recetaService');
 const logger = require('../config/logger');
+const orderEngine = require('./orderEngineService');
+const PedidoModel = require('../models/pedidoModel');
+const STATUS = require('../config/orderStatus');
 
-const pedidoService = {
+const pedidoService = { 
+
+    // Agrega producto a un pedido
+    agregarProducto: async (
+        idPedido,
+        idPlatillo,
+        cantidad = 1,
+        notas = null
+    ) => {
+
+        const pedido = await PedidoModel.getById(idPedido);
+
+        if (!pedido)
+            throw new Error('Pedido inexistente');
+
+        if (!orderEngine.canEditOrder(pedido.estado_pedido)) {
+            throw new Error('El pedido no admite modificaciones.');
+        }
+
+        await db.query(
+            `INSERT INTO detalles_pedido
+            (id_pedido, id_platillo, cantidad, notas_especiales, estado_item)
+            VALUES (?, ?, ?, ?, ?)`,
+            [idPedido, idPlatillo, cantidad, notas, STATUS.ITEM.EN_ESPERA]
+        );
+
+        return true;
+    },
+
+    // Cambia el estado de un pedido
+    cambiarEstadoPedido: async (idPedido, nuevoEstado) => {
+        const pedido = await PedidoModel.getById(idPedido);
+        if (!pedido) {
+            throw new Error('Pedido no encontrado.');
+        }
+
+        orderEngine.validateOrderStatus(pedido.estado_pedido, nuevoEstado);
+        return await PedidoModel.updateEstadoPedido(idPedido, nuevoEstado);
+    },
+
+    // Cambia el estado de un item
+    cambiarEstadoItem: async (idDetalle, nuevoEstado) => {
+        const item = await PedidoModel.getDetalleById(idDetalle);
+        if (!item) {
+            throw new Error('Detalle no encontrado.');
+        }
+
+        orderEngine.validateItemStatus(item.estado_item, nuevoEstado);
+        return await PedidoModel.updateEstadoItem(idDetalle, nuevoEstado);
+    },
+
     // Obtener pedidos en consumo
     obtenerTodosActivos: async () => {
         const [rows] = await db.query(
@@ -35,6 +88,18 @@ const pedidoService = {
              WHERE dp.id_pedido = ?`, [id]
         );
 
+        // Agregamos la lógica para traer los modificadores por cada detalle
+        for (let item of detalles) {
+            const [mods] = await db.query(
+                `SELECT mm.nombre, mm.tipo 
+                 FROM detalles_pedido_modificadores dpm
+                 INNER JOIN modificadores_menu mm ON dpm.modificador_id = mm.id
+                 WHERE dpm.detalle_pedido_id = ?`,
+                [item.id_detalle]
+            );
+            item.modificadores = mods; // Esto inyecta el array en el objeto para la vista
+        }
+
         const pedido = pedidoRow[0];
         pedido.detalles = detalles;
         return pedido;
@@ -43,20 +108,19 @@ const pedidoService = {
     // Iniciar el servicio e indicar que la mesa está ocupada
     crearNuevoPedido: async (id_mesa) => {
         const connection = await db.getConnection();
+        const [mesa] = await connection.query(`SELECT estado FROM mesas WHERE id=?`, [id_mesa]);
+
+        if (mesa.length === 0) throw new Error('Mesa inexistente');
+        if (mesa[0].estado !== STATUS.MESA.LIBRE) throw new Error('La mesa ya posee un pedido activo.');
+
         try {
             await connection.beginTransaction();
-            
             const [result] = await connection.query(
                 "INSERT INTO pedidos (id_mesa, fecha_apertura) VALUES (?, NOW())", [id_mesa]
             );
-            const nuevoId = result.insertId;
-
-            await connection.query(
-                "UPDATE mesas SET estado = 'en_consumo' WHERE id = ?", [id_mesa]
-            );
-
+            await connection.query("UPDATE mesas SET estado = 'en_consumo' WHERE id = ?", [id_mesa]);
             await connection.commit();
-            return nuevoId;
+            return result.insertId;
         } catch (error) {
             await connection.rollback();
             throw error;
@@ -65,28 +129,19 @@ const pedidoService = {
         }
     },
 
-    // Procesa el bloque completo de la orden de forma atómica
+    // Procesa el bloque completo de la orden usando el modelo actualizado para modificadores
     adicionarOrdenLote: async (id_pedido, items, externalConn = null) => {
-        const connection = externalConn || await db.getConnection();
-        try {
-            await connection.beginTransaction();
-
-            for (const item of items) {
-                await connection.query(
-                    `INSERT INTO detalles_pedido (id_pedido, id_platillo, cantidad, estado_item) 
-                     VALUES (?, ?, ?, 'en_espera')`,
-                    [id_pedido, item.id_platillo, item.cantidad]
-                );
-            }
-
-            await connection.commit();
-            return true;
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
+        // items espera una estructura: { id_platillo, cantidad, modificadores: [] }
+        for (const item of items) {
+            await PedidoModel.addDetailWithModifiers(
+                id_pedido,
+                item.id_platillo,
+                item.cantidad,
+                item.modificadores || [],
+                externalConn || db
+            );
         }
+        return true;
     },
 
     // Cierre estándar de cuenta con descuento de inventario
@@ -98,35 +153,26 @@ const pedidoService = {
             const [pedido] = await connection.query("SELECT id_mesa FROM pedidos WHERE id = ?", [id_pedido]);
             if (pedido.length === 0) throw new Error('Pedido no encontrado');
 
-            // Obtener detalles del pedido para descontar inventario
             const [detalles] = await connection.query(
                 `SELECT id_platillo, cantidad FROM detalles_pedido 
                  WHERE id_pedido = ? AND estado_item != 'cancelado'`, [id_pedido]
             );
 
-            // Descontar stock de ingredientes usando el sistema de recetas
             if (detalles.length > 0) {
                 try {
-                    // Usar almacén principal (id=1) - configurable según necesidades
-                    const almacenId = 1;
-                    await RecetaService.descontarStockPedido(detalles, almacenId);
+                    await RecetaService.descontarStockPedido(detalles, 1);
                     logger.info(`Stock descontado para pedido ${id_pedido}`);
                 } catch (error) {
                     logger.error(`Error al descontar stock para pedido ${id_pedido}:`, error);
-                    // No fallar el cierre por error en inventario, pero loggear
                 }
             }
 
             await connection.query(
-                `UPDATE pedidos 
-                 SET fecha_cierre = NOW(), id_usuario_cajero = ? 
-                 WHERE id = ?`, [id_usuario_cajero, id_pedido]
+                `UPDATE pedidos SET fecha_cierre = NOW(), id_usuario_cajero = ? WHERE id = ?`, 
+                [id_usuario_cajero, id_pedido]
             );
 
-            await connection.query(
-                "UPDATE mesas SET estado = 'desocupando' WHERE id = ?", [pedido[0].id_mesa]
-            );
-
+            await connection.query("UPDATE mesas SET estado = 'desocupando' WHERE id = ?", [pedido[0].id_mesa]);
             await connection.commit();
             return true;
         } catch (error) {
@@ -154,49 +200,23 @@ const pedidoService = {
                 
                 if (detalleRows.length > 0) {
                     const actualItem = detalleRows[0];
-
                     if (item.accion === 'reingresar') {
-                        await connection.query(
-                            `UPDATE detalles_pedido 
-                             SET estado_item = 'cancelado', afecta_inventario = 0 
-                             WHERE id = ?`, [item.id_detalle]
-                        );
-                        
-                        await connection.query(
-                            `UPDATE inventario SET stock = stock + ? WHERE id_platillo = ?`,
-                            [actualItem.cantidad, actualItem.id_platillo]
-                        );
+                        await connection.query(`UPDATE detalles_pedido SET estado_item = 'cancelado', afecta_inventario = 0 WHERE id = ?`, [item.id_detalle]);
+                        await connection.query(`UPDATE inventario SET stock = stock + ? WHERE id_platillo = ?`, [actualItem.cantidad, actualItem.id_platillo]);
                     } else {
-                        await connection.query(
-                            `UPDATE detalles_pedido 
-                             SET estado_item = 'cancelado', afecta_inventario = 1 
-                             WHERE id = ?`, [item.id_detalle]
-                        );
-                        
-                        await connection.query(
-                            `INSERT INTO mermas_auditoria (id_pedido, id_platillo, cantidad, motivo, id_usuario, fecha_registro) 
-                             VALUES (?, ?, ?, ?, ?, NOW())`,
+                        await connection.query(`UPDATE detalles_pedido SET estado_item = 'cancelado', afecta_inventario = 1 WHERE id = ?`, [item.id_detalle]);
+                        await connection.query(`INSERT INTO mermas_auditoria (id_pedido, id_platillo, cantidad, motivo, id_usuario, fecha_registro) VALUES (?, ?, ?, ?, ?, NOW())`,
                             [id_pedido, actualItem.id_platillo, actualItem.cantidad, motivo, id_usuario]
                         );
                     }
                 }
             }
 
-            const [restantes] = await connection.query(
-                `SELECT COUNT(*) as activos FROM detalles_pedido 
-                 WHERE id_pedido = ? AND estado_item != 'cancelado'`, [id_pedido]
-            );
+            const [restantes] = await connection.query(`SELECT COUNT(*) as activos FROM detalles_pedido WHERE id_pedido = ? AND estado_item != 'cancelado'`, [id_pedido]);
 
-            // Si todos los ítems de la mesa fueron cancelados, cerramos el pedido por completo
             if (restantes[0].activos === 0) {
-                await connection.query(
-                    `UPDATE pedidos SET fecha_cierre = NOW(), id_usuario_cajero = ? WHERE id = ?`,
-                    [id_usuario, id_pedido]
-                );
-
-                await connection.query(
-                    "UPDATE mesas SET estado = 'desocupando' WHERE id = ?", [id_mesa]
-                );
+                await connection.query(`UPDATE pedidos SET fecha_cierre = NOW(), id_usuario_cajero = ? WHERE id = ?`, [id_usuario, id_pedido]);
+                await connection.query("UPDATE mesas SET estado = 'desocupando' WHERE id = ?", [id_mesa]);
             }
 
             await connection.commit();
