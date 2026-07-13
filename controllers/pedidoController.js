@@ -1,7 +1,7 @@
 const pedidoService = require('../services/pedidoService');
 const inventarioService = require('../services/inventarioService');
 const db = require('../config/db');
-const Pedido = require('../models/PedidoModel'); // Importación necesaria para usar addDetailWithModifiers
+const Pedido = require('../models/pedidoModel'); // Importación necesaria para usar addDetailWithModifiers
 
 const pedidoController = {
     // Listar todos los pedidos activos en consumo
@@ -47,11 +47,20 @@ const pedidoController = {
     crearPedido: async (req, res) => {
         try {
             const { id_mesa } = req.body;
-            const nuevoId = await pedidoService.crearNuevoPedido(id_mesa);
+            const id_usuario_mesero = req.user?.id;
+            const turno_servicio_id = req.turnoServicioId;
+
+            if (!id_usuario_mesero) {
+                req.flash('error_msg', 'Sesión inválida o expirada. Inicie sesión de nuevo para abrir una mesa.');
+                return res.redirect('/login');
+            }
+
+            const nuevoId = await pedidoService.crearNuevoPedido(id_mesa, id_usuario_mesero, turno_servicio_id);
             res.redirect(`/admin/pedido/${nuevoId}`);
         } catch (error) {
             console.error('Error al crear pedido:', error);
-            res.status(500).send('Error al iniciar el servicio');
+            req.flash('error_msg', error.message || 'Error al iniciar el servicio.');
+            res.redirect('/dependiente/dashboard');
         }
     },
 

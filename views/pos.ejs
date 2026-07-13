@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title><%= pageTitle %></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
     
     <style>
         html, body {
@@ -14,97 +16,104 @@
             overflow: hidden;
             position: relative;
         }
-        .pos-container { 
-            height: calc(100vh - 65px); 
-            overflow: hidden; 
+        .pos-container {
+            height: calc(100vh - 65px);
+            overflow: hidden;
         }
-        .menu-section { 
-            height: 100%; 
-            overflow-y: auto; 
+        .menu-section {
+            height: 100%;
+            overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
-        .cart-section { 
-            height: 100%; 
-            display: flex; 
-            flex-direction: column; 
-            background: #f8f9fa; 
-            border-left: 1px solid #dee2e6; 
+        .cart-section {
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            background: #f8f9fa;
+            border-left: 1px solid #dee2e6;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
         }
-        .cart-items { 
-            flex-grow: 1; 
-            overflow-y: auto; 
-            -webkit-overflow-scrolling: touch;
+        .cart-section.active {
+            display: flex !important;
         }
-        .category-btn { 
-            white-space: nowrap; 
-            transition: all 0.2s; 
+        .cart-items {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        .category-btn {
+            white-space: nowrap;
+            transition: all 0.2s;
             font-size: 0.9rem;
             padding: 0.4rem 1.2rem;
         }
-        .dish-card { 
-            cursor: pointer; 
-            transition: transform 0.15s, box-shadow 0.15s; 
-            border: none; 
-            user-select: none;
-            -webkit-user-select: none;
+        .dish-card {
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            border: none;
         }
         .dish-card:active { transform: scale(0.98); }
         .dish-img-wrapper { height: 110px; position: relative; background: #e9ecef; }
         .dish-img-wrapper img { width: 100%; height: 100%; object-fit: cover; }
-        .scroll-clean::-webkit-scrollbar { display: none; }
-        .scroll-clean { -ms-overflow-style: none; scrollbar-width: none; }
         .mobile-cart-badge {
-            position: fixed; bottom: 20px; right: 20px; z-index: 1050;
-            padding: 15px 20px; border-radius: 50px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: none; font-weight: bold;
+            position: fixed; 
+            bottom: 20px; 
+            right: 20px; 
+            z-index: 1050;
+            padding: 15px 20px; 
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+            display: none; 
+            font-weight: bold;
         }
         @media (max-width: 767.98px) {
             .navbar { height: 60px !important; }
-            .pos-container { height: calc(100vh - 60px); position: relative; }
-            .menu-section { display: block; width: 100%; padding-bottom: 80px !important; }
-            .cart-section { display: none; position: absolute; top: 0; left: 0; width: 100%; z-index: 1040; background: #ffffff; }
-            .cart-section.active { display: flex !important; }
+            .pos-container { height: calc(100vh - 60px); }
+            .menu-section { padding-bottom: 80px !important; }
             .mobile-cart-badge { display: flex; align-items: center; gap: 10px; }
-            .dish-img-wrapper { height: 95px; }
         }
     </style>
 </head>
 <body class="bg-light">
-
     <input type="hidden" id="pos_id_pedido" value="<%= id_pedido %>">
 
+    <!-- Navbar con flex-nowrap y text-truncate para evitar que el texto corte el botón en móviles -->
     <nav class="navbar navbar-dark bg-dark px-3 px-md-4 sticky-top shadow-sm" style="height: 70px;">
-        <div class="d-flex align-items-center gap-2 gap-md-3">
-            <a href="/admin/dashboard" class="btn btn-outline-light btn-sm" title="Volver al Panel">
+        <div class="d-flex align-items-center gap-2 w-100 flex-nowrap">
+            <a href="/admin/dashboard" class="btn btn-outline-light btn-sm flex-shrink-0">
                 <i class="fa-solid fa-arrow-left"></i>
             </a>
-            <span class="navbar-brand fw-bold mb-0 fs-6 fs-md-5">
-                <i class="fa-solid fa-receipt me-2 text-warning"></i>Comanda #<%= id_pedido %> - Bahía
+            <span class="navbar-brand fw-bold mb-0 fs-6 fs-md-5 flex-grow-1 text-center text-truncate px-1">
+                <i class="fa-solid fa-receipt me-1 text-warning"></i>Comanda #<%= id_pedido %>
             </span>
+            <button class="btn btn-warning btn-sm fw-bold d-md-none flex-shrink-0 btn-back-to-menu" id="btn-back-menu" style="display: none;">
+                <i class="fa-solid fa-utensils"></i> Menú
+            </button>
         </div>
-        <button class="btn btn-warning btn-sm fw-bold d-md-none" id="btn-back-menu" style="display: none;" onclick="toggleMobileViews('menu')">
-            <i class="fa-solid fa-utensils me-1"></i> Ver Menú
-        </button>
     </nav>
 
     <div class="container-fluid pos-container">
         <div class="row h-100">
-            
+            <!-- Menú -->
             <div class="col-md-7 col-lg-8 py-3 menu-section" id="section-menu">
-                <div class="d-flex gap-2 overflow-x-auto pb-3 mb-2 scroll-clean px-1">
-                    <button class="btn btn-dark category-btn rounded-pill shadow-sm" onclick="filterCategory('todos', this)">Todos</button>
-                    <button class="btn btn-outline-dark category-btn rounded-pill shadow-sm text-capitalize" onclick="filterCategory('entradas', this)">Entradas</button>
-                    <button class="btn btn-outline-dark category-btn rounded-pill shadow-sm text-capitalize" onclick="filterCategory('platos fuertes', this)">Platos Fuertes</button>
-                    <button class="btn btn-outline-dark category-btn rounded-pill shadow-sm text-capitalize" onclick="filterCategory('postres', this)">Postres</button>
-                    <button class="btn btn-outline-dark category-btn rounded-pill shadow-sm text-capitalize" onclick="filterCategory('bebidas', this)">Bebidas</button>
+                <div class="d-flex gap-2 overflow-x-auto pb-3 mb-2 scroll-clean px-1" id="category-filters">
+                    <button class="btn btn-dark category-btn rounded-pill shadow-sm" data-category="todos">Todos</button>
+                    <button class="btn btn-outline-dark category-btn rounded-pill shadow-sm" data-category="entradas">Entradas</button>
+                    <button class="btn btn-outline-dark category-btn rounded-pill shadow-sm" data-category="platos fuertes">Platos Fuertes</button>
+                    <button class="btn btn-outline-dark category-btn rounded-pill shadow-sm" data-category="postres">Postres</button>
+                    <button class="btn btn-outline-dark category-btn rounded-pill shadow-sm" data-category="bebidas">Bebidas</button>
                 </div>
 
                 <div class="row g-2 g-md-3 px-1" id="dishes-grid">
                     <% if (locals.platillos && platillos.length > 0) { %>
                         <% platillos.forEach(platillo => { %>
-                            <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" data-category="<%= platillo.categoria ? platillo.categoria.toLowerCase().trim() : '' %>">
-                                <div class="card dish-card h-100 shadow-sm overflow-hidden" 
-                                     onclick="addToCart('<%= platillo.id %>', '<%= platillo.nombre %>', '<%= platillo.precio %>')">
+                            <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
+                                 data-id="<%= platillo.id %>"
+                                 data-category="<%= (platillo.categoria || '').toLowerCase().trim() %>">
+                                <div class="card dish-card h-100 shadow-sm overflow-hidden">
                                     <div class="dish-img-wrapper">
                                         <% if (platillo.foto && platillo.foto !== 'null') { %>
                                             <img src="/uploads/<%= platillo.foto %>" alt="<%= platillo.nombre %>">
@@ -113,12 +122,14 @@
                                                 <i class="fa-solid fa-bowl-food fa-xl text-black-50"></i>
                                             </div>
                                         <% } %>
-                                        <span class="position-absolute top-0 end-0 bg-dark text-white fw-bold px-2 py-0.5 m-1.5 rounded-pill style-price" style="font-size: 0.8rem;">
+                                        <span class="position-absolute top-0 end-0 bg-dark text-white fw-bold px-2 py-0.5 m-1.5 rounded-pill" style="font-size: 0.8rem;">
                                             $<%= parseFloat(platillo.precio).toFixed(2) %>
                                         </span>
                                     </div>
                                     <div class="card-body p-2 p-md-3">
-                                        <h6 class="card-title fw-bold text-dark mb-0 text-truncate" style="font-size: 0.9rem;"><%= platillo.nombre %></h6>
+                                        <h6 class="card-title fw-bold text-dark mb-0 text-truncate" style="font-size: 0.9rem;">
+                                            <%= platillo.nombre %>
+                                        </h6>
                                     </div>
                                 </div>
                             </div>
@@ -127,13 +138,18 @@
                 </div>
             </div>
 
+            <!-- Carrito -->
             <div class="col-md-5 col-lg-4 p-0 cart-section" id="section-cart">
-                <div class="p-3 bg-secondary text-white fw-bold text-center shadow-sm">
-                    <i class="fa-solid fa-table me-2"></i> Mesa Vinculada Operativa
+                <!-- Cabecera de carrito actualizada con botón de cierre (X) para móvil -->
+                <div class="p-3 bg-secondary text-white fw-bold d-flex justify-content-between align-items-center shadow-sm">
+                    <span><i class="fa-solid fa-table me-2"></i> Mesa Vinculada</span>
+                    <button class="btn btn-light btn-sm fw-bold d-md-none btn-back-to-menu text-dark py-0 px-2">
+                        <i class="fa-solid fa-xmark fs-6"></i>
+                    </button>
                 </div>
-
+                
                 <div class="cart-items p-2 p-md-3" id="cart-wrapper"></div>
-
+                
                 <div class="p-3 bg-white border-top mt-auto shadow-lg">
                     <div class="d-flex justify-content-between mb-1">
                         <span class="text-secondary small fw-semibold">Subtotal</span>
@@ -143,56 +159,113 @@
                         <span class="text-dark fw-bold">Total (Con Impuestos)</span>
                         <span class="text-success fw-bold fs-5" id="summary-total">$0.00</span>
                     </div>
+                    
                     <div class="row g-2">
+                        <!-- Nuevo botón inferior para volver al menú en móvil -->
+                        <div class="col-12 mb-1 d-md-none">
+                            <button class="btn btn-outline-dark w-100 py-2 fw-bold btn-sm btn-back-to-menu">
+                                <i class="fa-solid fa-utensils me-1"></i> Seguir Agregando Productos
+                            </button>
+                        </div>
                         <div class="col-4">
-                            <button class="btn btn-outline-danger w-100 py-2 fw-semibold btn-sm" onclick="clearCart()">Vaciar</button>
+                            <button class="btn btn-outline-danger w-100 py-2 fw-semibold btn-sm" id="btn-clear-cart">Vaciar</button>
                         </div>
                         <div class="col-8">
-                            <button class="btn btn-primary w-100 py-2 fw-bold text-uppercase shadow-sm btn-sm" onclick="saveOrderToServer()">
+                            <button class="btn btn-primary w-100 py-2 fw-bold text-uppercase shadow-sm btn-sm" id="btn-save-order">
                                 <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Comanda
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
 
-    <button class="btn btn-primary mobile-cart-badge btn-lg" id="mobile-cart-trigger" onclick="toggleMobileViews('cart')">
+    <button class="btn btn-primary mobile-cart-badge btn-lg shadow" id="mobile-cart-trigger">
         <i class="fa-solid fa-receipt fs-5"></i>
         <span>Ver Comanda</span>
         <span class="badge bg-danger rounded-circle ms-1" id="mobile-badge-count">0</span>
     </button>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+
     <script>
         let carrito = [];
 
-        // Cargar datos preexistentes del servidor al inicializar el POS
         document.addEventListener("DOMContentLoaded", () => {
             const rawDetails = `<%- detallesActuales %>`;
-            if (rawDetails) {
-                const itemsServidor = JSON.parse(rawDetails);
-                itemsServidor.forEach(item => {
-                    carrito.push({
-                        id: item.id_platillo.toString(),
-                        nombre: item.nombre,
-                        precio: parseFloat(item.precio),
-                        cantidad: parseInt(item.cantidad, 10),
-                        notas: item.notas_especiales
+            if (rawDetails && rawDetails !== 'null') {
+                try {
+                    const items = JSON.parse(rawDetails);
+                    items.forEach(item => {
+                        carrito.push({
+                            id: item.id_platillo.toString(),
+                            nombre: item.nombre,
+                            precio: parseFloat(item.precio),
+                            cantidad: parseInt(item.cantidad),
+                            notas: item.notas_especiales || ''
+                        });
                     });
-                });
-                renderCart();
+                    renderCart();
+                } catch (e) {
+                    console.error("Error al cargar detalles:", e);
+                }
             }
+            setupEventListeners();
         });
+
+        function setupEventListeners() {
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('btn-dark'));
+                    btn.classList.add('btn-dark');
+                    filterCategory(btn.dataset.category);
+                });
+            });
+
+            document.getElementById('dishes-grid').addEventListener('click', async (e) => {
+                const card = e.target.closest('.dish-card');
+                if (card) {
+                    const itemEl = card.closest('.dish-item');
+                    const id = itemEl.dataset.id;
+                    const nombre = itemEl.querySelector('.card-title').textContent.trim();
+                    const precioText = itemEl.querySelector('.rounded-pill').textContent.replace('$', '').trim();
+                    await addToCart(id, nombre, precioText);
+                }
+            });
+
+            document.getElementById('cart-wrapper').addEventListener('click', (e) => {
+                if (e.target.closest('.update-qty')) {
+                    const btn = e.target.closest('.update-qty');
+                    const id = btn.dataset.id;
+                    const delta = parseInt(btn.dataset.delta);
+                    updateQuantity(id, delta);
+                }
+                if (e.target.closest('.remove-item')) {
+                    const btn = e.target.closest('.remove-item');
+                    const id = btn.dataset.id;
+                    removeItem(id);
+                }
+            });
+
+            document.getElementById('btn-clear-cart').addEventListener('click', clearCart);
+            document.getElementById('btn-save-order').addEventListener('click', saveOrderToServer);
+            document.getElementById('mobile-cart-trigger').addEventListener('click', () => toggleMobileViews('cart'));
+            
+            // Evento asignado a todos los botones que regresan al menú (arriba y abajo en el carrito, y en el navbar)
+            document.querySelectorAll('.btn-back-to-menu').forEach(btn => {
+                btn.addEventListener('click', () => toggleMobileViews('menu'));
+            });
+        }
 
         function toggleMobileViews(target) {
             const cartSection = document.getElementById('section-cart');
             const cartTrigger = document.getElementById('mobile-cart-trigger');
             const backMenuBtn = document.getElementById('btn-back-menu');
+
             if (target === 'cart') {
                 cartSection.classList.add('active');
                 cartTrigger.style.display = 'none';
@@ -204,47 +277,29 @@
             }
         }
 
-        function filterCategory(category, buttonElement) {
-            document.querySelectorAll('.category-btn').forEach(btn => { btn.classList.remove('btn-dark'); btn.classList.add('btn-outline-dark'); });
-            buttonElement.classList.replace('btn-outline-dark', 'btn-dark');
-            const targetCategory = category.toLowerCase().trim();
+        function filterCategory(category) {
             document.querySelectorAll('.dish-item').forEach(item => {
-                const itemCategory = item.getAttribute('data-category');
-                if (targetCategory === 'todos' || itemCategory === targetCategory) {
-                    item.style.setProperty('display', 'block', 'important');
-                } else {
-                    item.style.setProperty('display', 'none', 'important');
-                }
+                const itemCategory = item.dataset.category || '';
+                item.style.display = (category === 'todos' || itemCategory === category) ? 'block' : 'none';
             });
         }
 
         async function checkStockAvailability(id, nombre) {
             try {
                 const response = await fetch(`/api/pos/verify-stock?id_platillo=${id}&cantidad=1`);
-                const data = await response.json();
-                return data;
+                return await response.json();
             } catch (error) {
-                console.error('Error al verificar stock:', error);
-                return { success: true, suficiente: true }; // Permitir continuar si hay error
+                return { success: true, suficiente: true };
             }
         }
 
         async function addToCart(id, nombre, precio) {
-            // Verificar stock antes de agregar
             const stockCheck = await checkStockAvailability(id, nombre);
-            
             if (!stockCheck.suficiente) {
-                let mensaje = `No hay suficiente stock para ${nombre}`;
-                if (stockCheck.faltantes && stockCheck.faltantes.length > 0) {
-                    const faltantes = stockCheck.faltantes.map(f => `${f.producto_nombre}: falta ${f.cantidad_faltante}`).join(', ');
-                    mensaje += `<br><small class="text-muted">Faltan: ${faltantes}</small>`;
-                }
-                
                 Swal.fire({
                     icon: 'warning',
                     title: 'Stock Insuficiente',
-                    html: mensaje,
-                    confirmButtonColor: '#dc3545',
+                    html: `No hay suficiente stock para <strong>${nombre}</strong>`,
                     confirmButtonText: 'Entendido'
                 });
                 return;
@@ -254,7 +309,13 @@
             if (itemExistente) {
                 itemExistente.cantidad += 1;
             } else {
-                carrito.push({ id, nombre, precio: parseFloat(precio), cantidad: 1, notes: '' });
+                carrito.push({
+                    id: id.toString(),
+                    nombre,
+                    precio: parseFloat(precio),
+                    cantidad: 1,
+                    notas: ''
+                });
             }
             renderCart();
         }
@@ -263,9 +324,7 @@
             const index = carrito.findIndex(prod => prod.id === id);
             if (index !== -1) {
                 carrito[index].cantidad += delta;
-                if (carrito[index].getOrCreateOrderForMesa <= 0 || carrito[index].cantidad <= 0) {
-                    carrito.splice(index, 1);
-                }
+                if (carrito[index].cantidad <= 0) carrito.splice(index, 1);
                 renderCart();
             }
         }
@@ -278,7 +337,6 @@
         function clearCart() {
             carrito = [];
             renderCart();
-            if (window.innerWidth < 768) toggleMobileViews('menu');
         }
 
         function renderCart() {
@@ -293,8 +351,7 @@
                         <p class="fw-semibold mb-0">Comanda Vacía</p>
                     </div>
                 `;
-                document.getElementById('summary-subtotal').textContent = '$0.00';
-                document.getElementById('summary-total').textContent = '$0.00';
+                updateSummary(0);
                 return;
             }
 
@@ -313,18 +370,22 @@
                         <span class="text-muted extra-small">$${prod.precio.toFixed(2)}</span>
                     </div>
                     <div class="d-flex align-items-center gap-1">
-                        <div class="btn-group btn-group-sm border rounded bg-light" style="transform: scale(0.9);">
-                            <button class="btn btn-light border-0 px-2 text-secondary" onclick="updateQuantity('${prod.id}', -1)"><i class="fa-solid fa-minus"></i></button>
+                        <div class="btn-group btn-group-sm border rounded bg-light">
+                            <button class="btn btn-light border-0 px-2 text-secondary update-qty" data-id="${prod.id}" data-delta="-1"><i class="fa-solid fa-minus"></i></button>
                             <span class="px-2 fw-bold text-dark d-flex align-items-center bg-white" style="min-width:25px; justify-content:center;">${prod.cantidad}</span>
-                            <button class="btn btn-light border-0 px-2 text-secondary" onclick="updateQuantity('${prod.id}', 1)"><i class="fa-solid fa-plus"></i></button>
+                            <button class="btn btn-light border-0 px-2 text-secondary update-qty" data-id="${prod.id}" data-delta="1"><i class="fa-solid fa-plus"></i></button>
                         </div>
                         <span class="fw-bold text-dark ms-1" style="min-width: 55px; text-align: right; font-size: 0.85rem;">$${itemTotal.toFixed(2)}</span>
-                        <button class="btn btn-sm text-danger border-0 p-1 ms-1" onclick="removeItem('${prod.id}')"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="btn btn-sm text-danger border-0 p-1 ms-1 remove-item" data-id="${prod.id}"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                 `;
                 wrapper.appendChild(row);
             });
 
+            updateSummary(subtotal);
+        }
+
+        function updateSummary(subtotal) {
             const totalConTax = subtotal * 1.10;
             document.getElementById('summary-subtotal').textContent = `$${subtotal.toFixed(2)}`;
             document.getElementById('summary-total').textContent = `$${totalConTax.toFixed(2)}`;
@@ -332,45 +393,25 @@
 
         function saveOrderToServer() {
             const id_pedido = document.getElementById('pos_id_pedido').value;
-
             Swal.fire({
-                title: '¿Guardar y Sincronizar?',
-                text: "Se actualizará el estado de la comanda en la base de datos de la cocina.",
+                title: '¿Guardar Comanda?',
+                text: "Se sincronizará con la cocina.",
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonColor: '#0d6efd',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, guardar',
+                confirmButtonText: 'Guardar',
                 showLoaderOnConfirm: true,
                 preConfirm: () => {
                     return fetch('/api/pos/save', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ id_pedido, items: carrito })
-                    })
-                    .then(response => {
-                        if (!response.ok) return response.json().then(err => { throw new Error(err.message) });
-                        return response.json();
-                    })
-                    .catch(error => { Swal.showValidationMessage(`Error: ${error.message}`); });
+                    }).then(response => response.json());
                 }
-            }).then((result) => {
+            }).then(result => {
                 if (result.isConfirmed && result.value.success) {
-                    Swal.fire({ icon: 'success', title: 'Guardado', text: result.value.message });
-                } else if (result.isConfirmed && !result.value.success) {
-                    // Manejar error de stock insuficiente
-                    if (result.value.faltantes && result.value.faltantes.length > 0) {
-                        const faltantes = result.value.faltantes.map(f => `${f.producto_nombre}: falta ${f.cantidad_faltante}`).join(', ');
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Stock Insuficiente',
-                            html: `${result.value.message}<br><small class="text-muted">Faltan: ${faltantes}</small>`,
-                            confirmButtonColor: '#dc3545',
-                            confirmButtonText: 'Entendido'
-                        });
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: result.value.message });
-                    }
+                    Swal.fire('Guardado', result.value.message, 'success');
+                } else if (result.value && !result.value.success) {
+                    Swal.fire('Error', result.value.message, 'error');
                 }
             });
         }

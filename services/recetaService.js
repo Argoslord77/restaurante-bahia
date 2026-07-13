@@ -176,7 +176,7 @@ const RecetaService = {
     },
 
     // Descontar stock de ingredientes al cerrar pedido con CONTROL DE TRANSACCIONES
-    descontarStockPedido: async (items, almacenId) => {
+    descontarStockPedido: async (items, almacenId, idPedido = null, usuarioId = null) => {
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction(); 
@@ -216,11 +216,23 @@ const RecetaService = {
                             [cantidadADescontar, lote.id]
                         );
 
+                        // FIX: 'movimientos_inventario' NO tiene columnas 'tipo', 'motivo' ni 'fecha'.
+                        // Las columnas reales son 'tipo_movimiento', 'observaciones', 'fecha_movimiento'
+                        // (esta última con DEFAULT, no hace falta pasarla), y además 'producto_id',
+                        // 'almacen_id' y 'documento_numero' son NOT NULL sin valor por defecto.
                         await connection.query(
                             `INSERT INTO movimientos_inventario 
-                            (lote_id, tipo, cantidad, motivo, usuario_id, fecha) 
-                            VALUES (?, 'salida', ?, 'Venta / Production Receta', NULL, NOW())`,
-                            [lote.id, cantidadADescontar]
+                            (producto_id, almacen_id, lote_id, tipo_movimiento, referencia_tipo, referencia_id, cantidad, usuario_id, observaciones, documento_numero) 
+                            VALUES (?, ?, ?, 'CONSUMO_RECETA', 'PEDIDO', ?, ?, ?, 'Consumo por venta de receta', ?)`,
+                            [
+                                ingrediente.producto_id,
+                                almacenId,
+                                lote.id,
+                                idPedido,
+                                cantidadADescontar,
+                                usuarioId,
+                                idPedido ? `PED-${idPedido}` : `REC-${Date.now()}`
+                            ]
                         );
 
                         movimientos.push({

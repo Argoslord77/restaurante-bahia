@@ -18,11 +18,11 @@ class OrderModel {
     /**
      * Crea un pedido inicial vacío asignado a una mesa
      */
-    async createEmptyOrder(id_mesa, id_usuario_mesero) {
+    async createEmptyOrder(id_mesa, id_usuario_mesero, turno_servicio_id) {
         const [result] = await db.query(`
-            INSERT INTO pedidos (id_mesa, id_usuario_mesero, estado_pedido, estado_pago)
-            VALUES (?, ?, 'pendiente', 'no pagado')
-        `, [id_mesa, id_usuario_mesero]);
+            INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
+            VALUES (?, ?, ?, 'pendiente', 'no pagado')
+        `, [id_mesa, id_usuario_mesero, turno_servicio_id]);
         return result.insertId;
     }
 

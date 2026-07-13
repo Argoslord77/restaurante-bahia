@@ -3,6 +3,7 @@ const orderService = require('../services/orderService');
 const orderModel = require('../models/orderModel');
 const RecetaService = require('../services/recetaService');
 const logger = require('../config/logger');
+const turnoService = require('../services/turnoService');
 
 /**
  * Acceso directo al POS pasándole obligatoriamente el ID del pedido previamente inicializado
@@ -29,20 +30,30 @@ exports.viewPOS = async (req, res) => {
     }
 };
 
-/**
- * Endpoint del Dashboard (Variante 1): Crear o recuperar orden y redirigir
- */
 exports.initOrderManual = async (req, res) => {
     try {
         const { id_mesa } = req.body;
         const userId = req.user ? req.user.id : 1;
-        
-        const pedido = await orderService.getOrCreateOrderForMesa(id_mesa, userId);
-        return res.redirect(`/pos/${pedido.id}`);
+
+        // Obtener turno activo
+        const turnoActivo = await turnoService.obtenerTurnoActivo();
+
+        if (!turnoActivo) {
+            throw new Error('No hay un turno de servicio abierto. Abra un turno primero.');
+        }
+
+        const pedido = await orderService.getOrCreateOrderForMesa(id_mesa, userId, turnoActivo.id);
+
+        return res.json({ 
+            success: true, 
+            pedidoId: pedido.id 
+        });
     } catch (error) {
-        console.error('Error en initOrderManual:', error);
-        req.flash('error_msg', error.message);
-        return res.redirect('/dependiente/dashboard');
+        console.error(error);
+        return res.status(400).json({ 
+            success: false, 
+            message: error.message 
+        });
     }
 };
 

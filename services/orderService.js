@@ -5,15 +5,14 @@ class OrderService {
     /**
      * Procesa la solicitud manual de creación desde el Dashboard o la recupera si ya existe
      */
-    async getOrCreateOrderForMesa(id_mesa, userId) {
+    async getOrCreateOrderForMesa(id_mesa, userId, turno_servicio_id) {
         if (!id_mesa) throw new Error('ID de mesa inválido.');
+        if (!turno_servicio_id) throw new Error('Se requiere un turno activo.');
 
-        // Comprobar si la mesa ya tiene una comanda activa en curso
         let pedidoActivo = await orderModel.getActiveOrderByMesa(id_mesa);
         
         if (!pedidoActivo) {
-            // Si está libre, creamos el registro inicial del pedido para bloquearla
-            const id_pedido = await orderModel.createEmptyOrder(id_mesa, userId);
+            const id_pedido = await orderModel.createEmptyOrder(id_mesa, userId, turno_servicio_id);
             pedidoActivo = { id: id_pedido, id_mesa, estado_pedido: 'pendiente' };
         }
         

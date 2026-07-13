@@ -106,7 +106,14 @@ const pedidoService = {
     },
 
     // Iniciar el servicio e indicar que la mesa está ocupada
-    crearNuevoPedido: async (id_mesa) => {
+    crearNuevoPedido: async (id_mesa, id_usuario_mesero, turno_servicio_id) => {
+        if (!id_usuario_mesero) {
+            throw new Error('Se requiere un usuario mesero válido (sesión activa) para abrir la mesa.');
+        }
+        if (!turno_servicio_id) {
+            throw new Error('No hay un turno de servicio activo para asociar el pedido.');
+        }
+
         const connection = await db.getConnection();
         const [mesa] = await connection.query(`SELECT estado FROM mesas WHERE id=?`, [id_mesa]);
 
@@ -115,12 +122,14 @@ const pedidoService = {
 
         try {
             await connection.beginTransaction();
-            const [result] = await connection.query(
-                "INSERT INTO pedidos (id_mesa, fecha_apertura) VALUES (?, NOW())", [id_mesa]
-            );
-            await connection.query("UPDATE mesas SET estado = 'en_consumo' WHERE id = ?", [id_mesa]);
+            // FIX: se usa PedidoModel.create(), que ya insertaba correctamente
+            // (id_mesa, id_usuario_mesero, turno_servicio_id, creado_en) según el
+            // esquema real de la tabla `pedidos`. El INSERT manual anterior usaba
+            // una columna 'fecha_apertura' inexistente y omitía dos campos NOT NULL.
+            const nuevoId = await PedidoModel.create(id_mesa, id_usuario_mesero, turno_servicio_id, connection);
+            await PedidoModel.actualizarEstadoMesa(id_mesa, STATUS.MESA.OCUPADA, connection);
             await connection.commit();
-            return result.insertId;
+            return nuevoId;
         } catch (error) {
             await connection.rollback();
             throw error;
@@ -160,7 +169,7 @@ const pedidoService = {
 
             if (detalles.length > 0) {
                 try {
-                    await RecetaService.descontarStockPedido(detalles, 1);
+                    await RecetaService.descontarStockPedido(detalles, 1, id_pedido, id_usuario_cajero);
                     logger.info(`Stock descontado para pedido ${id_pedido}`);
                 } catch (error) {
                     logger.error(`Error al descontar stock para pedido ${id_pedido}:`, error);
@@ -172,7 +181,7 @@ const pedidoService = {
                 [id_usuario_cajero, id_pedido]
             );
 
-            await connection.query("UPDATE mesas SET estado = 'desocupando' WHERE id = ?", [pedido[0].id_mesa]);
+            await connection.query("UPDATE mesas SET estado = ? WHERE id = ?", [STATUS.MESA.DESOCUPANDOSE, pedido[0].id_mesa]);
             await connection.commit();
             return true;
         } catch (error) {
@@ -216,7 +225,7 @@ const pedidoService = {
 
             if (restantes[0].activos === 0) {
                 await connection.query(`UPDATE pedidos SET fecha_cierre = NOW(), id_usuario_cajero = ? WHERE id = ?`, [id_usuario, id_pedido]);
-                await connection.query("UPDATE mesas SET estado = 'desocupando' WHERE id = ?", [id_mesa]);
+                await connection.query("UPDATE mesas SET estado = ? WHERE id = ?", [STATUS.MESA.DESOCUPANDOSE, id_mesa]);
             }
 
             await connection.commit();
