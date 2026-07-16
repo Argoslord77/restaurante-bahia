@@ -27,13 +27,22 @@
                 modal: "modalProducto"
             }) %>
 
-            <div class="d-flex justify-content-start mb-4 bg-white p-3 rounded shadow-sm border">
-                <div class="col-12 col-sm-5 col-md-4 m-0">
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4 bg-white p-3 rounded shadow-sm border">
+                <!-- Buscador -->
+                <div class="col-12 col-sm-6 col-md-4 m-0">
                     <div class="input-group input-group-sm">
                         <span class="input-group-text bg-light border-end-0 text-muted">
                             <i class="fas fa-search"></i>
                         </span>
                         <input type="text" id="buscarProductoCatalogo" class="form-control bg-light border-start-0 ps-0" placeholder="Buscar por código o producto...">
+                    </div>
+                </div>
+                
+                <!-- Contador Píldora de alto contraste -->
+                <div class="ms-sm-auto">
+                    <div class="bg-light border rounded-pill px-3 py-1 d-flex align-items-center gap-2 shadow-sm">
+                        <span class="text-secondary small fw-semibold text-uppercase font-monospace">Inventario</span>
+                        <span id="contadorProductosCatalogo" class="badge bg-dark text-white rounded-pill px-2.5 py-1.5 fs-7"><%= productos.length %></span>
                     </div>
                 </div>
             </div>
@@ -47,6 +56,7 @@
                                 <th class="py-3">Nombre del Insumo</th>
                                 <th class="py-3">Categoría</th>
                                 <th class="py-3">U. Inventario</th>
+                                <th class="text-end py-3">Costo Promedio</th>
                                 <th class="text-end py-3">Stock Mín.</th>
                                 <th class="text-center py-3">Venta Directa</th>
                                 <th class="text-center py-3">Estado</th>
@@ -63,6 +73,7 @@
                                     </td>
                                     <td><span class="badge bg-light text-dark border"><%= p.categoria_nombre %></span></td>
                                     <td><%= p.unidad_nombre %></td>
+                                    <td class="text-end fw-bold text-muted">$<%= Number(p.costo_promedio || 0).toFixed(2) %></td>
                                     <td class="text-end fw-bold text-secondary"><%= parseFloat(p.stock_minimo).toFixed(2) %></td>
                                     <td class="text-center">
                                         <span class="badge <%= p.permitida_venta ? 'bg-info-subtle text-info border border-info' : 'bg-light text-muted border' %> px-2 rounded-pill">
@@ -87,7 +98,7 @@
                                 </tr>
                             <% }) %>
                             <tr id="filaNoCoincidenciasCatalogo" style="display: none;">
-                                <td colspan="8" class="text-center py-5 text-muted">
+                                <td colspan="9" class="text-center py-5 text-muted">
                                     <i class="fas fa-filter d-block mb-2 fs-3 text-secondary opacity-50"></i>
                                     No se encontraron productos que coincidan con la búsqueda.
                                 </td>
@@ -164,6 +175,15 @@
                             <input type="number" step="0.001" id="stock_minimo" class="form-control shadow-sm" value="0.000">
                         </div>
                         
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-secondary small">Costo Promedio</label>
+                            <div class="input-group input-group shadow-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.0001" min="0" id="costo_promedio" class="form-control" value="0.0000" placeholder="0.0000">
+                            </div>
+                            <small class="text-muted">Costo base para ficha técnica del menú.</small>
+                        </div>
+
                         <div class="col-md-4 offset-md-4 d-flex align-items-end pb-1">
                             <div class="form-check form-switch bg-light p-2 rounded border w-100 ps-5">
                                 <input class="form-check-input" type="checkbox" id="permitida_venta">
@@ -225,6 +245,12 @@
                     }
                 });
 
+                // Actualizar dinámicamente el contador en la píldora de alta visibilidad
+                const badgeContador = document.getElementById('contadorProductosCatalogo');
+                if (badgeContador) {
+                    badgeContador.textContent = coincidencias;
+                }
+
                 if (filaNoCoincidencias) {
                     filaNoCoincidencias.style.display = (filasProductos.length > 0 && coincidencias === 0) ? '' : 'none';
                 }
@@ -246,7 +272,7 @@
         document.getElementById('modalTitle').innerText = "Nuevo Producto / Insumo";
         document.getElementById('activo').checked = true;
         document.getElementById('permitida_venta').checked = false;
-        
+        document.getElementById('costo_promedio').value = '0.0000';
         const previewContainer = document.getElementById('fotoPreviewContainer');
         if (previewContainer) {
             previewContainer.classList.add('d-none');
@@ -283,6 +309,7 @@
         formData.append('tipo', document.getElementById('tipo').value);
         formData.append('unidad_inventario_id', document.getElementById('unidad_inventario_id').value);
         formData.append('stock_minimo', document.getElementById('stock_minimo').value);
+        formData.append('costo_promedio', document.getElementById('costo_promedio').value || 0);
         formData.append('activo', document.getElementById('activo').checked ? 1 : 0);
         formData.append('permitida_venta', document.getElementById('permitida_venta').checked ? 1 : 0);
         
@@ -403,6 +430,7 @@
             document.getElementById('tipo').value = data.tipo;
             document.getElementById('unidad_inventario_id').value = data.unidad_inventario_id;
             document.getElementById('stock_minimo').value = data.stock_minimo;
+            document.getElementById('costo_promedio').value = data.costo_promedio ?? 0
             document.getElementById('activo').checked = data.activo === 1;
             document.getElementById('permitida_venta').checked = data.permitida_venta === 1;
             

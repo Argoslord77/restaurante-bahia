@@ -30,6 +30,24 @@ exports.createUser = async (req, res) => {
     const foto = req.file ? req.file.filename : null;
 
     try {
+
+        // Validación manual adicional (por si el middleware no está capturando bien)
+        if (!nombre || nombre.trim() === '') {
+            return res.status(400).json({ success: false, message: 'El nombre es obligatorio' });
+        }
+        if (!apellidos || apellidos.trim() === '') {
+            return res.status(400).json({ success: false, message: 'Los apellidos son obligatorios' });
+        }
+        if (!usuario || usuario.trim() === '') {
+            return res.status(400).json({ success: false, message: 'El usuario es obligatorio' });
+        }
+        if (!password || password.length < 6) {
+            return res.status(400).json({ success: false, message: 'La contraseña debe tener al menos 6 caracteres' });
+        }
+        if (!rol) {
+            return res.status(400).json({ success: false, message: 'El rol es obligatorio' });
+        }
+
         const hashedPass = await bcrypt.hash(password, 10);
 
         await userService.createUser({

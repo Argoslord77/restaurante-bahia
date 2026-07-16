@@ -27,33 +27,27 @@ const userValidationRules = {
             .trim()
             .notEmpty().withMessage('El nombre es obligatorio')
             .isLength({ min: 2, max: 100 }).withMessage('El nombre debe tener entre 2 y 100 caracteres')
-            .matches(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/).withMessage('El nombre solo debe contener letras'),
-        
+            .matches(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/).withMessage('El nombre solo debe contener letras y espacios'),
+
         body('apellidos')
             .trim()
             .notEmpty().withMessage('Los apellidos son obligatorios')
             .isLength({ min: 2, max: 100 }).withMessage('Los apellidos deben tener entre 2 y 100 caracteres')
-            .matches(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/).withMessage('Los apellidos solo deben contener letras'),
-        
-        body('email')
-            .optional()
-            .trim()
-            .isEmail().withMessage('El email no es válido')
-            .normalizeEmail(),
-        
+            .matches(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/).withMessage('Los apellidos solo deben contener letras y espacios'),
+
         body('usuario')
             .trim()
             .notEmpty().withMessage('El usuario es obligatorio')
             .isLength({ min: 3, max: 50 }).withMessage('El usuario debe tener entre 3 y 50 caracteres')
             .matches(/^[a-zA-Z0-9_]+$/).withMessage('El usuario solo puede contener letras, números y guiones bajos'),
-        
+
         body('password')
             .notEmpty().withMessage('La contraseña es obligatoria')
             .isLength({ min: 6 }).withMessage('La contraseña debe tener al menos 6 caracteres'),
-        
+
         body('rol')
             .notEmpty().withMessage('El rol es obligatorio')
-            .isIn(['superadministrador', 'administrador', 'dependiente']).withMessage('Rol no válido')
+            .isIn(['superadministrador', 'administrador', 'dependiente', 'cocinero', 'luncher', 'bartender', 'almacenero', 'fregador', 'comercial']).withMessage('Rol no válido')
     ],
     
     update: [
@@ -74,12 +68,6 @@ const userValidationRules = {
             .isLength({ min: 2, max: 100 }).withMessage('Los apellidos deben tener entre 2 y 100 caracteres')
             .matches(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/).withMessage('Los apellidos solo deben contener letras'),
         
-        body('email')
-            .optional()
-            .trim()
-            .isEmail().withMessage('El email no es válido')
-            .normalizeEmail(),
-        
         body('usuario')
             .optional()
             .trim()
@@ -93,7 +81,7 @@ const userValidationRules = {
         
         body('rol')
             .optional()
-            .isIn(['superadministrador', 'administrador', 'dependiente']).withMessage('Rol no válido')
+            .isIn(['superadministrador', 'administrador', 'dependiente', 'cocinero', 'luncher', 'bartender', 'almacenero', 'fregador', 'comercial']).withMessage('Rol no válido')
     ],
     
     delete: [
