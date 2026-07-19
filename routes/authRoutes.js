@@ -21,6 +21,21 @@ router.get('/login', (req, res) => {
             case "dependiente":
                 return res.redirect('/dependiente/dashboard');
                 break;
+            case "bartender":
+                return res.redirect('/monitor/bar');
+                break;
+            case "jefe-cocina":
+                return res.redirect('/monitor/cocina');
+                break;
+            case "cocinero":
+                return res.redirect('/monitor/cocina');
+                break;
+            case "luncher":
+                return res.redirect('/monitor/cocina');
+                break;
+            case "porcionador":
+                return res.redirect('/monitor/cocina');
+                break;
             default:
                 return res.redirect('/logout');
                 break; 
@@ -32,10 +47,24 @@ router.get('/login', (req, res) => {
 
 // POST: Procesar Login
 router.post('/login', authLimiter, (req, res, next) => {
-    passport.authenticate('local', (err, user, info) => {
+    passport.authenticate('local', async (err, user, info) => { // Agregamos async aquí para manejar la consulta
         if (err) return next(err);
         if (!user) {
             req.flash('error_msg', info.message || 'Credenciales incorrectas');
+            return res.redirect('/login');
+        }
+        
+        try {
+            // Chequear en tiempo real que el usuario esté activo en la base de datos
+            const [rows] = await db.query('SELECT activo FROM usuarios WHERE id = ?', [user.id]);
+            
+            if (rows.length === 0 || rows[0].activo === 0 || rows[0].activo === false) {
+                req.flash('error_msg', 'Tu cuenta no está activa. Contacta al administrador.');
+                return res.redirect('/login'); // Redirige a login directamente ya que aún no inicia sesión
+            }
+        } catch (dbError) {
+            console.error('Error al verificar el estado activo del usuario:', dbError);
+            req.flash('error_msg', 'Ocurrió un error al verificar tu cuenta. Inténtalo de nuevo.');
             return res.redirect('/login');
         }
 
@@ -64,7 +93,6 @@ router.post('/login', authLimiter, (req, res, next) => {
 
                 try {
                     // 3. Guardar el token en la base de datos vinculándolo al usuario
-                    // Ajusta esta consulta a la sintaxis exacta de tu librería de DB (mysql2, pool, etc.)
                     await db.query(
                         'INSERT INTO usuarios_tokens (token, usuario_id, expira_en) VALUES (?, ?, ?)',
                         [token, user.id, fechaExpiracion]

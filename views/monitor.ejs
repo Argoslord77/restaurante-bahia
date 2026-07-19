@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= typeof pageTitle !== 'undefined' ? pageTitle : 'Monitor de Producción • Restaurante Bahía' %></title>
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans antialiased select-none">
+
+    <% 
+        // ----------------- INYECCIÓN DE DATOS DE PRUEBA -----------------
+        let currentArea = typeof area !== 'undefined' ? area : 'COCINA';
+        let currentAreaKey = typeof areaKey !== 'undefined' ? areaKey : 'cocina';
+        
+        let listaComandas = [];
+        if (typeof comandas !== 'undefined' && comandas.length > 0) {
+            listaComandas = comandas;
+        } else {
+            listaComandas = [
+                {
+                    id_pedido: 2041,
+                    numero_mesa: '4',
+                    items: [
+                        { detalle_id: 101, cantidad: 2, nombre_platillo: 'Hamburguesa Bahía Doble', notas_especiales: 'Sin cebolla, papas bien crujientes' },
+                        { detalle_id: 102, cantidad: 1, nombre_platillo: 'Tacos de Pescado Rebozado', notas_especiales: null }
+                    ]
+                },
+                {
+                    id_pedido: 2042,
+                    numero_mesa: '12',
+                    items: [
+                        { detalle_id: 103, cantidad: 1, nombre_platillo: 'Ceviche Clásico Peruano', notas_especiales: 'Picante medio' },
+                        { detalle_id: 104, cantidad: 3, nombre_platillo: 'Tacos de Pescado Rebozado', notas_especiales: 'Limon aparte' }
+                    ]
+                },
+                {
+                    id_pedido: 2043,
+                    numero_mesa: 'BARRA 2',
+                    items: [
+                        { detalle_id: 105, cantidad: 1, nombre_platillo: 'Hamburguesa Bahía Doble', notas_especiales: 'Término medio' },
+                        { detalle_id: 106, cantidad: 2, nombre_platillo: 'Ceviche Clásico Peruano', notas_especiales: 'Sin cilantro' }
+                    ]
+                }
+            ];
+        }
+
+        // --- LÓGICA DE CONSOLIDACIÓN ---
+        let consolidado = {};
+        listaComandas.forEach(comanda => {
+            comanda.items.forEach(item => {
+                let nombre = item.nombre_platillo;
+                consolidado[nombre] = (consolidado[nombre] || 0) + item.cantidad;
+            });
+        });
+    %>
+
+    <!-- Header de Alto Contraste -->
+    <header class="bg-[#111625] border-b border-slate-800/60 px-6 py-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-md sticky top-0 z-50">
+        
+        <div class="flex items-center space-x-4 w-full md:w-auto justify-center md:justify-start">
+            <div class="p-3 rounded-xl <%= currentAreaKey === 'cocina' ? 'bg-orange-600 shadow-orange-950/40' : 'bg-cyan-600 shadow-cyan-950/40' %> text-white flex-shrink-0 shadow-lg">
+                <i class="fa-solid <%= currentAreaKey === 'cocina' ? 'fa-fire-burner' : 'fa-martini-glass-citrus' %> text-xl"></i>
+            </div>
+            <div class="text-center md:text-left">
+                <h1 class="text-xl md:text-2xl font-black text-white tracking-wider uppercase leading-none">
+                    MONITOR DE <%= currentArea %>
+                </h1>
+                <p class="text-[11px] text-slate-400 font-extrabold uppercase mt-1.5 tracking-widest">Restaurante Bahía • Producción</p>
+            </div>
+        </div>
+        
+        <!-- Lado Derecho: Botonera con Seguridad CSP compatible -->
+        <div class="flex flex-wrap items-center justify-center md:justify-end gap-3 w-full md:w-auto">
+            
+            <!-- Botón / Indicador de Autorefresh -->
+            <button id="btn-sync" 
+                    style="border-radius: 9999px !important;"
+                    class="group h-11 min-w-[190px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] !rounded-full px-5 py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 active:scale-95">
+                <span id="sync-dot" class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="sync-text">Sincronizado</span>
+                <span id="sync-counter" class="text-xs text-amber-400 font-mono font-bold ml-1"></span>
+            </button>
+            
+            <!-- Botón Refrescar -->
+            <button id="btn-reload" 
+                    style="border-radius: 9999px !important;"
+                    class="group h-11 min-w-[170px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95">
+                <i class="fa-solid fa-arrows-rotate text-[#936932] group-hover:text-white transition-colors duration-200"></i> Refrescar
+            </button>
+            
+            <!-- Botón Salir -->
+            <a id="btn-exit" 
+               href="/admin/dashboard" 
+               style="border-radius: 9999px !important; color: #cbd5e1 !important;"
+               class="group h-11 min-w-[170px] bg-slate-800/40 border-2 border-[#936932] !text-slate-300 hover:!text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] !rounded-full px-4 py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95 text-decoration-none">
+                <i class="fa-solid fa-right-from-bracket text-[#936932] group-hover:!text-white transition-colors duration-200"></i> Salir
+            </a>
+        </div>
+    </header>
+
+    <!-- Barra Superior de Consolidado con estilo Claro Integrado -->
+    <section class="bg-[#0b101d] border-b border-slate-900 px-6 py-4 shadow-inner">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="flex h-2 w-2 relative">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                </span>
+                <span class="text-[11px] font-black tracking-widest text-cyan-400 uppercase">PRODUCCIÓN ACTIVA:</span>
+            </div>
+            
+            <div class="flex flex-wrap gap-3 items-center overflow-x-auto py-1 custom-scrollbar">
+                <% if (Object.keys(consolidado).length === 0) { %>
+                    <span class="text-xs text-slate-500 italic">Sin tareas activas</span>
+                <% } else { %>
+                    <% Object.keys(consolidado).forEach(platillo => { %>
+                        <!-- Tarjetas de consolidación adaptadas al color claro premium de las comandas con contador azul intenso -->
+                        <div class="bg-[#f8fafc] border border-slate-200/80 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-md">
+                            <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-xs leading-none shadow-sm">
+                                <%= consolidado[platillo] %>x
+                            </span>
+                            <span class="text-xs font-extrabold text-[#0f172a] tracking-wide uppercase"><%= platillo %></span>
+                        </div>
+                    <% }) %>
+                <% } %>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contenido Principal (Responsivo Adaptativo: Lista vertical en móvil / Scroll horizontal en pantallas grandes) -->
+    <main class="flex-1 p-4 md:p-6 bg-[#080c16] overflow-x-hidden md:overflow-x-auto">
+        <% if (listaComandas.length === 0) { %>
+            <div class="h-full min-h-[55vh] flex flex-col items-center justify-center text-center p-6">
+                <div class="w-20 h-20 rounded-full bg-[#111625] flex items-center justify-center mb-4 border border-slate-800 shadow-md">
+                    <i class="fa-solid fa-circle-check text-3xl text-emerald-400"></i>
+                </div>
+                <h2 class="text-xl font-extrabold text-slate-200">¡Limpios!</h2>
+                <p class="text-slate-400 text-sm mt-1.5">No hay comandas pendientes de preparación.</p>
+            </div>
+        <% } else { %>
+            <!-- 
+               flex-col: En vertical para dispositivos móviles.
+               md:flex-row md:inline-flex md:space-x-6 md:space-y-0: Scroll horizontal para tablets/desktop.
+            -->
+            <div class="flex flex-col space-y-6 md:space-y-0 md:flex-row md:inline-flex md:space-x-6 h-full items-start align-top w-full md:w-auto">
+                <% listaComandas.forEach(comanda => { %>
+                    
+                    <!-- Tarjeta de Comanda (FONDO CLARO PREMIUM) -->
+                    <div class="w-full md:w-85 bg-[#f8fafc] rounded-3xl shadow-2xl flex flex-col max-h-[68vh] whitespace-normal flex-shrink-0 transition-all border border-slate-200/60 overflow-hidden transform hover:translate-y-[-4px] duration-200">
+                        
+                        <!-- Header de la Tarjeta Claro -->
+                        <div class="p-4 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center">
+                            <div>
+                                <span class="bg-[#1e293b] text-white text-[11px] px-3.5 py-1.5 rounded-xl font-black tracking-widest uppercase shadow-sm">
+                                    MESA <%= comanda.numero_mesa %>
+                                </span>
+                                <div class="text-[11px] text-slate-500 mt-2.5 font-bold tracking-wider">ORDEN #<%= comanda.id_pedido %></div>
+                            </div>
+                            <span class="text-[11px] text-[#b45309] font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-[#fef3c7] px-3 py-1.5 rounded-lg border border-[#fde68a]">
+                                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> En espera
+                            </span>
+                        </div>
+
+                        <!-- Lista de Platillos -->
+                        <div class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar bg-white">
+                            <% comanda.items.forEach(item => { %>
+                                <div class="bg-[#f8fafc] p-4 rounded-2xl border border-slate-200/70 flex flex-col justify-between hover:bg-[#f1f5f9] transition-all" id="item-row-<%= item.detalle_id %>">
+                                    <div class="flex items-start gap-3">
+                                        <!-- Cantidad con Contraste Intenso en Azul Cobalto -->
+                                        <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-sm leading-none flex-shrink-0 mt-0.5 shadow-sm">
+                                            <%= item.cantidad %>x
+                                        </span>
+                                        <div class="min-w-0 flex-1">
+                                            <h4 class="font-extrabold text-[#0f172a] text-[15px] leading-snug tracking-wide break-words uppercase">
+                                                <%= item.nombre_platillo %>
+                                            </h4>
+                                            <% if (item.notas_especiales) { %>
+                                                <!-- NOTAS VISUALMENTE MÁS GRANDES Y ADAPTADAS PARA LECTURA RÁPIDA -->
+                                                <div class="text-sm text-amber-900 bg-amber-50 px-3 py-3 rounded-xl mt-3.5 border border-amber-200 font-bold leading-relaxed shadow-sm">
+                                                    <i class="fa-solid fa-bell mr-1.5 text-amber-600 animate-bounce"></i> <%= item.notas_especiales %>
+                                                </div>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botón Terminar Redondeado (rounded-full) -->
+                                    <div class="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+                                        <button data-id="<%= item.detalle_id %>" 
+                                                class="btn-complete w-full bg-[#10b981] hover:bg-[#059669] text-white text-[11px] font-black py-3 px-6 rounded-full transition-all flex items-center justify-center gap-2 tracking-widest uppercase active:scale-[0.98] shadow-md shadow-emerald-200/50">
+                                            <i class="fa-solid fa-circle-check text-sm"></i> Terminar Platillo
+                                        </button>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </div>
+                <% }) %>
+            </div>
+        <% } %>
+    </main>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        let countdownInterval = null;
+        const INTERVALO_SEGUNDOS = 20;
+        let timeLeft = INTERVALO_SEGUNDOS;
+
+        let sincronizado = localStorage.getItem('sync_activa') !== 'false';
+
+        function iniciarAutoRefresh() {
+            detenerAutoRefresh();
+            timeLeft = INTERVALO_SEGUNDOS;
+            actualizarContadorUI();
+
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    detenerAutoRefresh();
+                    window.location.reload();
+                } else {
+                    actualizarContadorUI();
+                }
+            }, 1000);
+        }
+
+        function detenerAutoRefresh() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+
+        function actualizarContadorUI() {
+            const counterSpan = document.getElementById('sync-counter');
+            if (counterSpan) {
+                counterSpan.textContent = `(${timeLeft}s)`;
+            }
+        }
+
+        function actualizarUI() {
+            const dot = document.getElementById('sync-dot');
+            const text = document.getElementById('sync-text');
+            const counterSpan = document.getElementById('sync-counter');
+
+            if (sincronizado) {
+                if (dot) dot.className = "h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"; 
+                if (text) text.textContent = "Sincronizado";
+                iniciarAutoRefresh();
+            } else {
+                detenerAutoRefresh();
+                if (dot) dot.className = "h-2.5 w-2.5 rounded-full bg-orange-500"; 
+                if (text) text.textContent = "Sin Sincronizar";
+                if (counterSpan) {
+                    counterSpan.textContent = "";
+                }
+            }
+        }
+
+        function toggleSincronizacion() {
+            sincronizado = !sincronizado;
+            localStorage.setItem('sync_activa', sincronizado ? 'true' : 'false');
+            actualizarUI();
+        }
+
+        function marcarListo(id) {
+            Swal.fire({
+                title: '¿MARCAR COMO LISTO?',
+                text: 'El platillo desaparecerá de la cola de preparación.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#ef4444',
+                confirmButtonText: 'SÍ, MARCAR',
+                cancelButtonText: 'CANCELAR',
+                background: '#ffffff',
+                color: '#0f172a'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const row = document.getElementById(`item-row-${id}`);
+                    if (row) {
+                        row.style.opacity = '0';
+                        row.style.transform = 'scale(0.9)';
+                        row.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+                        setTimeout(() => {
+                            row.remove();
+                            Swal.fire({
+                                title: '¡DESPACHADO!',
+                                icon: 'success',
+                                timer: 1000,
+                                showConfirmButton: false,
+                                background: '#ffffff',
+                                color: '#0f172a'
+                            });
+                        }, 200);
+                    }
+                }
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const btnSync = document.getElementById('btn-sync');
+            if (btnSync) {
+                btnSync.addEventListener('click', toggleSincronizacion);
+            }
+
+            const btnReload = document.getElementById('btn-reload');
+            if (btnReload) {
+                btnReload.addEventListener('click', () => {
+                    window.location.reload();
+                });
+            }
+
+            const btnExit = document.getElementById('btn-exit');
+            if (btnExit) {
+                btnExit.addEventListener('mouseenter', () => {
+                    btnExit.style.setProperty('color', '#ffffff', 'important');
+                });
+                btnExit.addEventListener('mouseleave', () => {
+                    btnExit.style.setProperty('color', '#cbd5e1', 'important');
+                });
+            }
+
+            document.querySelectorAll('.btn-complete').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const detalleId = this.getAttribute('data-id');
+                    marcarListo(detalleId);
+                });
+            });
+
+            actualizarUI();
+        });
+    </script>
+
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</body>
+</html>

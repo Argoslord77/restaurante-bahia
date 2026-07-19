@@ -1,6 +1,7 @@
 // userController.js
 const userService = require('../services/userService');
 const dashboardService = require('../services/dashboardService');
+const db = require('../config/db'); // Conexión compartida de la base de datos
 
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
@@ -172,6 +173,99 @@ exports.deleteUser = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: error.message || 'No se pudo eliminar al miembro del personal de la base de datos.'
+        });
+    }
+};
+
+/**
+ * Cambia la contraseña del usuario autenticado.
+ * @param {Object} req - Objeto de solicitud de Express.
+ * @param {Object} res - Objeto de respuesta de Express.
+ * @param {Function} next - Función de middleware de Express.
+ */
+exports.cambiarPassword = async (req, res, next) => {
+    const { passwordActual, nuevaPassword } = req.body;
+    const usuarioId = req.user.id; 
+
+    // Inicializar el contador de intentos fallidos si no existe en la sesión
+    if (typeof req.session.intentosPassword === 'undefined') {
+        req.session.intentosPassword = 0;
+    }
+
+    try {
+        // 1. Obtener datos del usuario
+        const [rows] = await db.query('SELECT password FROM usuarios WHERE id = ?', [usuarioId]);
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Usuario no encontrado en el sistema.' 
+            });
+        }
+
+        const userDb = rows[0];
+
+        // 2. Verificar contraseña actual con bcryptjs
+        const coincide = await bcrypt.compare(passwordActual, userDb.password);
+
+        if (!coincide) {
+            req.session.intentosPassword += 1;
+            const intentosRestantes = 3 - req.session.intentosPassword;
+
+            // CONDICIÓN CRÍTICA: 3 Intentos fallidos consecutivos
+            if (req.session.intentosPassword >= 3) {
+                req.session.intentosPassword = 0; // Resetear contador de sesión
+
+                console.warn(`ALERTA DE SEGURIDAD: Intentos fallidos de contraseña excedidos para ID: ${usuarioId}. Desactivando cuenta.`);
+
+                // A) Desactivar la cuenta en la Base de Datos (activo = 0)
+                await db.query('UPDATE usuarios SET activo = 0 WHERE id = ?', [usuarioId]);
+
+                // B) Eliminar tokens "Recordarme" del usuario
+                const cookieToken = req.signedCookies.remember_me;
+                if (cookieToken) {
+                    await db.query('DELETE FROM usuarios_tokens WHERE token = ?', [cookieToken]);
+                    res.clearCookie('remember_me', { path: '/' });
+                }
+
+                // C) Desautenticar al usuario de la sesión de Passport y retornar código 403 (Forbidden)
+                return req.logout((err) => {
+                    if (err) return next(err);
+                    return res.status(403).json({
+                        success: false,
+                        usurpado: true, // Flag útil para que tu frontend sepa que debe redirigir a /login
+                        message: 'Tu cuenta ha sido bloqueada y la sesión cerrada por seguridad tras 3 intentos fallidos.'
+                    });
+                });
+            }
+
+            // Error de contraseña incorrecta normal (Retorna un 400)
+            return res.status(400).json({
+                success: false,
+                intentosRestantes,
+                message: `La contraseña actual es incorrecta. Te quedan ${intentosRestantes} ${intentosRestantes === 1 ? 'intento' : 'intentos'}.`
+            });
+        }
+
+        // 3. ÉXITO: Resetear contador
+        req.session.intentosPassword = 0;
+
+        // 4. Generar Hash de la nueva contraseña
+        const hashedNuevaPass = await bcrypt.hash(nuevaPassword, 10);
+
+        // 5. Actualizar base de datos
+        await db.query('UPDATE usuarios SET password = ? WHERE id = ?', [hashedNuevaPass, usuarioId]);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Tu contraseña ha sido actualizada con éxito.'
+        });
+
+    } catch (error) {
+        console.error('Error al cambiar contraseña:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Ocurrió un error interno en el servidor al procesar la solicitud.'
         });
     }
 };

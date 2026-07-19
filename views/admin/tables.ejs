@@ -58,19 +58,23 @@
                     <div class="card p-3 mb-4 shadow-sm bg-light border-0">
                         <div class="row g-3 align-items-center justify-content-between">
                             <div class="col-md-6 d-flex align-items-center gap-2">
-                                <label class="form-label m-0 small fw-bold text-secondary text-nowrap"><i class="fa-solid fa-user-tie text-primary"></i> Seleccionar Dependiente:</label>
-                                <select id="selectPintarDependiente" class="form-select form-select-sm border-2">
+                                <label class="form-label m-0 small fw-bold text-secondary text-nowrap">
+                                    <i class="fa-solid fa-user-tie text-primary"></i> Seleccionar Dependiente:
+                                </label>
+                                <select id="selectPintarDependiente" class="form-select form-select-sm border-2" style="font-family: sans-serif; font-size: 11px;">
                                     <option value="">-- Elegir de la Lista --</option>
                                     <% waiters.forEach(waiter => { %>
-                                        <option value="<%= waiter.id %>"><%= waiter.nombre %></option>
+                                        <option value="<%= waiter.id %>">
+                                            <%= waiter.nombre %> <%= (waiter.rol && waiter.rol.toLowerCase() === 'capitan') ? '(Capitán)' : '' %>
+                                        </option>
                                     <% }) %>
                                 </select>
                             </div>
                             <div class="col-md-6 text-md-end d-flex gap-2 justify-content-md-end">
-                                <button id="btnGuardarDistribucion" class="btn btn-sm btn-success px-4 shadow-sm" style="display:none;">
+                                <button id="btnGuardarDistribucion" class="btn btn-sm btn-success px-4 shadow-sm" style="display:none; font-family: sans-serif; font-size: 11px;">
                                     <i class="fa-solid fa-floppy-disk"></i> Guardar Distribución
                                 </button>
-                                <button id="btnCancelarDistribucion" class="btn btn-sm btn-outline-secondary px-3" style="display:none;">
+                                <button id="btnCancelarDistribucion" class="btn btn-sm btn-outline-secondary px-3" style="display:none; font-family: sans-serif; font-size: 11px;">
                                     Cancelar
                                 </button>
                             </div>

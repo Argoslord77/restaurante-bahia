@@ -57,6 +57,15 @@ router.delete('/usuarios/eliminar/:id',
     userController.deleteUser
 );
 
+// POST: Procesar el cambio de contraseña con su respectivo validador y control de intentos
+router.post(
+    '/usuario/cambiar-password', 
+    ensureAuthenticated, 
+    userValidationRules.cambiarPassword, 
+    handleValidationErrors, // Captura fallos de coincidencia o longitud de contraseña nueva
+    userController.cambiarPassword
+);
+
 /**
  * RUTA SECRETA EN MD5 (32 caracteres)
  * Generada a partir de un string para que actúe como "token" en la URL.

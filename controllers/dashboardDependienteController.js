@@ -8,35 +8,76 @@ const DashboardDependienteController = {
         try {
             const turnoActivo = await turnoService.obtenerTurnoActivo();
 
-            if (!turnoActivo && req.user?.rol === 'dependiente') {
+            //Si es depediente o capitan de salon
+            if (!turnoActivo && (req.user?.rol === 'dependiente' || req.user?.rol === 'capitan')) {
                 req.flash('error_msg', 'No hay un turno de servicio abierto. Contacta al administrador.');
                 return res.redirect('/logout');
             }
 
-            // Obtener mesas
-            const [mesas] = await db.query(`
-                SELECT 
-                    m.id,
-                    m.numero,
-                    CONCAT('Mesa ', m.numero) AS nombre,
-                    m.capacidad,
-                    m.estado AS estado_mesa,
-                    p.id AS id_pedido_activo,
-                    p.estado_pedido,
-                    p.estado_pago,
-                    COALESCE(p.total, 0) AS total,
-                    p.creado_en AS hora_apertura,
-                    u.usuario AS mesero_asignado,
-                    TIMESTAMPDIFF(MINUTE, p.creado_en, NOW()) AS minutos_abiertos
-                FROM mesas m
-                LEFT JOIN pedidos p 
-                    ON m.id = p.id_mesa 
-                    AND p.fecha_cierre IS NULL
-                LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
-                ORDER BY m.numero ASC
-            `);
+            const usuarioId = req.user?.id || 1;
+            const usuarioRol = req.user?.rol || 'dependiente';
+            const turnoId = turnoActivo ? turnoActivo.id : null;
 
-            const stats = await DashboardDependienteController.getDashboardStats();
+            // Obtener mesas asignadas al dependiente (o todas si es admin)
+            let queryMesas = '';
+            let paramsMesas = [];
+
+            if (usuarioRol === 'dependiente') {
+                queryMesas = `
+                    SELECT 
+                        m.id,
+                        m.numero,
+                        CONCAT('Mesa ', m.numero) AS nombre,
+                        m.capacidad,
+                        m.estado AS estado_mesa,
+                        p.id AS id_pedido_activo,
+                        p.estado_pedido,
+                        p.estado_pago,
+                        COALESCE(p.total, 0) AS total,
+                        p.creado_en AS hora_apertura,
+                        u.usuario AS mesero_asignado,
+                        TIMESTAMPDIFF(MINUTE, p.creado_en, NOW()) AS minutos_abiertos
+                    FROM mesas m
+                    INNER JOIN detalle_asignacion_mesa dam ON m.id = dam.mesa_id 
+                        AND dam.dependiente_id = ?
+                    LEFT JOIN pedidos p 
+                        ON m.id = p.id_mesa 
+                        AND p.estado_pago = 'no pagado'
+                        AND p.turno_servicio_id = ?
+                    LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+                    ORDER BY CAST(m.numero AS UNSIGNED) ASC
+                `;
+                paramsMesas = [usuarioId, turnoId];
+            } else {
+                // Admin o Supervisor ve todo el plano
+                queryMesas = `
+                    SELECT 
+                        m.id,
+                        m.numero,
+                        CONCAT('Mesa ', m.numero) AS nombre,
+                        m.capacidad,
+                        m.estado AS estado_mesa,
+                        p.id AS id_pedido_activo,
+                        p.estado_pedido,
+                        p.estado_pago,
+                        COALESCE(p.total, 0) AS total,
+                        p.creado_en AS hora_apertura,
+                        u.usuario AS mesero_asignado,
+                        TIMESTAMPDIFF(MINUTE, p.creado_en, NOW()) AS minutos_abiertos
+                    FROM mesas m
+                    LEFT JOIN pedidos p 
+                        ON m.id = p.id_mesa 
+                        AND p.estado_pago = 'no pagado'
+                    LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+                    ORDER BY CAST(m.numero AS UNSIGNED) ASC
+                `;
+                paramsMesas = [];
+            }
+
+            const [mesas] = await db.query(queryMesas, paramsMesas);
+            
+            // Pasar el turnoId y el usuarioId a los stats para cálculos reales
+            const stats = await DashboardDependienteController.getDashboardStats(turnoId, usuarioId, usuarioRol);
 
             res.render('dependiente/dashboard', {
                 mesas,
@@ -56,25 +97,65 @@ const DashboardDependienteController = {
         }
     },
 
-    getDashboardStats: async () => {
+    getDashboardStats: async (turnoId, usuarioId, usuarioRol) => {
         try {
-            const [rows] = await db.query(`
-                SELECT 
-                    COUNT(DISTINCT m.id) AS total_mesas,
-                    COUNT(DISTINCT CASE WHEN p.id IS NOT NULL THEN m.id END) AS mesas_ocupadas,
-                    SUM(CASE WHEN p.estado_pedido = 'pendiente' THEN 1 ELSE 0 END) AS pedidos_pendientes,
-                    SUM(CASE WHEN p.estado_pedido = 'preparando' THEN 1 ELSE 0 END) AS en_preparacion,
-                    COALESCE(ROUND(SUM(p.total), 2), 0) AS ventas_del_turno
-                FROM mesas m
-                LEFT JOIN pedidos p ON m.id = p.id_mesa AND p.fecha_cierre IS NULL
-            `);
+            if (!turnoId) return { total_mesas: 0, mesas_ocupadas: 0, pedidos_pendientes: 0, en_preparacion: 0, ventas_del_turno: 0 };
+
+            let queryStats = '';
+            let paramsStats = [];
+
+            if (usuarioRol === 'dependiente') {
+                queryStats = `
+                    SELECT 
+                        COUNT(DISTINCT dam.mesa_id) AS total_mesas,
+                        COUNT(DISTINCT CASE WHEN p.estado_pago = 'no pagado' THEN m.id END) AS mesas_ocupadas,
+                        SUM(CASE WHEN p.estado_pedido = 'pendiente' AND p.estado_pago = 'no pagado' THEN 1 ELSE 0 END) AS pedidos_pendientes,
+                        SUM(CASE WHEN p.estado_pedido = 'preparando' AND p.estado_pago = 'no pagado' THEN 1 ELSE 0 END) AS en_preparacion,
+                        (
+                            SELECT COALESCE(ROUND(SUM(p2.total), 2), 0) 
+                            FROM pedidos p2 
+                            WHERE p2.turno_servicio_id = ? 
+                              AND p2.id_usuario_mesero = ? 
+                              AND p2.estado_pago = 'pagado'
+                        ) AS ventas_del_turno
+                    FROM detalle_asignacion_mesa dam
+                    INNER JOIN mesas m ON dam.mesa_id = m.id
+                    LEFT JOIN pedidos p ON m.id = p.id_mesa 
+                        AND p.turno_servicio_id = ? 
+                        AND p.estado_pago = 'no pagado'
+                    WHERE dam.dependiente_id = ?
+                `;
+                paramsStats = [turnoId, usuarioId, turnoId, usuarioId];
+            } else {
+                // Stats globales para administración
+                queryStats = `
+                    SELECT 
+                        COUNT(DISTINCT m.id) AS total_mesas,
+                        COUNT(DISTINCT CASE WHEN p.estado_pago = 'no pagado' THEN m.id END) AS mesas_ocupadas,
+                        SUM(CASE WHEN p.estado_pedido = 'pendiente' AND p.estado_pago = 'no pagado' THEN 1 ELSE 0 END) AS pedidos_pendientes,
+                        SUM(CASE WHEN p.estado_pedido = 'preparando' AND p.estado_pago = 'no pagado' THEN 1 ELSE 0 END) AS en_preparacion,
+                        (
+                            SELECT COALESCE(ROUND(SUM(p2.total), 2), 0) 
+                            FROM pedidos p2 
+                            WHERE p2.turno_servicio_id = ? 
+                              AND p2.estado_pago = 'pagado'
+                        ) AS ventas_del_turno
+                    FROM mesas m
+                    LEFT JOIN pedidos p ON m.id = p.id_mesa 
+                        AND p.turno_servicio_id = ? 
+                        AND p.estado_pago = 'no pagado'
+                `;
+                paramsStats = [turnoId, turnoId];
+            }
+
+            const [rows] = await db.query(queryStats, paramsStats);
 
             return rows[0] || {
                 total_mesas: 0,
                 mesas_ocupadas: 0,
                 pedidos_pendientes: 0,
                 en_preparacion: 0,
-                ventas_del_turno: 0
+                 ventas_del_turno: 0
             };
         } catch (error) {
             console.error('Error en getDashboardStats:', error);

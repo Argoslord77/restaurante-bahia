@@ -3,6 +3,7 @@ const request = require('supertest');
 const express = require('express');
 const userController = require('./userController');
 
+
 // Mock de los servicios
 jest.mock('../services/userService');
 jest.mock('../services/dashboardService');

@@ -47,7 +47,7 @@ const userValidationRules = {
 
         body('rol')
             .notEmpty().withMessage('El rol es obligatorio')
-            .isIn(['superadministrador', 'administrador', 'dependiente', 'cocinero', 'luncher', 'bartender', 'almacenero', 'fregador', 'comercial']).withMessage('Rol no válido')
+            .isIn(['superadministrador','administrador','capitan','dependiente','dependiente-pos','bartender','almacenero','luncher','porcionador','fregador','jefe-cocina','cocinero','ayudante-cocina','cajero','chofer','economico','comercial']).withMessage('Rol no válido')
     ],
     
     update: [
@@ -81,12 +81,30 @@ const userValidationRules = {
         
         body('rol')
             .optional()
-            .isIn(['superadministrador', 'administrador', 'dependiente', 'cocinero', 'luncher', 'bartender', 'almacenero', 'fregador', 'comercial']).withMessage('Rol no válido')
+            .isIn(['superadministrador','administrador','capitan','dependiente','dependiente-pos','bartender','almacenero','luncher','porcionador','fregador','jefe-cocina','cocinero','ayudante-cocina','cajero','chofer','economico','comercial']).withMessage('Rol no válido')
     ],
     
     delete: [
         param('id')
             .isInt().withMessage('El ID debe ser un número entero')
+    ],
+
+    cambiarPassword: [
+        body('passwordActual')
+            .notEmpty().withMessage('La contraseña actual es obligatoria'),
+        
+        body('nuevaPassword')
+            .notEmpty().withMessage('La nueva contraseña es obligatoria')
+            .isLength({ min: 6 }).withMessage('La nueva contraseña debe tener al menos 6 caracteres'),
+        
+        body('confirmarPassword')
+            .notEmpty().withMessage('Debes confirmar tu nueva contraseña')
+            .custom((value, { req }) => {
+                if (value !== req.body.nuevaPassword) {
+                    throw new Error('La confirmación de la contraseña no coincide con la nueva contraseña');
+                }
+                return true;
+            })
     ]
 };
 

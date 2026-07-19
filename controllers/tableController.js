@@ -1,13 +1,12 @@
-// tableController.js
+// controllers/tableController.js
 const tableService = require('../services/tableService');
-const crypto = require('crypto');
 
 exports.listTables = async (req, res) => {
     try {
         const tables = await tableService.getAllTables();
         const waiters = await tableService.getActiveWaiters();
         
-        // Capturar áreas únicas del mobiliario actual para segmentar las alertas y distribuciones
+        // Capturar áreas únicas del mobiliario actual (Uso de 'Salon Principal' sin acento)
         const areas = [...new Set(tables.map(t => t.ubicacion || 'Salon Principal'))];
         
         // Consultar la distribución de la primera área por defecto o procesar el mapa completo de hoy
@@ -57,14 +56,12 @@ exports.createTable = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El código o número de mesa es obligatorio.' });
         }
 
-        const auto_hash = crypto.createHash('sha256').update(`mesa-${numero}-${Date.now()}`).digest('hex');
-
+        // Se envían ÚNICAMENTE los campos existentes en tu estructura SQL
         await tableService.createTable({
             numero,
             ubicacion,
             capacidad: parseInt(capacidad, 10) || 2,
-            estado: estado || 'libre',
-            auto_hash
+            estado: estado || 'libre'
         });
 
         return res.status(200).json({ success: true, message: 'Mesa dada de alta exitosamente.' });
@@ -83,32 +80,25 @@ exports.updateTable = async (req, res) => {
         const { id } = req.params;
         const numero = req.body.numero ? req.body.numero.trim() : '';
         const ubicacion = req.body.ubicacion ? req.body.ubicacion.trim() : 'Salon Principal';
-        const { capacidad, estado, regenerarHash } = req.body;
+        const { capacidad, estado } = req.body;
 
         if (!numero) {
             return res.status(400).json({ success: false, message: 'El número de mesa es obligatorio.' });
         }
 
+        // Removida la lógica e intentos de mutación del campo inexistente auto_hash
         const updateData = {
             numero,
             ubicacion,
             capacidad: parseInt(capacidad, 10) || 2,
-            estado,
-            regenerarHash: !!regenerarHash
+            estado
         };
-
-        if (updateData.regenerarHash) {
-            const tokenAleatorio = crypto.randomBytes(4).toString('hex');
-            updateData.auto_hash = `${Date.now()}${tokenAleatorio}`;
-        }
 
         await tableService.updateTable(id, updateData);
 
         return res.status(200).json({
             success: true,
-            message: updateData.regenerarHash 
-                ? `Mesa ${numero} guardada correctamente y se ha regenerado un nuevo código QR.`
-                : `Propiedades de la Mesa ${numero} actualizadas con éxito.`
+            message: `Propiedades de la Mesa ${numero} actualizadas con éxito.`
         });
 
     } catch (error) {
@@ -130,4 +120,4 @@ exports.deleteTable = async (req, res) => {
         console.error('Error crítico al eliminar mesa:', error);
         return res.status(500).json({ success: false, message: 'Error interno del servidor al procesar la baja.' });
     }
-};
+}; 

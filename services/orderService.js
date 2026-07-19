@@ -1,5 +1,6 @@
 const orderModel = require('../models/orderModel');
 const MenuModel = require('../models/menuModel');
+const STATUS = require('../config/orderStatus'); // NUEVO: Importar normalización de estados
 
 class OrderService {
     /**
@@ -13,7 +14,7 @@ class OrderService {
         
         if (!pedidoActivo) {
             const id_pedido = await orderModel.createEmptyOrder(id_mesa, userId, turno_servicio_id);
-            pedidoActivo = { id: id_pedido, id_mesa, estado_pedido: 'pendiente' };
+            pedidoActivo = { id: id_pedido, id_mesa, estado_pedido: STATUS.PEDIDO.PENDIENTE };
         }
         
         return pedidoActivo;
@@ -53,11 +54,20 @@ class OrderService {
                 const cantidad = parseInt(item.cantidad, 10);
                 subtotal += (precioReal * cantidad);
 
+                // Determinar dinámicamente si el producto va a BAR o COCINA.
+                const esBebida = (platillo.categoria && platillo.categoria.toLowerCase().includes('bebida'));
+                const destino = esBebida ? 'bar' : 'cocina';
+                
+                // Mapeo normalizado del estado inicial del ítem según tu ENUM: detalles_pedido.estado_item
+                const estado_preparacion = esBebida ? STATUS.ITEM.EN_BAR : STATUS.ITEM.EN_COCINA;
+
                 verifiedItems.push({
                     id: item.id,
                     cantidad,
                     precio: precioReal,
-                    notas: item.notas || null
+                    notas: item.notas || null,
+                    destino, 
+                    estado_preparacion // NUEVO: Estado del ENUM normalizado ('en_cocina' o 'en_bar')
                 });
             }
         }

@@ -45,6 +45,19 @@
                 <i class="fa-solid fa-file-invoice me-2 text-dark"></i> Pedidos / Ventas
             </a>
         </li>
+
+        <!-- NUEVOS ACCESOS: Monitores de Producción en Tiempo Real -->
+        <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'monitor_cocina'){ %> active<% } %>" href="/monitor/cocina">
+                <i class="fa-solid fa-fire-burner me-2 text-dark"></i> Monitor de Cocina
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'monitor_bar'){ %> active<% } %>" href="/monitor/bar">
+                <i class="fa-solid fa-martini-glass-citrus me-2 text-dark"></i> Monitor de Bar
+            </a>
+        </li>
+
         <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'warehouse'){ %> active<% } %>" href="/admin/almacenes">
                 <i class="fa-solid fa-warehouse me-2 text-dark"></i> Inventario / Almacenes

@@ -54,10 +54,10 @@ class TableService {
         return await TableModel.delete(id); 
     }
 
-    // Obtener los usuarios activos que tengan el rol de dependiente (Sin filtro de columna estado errónea)
+    // Obtener los usuarios activos que tengan el rol de dependiente o capitan
     async getActiveWaiters() {
         const [rows] = await db.query(
-            "SELECT id, nombre FROM usuarios WHERE rol = 'dependiente' ORDER BY nombre ASC"
+            "SELECT id, nombre, rol FROM usuarios WHERE rol IN ('dependiente', 'capitan') ORDER BY nombre ASC"
         );
         return rows;
     }
