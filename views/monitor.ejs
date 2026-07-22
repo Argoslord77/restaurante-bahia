@@ -15,49 +15,21 @@
 <body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans antialiased select-none">
 
     <% 
-        // ----------------- INYECCIÓN DE DATOS DE PRUEBA -----------------
+        // --- DATOS REALES RECIBIDOS DE MONITORCONTROLLER ---
         let currentArea = typeof area !== 'undefined' ? area : 'COCINA';
         let currentAreaKey = typeof areaKey !== 'undefined' ? areaKey : 'cocina';
         
-        let listaComandas = [];
-        if (typeof comandas !== 'undefined' && comandas.length > 0) {
-            listaComandas = comandas;
-        } else {
-            listaComandas = [
-                {
-                    id_pedido: 2041,
-                    numero_mesa: '4',
-                    items: [
-                        { detalle_id: 101, cantidad: 2, nombre_platillo: 'Hamburguesa Bahía Doble', notas_especiales: 'Sin cebolla, papas bien crujientes' },
-                        { detalle_id: 102, cantidad: 1, nombre_platillo: 'Tacos de Pescado Rebozado', notas_especiales: null }
-                    ]
-                },
-                {
-                    id_pedido: 2042,
-                    numero_mesa: '12',
-                    items: [
-                        { detalle_id: 103, cantidad: 1, nombre_platillo: 'Ceviche Clásico Peruano', notas_especiales: 'Picante medio' },
-                        { detalle_id: 104, cantidad: 3, nombre_platillo: 'Tacos de Pescado Rebozado', notas_especiales: 'Limon aparte' }
-                    ]
-                },
-                {
-                    id_pedido: 2043,
-                    numero_mesa: 'BARRA 2',
-                    items: [
-                        { detalle_id: 105, cantidad: 1, nombre_platillo: 'Hamburguesa Bahía Doble', notas_especiales: 'Término medio' },
-                        { detalle_id: 106, cantidad: 2, nombre_platillo: 'Ceviche Clásico Peruano', notas_especiales: 'Sin cilantro' }
-                    ]
-                }
-            ];
-        }
+        let listaComandas = (typeof comandas !== 'undefined' && Array.isArray(comandas)) ? comandas : [];
 
-        // --- LÓGICA DE CONSOLIDACIÓN ---
+        // --- LÓGICA DE CONSOLIDACIÓN DINÁMICA DE BD ---
         let consolidado = {};
         listaComandas.forEach(comanda => {
-            comanda.items.forEach(item => {
-                let nombre = item.nombre_platillo;
-                consolidado[nombre] = (consolidado[nombre] || 0) + item.cantidad;
-            });
+            if (comanda.items && Array.isArray(comanda.items)) {
+                comanda.items.forEach(item => {
+                    let nombre = item.nombre_platillo;
+                    consolidado[nombre] = (consolidado[nombre] || 0) + item.cantidad;
+                });
+            }
         });
     %>
 
@@ -76,7 +48,7 @@
             </div>
         </div>
         
-        <!-- Lado Derecho: Botonera con Seguridad CSP compatible -->
+        <!-- Lado Derecho: Botonera -->
         <div class="flex flex-wrap items-center justify-center md:justify-end gap-3 w-full md:w-auto">
             
             <!-- Botón / Indicador de Autorefresh -->
@@ -105,7 +77,7 @@
         </div>
     </header>
 
-    <!-- Barra Superior de Consolidado con estilo Claro Integrado -->
+    <!-- Barra Superior de Consolidado -->
     <section class="bg-[#0b101d] border-b border-slate-900 px-6 py-4 shadow-inner">
         <div class="flex flex-col lg:flex-row lg:items-center gap-4">
             <div class="flex items-center gap-2 flex-shrink-0">
@@ -121,7 +93,6 @@
                     <span class="text-xs text-slate-500 italic">Sin tareas activas</span>
                 <% } else { %>
                     <% Object.keys(consolidado).forEach(platillo => { %>
-                        <!-- Tarjetas de consolidación adaptadas al color claro premium de las comandas con contador azul intenso -->
                         <div class="bg-[#f8fafc] border border-slate-200/80 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-md">
                             <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-xs leading-none shadow-sm">
                                 <%= consolidado[platillo] %>x
@@ -134,7 +105,7 @@
         </div>
     </section>
 
-    <!-- Contenido Principal (Responsivo Adaptativo: Lista vertical en móvil / Scroll horizontal en pantallas grandes) -->
+    <!-- Contenido Principal -->
     <main class="flex-1 p-4 md:p-6 bg-[#080c16] overflow-x-hidden md:overflow-x-auto">
         <% if (listaComandas.length === 0) { %>
             <div class="h-full min-h-[55vh] flex flex-col items-center justify-center text-center p-6">
@@ -145,17 +116,13 @@
                 <p class="text-slate-400 text-sm mt-1.5">No hay comandas pendientes de preparación.</p>
             </div>
         <% } else { %>
-            <!-- 
-               flex-col: En vertical para dispositivos móviles.
-               md:flex-row md:inline-flex md:space-x-6 md:space-y-0: Scroll horizontal para tablets/desktop.
-            -->
             <div class="flex flex-col space-y-6 md:space-y-0 md:flex-row md:inline-flex md:space-x-6 h-full items-start align-top w-full md:w-auto">
                 <% listaComandas.forEach(comanda => { %>
                     
-                    <!-- Tarjeta de Comanda (FONDO CLARO PREMIUM) -->
+                    <!-- Tarjeta de Comanda -->
                     <div class="w-full md:w-85 bg-[#f8fafc] rounded-3xl shadow-2xl flex flex-col max-h-[68vh] whitespace-normal flex-shrink-0 transition-all border border-slate-200/60 overflow-hidden transform hover:translate-y-[-4px] duration-200">
                         
-                        <!-- Header de la Tarjeta Claro -->
+                        <!-- Header de la Tarjeta -->
                         <div class="p-4 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center">
                             <div>
                                 <span class="bg-[#1e293b] text-white text-[11px] px-3.5 py-1.5 rounded-xl font-black tracking-widest uppercase shadow-sm">
@@ -168,37 +135,37 @@
                             </span>
                         </div>
 
-                        <!-- Lista de Platillos -->
+                        <!-- Lista de Platillos / Bebidas -->
                         <div class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar bg-white">
-                            <% comanda.items.forEach(item => { %>
-                                <div class="bg-[#f8fafc] p-4 rounded-2xl border border-slate-200/70 flex flex-col justify-between hover:bg-[#f1f5f9] transition-all" id="item-row-<%= item.detalle_id %>">
-                                    <div class="flex items-start gap-3">
-                                        <!-- Cantidad con Contraste Intenso en Azul Cobalto -->
-                                        <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-sm leading-none flex-shrink-0 mt-0.5 shadow-sm">
-                                            <%= item.cantidad %>x
-                                        </span>
-                                        <div class="min-w-0 flex-1">
-                                            <h4 class="font-extrabold text-[#0f172a] text-[15px] leading-snug tracking-wide break-words uppercase">
-                                                <%= item.nombre_platillo %>
-                                            </h4>
-                                            <% if (item.notas_especiales) { %>
-                                                <!-- NOTAS VISUALMENTE MÁS GRANDES Y ADAPTADAS PARA LECTURA RÁPIDA -->
-                                                <div class="text-sm text-amber-900 bg-amber-50 px-3 py-3 rounded-xl mt-3.5 border border-amber-200 font-bold leading-relaxed shadow-sm">
-                                                    <i class="fa-solid fa-bell mr-1.5 text-amber-600 animate-bounce"></i> <%= item.notas_especiales %>
-                                                </div>
-                                            <% } %>
+                            <% if (comanda.items && comanda.items.length > 0) { %>
+                                <% comanda.items.forEach(item => { %>
+                                    <div class="bg-[#f8fafc] p-4 rounded-2xl border border-slate-200/70 flex flex-col justify-between hover:bg-[#f1f5f9] transition-all" id="item-row-<%= item.detalle_id %>">
+                                        <div class="flex items-start gap-3">
+                                            <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-sm leading-none flex-shrink-0 mt-0.5 shadow-sm">
+                                                <%= item.cantidad %>x
+                                            </span>
+                                            <div class="min-w-0 flex-1">
+                                                <h4 class="font-extrabold text-[#0f172a] text-[15px] leading-snug tracking-wide break-words uppercase">
+                                                    <%= item.nombre_platillo %>
+                                                </h4>
+                                                <% if (item.notas_especiales) { %>
+                                                    <div class="text-sm text-amber-900 bg-amber-50 px-3 py-3 rounded-xl mt-3.5 border border-amber-200 font-bold leading-relaxed shadow-sm">
+                                                        <i class="fa-solid fa-bell mr-1.5 text-amber-600 animate-bounce"></i> <%= item.notas_especiales %>
+                                                    </div>
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Botón Terminar -->
+                                        <div class="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+                                            <button data-id="<%= item.detalle_id %>" 
+                                                    class="btn-complete w-full bg-[#10b981] hover:bg-[#059669] text-white text-[11px] font-black py-3 px-6 rounded-full transition-all flex items-center justify-center gap-2 tracking-widest uppercase active:scale-[0.98] shadow-md shadow-emerald-200/50">
+                                                <i class="fa-solid fa-circle-check text-sm"></i> Terminar Platillo
+                                            </button>
                                         </div>
                                     </div>
-                                    
-                                    <!-- Botón Terminar Redondeado (rounded-full) -->
-                                    <div class="mt-4 pt-3 border-t border-slate-100 flex justify-end">
-                                        <button data-id="<%= item.detalle_id %>" 
-                                                class="btn-complete w-full bg-[#10b981] hover:bg-[#059669] text-white text-[11px] font-black py-3 px-6 rounded-full transition-all flex items-center justify-center gap-2 tracking-widest uppercase active:scale-[0.98] shadow-md shadow-emerald-200/50">
-                                            <i class="fa-solid fa-circle-check text-sm"></i> Terminar Platillo
-                                        </button>
-                                    </div>
-                                </div>
-                            <% }) %>
+                                <% }) %>
+                            <% } %>
                         </div>
                     </div>
                 <% }) %>
@@ -272,10 +239,10 @@
             actualizarUI();
         }
 
-        function marcarListo(id) {
+        function marcarListo(detalle_id) {
             Swal.fire({
                 title: '¿MARCAR COMO LISTO?',
-                text: 'El platillo desaparecerá de la cola de preparación.',
+                text: 'El platillo pasará a la barra de despacho.',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#10b981',
@@ -284,24 +251,51 @@
                 cancelButtonText: 'CANCELAR',
                 background: '#ffffff',
                 color: '#0f172a'
-            }).then((result) => {
+            }).then(async (result) => {
                 if (result.isConfirmed) {
-                    const row = document.getElementById(`item-row-${id}`);
-                    if (row) {
-                        row.style.opacity = '0';
-                        row.style.transform = 'scale(0.9)';
-                        row.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-                        setTimeout(() => {
-                            row.remove();
+                    try {
+                        // AJUSTE: Consumo directo a la API apiActualizarEstadoItem de monitorController
+                        const response = await fetch('/api/pos/item-listo', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                detalle_id: detalle_id,
+                                nuevo_estado: 'listo' // STATUS.ITEM.LISTO
+                            })
+                        });
+                        
+                        const data = await response.json();
+
+                        if (data.success) {
+                            const row = document.getElementById(`item-row-${detalle_id}`);
+                            if (row) {
+                                row.style.opacity = '0';
+                                row.style.transform = 'scale(0.9)';
+                                row.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+                                setTimeout(() => {
+                                    row.remove();
+                                    
+                                    // Si no quedan ítems visibles en la tarjeta o pantalla, se recarga para actualizar consolidado
+                                    if (document.querySelectorAll('[id^="item-row-"]').length === 0) {
+                                        window.location.reload();
+                                    }
+                                }, 200);
+                            }
+                        } else {
                             Swal.fire({
-                                title: '¡DESPACHADO!',
-                                icon: 'success',
-                                timer: 1000,
-                                showConfirmButton: false,
-                                background: '#ffffff',
-                                color: '#0f172a'
+                                title: 'ERROR',
+                                text: data.message || 'No se pudo actualizar el estado.',
+                                icon: 'error',
+                                confirmButtonColor: '#ef4444'
                             });
-                        }, 200);
+                        }
+                    } catch (err) {
+                        Swal.fire({
+                            title: 'ERROR DE RED',
+                            text: 'Fallo al comunicarse con el servidor.',
+                            icon: 'error',
+                            confirmButtonColor: '#ef4444'
+                        });
                     }
                 }
             });

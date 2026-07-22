@@ -73,7 +73,6 @@ exports.viewMonitor = async (req, res) => {
  */
 exports.apiActualizarEstadoItem = async (req, res) => {
     const { detalle_id, nuevo_estado } = req.body;
-
     const estadosPermitidos = [STATUS.ITEM.LISTO, STATUS.ITEM.CANCELADO];
     
     if (!estadosPermitidos.includes(nuevo_estado)) {
@@ -81,11 +80,34 @@ exports.apiActualizarEstadoItem = async (req, res) => {
     }
 
     try {
-        // SQL AJUSTADO: Se actualiza la columna 'estado_item' en 'detalles_pedido'
+        // 1. Obtener id_pedido antes de actualizar
+        const [detalle] = await db.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [detalle_id]);
+        if (!detalle.length) {
+            return res.status(404).json({ success: false, message: 'Ítem no encontrado.' });
+        }
+        const id_pedido = detalle[0].id_pedido;
+
+        // 2. Actualizar estado del ítem
         await db.query(
             'UPDATE detalles_pedido SET estado_item = ? WHERE id = ?',
             [nuevo_estado, detalle_id]
         );
+
+        // 3. Verificar si quedan ítems en cocina/bar para este pedido
+        const [pendientes] = await db.query(
+            `SELECT COUNT(*) as restantes 
+             FROM detalles_pedido 
+             WHERE id_pedido = ? AND estado_item IN (?, ?)`,
+            [id_pedido, STATUS.ITEM.EN_COCINA, STATUS.ITEM.EN_BAR]
+        );
+
+        // Si ya no hay más elementos en preparación, marcar el pedido global como LISTO
+        if (pendientes[0].restantes === 0) {
+            await db.query(
+                'UPDATE pedidos SET estado_pedido = ? WHERE id = ?',
+                [STATUS.PEDIDO.LISTO, id_pedido]
+            );
+        }
 
         return res.status(200).json({
             success: true,

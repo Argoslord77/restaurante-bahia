@@ -62,7 +62,7 @@
             font-weight: 800;
         }
         
-        /* Custom Scrollbar minimalista estilo Monitor */
+        /* Custom Scrollbar minimalista */
         .custom-scrollbar::-webkit-scrollbar {
             height: 6px;
             width: 6px;
@@ -139,12 +139,38 @@
             <div class="col-md-7 col-lg-8 py-3 menu-section custom-scrollbar" id="section-menu">
                 
                 <!-- Filtros Dinámicos estilo Cápsula Premium -->
-                <div class="d-flex gap-2 overflow-x-auto pb-3 mb-2 custom-scrollbar px-1" id="category-filters">
-                    <button class="btn category-btn bg-[#3b82f6] text-white font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm transition-all" data-category="todos">Todos</button>
-                    <button class="btn category-btn bg-[#f8fafc] border border-slate-200 text-[#0f172a] hover:bg-[#3b82f6] hover:text-white font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm transition-all" data-category="entradas">Entradas</button>
-                    <button class="btn category-btn bg-[#f8fafc] border border-slate-200 text-[#0f172a] hover:bg-[#3b82f6] hover:text-white font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm transition-all" data-category="platos fuertes">Platos Fuertes</button>
-                    <button class="btn category-btn bg-[#f8fafc] border border-slate-200 text-[#0f172a] hover:bg-[#3b82f6] hover:text-white font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm transition-all" data-category="postres">Postres</button>
-                    <button class="btn category-btn bg-[#f8fafc] border border-slate-200 text-[#0f172a] hover:bg-[#3b82f6] hover:text-white font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm transition-all" data-category="bebidas">Bebidas</button>
+                <div class="d-flex gap-2 overflow-x-auto pb-2 mb-2 custom-scrollbar px-1" id="category-filters">
+                    <button class="btn category-btn active font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="todos">Todos</button>
+                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="entradas">Entradas</button>
+                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="platos fuertes">Platos Fuertes</button>
+                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="postres">Postres</button>
+                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="bebidas">Bebidas</button>
+                </div>
+
+                <!-- Buscador Integrado (Corregido) -->
+                <div class="mb-3 px-1">
+                    <div class="position-relative w-100 flex items-center">
+                        <!-- Icono Lupa a la izquierda -->
+                        <span class="position-absolute top-50 translate-middle-y text-slate-400" style="left: 14px; z-index: 5; pointer-events: none;">
+                            <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                        </span>
+                        
+                        <!-- Input con padding-left adecuado para no encimarse -->
+                        <input type="text" 
+                            id="dish-search-input" 
+                            class="w-full bg-[#f8fafc] text-[#0f172a] text-xs font-bold rounded-2xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition-all placeholder-slate-400 shadow-sm" 
+                            style="padding-top: 10px; padding-bottom: 10px; padding-left: 40px; padding-right: 40px;"
+                            placeholder="Buscar platillo en esta categoría..." 
+                            autocomplete="off">
+
+                        <!-- Botón Limpiar (X) a la derecha -->
+                        <button type="button" 
+                                id="btn-clear-search" 
+                                class="position-absolute top-50 translate-middle-y text-slate-400 hover:text-rose-500 transition-colors hidden border-0 bg-transparent"
+                                style="right: 14px; z-index: 5; cursor: pointer;">
+                            <i class="fa-solid fa-circle-xmark text-sm"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Rejilla de Platillos Fondo Claro Premium -->
@@ -153,6 +179,7 @@
                         <% platillos.forEach(platillo => { %>
                             <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
                                  data-id="<%= platillo.id %>"
+                                 data-name="<%= (platillo.nombre || '').toLowerCase() %>"
                                  data-category="<%= (platillo.categoria || '').toLowerCase().trim() %>">
                                 <div class="card dish-card h-100 bg-[#f8fafc] rounded-3xl shadow-xl overflow-hidden border border-slate-200/60 p-0">
                                     <div class="dish-img-wrapper">
@@ -176,6 +203,12 @@
                             </div>
                         <% }) %>
                     <% } %>
+                </div>
+
+                <!-- Mensaje de Sin Resultados -->
+                <div id="no-dishes-msg" class="text-center py-5 hidden">
+                    <i class="fa-solid fa-utensils text-slate-600 text-3xl mb-2"></i>
+                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">No se encontraron platillos</p>
                 </div>
             </div>
 
@@ -257,6 +290,7 @@
 
     <script>
         let carrito = [];
+        let activeCategory = 'todos';
 
         document.addEventListener("DOMContentLoaded", () => {
             const rawDetails = `<%- detallesActuales %>`;
@@ -281,18 +315,42 @@
         });
 
         function setupEventListeners() {
+            // Filtros por Categoría
             document.querySelectorAll('.category-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    document.querySelectorAll('.category-btn').forEach(b => {
-                        b.classList.remove('bg-[#3b82f6]', 'text-white');
-                        b.classList.add('bg-[#f8fafc]', 'text-[#0f172a]', 'border', 'border-slate-200');
-                    });
-                    btn.classList.remove('bg-[#f8fafc]', 'text-[#0f172a]', 'border', 'border-slate-200');
-                    btn.classList.add('bg-[#3b82f6]', 'text-white');
-                    filterCategory(btn.dataset.category);
+                    // Quitar 'active' de todos los botones
+                    document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+                    
+                    // Agregar 'active' solo al clickeado
+                    btn.classList.add('active');
+                    
+                    activeCategory = btn.dataset.category;
+                    applyFilters();
                 });
             });
 
+            // Buscador de Platillos
+            const searchInput = document.getElementById('dish-search-input');
+            const clearSearchBtn = document.getElementById('btn-clear-search');
+
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.trim();
+                if (query.length > 0) {
+                    clearSearchBtn.classList.remove('hidden');
+                } else {
+                    clearSearchBtn.classList.add('hidden');
+                }
+                applyFilters();
+            });
+
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                clearSearchBtn.classList.add('hidden');
+                searchInput.focus();
+                applyFilters();
+            });
+
+            // Eventos del Carrito y Platillos
             document.getElementById('dishes-grid').addEventListener('click', async (e) => {
                 const card = e.target.closest('.dish-card');
                 if (card) {
@@ -329,6 +387,36 @@
             });
         }
 
+        // Función unificada para filtrar por Categoría + Buscador
+        function applyFilters() {
+            const searchQuery = document.getElementById('dish-search-input').value.toLowerCase().trim();
+            const dishes = document.querySelectorAll('.dish-item');
+            let visibleCount = 0;
+
+            dishes.forEach(item => {
+                const itemCategory = item.dataset.category || '';
+                const itemName = item.dataset.name || '';
+
+                const matchesCategory = (activeCategory === 'todos' || itemCategory === activeCategory);
+                const matchesSearch = (searchQuery === '' || itemName.includes(searchQuery));
+
+                if (matchesCategory && matchesSearch) {
+                    item.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+
+            // Mostrar/Ocultar mensaje si no existen coincidencias
+            const noDishesMsg = document.getElementById('no-dishes-msg');
+            if (visibleCount === 0) {
+                noDishesMsg.classList.remove('hidden');
+            } else {
+                noDishesMsg.classList.add('hidden');
+            }
+        }
+
         function toggleMobileViews(target) {
             const cartSection = document.getElementById('section-cart');
             const cartTrigger = document.getElementById('mobile-cart-trigger');
@@ -343,13 +431,6 @@
                 cartTrigger.style.display = 'flex';
                 backMenuBtn.style.display = 'none';
             }
-        }
-
-        function filterCategory(category) {
-            document.querySelectorAll('.dish-item').forEach(item => {
-                const itemCategory = item.dataset.category || '';
-                item.style.display = (category === 'todos' || itemCategory === category) ? 'block' : 'none';
-            });
         }
 
         async function checkStockAvailability(id, nombre) {
@@ -572,6 +653,66 @@
             }
             window.location.href = `/pos/checkout/${id_pedido}`;
         }
+
+       // --- SISTEMA DE POLLING Y NOTIFICACIONES DEL DEPENDIENTE ---
+        let knownListos = new Set();
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 4000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+
+        function insonorizarNotificacion() {
+            try {
+                // Sonido suave de notificación (Audio API nativa)
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, ctx.currentTime); // Nota D5
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+            } catch (e) {
+                // Si el navegador bloquea el auto-audio sin interacción previa
+            }
+        }
+
+        function consultarItemsListos() {
+            const id_pedido = document.getElementById('pos_id_pedido').value;
+            if (!id_pedido) return;
+
+            fetch(`/api/pos/items-listos/${id_pedido}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.itemsListos) {
+                        data.itemsListos.forEach(item => {
+                            if (!knownListos.has(item.id_detalle)) {
+                                knownListos.add(item.id_detalle);
+                                
+                                insonorizarNotificacion();
+                                Toast.fire({
+                                    icon: 'success',
+                                    title: '¡PLATILLO LISTO!',
+                                    text: `${item.nombre_platillo} ya se encuentra listo para servir.`
+                                });
+                            }
+                        });
+                    }
+                })
+                .catch(err => console.debug("Error en polling pos:", err));
+        }
+
+        // Iniciar consulta periódica cada 10 segundos
+        setInterval(consultarItemsListos, 10000); 
     </script>
 </body>
 </html>

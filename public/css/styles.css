@@ -267,3 +267,31 @@ body { background-color: #f3f4f6; }
 #reader__scan_region {
     margin-bottom: 12px !important;
 }
+
+/* Estilo base para botones inactivos */
+.category-btn {
+    white-space: nowrap;
+    transition: all 0.2s;
+    font-size: 0.8rem;
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.category-btn:hover {
+    background-color: #e2e8f0 !important;
+    color: #0f172a !important;
+}
+
+/* Estilo para el botón activo seleccionado */
+.category-btn.active {
+    background-color: #3b82f6 !important;
+    color: #ffffff !important;
+    border-color: #3b82f6 !important;
+}
+
+/* Forzar que en estado :focus / :active mantenga el color del estado */
+.category-btn:focus,
+.category-btn:active {
+    box-shadow: none !important;
+}

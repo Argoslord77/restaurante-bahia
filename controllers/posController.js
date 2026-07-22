@@ -145,3 +145,28 @@ exports.apiVerifyStock = async (req, res) => {
         return res.status(500).json({ success: false, message: error.message });
     }
 };
+
+/**
+ * Obtiene los items listos en los pedidos activos
+ */
+exports.obtenerItemsListosPedido = async (req, res) => {
+    try {
+        const { id_pedido } = req.params;
+        const [rows] = await db.query(
+            `SELECT dp.id AS id_detalle, dp.estado_item, pl.nombre AS nombre_platillo
+             FROM detalles_pedido dp
+             INNER JOIN platillos_menu pl ON dp.id_platillo = pl.id
+             WHERE dp.id_pedido = ? AND dp.estado_item = ?`,
+            [id_pedido, STATUS.ITEM.LISTO]
+        );
+
+        return res.json({
+            success: true,
+            itemsListos: rows
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+ 

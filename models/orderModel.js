@@ -63,10 +63,11 @@ class OrderModel {
             // 1. Limpiar los detalles anteriores para re-escribir la comanda actualizada
             await connection.query(`DELETE FROM detalles_pedido WHERE id_pedido = ?`, [id_pedido]);
 
-            // 2. Insertar los nuevos items
+            // 2. Insertar los nuevos items con su estado correspondiente ('en_cocina' / 'en_bar')
             const detailQuery = `
-                INSERT INTO detalles_pedido (id_pedido, id_platillo, cantidad, precio_unitario, notas_especiales)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO detalles_pedido 
+                    (id_pedido, id_platillo, cantidad, precio_unitario, notas_especiales, estado_item)
+                VALUES (?, ?, ?, ?, ?, ?)
             `;
             for (const item of items) {
                 await connection.query(detailQuery, [
@@ -74,7 +75,8 @@ class OrderModel {
                     item.id,
                     item.cantidad,
                     item.precio,
-                    item.notas || null
+                    item.notas || null,
+                    item.estado_preparacion // 'en_cocina' o 'en_bar' generado en orderService
                 ]);
             }
 
