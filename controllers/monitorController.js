@@ -11,11 +11,35 @@ exports.viewMonitor = async (req, res) => {
         return res.status(400).send('Área de monitor no válida.');
     }
 
+    const userRole = (req.user && req.user.rol) ? req.user.rol.toLowerCase() : '';
+
+    console.log('Rol de usuario:' + userRole);
+
+    // Solo usuarios permitidos
+    const rolesPermitidos = [
+        'superadministrador', 'administrador', 'jefe-cocina', 
+        'cocinero', 'bartender', 'luncher', 'porcionador', 'ayudante-cocina'
+    ];
+    if (!rolesPermitidos.includes(userRole)) {
+        return res.redirect('/logout');
+    }
+
+    // Restricción por rol de área
+    if (['jefe-cocina', 'cocinero', 'luncher', 'porcionador', 'ayudante-cocina'].includes(userRole) && area === 'bar') {
+        return res.redirect('/monitor/cocina');
+    }
+    if (['bartender'].includes(userRole) && area === 'cocina') {
+        return res.redirect('/monitor/bar');
+    }
+
+    // --- LÓGICA DE NAVEGACIÓN Y ROL ADMINISTRATIVO EN EL CONTROLADOR ---
+    const adminRoles = ['superadministrador', 'administrador', 'jefe-cocina'];
+    const isAdministrative = adminRoles.includes(userRole);
+    const exitUrl = isAdministrative ? '/admin/dashboard' : '/logout';
+
     try {
-        // En tu SQL, el estado del ítem se mapea a través de STATUS.ITEM
         const estadoFiltro = area === 'cocina' ? STATUS.ITEM.EN_COCINA : STATUS.ITEM.EN_BAR;
 
-        // CONSULTA AJUSTADA: Usamos platillos_menu, estado_item y notas_especiales
         const query = `
             SELECT 
                 pd.id AS detalle_id,
@@ -41,7 +65,6 @@ exports.viewMonitor = async (req, res) => {
             STATUS.PEDIDO.PREPARANDO
         ]);
 
-        // Agrupar los ítems por pedido para mostrarlos como "comandas"
         const comandas = {};
         items.forEach(item => {
             if (!comandas[item.id_pedido]) {
@@ -59,8 +82,11 @@ exports.viewMonitor = async (req, res) => {
             areaKey: area,
             comandas: Object.values(comandas),
             pageTitle: `Monitor de ${area.charAt(0).toUpperCase() + area.slice(1)} - Restaurante Bahía`,
-            view: area === 'cocina' ? 'monitor_cocina' : 'monitor_bar', // <-- NUEVO: Vinculación con sidebarmenu
-            user: req.user || { nombre: 'Monitor', rol: 'personal' }
+            view: area === 'cocina' ? 'monitor_cocina' : 'monitor_bar',
+            user: req.user || { nombre: 'Monitor', rol: 'personal' },
+            // Variables enviadas directamente a la vista
+            isAdministrative,
+            exitUrl
         });
     } catch (error) {
         console.error(`Error al cargar el monitor de ${area}:`, error);
@@ -80,20 +106,17 @@ exports.apiActualizarEstadoItem = async (req, res) => {
     }
 
     try {
-        // 1. Obtener id_pedido antes de actualizar
         const [detalle] = await db.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [detalle_id]);
         if (!detalle.length) {
             return res.status(404).json({ success: false, message: 'Ítem no encontrado.' });
         }
         const id_pedido = detalle[0].id_pedido;
 
-        // 2. Actualizar estado del ítem
         await db.query(
             'UPDATE detalles_pedido SET estado_item = ? WHERE id = ?',
             [nuevo_estado, detalle_id]
         );
 
-        // 3. Verificar si quedan ítems en cocina/bar para este pedido
         const [pendientes] = await db.query(
             `SELECT COUNT(*) as restantes 
              FROM detalles_pedido 
@@ -101,7 +124,6 @@ exports.apiActualizarEstadoItem = async (req, res) => {
             [id_pedido, STATUS.ITEM.EN_COCINA, STATUS.ITEM.EN_BAR]
         );
 
-        // Si ya no hay más elementos en preparación, marcar el pedido global como LISTO
         if (pendientes[0].restantes === 0) {
             await db.query(
                 'UPDATE pedidos SET estado_pedido = ? WHERE id = ?',

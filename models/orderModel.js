@@ -63,11 +63,10 @@ class OrderModel {
             // 1. Limpiar los detalles anteriores para re-escribir la comanda actualizada
             await connection.query(`DELETE FROM detalles_pedido WHERE id_pedido = ?`, [id_pedido]);
 
-            // 2. Insertar los nuevos items con su estado correspondiente ('en_cocina' / 'en_bar')
+            // 2. Insertar los nuevos items
             const detailQuery = `
-                INSERT INTO detalles_pedido 
-                    (id_pedido, id_platillo, cantidad, precio_unitario, notas_especiales, estado_item)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO detalles_pedido (id_pedido, id_platillo, cantidad, precio_unitario, notas_especiales)
+                VALUES (?, ?, ?, ?, ?)
             `;
             for (const item of items) {
                 await connection.query(detailQuery, [
@@ -75,8 +74,7 @@ class OrderModel {
                     item.id,
                     item.cantidad,
                     item.precio,
-                    item.notas || null,
-                    item.estado_preparacion // 'en_cocina' o 'en_bar' generado en orderService
+                    item.notas || null
                 ]);
             }
 
@@ -95,6 +93,26 @@ class OrderModel {
         } finally {
             connection.release();
         }
+    }
+
+    /**
+     * Obtiene los detalles de un pedido que están en estado 'listo'
+     */
+    async getItemsListosByPedido(id_pedido) {
+        const query = `
+            SELECT 
+                dp.id AS id_detalle,
+                dp.id_pedido,
+                dp.id_platillo,
+                p.nombre AS nombre_platillo,
+                dp.cantidad,
+                dp.estado_item AS estado
+            FROM detalles_pedido dp
+            JOIN platillos_menu p ON dp.id_platillo = p.id
+            WHERE dp.id_pedido = ? AND dp.estado_item = 'listo'
+        `;
+        const [rows] = await db.query(query, [id_pedido]);
+        return rows;
     }
 }
 

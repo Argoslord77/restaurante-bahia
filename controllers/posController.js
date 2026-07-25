@@ -169,4 +169,33 @@ exports.obtenerItemsListosPedido = async (req, res) => {
     }
 };
 
+/**
+ * Obtiene la lista de platillos con estado 'listo' para un pedido específico
+ */
+exports.getItemsListos = async (req, res) => {
+    try {
+        const { id_pedido } = req.params;
+
+        if (!id_pedido) {
+            return res.status(400).json({
+                success: false,
+                message: 'El identificador del pedido es requerido.'
+            });
+        }
+
+        const itemsListos = await orderModel.getItemsListosByPedido(id_pedido);
+
+        return res.json({
+            success: true,
+            itemsListos
+        });
+    } catch (error) {
+        console.error('Error al obtener ítems listos:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error interno al consultar los ítems listos.',
+            error: error.message
+        });
+    }
+};
  

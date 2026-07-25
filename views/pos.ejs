@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title><%= pageTitle || 'POS - Restaurante Bahía' %></title>
+    <title><%= typeof pageTitle !== 'undefined' ? pageTitle : 'POS - Restaurante Bahía' %></title>
     <!-- Tailwind CSS Integrado & Estilos Core -->
     <link rel="stylesheet" href="/css/tailwind.css">
     <link rel="stylesheet" href="/css/jquery-ui.min.css">
@@ -29,14 +29,8 @@
         }
         .cart-section {
             height: 100%;
-            display: flex;
-            flex-direction: column;
             background: #f8fafc;
             border-left: 1px solid #e2e8f0;
-        }
-        .cart-items {
-            flex-grow: 1;
-            overflow-y: auto;
         }
         .category-btn {
             white-space: nowrap;
@@ -47,7 +41,15 @@
             cursor: pointer;
             transition: transform 0.15s, box-shadow 0.15s;
         }
+        .dish-card:hover {
+            transform: translateY(-2px);
+        }
         .dish-card:active { transform: scale(0.97); }
+        .dish-card.out-of-stock {
+            opacity: 0.6;
+            cursor: not-allowed;
+            filter: grayscale(0.8);
+        }
         .dish-img-wrapper { height: 110px; position: relative; background: #cbd5e1; }
         .dish-img-wrapper img { width: 100%; height: 100%; object-fit: cover; }
         
@@ -62,7 +64,6 @@
             font-weight: 800;
         }
         
-        /* Custom Scrollbar minimalista */
         .custom-scrollbar::-webkit-scrollbar {
             height: 6px;
             width: 6px;
@@ -73,9 +74,6 @@
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #cbd5e1;
             border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
         }
 
         @media (max-width: 767.98px) {
@@ -100,10 +98,9 @@
 <body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans antialiased select-none">
     <input type="hidden" id="pos_id_pedido" value="<%= id_pedido %>">
 
-    <!-- Header de Alto Contraste -->
+    <!-- Header -->
     <header class="bg-[#111625] border-b border-slate-800/60 px-4 py-3 flex justify-between items-center shadow-md sticky top-0 z-50 style-navbar" style="height: 73px;">
         <div class="d-flex align-items-center gap-3 w-100 flex-nowrap justify-between">
-            
             <div class="flex items-center space-x-3">
                 <a href="/admin/dashboard" 
                    style="border-radius: 9999px !important;"
@@ -137,8 +134,6 @@
         <div class="row h-100">
             <!-- Panel Izquierdo: Catálogo de Platillos -->
             <div class="col-md-7 col-lg-8 py-3 menu-section custom-scrollbar" id="section-menu">
-                
-                <!-- Filtros Dinámicos estilo Cápsula Premium -->
                 <div class="d-flex gap-2 overflow-x-auto pb-2 mb-2 custom-scrollbar px-1" id="category-filters">
                     <button class="btn category-btn active font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="todos">Todos</button>
                     <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="entradas">Entradas</button>
@@ -147,23 +142,19 @@
                     <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="bebidas">Bebidas</button>
                 </div>
 
-                <!-- Buscador Integrado (Corregido) -->
                 <div class="mb-3 px-1">
                     <div class="position-relative w-100 flex items-center">
-                        <!-- Icono Lupa a la izquierda -->
                         <span class="position-absolute top-50 translate-middle-y text-slate-400" style="left: 14px; z-index: 5; pointer-events: none;">
                             <i class="fa-solid fa-magnifying-glass text-sm"></i>
                         </span>
                         
-                        <!-- Input con padding-left adecuado para no encimarse -->
                         <input type="text" 
                             id="dish-search-input" 
                             class="w-full bg-[#f8fafc] text-[#0f172a] text-xs font-bold rounded-2xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition-all placeholder-slate-400 shadow-sm" 
                             style="padding-top: 10px; padding-bottom: 10px; padding-left: 40px; padding-right: 40px;"
-                            placeholder="Buscar platillo en esta categoría..." 
+                            placeholder="Buscar platillo..." 
                             autocomplete="off">
 
-                        <!-- Botón Limpiar (X) a la derecha -->
                         <button type="button" 
                                 id="btn-clear-search" 
                                 class="position-absolute top-50 translate-middle-y text-slate-400 hover:text-rose-500 transition-colors hidden border-0 bg-transparent"
@@ -173,15 +164,16 @@
                     </div>
                 </div>
 
-                <!-- Rejilla de Platillos Fondo Claro Premium -->
                 <div class="row g-2 g-md-3 px-1" id="dishes-grid">
                     <% if (locals.platillos && platillos.length > 0) { %>
                         <% platillos.forEach(platillo => { %>
+                            <% const esDisponible = typeof platillo.disponible === 'undefined' || platillo.disponible === 1 || platillo.disponible === true; %>
                             <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
                                  data-id="<%= platillo.id %>"
                                  data-name="<%= (platillo.nombre || '').toLowerCase() %>"
-                                 data-category="<%= (platillo.categoria || '').toLowerCase().trim() %>">
-                                <div class="card dish-card h-100 bg-[#f8fafc] rounded-3xl shadow-xl overflow-hidden border border-slate-200/60 p-0">
+                                 data-category="<%= (platillo.categoria || '').toLowerCase().trim() %>"
+                                 data-available="<%= esDisponible ? 'true' : 'false' %>">
+                                <div class="card dish-card h-100 bg-[#f8fafc] rounded-3xl shadow-xl overflow-hidden border border-slate-200/60 p-0 <%= !esDisponible ? 'out-of-stock' : '' %>">
                                     <div class="dish-img-wrapper">
                                         <% if (platillo.foto && platillo.foto !== 'null') { %>
                                             <img src="/uploads/<%= platillo.foto %>" alt="<%= platillo.nombre %>">
@@ -190,6 +182,13 @@
                                                 <i class="fa-solid fa-bowl-food fa-2xl"></i>
                                             </div>
                                         <% } %>
+                                        
+                                        <% if (!esDisponible) { %>
+                                            <span class="position-absolute top-0 start-0 bg-rose-600 text-white font-black px-2.5 py-1 m-2 rounded-xl text-[10px] shadow-sm tracking-wide uppercase">
+                                                Agotado
+                                            </span>
+                                        <% } %>
+
                                         <span class="position-absolute top-0 end-0 bg-[#1e293b] text-white font-black px-3 py-1 m-2 rounded-xl text-xs shadow-sm tracking-wide">
                                             $<%= parseFloat(platillo.precio).toFixed(2) %>
                                         </span>
@@ -205,37 +204,59 @@
                     <% } %>
                 </div>
 
-                <!-- Mensaje de Sin Resultados -->
                 <div id="no-dishes-msg" class="text-center py-5 hidden">
                     <i class="fa-solid fa-utensils text-slate-600 text-3xl mb-2"></i>
                     <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">No se encontraron platillos</p>
                 </div>
             </div>
 
-            <!-- Panel Derecho: Detalle de la Comanda Activa -->
-            <div class="col-md-5 col-lg-4 p-0 cart-section" id="section-cart">
-                <!-- Header Caja Lateral -->
-                <div class="p-3 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center shadow-sm">
+            <!-- Panel Derecho: Carrito Limpio + Panel Colapsable de Histórico (Flexbox Dinámico) -->
+            <div class="col-md-5 col-lg-4 p-0 cart-section h-full flex flex-col min-h-0" id="section-cart">
+                <!-- Header de Mesa -->
+                <div class="p-3 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center shadow-sm shrink-0">
                     <span class="bg-[#1e293b] text-white text-xs px-3 py-1.5 rounded-xl font-black tracking-widest uppercase flex items-center gap-1.5">
                         <i class="fa-solid fa-table text-cyan-400"></i> <%= locals.nombre_mesa || 'Mesa Activa' %>
+                    </span>
+                    <span class="text-[11px] font-extrabold text-blue-600 uppercase tracking-wide bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                        NUEVA RONDA
                     </span>
                     <button class="btn btn-light btn-sm fw-bold d-md-none btn-back-to-menu text-dark border-0 p-1">
                         <i class="fa-solid fa-xmark fs-5"></i>
                     </button>
                 </div>
                 
-                <!-- Contenedor del Carrito -->
-                <div class="cart-items p-3 space-y-3 bg-white custom-scrollbar" id="cart-wrapper"></div>
-                
-                <!-- Acciones e Indicadores de Totales -->
-                <div class="p-4 bg-[#f1f5f9] border-t border-slate-200/80 mt-auto shadow-2xl space-y-3.5">
+                <!-- ÁREA DE CAPTURA: Carrito Activo (Se encoge al desplegar el histórico) -->
+                <div id="cart-container" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 bg-white custom-scrollbar transition-all duration-300">
+                    <div id="cart-wrapper" class="space-y-2"></div>
+                </div>
+
+                <!-- PANEL COLAPSABLE: Histórico de Consumos (Se expande hacia arriba) -->
+                <div id="history-container" class="border-t border-slate-200 bg-slate-100 flex flex-col shrink-0 min-h-0 transition-all duration-300">
+                    <button class="w-full px-3 py-2.5 text-xs font-black text-slate-700 uppercase flex justify-between items-center hover:bg-slate-200/70 transition-colors shrink-0" 
+                            type="button" 
+                            id="btn-toggle-history">
+                        <span class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-clock-rotate-left text-slate-500"></i> 
+                            Histórico Mesa (<span id="history-count">0</span> items)
+                        </span>
+                        <i class="fa-solid fa-chevron-up text-slate-500 transition-transform duration-300" id="history-chevron"></i>
+                    </button>
+                    
+                    <!-- Contenido Desplegable que toma el alto restante -->
+                    <div id="history-collapse" class="hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2.5 bg-slate-50 border-t border-slate-200 space-y-2">
+                        <div id="history-wrapper" class="space-y-2"></div>
+                    </div>
+                </div>
+
+                <!-- Resumen de Totales y Acciones -->
+                <div class="p-4 bg-[#f1f5f9] border-t border-slate-200/80 shrink-0 shadow-2xl space-y-3.5">
                     <div class="space-y-1.5 px-1">
                         <div class="d-flex justify-content-between">
-                            <span class="text-slate-500 text-xs font-extrabold tracking-wider uppercase">Subtotal</span>
+                            <span class="text-slate-500 text-xs font-extrabold tracking-wider uppercase">Subtotal Acumulado</span>
                             <span class="text-[#0f172a] text-xs font-black" id="summary-subtotal">$0.00</span>
                         </div>
                         <div class="d-flex justify-content-between align-items-center pt-1 border-t border-slate-200/60">
-                            <span class="text-[#0f172a] text-xs font-black tracking-wider uppercase">Total (Con Impuestos)</span>
+                            <span class="text-[#0f172a] text-xs font-black tracking-wider uppercase">Total Orden</span>
                             <span class="text-xl font-black text-[#0f172a]" id="summary-total">$0.00</span>
                         </div>
                     </div>
@@ -243,7 +264,7 @@
                     <div class="row g-2">
                         <div class="col-12 d-md-none">
                             <button class="w-full bg-[#f8fafc] border border-slate-300 text-[#0f172a] hover:bg-slate-100 text-xs font-black py-2.5 rounded-full uppercase tracking-wider btn-back-to-menu transition-all">
-                                <i class="fa-solid fa-utensils me-1"></i> Continuar Agregando
+                                <i class="fa-solid fa-utensils me-1"></i> Agregar Platillos
                             </button>
                         </div>
                         
@@ -254,11 +275,10 @@
                         </div>
                         <div class="col-8">
                             <button class="w-full bg-[#10b981] hover:bg-[#059669] text-white text-xs font-black py-2.5 rounded-full uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-1.5" id="btn-save-order">
-                                <i class="fa-solid fa-paper-plane text-xs"></i> Enviar Cocina
+                                <i class="fa-solid fa-paper-plane text-xs"></i> Enviar a Cocina
                             </button>
                         </div>
 
-                        <!-- Botones Avanzados de Flujo (Precuenta / Cobro) -->
                         <div class="col-6 mt-2">
                             <button class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-black py-2.5 rounded-full uppercase tracking-wider transition-all flex items-center justify-center gap-1.5" id="btn-print-precuenta">
                                 <i class="fa-solid fa-print"></i> Pre-Cuenta
@@ -275,7 +295,7 @@
         </div>
     </div>
 
-    <!-- Botón Flotante para Móviles -->
+    <!-- Botón Flotante Móvil -->
     <button class="btn btn-primary mobile-cart-badge !rounded-full bg-[#3b82f6] hover:bg-[#2563eb] text-white transition-all active:scale-95" id="mobile-cart-trigger">
         <i class="fa-solid fa-receipt fs-5"></i>
         <span class="uppercase tracking-wider">Ver Comanda</span>
@@ -289,53 +309,87 @@
     <script src="/js/sweetalert2.all.min.js"></script>
 
     <script>
-        let carrito = [];
+        // 1. Captura local de la ronda activa (Comienza limpia)
+        let carrito = []; 
+        // 2. Registros históricos persistentes en BD para esta mesa
+        let historicoDetalles = []; 
         let activeCategory = 'todos';
 
         document.addEventListener("DOMContentLoaded", () => {
-            const rawDetails = `<%- detallesActuales %>`;
+            const rawDetails = `<%- typeof detallesActuales !== 'undefined' ? detallesActuales : '' %>`;
             if (rawDetails && rawDetails !== 'null' && rawDetails.trim() !== '') {
                 try {
                     const items = JSON.parse(rawDetails);
-                    items.forEach(item => {
-                        carrito.push({
-                            id: item.id_platillo.toString(),
-                            nombre: item.nombre,
-                            precio: parseFloat(item.precio),
-                            cantidad: parseInt(item.cantidad),
-                            notas: item.notas_especiales || ''
-                        });
-                    });
-                    renderCart();
+                    historicoDetalles = items.map(item => ({
+                        id_detalle: item.id_detalle || item.id,
+                        id_platillo: item.id_platillo,
+                        nombre: item.nombre || item.nombre_platillo,
+                        precio: parseFloat(item.precio || item.precio_unitario),
+                        cantidad: parseInt(item.cantidad),
+                        estado: item.estado || item.estado_item || 'en_cocina',
+                        notas: item.notas_especiales || ''
+                    }));
                 } catch (e) {
-                    console.error("Error al cargar detalles iniciales:", e);
+                    console.error("Error al procesar el histórico de la orden:", e);
                 }
             }
+            
+            renderCart();
+            renderHistory();
             setupEventListeners();
         });
 
         function setupEventListeners() {
+            // Lógica para Expandir / Colapsar el Histórico desplazando al Carrito hacia arriba
+            const btnToggleHistory = document.getElementById('btn-toggle-history');
+            const historyCollapse = document.getElementById('history-collapse');
+            const historyChevron = document.getElementById('history-chevron');
+            const historyContainer = document.getElementById('history-container');
+            const cartContainer = document.getElementById('cart-container');
+
+            btnToggleHistory.addEventListener('click', () => {
+                const isHidden = historyCollapse.classList.contains('hidden');
+                
+                if (isHidden) {
+                    // Desplegar el histórico tomando todo el espacio disponible
+                    historyCollapse.classList.remove('hidden');
+                    historyContainer.classList.remove('shrink-0');
+                    historyContainer.classList.add('flex-1');
+                    
+                    // Reducir la sección de captura del carrito
+                    cartContainer.classList.remove('flex-1');
+                    cartContainer.classList.add('shrink-0', 'max-h-28'); 
+                    
+                    historyChevron.classList.add('rotate-180');
+                } else {
+                    // Restaurar estado original (Carrito expandido, histórico plegado)
+                    historyCollapse.classList.add('hidden');
+                    historyContainer.classList.remove('flex-1');
+                    historyContainer.classList.add('shrink-0');
+                    
+                    cartContainer.classList.remove('shrink-0', 'max-h-28');
+                    cartContainer.classList.add('flex-1');
+                    
+                    historyChevron.classList.remove('rotate-180');
+                }
+            });
+
             // Filtros por Categoría
             document.querySelectorAll('.category-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    // Quitar 'active' de todos los botones
                     document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
-                    
-                    // Agregar 'active' solo al clickeado
                     btn.classList.add('active');
-                    
                     activeCategory = btn.dataset.category;
                     applyFilters();
                 });
             });
 
-            // Buscador de Platillos
+            // Buscador
             const searchInput = document.getElementById('dish-search-input');
             const clearSearchBtn = document.getElementById('btn-clear-search');
 
             searchInput.addEventListener('input', () => {
-                const query = searchInput.value.trim();
-                if (query.length > 0) {
+                if (searchInput.value.trim().length > 0) {
                     clearSearchBtn.classList.remove('hidden');
                 } else {
                     clearSearchBtn.classList.add('hidden');
@@ -350,18 +404,32 @@
                 applyFilters();
             });
 
-            // Eventos del Carrito y Platillos
+            // Agregar del Menú
             document.getElementById('dishes-grid').addEventListener('click', async (e) => {
                 const card = e.target.closest('.dish-card');
                 if (card) {
                     const itemEl = card.closest('.dish-item');
+                    if (itemEl.dataset.available === 'false') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'PLATILLO AGOTADO',
+                            text: 'Este producto no se encuentra disponible actualmente.',
+                            confirmButtonText: 'Entendido',
+                            confirmButtonColor: '#3b82f6',
+                            background: '#ffffff',
+                            color: '#0f172a'
+                        });
+                        return;
+                    }
+
                     const id = itemEl.dataset.id;
                     const nombre = itemEl.querySelector('.card-title').textContent.trim();
                     const precioText = itemEl.querySelector('.position-absolute').textContent.replace('$', '').trim();
-                    await addToCart(id, nombre, precioText);
+                    addToCart(id, nombre, precioText);
                 }
             });
 
+            // Acciones de Ítems dentro del Carrito Activo
             document.getElementById('cart-wrapper').addEventListener('click', (e) => {
                 const target = e.target;
                 if (target.closest('.update-qty')) {
@@ -387,7 +455,6 @@
             });
         }
 
-        // Función unificada para filtrar por Categoría + Buscador
         function applyFilters() {
             const searchQuery = document.getElementById('dish-search-input').value.toLowerCase().trim();
             const dishes = document.querySelectorAll('.dish-item');
@@ -408,7 +475,6 @@
                 }
             });
 
-            // Mostrar/Ocultar mensaje si no existen coincidencias
             const noDishesMsg = document.getElementById('no-dishes-msg');
             if (visibleCount === 0) {
                 noDishesMsg.classList.remove('hidden');
@@ -433,30 +499,7 @@
             }
         }
 
-        async function checkStockAvailability(id, nombre) {
-            try {
-                const response = await fetch(`/api/pos/verify-stock?id_platillo=${id}&cantidad=1`);
-                return await response.json();
-            } catch (error) {
-                return { success: true, suficiente: true };
-            }
-        }
-
-        async function addToCart(id, nombre, precio) {
-            const stockCheck = await checkStockAvailability(id, nombre);
-            if (!stockCheck.suficiente) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'STOCK INSUFICIENTE',
-                    html: `No hay suficiente inventario disponible para <strong>${nombre}</strong>`,
-                    confirmButtonText: 'Entendido',
-                    confirmButtonColor: '#3b82f6',
-                    background: '#ffffff',
-                    color: '#0f172a'
-                });
-                return;
-            }
-
+        function addToCart(id, nombre, precio) {
             const itemExistente = carrito.find(prod => prod.id === id);
             if (itemExistente) {
                 itemExistente.cantidad += 1;
@@ -488,7 +531,7 @@
             const { value: text } = await Swal.fire({
                 title: `Notas para: ${item.nombre}`,
                 input: 'text',
-                inputLabel: 'Especificaciones de cocina o preparación',
+                inputLabel: 'Especificaciones para cocina',
                 inputValue: item.notas,
                 showCancelButton: true,
                 confirmButtonText: 'Confirmar',
@@ -516,70 +559,110 @@
 
         function renderCart() {
             const wrapper = document.getElementById('cart-wrapper');
-            const totalProductos = carrito.reduce((sum, item) => sum + item.cantidad, 0);
-            document.getElementById('mobile-badge-count').textContent = totalProductos;
+            const totalNuevosProductos = carrito.reduce((sum, item) => sum + item.cantidad, 0);
+            document.getElementById('mobile-badge-count').textContent = totalNuevosProductos;
 
             if (carrito.length === 0) {
                 wrapper.innerHTML = `
-                    <div class="text-center my-5 py-5">
-                        <div class="w-14 h-14 rounded-full bg-[#f1f5f9] flex items-center justify-center mb-2 mx-auto border border-slate-200">
-                            <i class="fa-solid fa-basket-shopping text-xl text-slate-400"></i>
+                    <div class="text-center my-4 py-4">
+                        <div class="w-12 h-12 rounded-full bg-[#f1f5f9] flex items-center justify-center mb-2 mx-auto border border-slate-200">
+                            <i class="fa-solid fa-basket-shopping text-lg text-slate-400"></i>
                         </div>
-                        <p class="text-slate-500 text-xs font-black uppercase tracking-wide">La comanda está vacía</p>
+                        <p class="text-slate-500 text-xs font-black uppercase tracking-wide">Sin productos en esta ronda</p>
+                        <span class="text-[10px] text-slate-400">Selecciona platillos del menú para agregarlos.</span>
                     </div>
                 `;
-                updateSummary(0);
+            } else {
+                wrapper.innerHTML = '';
+                carrito.forEach(prod => {
+                    const itemTotal = prod.precio * prod.cantidad;
+                    const row = document.createElement('div');
+                    row.className = 'bg-[#f8fafc] p-3 rounded-2xl border border-slate-200/70 flex flex-col gap-1.5 transition-all shadow-sm';
+                    row.innerHTML = `
+                        <div class="d-flex align-items-center justify-content-between w-100">
+                            <div style="max-width: 45%;">
+                                <span class="font-extrabold text-[#0f172a] d-block text-truncate text-xs uppercase tracking-wide">${prod.nombre}</span>
+                                <span class="text-slate-500 font-bold text-[11px]">$${prod.precio.toFixed(2)}</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-1.5">
+                                <button class="btn btn-sm btn-link text-slate-400 p-1 add-notes" data-id="${prod.id}">
+                                    <i class="fa-solid ${prod.notas ? 'fa-comment text-amber-500' : 'fa-comment-dots'} text-sm"></i>
+                                </button>
+                                <div class="btn-group btn-group-sm border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                    <button class="btn btn-white border-0 px-2 text-slate-500 update-qty" data-id="${prod.id}" data-delta="-1"><i class="fa-solid fa-minus text-[10px]"></i></button>
+                                    <span class="px-2 font-black text-[#0f172a] d-flex align-items-center bg-white text-xs" style="min-width:25px; justify-content:center;">${prod.cantidad}</span>
+                                    <button class="btn btn-white border-0 px-2 text-slate-500 update-qty" data-id="${prod.id}" data-delta="1"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                                </div>
+                                <span class="font-black text-[#0f172a] ms-1 text-xs" style="min-width: 55px; text-align: right;">$${itemTotal.toFixed(2)}</span>
+                                <button class="btn btn-sm text-rose-500 hover:text-rose-700 border-0 p-1 ms-1 remove-item" data-id="${prod.id}"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                            </div>
+                        </div>
+                        ${prod.notas ? `<div class="bg-amber-50 text-amber-800 text-[11px] font-medium p-2 rounded-xl border-start border-amber-500 border-3"><i class="fa-solid fa-quote-left me-1 text-amber-500"></i>${prod.notas}</div>` : ''}
+                    `;
+                    wrapper.appendChild(row);
+                });
+            }
+
+            recalcularTotales();
+        }
+
+        function renderHistory() {
+            const wrapper = document.getElementById('history-wrapper');
+            document.getElementById('history-count').textContent = historicoDetalles.length;
+
+            if (historicoDetalles.length === 0) {
+                wrapper.innerHTML = `
+                    <div class="text-center py-2">
+                        <p class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-0">Sin consumos previos registrados</p>
+                    </div>
+                `;
                 return;
             }
 
             wrapper.innerHTML = '';
-            let subtotal = 0;
-
-            carrito.forEach(prod => {
-                const itemTotal = prod.precio * prod.cantidad;
-                subtotal += itemTotal;
+            historicoDetalles.forEach(item => {
+                const itemTotal = item.precio * item.cantidad;
+                
+                let badgeEstado = 'bg-amber-100 text-amber-800 border-amber-300';
+                if (item.estado === 'listo') badgeEstado = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                if (item.estado === 'entregado') badgeEstado = 'bg-slate-200 text-slate-700 border-slate-300';
 
                 const row = document.createElement('div');
-                row.className = 'bg-[#f8fafc] p-3 rounded-2xl border border-slate-200/70 flex flex-col gap-1.5 transition-all shadow-sm';
+                row.className = 'bg-white p-2.5 rounded-xl border border-slate-200 flex flex-col gap-0.5 shadow-xs';
                 row.innerHTML = `
-                    <div class="d-flex align-items-center justify-content-between w-100">
-                        <div style="max-width: 45%;">
-                            <span class="font-extrabold text-[#0f172a] d-block text-truncate text-xs uppercase tracking-wide">${prod.nombre}</span>
-                            <span class="text-slate-500 font-bold text-[11px]">$${prod.precio.toFixed(2)}</span>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="font-black text-slate-800 text-xs uppercase d-block">${item.nombre}</span>
+                            <span class="text-slate-400 text-[10px] font-bold">Cant: ${item.cantidad} x $${item.precio.toFixed(2)}</span>
                         </div>
-                        <div class="d-flex align-items-center gap-1.5">
-                            <button class="btn btn-sm btn-link text-slate-400 p-1 add-notes" data-id="${prod.id}">
-                                <i class="fa-solid ${prod.notas ? 'fa-comment text-amber-500' : 'fa-comment-dots'} text-sm"></i>
-                            </button>
-                            <div class="btn-group btn-group-sm border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                <button class="btn btn-white border-0 px-2 text-slate-500 update-qty" data-id="${prod.id}" data-delta="-1"><i class="fa-solid fa-minus text-[10px]"></i></button>
-                                <span class="px-2 font-black text-[#0f172a] d-flex align-items-center bg-white text-xs" style="min-width:25px; justify-content:center;">${prod.cantidad}</span>
-                                <button class="btn btn-white border-0 px-2 text-slate-500 update-qty" data-id="${prod.id}" data-delta="1"><i class="fa-solid fa-plus text-[10px]"></i></button>
-                            </div>
-                            <span class="font-black text-[#0f172a] ms-1 text-xs" style="min-width: 55px; text-align: right;">$${itemTotal.toFixed(2)}</span>
-                            <button class="btn btn-sm text-rose-500 hover:text-rose-700 border-0 p-1 ms-1 remove-item" data-id="${prod.id}"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                        <div class="text-end">
+                            <span class="font-black text-slate-800 text-xs d-block">$${itemTotal.toFixed(2)}</span>
+                            <span class="badge ${badgeEstado} border text-[9px] uppercase px-1.5 py-0.5 rounded font-black">${item.estado}</span>
                         </div>
                     </div>
-                    ${prod.notas ? `<div class="bg-amber-50 text-amber-800 text-[11px] font-medium p-2 rounded-xl border-start border-amber-500 border-3"><i class="fa-solid fa-quote-left me-1 text-amber-500"></i>${prod.notas}</div>` : ''}
+                    ${item.notas ? `<div class="text-[10px] text-slate-500 italic mt-0.5"><i class="fa-solid fa-pencil text-[9px] me-1"></i>${item.notas}</div>` : ''}
                 `;
                 wrapper.appendChild(row);
             });
-
-            updateSummary(subtotal);
         }
 
-        function updateSummary(subtotal) {
-            const totalConTax = subtotal * 1.10; 
-            document.getElementById('summary-subtotal').textContent = `$${subtotal.toFixed(2)}`;
+        function recalcularTotales() {
+            const subtotalRondaNueva = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+            const subtotalHistorico = historicoDetalles.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+            
+            const subtotalTotal = subtotalRondaNueva + subtotalHistorico;
+            const totalConTax = subtotalTotal * 1.10;
+
+            document.getElementById('summary-subtotal').textContent = `$${subtotalTotal.toFixed(2)}`;
             document.getElementById('summary-total').textContent = `$${totalConTax.toFixed(2)}`;
         }
 
         function saveOrderToServer() {
             const id_pedido = document.getElementById('pos_id_pedido').value;
-            if(carrito.length === 0) {
+            if (carrito.length === 0) {
                 Swal.fire({
-                    title: 'COMANDA VACÍA', 
-                    text: 'Agrega productos antes de enviar a cocina.', 
+                    title: 'RONDA VACÍA', 
+                    text: 'Agrega nuevos productos antes de enviar a cocina.', 
                     icon: 'warning',
                     confirmButtonColor: '#3b82f6',
                     background: '#ffffff',
@@ -589,8 +672,8 @@
             }
 
             Swal.fire({
-                title: '¿ENVIAR COMANDA A COCINA?',
-                text: "Los nuevos elementos se notificarán al área de preparación.",
+                title: '¿ENVIAR RONDA A COCINA?',
+                text: "Se enviarán únicamente los productos agregados en esta captura.",
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#10b981',
@@ -611,9 +694,38 @@
                 }
             }).then(result => {
                 if (result.isConfirmed && result.value.success) {
-                    Swal.fire({ title: '¡SINCRONIZADO!', text: result.value.message, icon: 'success', confirmButtonColor: '#10b981', background: '#ffffff', color: '#0f172a'});
+                    // Trasladar ítems de la ronda capturada hacia el histórico de la mesa
+                    carrito.forEach(prod => {
+                        historicoDetalles.push({
+                            id_platillo: prod.id,
+                            nombre: prod.nombre,
+                            precio: prod.precio,
+                            cantidad: prod.cantidad,
+                            estado: 'en_cocina',
+                            notas: prod.notas
+                        });
+                    });
+
+                    clearCart();
+                    renderHistory();
+
+                    Swal.fire({ 
+                        title: '¡ENVIADO A COCINA!', 
+                        text: result.value.message || 'Ronda enviada a cocina correctamente.', 
+                        icon: 'success', 
+                        confirmButtonColor: '#10b981', 
+                        background: '#ffffff', 
+                        color: '#0f172a'
+                    });
                 } else if (result.value && !result.value.success) {
-                    Swal.fire({ title: 'ERROR', text: result.value.message, icon: 'error', confirmButtonColor: '#ef4444', background: '#ffffff', color: '#0f172a'});
+                    Swal.fire({ 
+                        title: 'ERROR', 
+                        text: result.value.message, 
+                        icon: 'error', 
+                        confirmButtonColor: '#ef4444', 
+                        background: '#ffffff', 
+                        color: '#0f172a'
+                    });
                 }
             });
         }
@@ -640,10 +752,11 @@
 
         function checkoutOrder() {
             const id_pedido = document.getElementById('pos_id_pedido').value;
-            if(carrito.length === 0) {
+            const totalArticulos = carrito.length + historicoDetalles.length;
+            if(totalArticulos === 0) {
                 Swal.fire({
                     title: 'SIN PRODUCTOS', 
-                    text: 'No se puede cobrar una comanda vacía.', 
+                    text: 'No se puede cobrar una comanda sin consumos.', 
                     icon: 'warning',
                     confirmButtonColor: '#3b82f6',
                     background: '#ffffff',
@@ -654,65 +767,64 @@
             window.location.href = `/pos/checkout/${id_pedido}`;
         }
 
-       // --- SISTEMA DE POLLING Y NOTIFICACIONES DEL DEPENDIENTE ---
-        let knownListos = new Set();
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 4000,
-            timerProgressBar: true,
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
-            }
-        });
-
-        function insonorizarNotificacion() {
-            try {
-                // Sonido suave de notificación (Audio API nativa)
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(587.33, ctx.currentTime); // Nota D5
-                gain.gain.setValueAtTime(0.1, ctx.currentTime);
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.3);
-            } catch (e) {
-                // Si el navegador bloquea el auto-audio sin interacción previa
+        // Reproductor de sonido para notificaciones
+        function playNotificationSound() {
+            const audio = document.getElementById('audio-notification');
+            if (audio) {
+                audio.currentTime = 0; // Reiniciar al inicio si ya estaba reproduciéndose
+                audio.play().catch(err => {
+                    // Manejar bloqueo de reproducción automática del navegador
+                    console.warn("El navegador bloqueó la reproducción automática hasta interacción previa:", err);
+                });
             }
         }
 
-        function consultarItemsListos() {
-            const id_pedido = document.getElementById('pos_id_pedido').value;
-            if (!id_pedido) return;
+        let itemsListosAnteriores = new Set();
 
-            fetch(`/api/pos/items-listos/${id_pedido}`)
+        function verificarItemsListos() {
+            const idPedido = document.getElementById('pos_id_pedido').value;
+            
+            fetch(`/api/pos/items-listos/${idPedido}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success && data.itemsListos) {
+                        let hayNuevosListos = false;
+
                         data.itemsListos.forEach(item => {
-                            if (!knownListos.has(item.id_detalle)) {
-                                knownListos.add(item.id_detalle);
-                                
-                                insonorizarNotificacion();
-                                Toast.fire({
-                                    icon: 'success',
-                                    title: '¡PLATILLO LISTO!',
-                                    text: `${item.nombre_platillo} ya se encuentra listo para servir.`
-                                });
+                            // Si encontramos un ID que no estaba marcado anteriormente como listo
+                            if (!itemsListosAnteriores.has(item.id_detalle)) {
+                                itemsListosAnteriores.add(item.id_detalle);
+                                hayNuevosListos = true;
+
+                                // Actualizar el estado en el histórico local
+                                const hItem = historicoDetalles.find(d => d.id_detalle == item.id_detalle);
+                                if (hItem) hItem.estado = 'listo';
                             }
                         });
+
+                        if (hayNuevosListos) {
+                            playNotificationSound();
+                            renderHistory();
+                            
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: '¡Nuevos platillos listos!',
+                                text: 'Revisa el histórico para entregar al cliente.',
+                                showConfirmButton: false,
+                                timer: 3500
+                            });
+                        }
                     }
                 })
-                .catch(err => console.debug("Error en polling pos:", err));
+                .catch(err => console.error("Error al consultar ítems listos:", err));
         }
 
-        // Iniciar consulta periódica cada 10 segundos
-        setInterval(consultarItemsListos, 10000); 
+        // Consultar cada 8 segundos si no usas WebSockets
+        setInterval(verificarItemsListos, 8000);
     </script>
+    <!-- Sonido de Notificación de Platillo Listo -->
+    <audio id="audio-notification" src="/sounds/success.mp3" preload="auto"></audio>
 </body>
 </html>

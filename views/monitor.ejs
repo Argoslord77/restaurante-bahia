@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= typeof pageTitle !== 'undefined' ? pageTitle : 'Monitor de Producción • Restaurante Bahía' %></title>
-    <!-- Tailwind CSS -->
     <link rel="stylesheet" href="/css/tailwind.css">
     <link rel="stylesheet" href="/css/jquery-ui.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
@@ -15,13 +14,11 @@
 <body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans antialiased select-none">
 
     <% 
-        // --- DATOS REALES RECIBIDOS DE MONITORCONTROLLER ---
         let currentArea = typeof area !== 'undefined' ? area : 'COCINA';
         let currentAreaKey = typeof areaKey !== 'undefined' ? areaKey : 'cocina';
-        
         let listaComandas = (typeof comandas !== 'undefined' && Array.isArray(comandas)) ? comandas : [];
 
-        // --- LÓGICA DE CONSOLIDACIÓN DINÁMICA DE BD ---
+        // Consolidado directo sobre las comandas entregadas por el controlador
         let consolidado = {};
         listaComandas.forEach(comanda => {
             if (comanda.items && Array.isArray(comanda.items)) {
@@ -33,7 +30,7 @@
         });
     %>
 
-    <!-- Header de Alto Contraste -->
+    <!-- Header Principal -->
     <header class="bg-[#111625] border-b border-slate-800/60 px-6 py-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-md sticky top-0 z-50">
         
         <div class="flex items-center space-x-4 w-full md:w-auto justify-center md:justify-start">
@@ -48,10 +45,10 @@
             </div>
         </div>
         
-        <!-- Lado Derecho: Botonera -->
+        <!-- Botonera -->
         <div class="flex flex-wrap items-center justify-center md:justify-end gap-3 w-full md:w-auto">
             
-            <!-- Botón / Indicador de Autorefresh -->
+            <!-- Indicador / Botón Auto-refresh -->
             <button id="btn-sync" 
                     style="border-radius: 9999px !important;"
                     class="group h-11 min-w-[190px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] !rounded-full px-5 py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 active:scale-95">
@@ -67,12 +64,13 @@
                 <i class="fa-solid fa-arrows-rotate text-[#936932] group-hover:text-white transition-colors duration-200"></i> Refrescar
             </button>
             
-            <!-- Botón Salir -->
+            <!-- Botón Salir (Utiliza directamente exitUrl e isAdministrative calculados en el controlador) -->
             <a id="btn-exit" 
-               href="/admin/dashboard" 
+               href="<%= typeof exitUrl !== 'undefined' ? exitUrl : '/logout' %>" 
                style="border-radius: 9999px !important; color: #cbd5e1 !important;"
                class="group h-11 min-w-[170px] bg-slate-800/40 border-2 border-[#936932] !text-slate-300 hover:!text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] !rounded-full px-4 py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95 text-decoration-none">
-                <i class="fa-solid fa-right-from-bracket text-[#936932] group-hover:!text-white transition-colors duration-200"></i> Salir
+                <i class="fa-solid <%= (typeof isAdministrative !== 'undefined' && isAdministrative) ? 'fa-table-columns' : 'fa-right-from-bracket' %> text-[#936932] group-hover:!text-white transition-colors duration-200"></i> 
+                <%= (typeof isAdministrative !== 'undefined' && isAdministrative) ? 'Panel Central' : 'Salir' %>
             </a>
         </div>
     </header>
@@ -90,7 +88,7 @@
             
             <div class="flex flex-wrap gap-3 items-center overflow-x-auto py-1 custom-scrollbar">
                 <% if (Object.keys(consolidado).length === 0) { %>
-                    <span class="text-xs text-slate-500 italic">Sin tareas activas</span>
+                    <span class="text-xs text-slate-500 italic">Sin tareas activas en <%= currentArea %></span>
                 <% } else { %>
                     <% Object.keys(consolidado).forEach(platillo => { %>
                         <div class="bg-[#f8fafc] border border-slate-200/80 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-md">
@@ -112,17 +110,14 @@
                 <div class="w-20 h-20 rounded-full bg-[#111625] flex items-center justify-center mb-4 border border-slate-800 shadow-md">
                     <i class="fa-solid fa-circle-check text-3xl text-emerald-400"></i>
                 </div>
-                <h2 class="text-xl font-extrabold text-slate-200">¡Limpios!</h2>
-                <p class="text-slate-400 text-sm mt-1.5">No hay comandas pendientes de preparación.</p>
+                <h2 class="text-xl font-extrabold text-slate-200">¡Todo al día!</h2>
+                <p class="text-slate-400 text-sm mt-1.5">No hay ordenes pendientes en <%= currentArea %>.</p>
             </div>
         <% } else { %>
             <div class="flex flex-col space-y-6 md:space-y-0 md:flex-row md:inline-flex md:space-x-6 h-full items-start align-top w-full md:w-auto">
                 <% listaComandas.forEach(comanda => { %>
-                    
-                    <!-- Tarjeta de Comanda -->
                     <div class="w-full md:w-85 bg-[#f8fafc] rounded-3xl shadow-2xl flex flex-col max-h-[68vh] whitespace-normal flex-shrink-0 transition-all border border-slate-200/60 overflow-hidden transform hover:translate-y-[-4px] duration-200">
                         
-                        <!-- Header de la Tarjeta -->
                         <div class="p-4 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center">
                             <div>
                                 <span class="bg-[#1e293b] text-white text-[11px] px-3.5 py-1.5 rounded-xl font-black tracking-widest uppercase shadow-sm">
@@ -131,11 +126,10 @@
                                 <div class="text-[11px] text-slate-500 mt-2.5 font-bold tracking-wider">ORDEN #<%= comanda.id_pedido %></div>
                             </div>
                             <span class="text-[11px] text-[#b45309] font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-[#fef3c7] px-3 py-1.5 rounded-lg border border-[#fde68a]">
-                                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> En espera
+                                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> En cola
                             </span>
                         </div>
 
-                        <!-- Lista de Platillos / Bebidas -->
                         <div class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar bg-white">
                             <% if (comanda.items && comanda.items.length > 0) { %>
                                 <% comanda.items.forEach(item => { %>
@@ -149,18 +143,17 @@
                                                     <%= item.nombre_platillo %>
                                                 </h4>
                                                 <% if (item.notas_especiales) { %>
-                                                    <div class="text-sm text-amber-900 bg-amber-50 px-3 py-3 rounded-xl mt-3.5 border border-amber-200 font-bold leading-relaxed shadow-sm">
+                                                    <div class="text-sm text-amber-900 bg-amber-50 px-3 py-2.5 rounded-xl mt-3 border border-amber-200 font-bold leading-relaxed shadow-sm">
                                                         <i class="fa-solid fa-bell mr-1.5 text-amber-600 animate-bounce"></i> <%= item.notas_especiales %>
                                                     </div>
                                                 <% } %>
                                             </div>
                                         </div>
                                         
-                                        <!-- Botón Terminar -->
                                         <div class="mt-4 pt-3 border-t border-slate-100 flex justify-end">
                                             <button data-id="<%= item.detalle_id %>" 
                                                     class="btn-complete w-full bg-[#10b981] hover:bg-[#059669] text-white text-[11px] font-black py-3 px-6 rounded-full transition-all flex items-center justify-center gap-2 tracking-widest uppercase active:scale-[0.98] shadow-md shadow-emerald-200/50">
-                                                <i class="fa-solid fa-circle-check text-sm"></i> Terminar Platillo
+                                                <i class="fa-solid fa-circle-check text-sm"></i> Marcar Listo
                                             </button>
                                         </div>
                                     </div>
@@ -179,7 +172,7 @@
     <script src="/js/sweetalert2.all.min.js"></script>
     <script>
         let countdownInterval = null;
-        const INTERVALO_SEGUNDOS = 20;
+        const INTERVALO_SEGUNDOS = 15;
         let timeLeft = INTERVALO_SEGUNDOS;
 
         let sincronizado = localStorage.getItem('sync_activa') !== 'false';
@@ -241,26 +234,25 @@
 
         function marcarListo(detalle_id) {
             Swal.fire({
-                title: '¿MARCAR COMO LISTO?',
-                text: 'El platillo pasará a la barra de despacho.',
+                title: '¿MARCAR PRODUCTO LISTO?',
+                text: 'El ítem pasará al estado listo para su entrega.',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#ef4444',
-                confirmButtonText: 'SÍ, MARCAR',
+                confirmButtonText: 'SÍ, LISTO',
                 cancelButtonText: 'CANCELAR',
                 background: '#ffffff',
                 color: '#0f172a'
             }).then(async (result) => {
                 if (result.isConfirmed) {
                     try {
-                        // AJUSTE: Consumo directo a la API apiActualizarEstadoItem de monitorController
-                        const response = await fetch('/api/pos/item-listo', {
+                        const response = await fetch('/api/monitor/cambiar-estado', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 detalle_id: detalle_id,
-                                nuevo_estado: 'listo' // STATUS.ITEM.LISTO
+                                nuevo_estado: 'listo'
                             })
                         });
                         
@@ -274,8 +266,6 @@
                                 row.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
                                 setTimeout(() => {
                                     row.remove();
-                                    
-                                    // Si no quedan ítems visibles en la tarjeta o pantalla, se recarga para actualizar consolidado
                                     if (document.querySelectorAll('[id^="item-row-"]').length === 0) {
                                         window.location.reload();
                                     }
@@ -292,7 +282,7 @@
                     } catch (err) {
                         Swal.fire({
                             title: 'ERROR DE RED',
-                            text: 'Fallo al comunicarse con el servidor.',
+                            text: 'Ocurrió un fallo de conexión al intentar actualizar.',
                             icon: 'error',
                             confirmButtonColor: '#ef4444'
                         });
@@ -311,16 +301,6 @@
             if (btnReload) {
                 btnReload.addEventListener('click', () => {
                     window.location.reload();
-                });
-            }
-
-            const btnExit = document.getElementById('btn-exit');
-            if (btnExit) {
-                btnExit.addEventListener('mouseenter', () => {
-                    btnExit.style.setProperty('color', '#ffffff', 'important');
-                });
-                btnExit.addEventListener('mouseleave', () => {
-                    btnExit.style.setProperty('color', '#cbd5e1', 'important');
                 });
             }
 

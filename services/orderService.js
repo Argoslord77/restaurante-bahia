@@ -42,7 +42,7 @@ class OrderService {
     async syncPosOrder(id_pedido, items) {
         if (!id_pedido) throw new Error('Identificador de pedido faltante.');
 
-        let subtotal = 0;
+        let subtotalNuevos = 0;
         const verifiedItems = [];
 
         if (items && items.length > 0) {
@@ -52,13 +52,10 @@ class OrderService {
 
                 const precioReal = parseFloat(platillo.precio);
                 const cantidad = parseInt(item.cantidad, 10);
-                subtotal += (precioReal * cantidad);
+                subtotalNuevos += (precioReal * cantidad);
 
-                // Determinar dinámicamente si el producto va a BAR o COCINA.
                 const esBebida = (platillo.categoria && platillo.categoria.toLowerCase().includes('bebida'));
                 const destino = esBebida ? 'bar' : 'cocina';
-                
-                // Mapeo normalizado del estado inicial del ítem según tu ENUM: detalles_pedido.estado_item
                 const estado_preparacion = esBebida ? STATUS.ITEM.EN_BAR : STATUS.ITEM.EN_COCINA;
 
                 verifiedItems.push({
@@ -67,17 +64,24 @@ class OrderService {
                     precio: precioReal,
                     notas: item.notas || null,
                     destino, 
-                    estado_preparacion // NUEVO: Estado del ENUM normalizado ('en_cocina' o 'en_bar')
+                    estado_preparacion 
                 });
             }
         }
 
-        const impuesto = subtotal * 0.10; // 10% IVA/Tasa
-        const total = subtotal + impuesto;
+        const impuestoNuevos = subtotalNuevos * 0.10;
+        const totalNuevos = subtotalNuevos + impuestoNuevos;
 
-        const financialData = { subtotal, impuesto, total };
-        await orderModel.updateOrderItems(id_pedido, verifiedItems, financialData);
-        return financialData;
+        const financialDataRonda = { 
+            subtotal: subtotalNuevos, 
+            impuesto: impuestoNuevos, 
+            total: totalNuevos 
+        };
+        
+        // Inserta los items y acumula en la base de datos
+        await orderModel.updateOrderItems(id_pedido, verifiedItems, financialDataRonda);
+
+        return financialDataRonda;
     }
 }
 
