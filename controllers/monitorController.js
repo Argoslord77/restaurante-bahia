@@ -42,9 +42,6 @@ exports.viewMonitor = async (req, res) => {
             : (STATUS.ITEM.EN_BAR || 'en_bar');
 
         // QUERY OPTIMIZADA CON SEGURIDAD PARA MULTI-RONDAS:
-        // En lugar de restringir por p.estado_pedido IN ('pendiente', 'preparando'),
-        // filtramos directamente por los detalles que están en preparación
-        // y descartamos únicamente comandas que hayan sido cerradas/pagadas o canceladas.
         const query = `
             SELECT 
                 pd.id AS detalle_id,
@@ -142,5 +139,63 @@ exports.apiActualizarEstadoItem = async (req, res) => {
     } catch (error) {
         console.error('Error al actualizar estado del ítem:', error);
         return res.status(500).json({ success: false, message: 'Error interno del servidor.' });
+    }
+};
+
+/**
+ * API para obtener la lista de comandas activas en formato JSON (Polling Asíncrono)
+ */
+exports.getComandasAPI = async (req, res) => {
+    const area = req.query.area || 'cocina';
+
+    if (!['cocina', 'bar'].includes(area)) {
+        return res.status(400).json({ success: false, message: 'Área no válida.' });
+    }
+
+    try {
+        const estadoFiltro = area === 'cocina' 
+            ? (STATUS.ITEM.EN_COCINA || 'en_cocina') 
+            : (STATUS.ITEM.EN_BAR || 'en_bar');
+
+        const query = `
+            SELECT 
+                pd.id AS detalle_id,
+                pd.id_pedido,
+                pd.cantidad,
+                pd.notas_especiales,
+                pd.estado_item,
+                p.id_mesa,
+                m.numero AS numero_mesa,
+                pl.nombre AS nombre_platillo
+            FROM detalles_pedido pd
+            JOIN pedidos p ON pd.id_pedido = p.id
+            JOIN mesas m ON p.id_mesa = m.id
+            JOIN platillos_menu pl ON pd.id_platillo = pl.id
+            WHERE LOWER(pd.estado_item) = LOWER(?)
+              AND LOWER(p.estado_pedido) NOT IN ('cerrado', 'pagado', 'cancelado')
+            ORDER BY p.creado_en ASC, pd.id ASC
+        `;
+        
+        const [items] = await db.query(query, [estadoFiltro]);
+
+        const comandas = {};
+        items.forEach(item => {
+            if (!comandas[item.id_pedido]) {
+                comandas[item.id_pedido] = {
+                    id_pedido: item.id_pedido,
+                    numero_mesa: item.numero_mesa,
+                    items: []
+                };
+            }
+            comandas[item.id_pedido].items.push(item);
+        });
+
+        return res.status(200).json({
+            success: true,
+            comandas: Object.values(comandas)
+        });
+    } catch (error) {
+        console.error(`Error al consultar comandas vía API (${area}):`, error);
+        return res.status(500).json({ success: false, message: 'Error al consultar datos.' });
     }
 };

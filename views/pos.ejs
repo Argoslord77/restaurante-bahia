@@ -232,14 +232,26 @@
 
                 <!-- PANEL COLAPSABLE: Histórico de Consumos (Se expande hacia arriba) -->
                 <div id="history-container" class="border-t border-slate-200 bg-slate-100 flex flex-col shrink-0 min-h-0 transition-all duration-300">
-                    <button class="w-full px-3 py-2.5 text-xs font-black text-slate-700 uppercase flex justify-between items-center hover:bg-slate-200/70 transition-colors shrink-0" 
+                    <button class="w-full px-3 py-2 text-xs font-black text-slate-700 uppercase flex justify-between items-center hover:bg-slate-200/70 transition-colors shrink-0" 
                             type="button" 
                             id="btn-toggle-history">
                         <span class="flex items-center gap-1.5">
                             <i class="fa-solid fa-clock-rotate-left text-slate-500"></i> 
-                            Histórico (<span id="history-count">0</span> items)
+                            Histórico (<span id="history-count">0</span>)
                         </span>
-                        <i class="fa-solid fa-chevron-up text-slate-500 transition-transform duration-300" id="history-chevron"></i>
+                        
+                        <!-- Desglose de totales por estado -->
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1" title="Servidos / Entregados">
+                                <i class="fa-solid fa-circle-check text-emerald-600"></i> 
+                                <span id="history-servidos-count">0</span> Servidos
+                            </span>
+                            <span class="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1" title="Pendientes por entregar">
+                                <i class="fa-solid fa-hourglass-half text-amber-600"></i> 
+                                <span id="history-pendientes-count">0</span> Pendientes
+                            </span>
+                            <i class="fa-solid fa-chevron-up text-slate-500 transition-transform duration-300 ms-1" id="history-chevron"></i>
+                        </div>
                     </button>
                     
                     <!-- Contenido Desplegable que toma el alto restante -->
@@ -565,8 +577,38 @@
         }
 
         function clearCart() {
-            carrito = [];
-            renderCart();
+            if (carrito.length === 0) return;
+
+            Swal.fire({
+                title: '¿VACIAR RONDA ACTUAL?',
+                text: 'Se eliminarán todos los productos agregados en esta captura que aún no han sido enviados a cocina.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'SÍ, VACIAR',
+                cancelButtonText: 'CANCELAR',
+                background: '#ffffff',
+                color: '#0f172a'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    carrito = [];
+                    renderCart();
+
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 1500,
+                        timerProgressBar: true
+                    });
+
+                    Toast.fire({
+                        icon: 'info',
+                        title: 'Ronda vaciada'
+                    });
+                }
+            });
         }
 
         function renderCart() {
@@ -620,10 +662,23 @@
 
         /**
          * Renderiza el historial de platillos pedidos en el panel colapsable del POS
+         * y calcula el desglose de productos servidos y pendientes.
          */
         function renderHistory() {
             const wrapper = document.getElementById('history-wrapper');
             document.getElementById('history-count').textContent = historicoDetalles.length;
+
+            // Conteo dinámico de unidades servidas vs pendientes
+            const totalServidos = historicoDetalles
+                .filter(item => item.estado === 'entregado')
+                .reduce((sum, item) => sum + item.cantidad, 0);
+
+            const totalPendientes = historicoDetalles
+                .filter(item => item.estado !== 'entregado')
+                .reduce((sum, item) => sum + item.cantidad, 0);
+
+            document.getElementById('history-servidos-count').textContent = totalServidos;
+            document.getElementById('history-pendientes-count').textContent = totalPendientes;
 
             if (historicoDetalles.length === 0) {
                 wrapper.innerHTML = `
@@ -642,10 +697,7 @@
                 if (item.estado === 'listo') badgeEstado = 'bg-emerald-100 text-emerald-800 border-emerald-300';
                 if (item.estado === 'entregado') badgeEstado = 'bg-slate-200 text-slate-700 border-slate-300';
 
-                // Botón o indicador de estado con alto contraste y sin conflicto de clases
                 let botonAccion = '';
-                // Fragmento actualizado dentro de renderHistory() en pos.ejs
-                // Fragmento dentro de renderHistory() en pos.ejs
                 if (item.estado === 'listo') {
                     botonAccion = `
                         <button type="button" 
@@ -844,22 +896,13 @@
 
         function printPrecuenta() {
             const id_pedido = document.getElementById('pos_id_pedido').value;
-            Swal.fire({
-                title: 'IMPRIMIENDO PRE-CUENTA...',
-                text: 'Generando ticket borrador.',
-                icon: 'info',
-                timer: 1500,
-                showConfirmButton: false,
-                background: '#ffffff',
-                color: '#0f172a',
-                willOpen: () => {
-                    fetch(`/api/pos/print-precuenta/${id_pedido}`, { method: 'POST' })
-                    .then(res => res.json())
-                    .then(data => {
-                        if(!data.success) console.error("Error de impresión:", data.message);
-                    });
-                }
-            });
+
+            if (!id_pedido) {
+                return Swal.fire('Error', 'Selecciona un pedido activo.', 'warning');
+            }
+
+            // Abrir el ticket EJS en una pestaña nueva para imprimir
+            window.open(`/pos/precuenta/${id_pedido}`, '_blank');
         }
 
         function checkoutOrder() {

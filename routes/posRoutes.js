@@ -37,6 +37,9 @@ router.post('/api/pos/save', ensureAuthenticated, checkRole(['superadministrador
 // Verificar stock para un platillo específico
 router.get('/api/pos/verify-stock', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.apiVerifyStock);
 
+// Consulta asíncrona de comandas según el área (utilizada por el refresco AJAX/Fetch del monitor)
+router.get('/api/monitor/comandas', ensureAuthenticated, asegurarTurnoActivo, checkRole(['superadministrador', 'administrador', 'jefe-cocina', 'bartender', 'cocinero', 'ayudante-cocina', 'luncher', 'porcionador']), monitorController.getComandasAPI);
+
 // Vista de producción (ej: /monitor/cocina o /monitor/bar)
 router.get('/monitor/:area', ensureAuthenticated, asegurarTurnoActivo, checkRole(['superadministrador', 'administrador','jefe-cocina', 'bartender', 'cocinero', 'ayudante-cocina','luncher','porcionador']), monitorController.viewMonitor);
 
@@ -48,5 +51,11 @@ router.post('/api/pos/item-estado', ensureAuthenticated, asegurarTurnoActivo, ch
 
 // Endpoint de polling para consultar ítems en estado 'listo' de un pedido
 router.get('/api/pos/items-listos/:id_pedido', posController.getItemsListos);
+
+// ========================================================
+// VISTA PREVIA E IMPRESIÓN DE PRE-CUENTA
+// ========================================================
+// Renderiza el ticket optimizado para impresora térmica de 48mm
+router.get('/pos/precuenta/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'dependiente', 'capitan']), asegurarTurnoActivo, posController.viewPrecuenta);
 
 module.exports = router;

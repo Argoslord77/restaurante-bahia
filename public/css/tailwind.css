@@ -1331,6 +1331,12 @@
   .text-end {
     text-align: end;
   }
+  .text-left {
+    text-align: left;
+  }
+  .text-right {
+    text-align: right;
+  }
   .text-start {
     text-align: start;
   }

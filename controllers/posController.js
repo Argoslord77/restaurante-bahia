@@ -4,6 +4,7 @@ const orderModel = require('../models/orderModel');
 const RecetaService = require('../services/recetaService');
 const logger = require('../config/logger');
 const turnoService = require('../services/turnoService');
+const db = require('../config/db');
 
 /**
  * Acceso directo al POS pasándole obligatoriamente el ID del pedido previamente inicializado
@@ -228,6 +229,53 @@ exports.apiActualizarEstadoItem = async (req, res) => {
             success: false, 
             message: 'Error interno del servidor al actualizar el estado del producto.' 
         });
+    }
+};
+
+/**
+ * Para imprimir/visualizar la precuenta de pedido desde la terminal POS
+ */
+exports.viewPrecuenta = async (req, res) => {
+    try {
+        const id_pedido = req.params.id_pedido;
+        
+        // Log de depuración para verificar el ID recibido en la consola del servidor
+        console.log("ID de pedido recibido en backend:", id_pedido);
+
+        if (!id_pedido || id_pedido === 'undefined') {
+            return res.status(400).send('Error: ID de pedido no válido o no enviado.');
+        }
+        
+        // Consulta del pedido, mesa (m.numero) y usuario que atendió
+        const [pedido] = await db.query(`
+            SELECT p.id, m.numero AS nombre_mesa, CONCAT(u.nombre, ' ', u.apellidos) AS atendio
+            FROM pedidos p
+            LEFT JOIN mesas m ON p.id_mesa = m.id
+            LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+            WHERE p.id = ?
+        `, [id_pedido]);
+
+        if (!pedido || pedido.length === 0) {
+            return res.status(404).send('Pedido no encontrado');
+        }
+
+        // Consulta de ítems consumidos
+        const [detalles] = await db.query(`
+            SELECT dp.cantidad, pm.nombre, dp.precio_unitario AS precio
+            FROM detalles_pedido dp
+            INNER JOIN platillos_menu pm ON dp.id_platillo = pm.id
+            WHERE dp.id_pedido = ? AND dp.estado_item != 'cancelado'
+        `, [id_pedido]);
+
+        res.render('precuenta', {
+            id_pedido: pedido[0].id,
+            nombre_mesa: pedido[0].nombre_mesa,
+            atendio: pedido[0].atendio,
+            detalles: detalles
+        });
+    } catch (error) {
+        console.error('Error al generar la precuenta:', error);
+        res.status(500).send('Error al generar la precuenta');
     }
 };
  

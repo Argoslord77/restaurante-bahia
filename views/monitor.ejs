@@ -16,18 +16,7 @@
     <% 
         let currentArea = typeof area !== 'undefined' ? area : 'COCINA';
         let currentAreaKey = typeof areaKey !== 'undefined' ? areaKey : 'cocina';
-        let listaComandas = (typeof comandas !== 'undefined' && Array.isArray(comandas)) ? comandas : [];
-
-        // Consolidado directo sobre las comandas entregadas por el controlador
-        let consolidado = {};
-        listaComandas.forEach(comanda => {
-            if (comanda.items && Array.isArray(comanda.items)) {
-                comanda.items.forEach(item => {
-                    let nombre = item.nombre_platillo;
-                    consolidado[nombre] = (consolidado[nombre] || 0) + item.cantidad;
-                });
-            }
-        });
+        let listaComandasInicial = (typeof comandas !== 'undefined' && Array.isArray(comandas)) ? comandas : [];
     %>
 
     <!-- Header Principal -->
@@ -50,6 +39,7 @@
             
             <!-- Indicador / Botón Auto-refresh -->
             <button id="btn-sync" 
+                    type="button"
                     style="border-radius: 9999px !important;"
                     class="group h-11 min-w-[190px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] !rounded-full px-5 py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 active:scale-95">
                 <span id="sync-dot" class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -59,12 +49,13 @@
             
             <!-- Botón Refrescar -->
             <button id="btn-reload" 
+                    type="button"
                     style="border-radius: 9999px !important;"
                     class="group h-11 min-w-[170px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95">
                 <i class="fa-solid fa-arrows-rotate text-[#936932] group-hover:text-white transition-colors duration-200"></i> Refrescar
             </button>
             
-            <!-- Botón Salir (Utiliza directamente exitUrl e isAdministrative calculados en el controlador) -->
+            <!-- Botón Salir -->
             <a id="btn-exit" 
                href="<%= typeof exitUrl !== 'undefined' ? exitUrl : '/logout' %>" 
                style="border-radius: 9999px !important; color: #cbd5e1 !important;"
@@ -86,44 +77,183 @@
                 <span class="text-[11px] font-black tracking-widest text-cyan-400 uppercase">PRODUCCIÓN ACTIVA:</span>
             </div>
             
-            <div class="flex flex-wrap gap-3 items-center overflow-x-auto py-1 custom-scrollbar">
-                <% if (Object.keys(consolidado).length === 0) { %>
-                    <span class="text-xs text-slate-500 italic">Sin tareas activas en <%= currentArea %></span>
-                <% } else { %>
-                    <% Object.keys(consolidado).forEach(platillo => { %>
-                        <div class="bg-[#f8fafc] border border-slate-200/80 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-md">
-                            <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-xs leading-none shadow-sm">
-                                <%= consolidado[platillo] %>x
-                            </span>
-                            <span class="text-xs font-extrabold text-[#0f172a] tracking-wide uppercase"><%= platillo %></span>
-                        </div>
-                    <% }) %>
-                <% } %>
+            <div id="consolidado-container" class="flex flex-wrap gap-3 items-center overflow-x-auto py-1 custom-scrollbar">
+                <!-- Se renderiza dinámicamente -->
             </div>
         </div>
     </section>
 
     <!-- Contenido Principal -->
-    <main class="flex-1 p-4 md:p-6 bg-[#080c16] overflow-x-hidden md:overflow-x-auto">
-        <% if (listaComandas.length === 0) { %>
-            <div class="h-full min-h-[55vh] flex flex-col items-center justify-center text-center p-6">
-                <div class="w-20 h-20 rounded-full bg-[#111625] flex items-center justify-center mb-4 border border-slate-800 shadow-md">
-                    <i class="fa-solid fa-circle-check text-3xl text-emerald-400"></i>
-                </div>
-                <h2 class="text-xl font-extrabold text-slate-200">¡Todo al día!</h2>
-                <p class="text-slate-400 text-sm mt-1.5">No hay ordenes pendientes en <%= currentArea %>.</p>
-            </div>
-        <% } else { %>
-            <div class="flex flex-col space-y-6 md:space-y-0 md:flex-row md:inline-flex md:space-x-6 h-full items-start align-top w-full md:w-auto">
-                <% listaComandas.forEach(comanda => { %>
+    <main id="main-comandas-container" class="flex-1 p-4 md:p-6 bg-[#080c16] overflow-x-hidden md:overflow-x-auto">
+        <!-- Se renderiza dinámicamente -->
+    </main>
+
+    <!-- Elemento de Audio según el Área Activa -->
+    <% if (currentAreaKey === 'cocina') { %>
+        <audio id="audio-notification" src="/sounds/notificacion-cocina.mp3" preload="auto"></audio>
+    <% } else { %>
+        <audio id="audio-notification" src="/sounds/notificacion-bar.mp3" preload="auto"></audio>
+    <% } %>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        const CURRENT_AREA_KEY = '<%= currentAreaKey %>';
+        const CURRENT_AREA_NAME = '<%= currentArea %>';
+        const INTERVALO_SEGUNDOS = 15;
+        
+        let countdownInterval = null;
+        let timeLeft = INTERVALO_SEGUNDOS;
+        let sincronizado = localStorage.getItem('sync_activa') !== 'false';
+
+        // Registro de IDs conocidos para comparar ingresos nuevos sin recargar la página
+        let idsItemsConocidos = new Set();
+        let esPrimerCarga = true;
+
+        // Carga inicial inyectada desde Express (SSR)
+        let comandasActuales = <%- JSON.stringify(listaComandasInicial) %>;
+
+        // Reproductor de sonido para notificaciones
+        function playAreaNotificationSound() {
+            const audio = document.getElementById('audio-notification');
+            if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch(err => {
+                    console.warn("Autoplay bloqueado por el navegador. Requiere una interacción previa del usuario:", err);
+                });
+            }
+        }
+
+        /**
+         * Realiza la petición Fetch asíncrona para traer las comandas activas
+         */
+        async function fetchComandasAsincronas() {
+            try {
+                const response = await fetch(`/api/monitor/comandas?area=${CURRENT_AREA_KEY}`);
+                const data = await response.json();
+
+                if (data.success && Array.isArray(data.comandas)) {
+                    procesarYRenderizar(data.comandas);
+                }
+            } catch (error) {
+                console.error("Error al actualizar comandas asíncronamente:", error);
+            }
+        }
+
+        /**
+         * Procesa los datos recibidos, detecta ítems nuevos para disparar el sonido y actualiza el DOM
+         */
+        function procesarYRenderizar(comandas) {
+            comandasActuales = comandas;
+
+            // Extraer lista completa de detalle_id activos
+            const idsEntrantes = [];
+            comandas.forEach(comanda => {
+                if (comanda.items && Array.isArray(comanda.items)) {
+                    comanda.items.forEach(item => idsEntrantes.push(String(item.detalle_id)));
+                }
+            });
+
+            // Verificar si hay nuevos platillos/bebidas
+            if (!esPrimerCarga) {
+                const hayNuevos = idsEntrantes.some(id => !idsItemsConocidos.has(id));
+                if (hayNuevos) {
+                    playAreaNotificationSound();
+
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 4000,
+                        timerProgressBar: true
+                    });
+
+                    Toast.fire({
+                        icon: 'info',
+                        title: CURRENT_AREA_KEY === 'cocina' ? '¡Nuevos platillos en comanda!' : '¡Nuevas bebidas en comanda!'
+                    });
+                }
+            }
+
+            // Actualizar Set de control
+            idsItemsConocidos = new Set(idsEntrantes);
+            esPrimerCarga = false;
+
+            // Renderizar secciones
+            renderizarConsolidado(comandas);
+            renderizarComandas(comandas);
+        }
+
+        /**
+         * Renderiza la barra horizontal de consolidado de platillos
+         */
+        function renderizarConsolidado(comandas) {
+            const container = document.getElementById('consolidado-container');
+            if (!container) return;
+
+            let consolidado = {};
+            comandas.forEach(comanda => {
+                if (comanda.items && Array.isArray(comanda.items)) {
+                    comanda.items.forEach(item => {
+                        let nombre = item.nombre_platillo;
+                        consolidado[nombre] = (consolidado[nombre] || 0) + item.cantidad;
+                    });
+                }
+            });
+
+            const llaves = Object.keys(consolidado);
+            if (llaves.length === 0) {
+                container.innerHTML = `<span class="text-xs text-slate-500 italic">Sin tareas activas en ${CURRENT_AREA_NAME}</span>`;
+                return;
+            }
+
+            let html = '';
+            llaves.forEach(platillo => {
+                html += `
+                    <div class="bg-[#f8fafc] border border-slate-200/80 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-md">
+                        <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-xs leading-none shadow-sm">
+                            ${consolidado[platillo]}x
+                        </span>
+                        <span class="text-xs font-extrabold text-[#0f172a] tracking-wide uppercase">${platillo}</span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        /**
+         * Renderiza el contenedor de tarjetas de comandas
+         */
+        function renderizarComandas(comandas) {
+            const main = document.getElementById('main-comandas-container');
+            if (!main) return;
+
+            if (comandas.length === 0) {
+                main.innerHTML = `
+                    <div class="h-full min-h-[55vh] flex flex-col items-center justify-center text-center p-6">
+                        <div class="w-20 h-20 rounded-full bg-[#111625] flex items-center justify-center mb-4 border border-slate-800 shadow-md">
+                            <i class="fa-solid fa-circle-check text-3xl text-emerald-400"></i>
+                        </div>
+                        <h2 class="text-xl font-extrabold text-slate-200">¡Todo al día!</h2>
+                        <p class="text-slate-400 text-sm mt-1.5">No hay ordenes pendientes en ${CURRENT_AREA_NAME}.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `<div class="flex flex-col space-y-6 md:space-y-0 md:flex-row md:inline-flex md:space-x-6 h-full items-start align-top w-full md:w-auto">`;
+
+            comandas.forEach(comanda => {
+                html += `
                     <div class="w-full md:w-85 bg-[#f8fafc] rounded-3xl shadow-2xl flex flex-col max-h-[68vh] whitespace-normal flex-shrink-0 transition-all border border-slate-200/60 overflow-hidden transform hover:translate-y-[-4px] duration-200">
-                        
                         <div class="p-4 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center">
                             <div>
                                 <span class="bg-[#1e293b] text-white text-[11px] px-3.5 py-1.5 rounded-xl font-black tracking-widest uppercase shadow-sm">
-                                    MESA <%= comanda.numero_mesa %>
+                                    MESA ${comanda.numero_mesa}
                                 </span>
-                                <div class="text-[11px] text-slate-500 mt-2.5 font-bold tracking-wider">ORDEN #<%= comanda.id_pedido %></div>
+                                <div class="text-[11px] text-slate-500 mt-2.5 font-bold tracking-wider">ORDEN #${comanda.id_pedido}</div>
                             </div>
                             <span class="text-[11px] text-[#b45309] font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-[#fef3c7] px-3 py-1.5 rounded-lg border border-[#fde68a]">
                                 <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> En cola
@@ -131,52 +261,59 @@
                         </div>
 
                         <div class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar bg-white">
-                            <% if (comanda.items && comanda.items.length > 0) { %>
-                                <% comanda.items.forEach(item => { %>
-                                    <div class="bg-[#f8fafc] p-4 rounded-2xl border border-slate-200/70 flex flex-col justify-between hover:bg-[#f1f5f9] transition-all" id="item-row-<%= item.detalle_id %>">
-                                        <div class="flex items-start gap-3">
-                                            <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-sm leading-none flex-shrink-0 mt-0.5 shadow-sm">
-                                                <%= item.cantidad %>x
-                                            </span>
-                                            <div class="min-w-0 flex-1">
-                                                <h4 class="font-extrabold text-[#0f172a] text-[15px] leading-snug tracking-wide break-words uppercase">
-                                                    <%= item.nombre_platillo %>
-                                                </h4>
-                                                <% if (item.notas_especiales) { %>
-                                                    <div class="text-sm text-amber-900 bg-amber-50 px-3 py-2.5 rounded-xl mt-3 border border-amber-200 font-bold leading-relaxed shadow-sm">
-                                                        <i class="fa-solid fa-bell mr-1.5 text-amber-600 animate-bounce"></i> <%= item.notas_especiales %>
-                                                    </div>
-                                                <% } %>
+                `;
+
+                if (comanda.items && comanda.items.length > 0) {
+                    comanda.items.forEach(item => {
+                        html += `
+                            <div class="bg-[#f8fafc] p-4 rounded-2xl border border-slate-200/70 flex flex-col justify-between hover:bg-[#f1f5f9] transition-all" id="item-row-${item.detalle_id}">
+                                <div class="flex items-start gap-3">
+                                    <span class="bg-[#3b82f6] text-white font-black px-2.5 py-1 rounded-lg text-sm leading-none flex-shrink-0 mt-0.5 shadow-sm">
+                                        ${item.cantidad}x
+                                    </span>
+                                    <div class="min-w-0 flex-1">
+                                        <h4 class="font-extrabold text-[#0f172a] text-[15px] leading-snug tracking-wide break-words uppercase">
+                                            ${item.nombre_platillo}
+                                        </h4>
+                                        ${item.notas_especiales ? `
+                                            <div class="text-sm text-amber-900 bg-amber-50 px-3 py-2.5 rounded-xl mt-3 border border-amber-200 font-bold leading-relaxed shadow-sm">
+                                                <i class="fa-solid fa-bell mr-1.5 text-amber-600 animate-bounce"></i> ${item.notas_especiales}
                                             </div>
-                                        </div>
-                                        
-                                        <div class="mt-4 pt-3 border-t border-slate-100 flex justify-end">
-                                            <button data-id="<%= item.detalle_id %>" 
-                                                    class="btn-complete w-full bg-[#10b981] hover:bg-[#059669] text-white text-[11px] font-black py-3 px-6 rounded-full transition-all flex items-center justify-center gap-2 tracking-widest uppercase active:scale-[0.98] shadow-md shadow-emerald-200/50">
-                                                <i class="fa-solid fa-circle-check text-sm"></i> Marcar Listo
-                                            </button>
-                                        </div>
+                                        ` : ''}
                                     </div>
-                                <% }) %>
-                            <% } %>
+                                </div>
+                                
+                                <div class="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+                                    <button data-id="${item.detalle_id}"
+                                            type="button" 
+                                            class="btn-complete w-full bg-[#10b981] hover:bg-[#059669] text-white text-[11px] font-black py-3 px-6 rounded-full transition-all flex items-center justify-center gap-2 tracking-widest uppercase active:scale-[0.98] shadow-md shadow-emerald-200/50">
+                                        <i class="fa-solid fa-circle-check text-sm"></i> Marcar Listo
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                html += `
                         </div>
                     </div>
-                <% }) %>
-            </div>
-        <% } %>
-    </main>
+                `;
+            });
 
-    <script src="/js/jquery-4.0.0.js"></script>
-    <script src="/js/bootstrap.bundle.min.js"></script>
-    <script src="/js/jquery-ui.min.js"></script>
-    <script src="/js/sweetalert2.all.min.js"></script>
-    <script>
-        let countdownInterval = null;
-        const INTERVALO_SEGUNDOS = 15;
-        let timeLeft = INTERVALO_SEGUNDOS;
+            html += `</div>`;
+            main.innerHTML = html;
 
-        let sincronizado = localStorage.getItem('sync_activa') !== 'false';
+            // Vincular los eventos de los botones recién renderizados
+            main.querySelectorAll('.btn-complete').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const detalleId = this.getAttribute('data-id');
+                    marcarListo(detalleId);
+                });
+            });
+        }
 
+        // --- MANEJO DEL REFRESH TEMPORIZADO ---
         function iniciarAutoRefresh() {
             detenerAutoRefresh();
             timeLeft = INTERVALO_SEGUNDOS;
@@ -185,8 +322,9 @@
             countdownInterval = setInterval(() => {
                 timeLeft--;
                 if (timeLeft <= 0) {
-                    detenerAutoRefresh();
-                    window.location.reload();
+                    timeLeft = INTERVALO_SEGUNDOS;
+                    actualizarContadorUI();
+                    fetchComandasAsincronas(); // Refresco asíncrono
                 } else {
                     actualizarContadorUI();
                 }
@@ -265,10 +403,8 @@
                                 row.style.transform = 'scale(0.9)';
                                 row.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
                                 setTimeout(() => {
-                                    row.remove();
-                                    if (document.querySelectorAll('[id^="item-row-"]').length === 0) {
-                                        window.location.reload();
-                                    }
+                                    idsItemsConocidos.delete(String(detalle_id));
+                                    fetchComandasAsincronas();
                                 }, 200);
                             }
                         } else {
@@ -300,17 +436,12 @@
             const btnReload = document.getElementById('btn-reload');
             if (btnReload) {
                 btnReload.addEventListener('click', () => {
-                    window.location.reload();
+                    fetchComandasAsincronas();
                 });
             }
 
-            document.querySelectorAll('.btn-complete').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const detalleId = this.getAttribute('data-id');
-                    marcarListo(detalleId);
-                });
-            });
-
+            // Procesar y renderizar datos iniciales
+            procesarYRenderizar(comandasActuales);
             actualizarUI();
         });
     </script>
