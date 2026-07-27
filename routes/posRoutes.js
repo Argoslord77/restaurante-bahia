@@ -40,8 +40,11 @@ router.get('/api/pos/verify-stock', ensureAuthenticated, checkRole(['superadmini
 // Vista de producción (ej: /monitor/cocina o /monitor/bar)
 router.get('/monitor/:area', ensureAuthenticated, asegurarTurnoActivo, checkRole(['superadministrador', 'administrador','jefe-cocina', 'bartender', 'cocinero', 'ayudante-cocina','luncher','porcionador']), monitorController.viewMonitor);
 
-// Endpoint API para la actualización de estados desde la interfaz
+// Endpoint API para la actualización de estados desde la interfaz de cocina/bar
 router.post('/api/monitor/cambiar-estado', ensureAuthenticated, asegurarTurnoActivo, checkRole(['superadministrador', 'administrador','jefe-cocina', 'bartender', 'cocinero']), monitorController.apiActualizarEstadoItem);
+
+// Endpoint API para la actualización de estados desde la interfaz de cocina/bar
+router.post('/api/pos/item-estado', ensureAuthenticated, asegurarTurnoActivo, checkRole(['dependiente', 'capitan']), posController.apiActualizarEstadoItem);
 
 // Endpoint de polling para consultar ítems en estado 'listo' de un pedido
 router.get('/api/pos/items-listos/:id_pedido', posController.getItemsListos);

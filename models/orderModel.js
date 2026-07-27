@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const STATUS = require('../config/orderStatus');
 
 class OrderModel {
     /**
@@ -53,40 +54,72 @@ class OrderModel {
     }
 
     /**
-     * Sincroniza y actualiza de forma atómica los platillos de una orden (Sobrescribe/Modifica)
+     * Agrega una nueva ronda de platillos al pedido sin borrar el histórico previo
+     * Y REACTIVA la comanda a 'pendiente' para que reaparezca en los monitores de producción.
      */
-    async updateOrderItems(id_pedido, items, financialData) {
+    async appendOrderItems(id_pedido, items) {
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction();
 
-            // 1. Limpiar los detalles anteriores para re-escribir la comanda actualizada
-            await connection.query(`DELETE FROM detalles_pedido WHERE id_pedido = ?`, [id_pedido]);
+            const insertedItems = [];
 
-            // 2. Insertar los nuevos items
-            const detailQuery = `
-                INSERT INTO detalles_pedido (id_pedido, id_platillo, cantidad, precio_unitario, notas_especiales)
-                VALUES (?, ?, ?, ?, ?)
+            // 1. Inserción de cada ítem de la ronda actual
+            const insertQuery = `
+                INSERT INTO detalles_pedido (id_pedido, id_platillo, cantidad, precio_unitario, notas_especiales, estado_item)
+                VALUES (?, ?, ?, ?, ?, ?)
             `;
+
             for (const item of items) {
-                await connection.query(detailQuery, [
+                const [res] = await connection.query(insertQuery, [
                     id_pedido,
                     item.id,
                     item.cantidad,
                     item.precio,
-                    item.notas || null
+                    item.notas || null,
+                    item.estado_preparacion || 'en_cocina'
                 ]);
+
+                insertedItems.push({
+                    id_detalle: res.insertId,
+                    id_platillo: item.id,
+                    nombre: item.nombre,
+                    precio: item.precio,
+                    cantidad: item.cantidad,
+                    estado: item.estado_preparacion || 'en_cocina',
+                    notas: item.notas || ''
+                });
             }
 
-            // 3. Actualizar totales financieros en la cabecera del pedido
+            // 2. Recalcular el subtotal total del pedido (histórico + nueva ronda)
+            const [sumRows] = await connection.query(`
+                SELECT SUM(cantidad * precio_unitario) AS subtotal_acumulado
+                FROM detalles_pedido
+                WHERE id_pedido = ?
+            `, [id_pedido]);
+
+            const subtotal = parseFloat(sumRows[0].subtotal_acumulado || 0);
+            const impuesto = subtotal * 0.10;
+            const total = subtotal + impuesto;
+
+            // 3. ACTUALIZACIÓN CLAVE: 
+            // Forzar estado_pedido = 'pendiente' (STATUS.PEDIDO.PENDIENTE)
+            // para reactivar la comanda en los monitores de cocina y bar
             await connection.query(`
                 UPDATE pedidos 
-                SET subtotal = ?, impuesto = ?, total = ?
+                SET subtotal = ?, 
+                    impuesto = ?, 
+                    total = ?, 
+                    estado_pedido = ? 
                 WHERE id = ?
-            `, [financialData.subtotal, financialData.impuesto, financialData.total, id_pedido]);
+            `, [subtotal, impuesto, total, STATUS.PEDIDO.PENDIENTE || 'pendiente', id_pedido]);
 
             await connection.commit();
-            return true;
+
+            return {
+                financialData: { subtotal, impuesto, total },
+                insertedItems
+            };
         } catch (error) {
             await connection.rollback();
             throw error;
@@ -113,6 +146,28 @@ class OrderModel {
         `;
         const [rows] = await db.query(query, [id_pedido]);
         return rows;
+    }
+
+    /**
+     * Actualiza el estado de un renglón/detalle específico de una comanda.
+     * @param {number|string} idDetalle - ID del renglón en la tabla `detalle_pedidos`.
+     * @param {string} nuevoEstado - Nuevo estado ('pendiente', 'en_preparacion', 'listo', 'entregado', 'cancelado').
+     * @returns {Promise<boolean>} Retorna true si la actualización afectó al menos una fila.
+     */
+    async updateItemStatus(idDetalle, nuevoEstado) {
+      const query = `
+        UPDATE detalles_pedido 
+        SET estado_item = ? 
+        WHERE id = ?
+      `;
+
+      try {
+        const [result] = await db.execute(query, [nuevoEstado, idDetalle]);
+        return result.affectedRows > 0;
+      } catch (error) {
+        console.error('Error en orderModel.updateItemStatus:', error);
+        throw error;
+      }
     }
 }
 

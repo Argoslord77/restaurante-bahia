@@ -80,10 +80,9 @@ exports.apiSaveOrder = async (req, res) => {
     try {
         const { id_pedido, items } = req.body;
 
-        // Verificar stock de ingredientes antes de guardar la orden
+        // Verificar stock si aplica
         if (items && items.length > 0) {
             try {
-                // Usar almacén principal (id=1) - configurable según necesidades
                 const almacenId = 1;
                 const stockVerification = await RecetaService.verificarStockParaPedido(items, almacenId);
                 
@@ -96,21 +95,18 @@ exports.apiSaveOrder = async (req, res) => {
                         requiereAprobacion: false
                     });
                 }
-                
-                logger.info(`Stock verificado exitosamente para pedido ${id_pedido}`);
             } catch (error) {
                 logger.error(`Error al verificar stock para pedido ${id_pedido}:`, error);
-                // No fallar el guardado por error en verificación de stock, pero loggear
-                // Esto permite que el sistema siga funcionando si hay un error en el servicio de recetas
             }
         }
 
-        const financialData = await orderService.syncPosOrder(id_pedido, items);
+        const { financialData, insertedItems } = await orderService.syncPosOrder(id_pedido, items);
 
         return res.status(200).json({
             success: true,
-            message: 'Orden sincronizada y guardada con éxito.',
-            financialData
+            message: 'Ronda enviada a cocina correctamente.',
+            financialData,
+            insertedItems // Enviar al cliente los ítems con sus ID reales de la BD
         });
     } catch (error) {
         console.error('Error al guardar la orden en POS:', error);
@@ -195,6 +191,42 @@ exports.getItemsListos = async (req, res) => {
             success: false,
             message: 'Error interno al consultar los ítems listos.',
             error: error.message
+        });
+    }
+};
+
+/**
+ * API para actualizar el estado de un detalle de pedido desde la terminal POS
+ */
+exports.apiActualizarEstadoItem = async (req, res) => {
+    try {
+        const { id_detalle, nuevo_estado } = req.body;
+
+        if (!id_detalle || !nuevo_estado) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'El id_detalle y el nuevo_estado son requeridos.' 
+            });
+        }
+
+        const resultado = await orderModel.updateItemStatus(id_detalle, nuevo_estado);
+
+        if (resultado.notFound) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Ítem no encontrado.' 
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `El producto ha sido actualizado a: ${nuevo_estado}.`
+        });
+    } catch (error) {
+        console.error('Error al actualizar estado del ítem desde el POS:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Error interno del servidor al actualizar el estado del producto.' 
         });
     }
 };

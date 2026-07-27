@@ -42,7 +42,6 @@ class OrderService {
     async syncPosOrder(id_pedido, items) {
         if (!id_pedido) throw new Error('Identificador de pedido faltante.');
 
-        let subtotalNuevos = 0;
         const verifiedItems = [];
 
         if (items && items.length > 0) {
@@ -52,7 +51,6 @@ class OrderService {
 
                 const precioReal = parseFloat(platillo.precio);
                 const cantidad = parseInt(item.cantidad, 10);
-                subtotalNuevos += (precioReal * cantidad);
 
                 const esBebida = (platillo.categoria && platillo.categoria.toLowerCase().includes('bebida'));
                 const destino = esBebida ? 'bar' : 'cocina';
@@ -60,6 +58,7 @@ class OrderService {
 
                 verifiedItems.push({
                     id: item.id,
+                    nombre: platillo.nombre,
                     cantidad,
                     precio: precioReal,
                     notas: item.notas || null,
@@ -69,19 +68,10 @@ class OrderService {
             }
         }
 
-        const impuestoNuevos = subtotalNuevos * 0.10;
-        const totalNuevos = subtotalNuevos + impuestoNuevos;
+        // Usar el método acumulativo
+        const result = await orderModel.appendOrderItems(id_pedido, verifiedItems);
 
-        const financialDataRonda = { 
-            subtotal: subtotalNuevos, 
-            impuesto: impuestoNuevos, 
-            total: totalNuevos 
-        };
-        
-        // Inserta los items y acumula en la base de datos
-        await orderModel.updateOrderItems(id_pedido, verifiedItems, financialDataRonda);
-
-        return financialDataRonda;
+        return result; // Retorna { financialData, insertedItems }
     }
 }
 
