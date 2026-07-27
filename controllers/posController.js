@@ -31,6 +31,7 @@ exports.viewPOS = async (req, res) => {
     }
 };
 
+
 exports.initOrderManual = async (req, res) => {
     try {
         const { id_mesa } = req.body;
@@ -245,7 +246,7 @@ exports.viewPrecuenta = async (req, res) => {
         if (!id_pedido || id_pedido === 'undefined') {
             return res.status(400).send('Error: ID de pedido no válido o no enviado.');
         }
-        
+
         // Consulta del pedido, mesa (m.numero) y usuario que atendió
         const [pedido] = await db.query(`
             SELECT p.id, m.numero AS nombre_mesa, CONCAT(u.nombre, ' ', u.apellidos) AS atendio
@@ -276,6 +277,122 @@ exports.viewPrecuenta = async (req, res) => {
     } catch (error) {
         console.error('Error al generar la precuenta:', error);
         res.status(500).send('Error al generar la precuenta');
+    }
+};
+
+/**
+ * Procesa el cobro de una orden POS alineado con el esquema real de pedidos
+ */
+exports.procesarCobro = async (req, res) => {
+    const { id_pedido } = req.params;
+    const { metodo_pago, monto_recibido, es_cortesia } = req.body;
+    
+    // Obtenemos el ID del cajero desde la sesión actual del usuario
+    const id_cajero = req.session?.user?.id || req.user?.id;
+
+    if (!id_pedido) {
+        return res.status(400).json({ success: false, message: 'ID de pedido no proporcionado.' });
+    }
+
+    if (!id_cajero) {
+        return res.status(401).json({ success: false, message: 'Sesión invalida. No se detectó cajero.' });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // 1. Obtener los datos actuales del pedido
+        const [filas] = await connection.query(`
+            SELECT id, id_mesa, total, estado_pago 
+            FROM pedidos 
+            WHERE id = ? FOR UPDATE
+        `, [id_pedido]);
+
+        if (!filas || filas.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'El pedido no existe.' });
+        }
+
+        const pedido = filas[0];
+
+        if (pedido.estado_pago === 'pagado' || pedido.estado_pago === 'cortesia') {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Este pedido ya fue cobrado o cerrado.' });
+        }
+
+        let nuevo_estado_pago = 'pagado';
+        let cambio = 0;
+        const totalPagar = parseFloat(pedido.total);
+
+        // 2. Control de cortesía o pago normal
+        if (es_cortesia) {
+            nuevo_estado_pago = 'cortesia';
+        } else {
+            if (metodo_pago === 'efectivo') {
+                const recibido = parseFloat(monto_recibido);
+                if (isNaN(recibido) || recibido < totalPagar) {
+                    await connection.rollback();
+                    return res.status(400).json({ success: false, message: 'Monto recibido insuficiente.' });
+                }
+                cambio = recibido - totalPagar;
+            }
+        }
+
+        // 3. Actualizar la tabla 'pedidos' según su esquema exacto
+        await connection.query(`
+            UPDATE pedidos 
+            SET estado_pedido = 'entregado',
+                estado_pago = ?,
+                id_usuario_cajero = ?,
+                fecha_cierre = NOW()
+            WHERE id = ?
+        `, [nuevo_estado_pago, id_cajero, id_pedido]);
+
+        // 4. Registrar la transacción en 'pagos_pedidos'
+        if (nuevo_estado_pago === 'pagado') {
+            await connection.query(`
+                INSERT INTO pagos_pedidos 
+                (id_pedido, metodo_pago, monto_recibido, monto_pagado, cambio_entregado)
+                VALUES (?, ?, ?, ?, ?)
+            `, [
+                id_pedido, 
+                metodo_pago, 
+                metodo_pago === 'efectivo' ? monto_recibido : totalPagar, 
+                totalPagar, 
+                cambio
+            ]);
+        }
+
+        // 5. Liberar la mesa
+        if (pedido.id_mesa) {
+            await connection.query(`
+                UPDATE mesas 
+                SET estado = 'disponible' 
+                WHERE id = ?
+            `, [pedido.id_mesa]);
+        }
+
+        await connection.commit();
+
+        return res.json({
+            success: true,
+            message: nuevo_estado_pago === 'cortesia' ? 'Orden cerrada como cortesía.' : 'Cobro procesado correctamente.',
+            detalles: {
+                total: totalPagar,
+                monto_recibido: metodo_pago === 'efectivo' ? parseFloat(monto_recibido) : totalPagar,
+                cambio: cambio,
+                estado_pago: nuevo_estado_pago
+            }
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error durante la transacción de cobro:', error);
+        return res.status(500).json({ success: false, message: 'Error en el servidor al ejecutar el cobro.' });
+    } finally {
+        connection.release();
     }
 };
  

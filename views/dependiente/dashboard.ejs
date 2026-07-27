@@ -286,10 +286,11 @@
                                 <% if (locals.mesas && mesas.length > 0) { %>
                                     <% mesas.forEach(mesa => { 
                                         let estadoMesa = 'Libre';
-                                        if (mesa.estado) {
+                                        if (mesa.id_pedido_activo) {
+                                            // Priorizar pedido activo sobre la columna estática mesa.estado
+                                            estadoMesa = (mesa.estado_pedido === 'pendiente') ? 'Pendiente' : 'Ocupada';
+                                        } else if (mesa.estado && mesa.estado.toLowerCase() !== 'libre') {
                                             estadoMesa = mesa.estado;
-                                        } else if (mesa.id_pedido_activo) {
-                                            estadoMesa = 'Ocupada';
                                         }
                                         let estadoClase = estadoMesa.toLowerCase();
                                     %>
@@ -307,15 +308,14 @@
                                                         <i class="fa-solid fa-utensils fa-xl monitor-mesa-icon"></i>
                                                     </div>
                                                     
-                                                    <!-- Información inferior adaptada -->
                                                     <div class="monitor-footer-info">
                                                         <span class="d-block"><i class="fa-solid fa-users me-1"></i> Cap: <%= mesa.capacidad %></span>
-                                                        <span class="d-block mt-1 text-truncate"><i class="fa-solid fa-layer-group me-1"></i> <%= mesa.ubicacion || 'Salón' %></span>
+                                                        <span class="d-block mt-1 text-truncate"><i class="fa-solid fa-layer-group me-1"></i> <%= mesa.ubicacion || 'Salón Principal' %></span>
                                                     </div>
                                                 </div>
 
                                                 <div class="p-2.5 bg-white border-top">
-                                                    <% if (estadoMesa === 'Libre') { %>
+                                                    <% if (!mesa.id_pedido_activo) { %>
                                                         <button class="btn-monitor btn-monitor-libre abrir-mesa-btn" data-mesa-id="<%= mesa.id %>">
                                                             <i class="fa-solid fa-plus"></i> Abrir
                                                         </button>

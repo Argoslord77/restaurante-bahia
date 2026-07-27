@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pre-Cuenta #<%= id_pedido %></title>
+    <style>
+        /* Configuración de página para papel térmico continuo de 48mm */
+        @page {
+            size: 48mm auto;
+            margin: 0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            width: 48mm;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            line-height: 1.2;
+            color: #000;
+            background: #fff;
+            padding: 4px 2px;
+            cursor: pointer; /* Indicar interactividad al usuario */
+            user-select: none;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .text-left { text-align: left; }
+        .bold { font-weight: bold; }
+        .uppercase { text-transform: uppercase; }
+
+        .title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .subtitle {
+            font-size: 10px;
+            margin-bottom: 4px;
+        }
+
+        .divider {
+            border-top: 1px dashed #000;
+            margin: 4px 0;
+            width: 100%;
+        }
+
+        .double-divider {
+            border-top: 2px double #000;
+            margin: 4px 0;
+            width: 100%;
+        }
+
+        .meta-info {
+            font-size: 10px;
+            margin-bottom: 4px;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .ticket-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 4px 0;
+            font-size: 10.5px;
+        }
+
+        .ticket-table th {
+            border-bottom: 1px solid #000;
+            padding-bottom: 2px;
+            font-size: 9.5px;
+        }
+
+        .ticket-table td {
+            padding: 2px 0;
+            vertical-align: top;
+        }
+
+        .col-cant { width: 15%; text-align: left; }
+        .col-desc { width: 55%; text-align: left; word-break: break-word; }
+        .col-total { width: 30%; text-align: right; }
+
+        .totals-container {
+            margin-top: 4px;
+            font-size: 11px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 1px 0;
+        }
+
+        .grand-total {
+            font-size: 13px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        /* Botón Flotante para Regresar al POS (Oculto por defecto) */
+        #btn-nav-pos {
+            position: fixed;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #0f172a;
+            color: #ffffff;
+            border: 2px solid #3b82f6;
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            display: none; /* Inicia oculto */
+            z-index: 9999;
+            cursor: pointer;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        /* Ocultar cualquier elemento interactivo en la impresión real */
+        @media print {
+            #btn-nav-pos {
+                display: none !important;
+            }
+            body {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Botón Flotante de Navegación Tactil (Oculto) -->
+    <button id="btn-nav-pos">
+        &#8592; Volver al POS (#<%= id_pedido %>)
+    </button>
+
+    <div class="ticket-container">
+        <!-- Encabezado -->
+        <div class="text-center">
+            <div class="title uppercase">Restaurante Bahía</div>
+            <div class="subtitle">*** PRE-CUENTA ***</div>
+            <div class="subtitle">(NO ES UN COMPROBANTE FISCAL)</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Metadatos de la Orden -->
+        <div class="meta-info">
+            <div class="meta-row">
+                <span>Comanda: #<%= id_pedido %></span>
+                <span>Mesa: <%= locals.nombre_mesa || 'N/A' %></span>
+            </div>
+            <div class="meta-row">
+                <span>Fecha: <%= new Date().toLocaleDateString('es-ES') %></span>
+                <span>Hora: <%= new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) %></span>
+            </div>
+            <% if (locals.atendio) { %>
+                <div class="meta-row">
+                    <span>Atendió: <%= atendio %></span>
+                </div>
+            <% } %>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Detalles de Consumos -->
+        <table class="ticket-table">
+            <thead>
+                <tr>
+                    <th class="col-cant">CANT</th>
+                    <th class="col-desc">CONCEPTO</th>
+                    <th class="col-total">IMPORT.</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (locals.detalles && detalles.length > 0) { %>
+                    <% detalles.forEach(item => { %>
+                        <% const subtotalItem = item.precio * item.cantidad; %>
+                        <tr>
+                            <td class="col-cant bold"><%= item.cantidad %></td>
+                            <td class="col-desc uppercase"><%= item.nombre %></td>
+                            <td class="col-total bold">$<%= subtotalItem.toFixed(2) %></td>
+                        </tr>
+                    <% }) %>
+                <% } else { %>
+                    <tr>
+                        <td colspan="3" class="text-center">Sin consumos registrados</td>
+                    </tr>
+                <% } %>
+            </tbody>
+        </table>
+
+        <div class="double-divider"></div>
+
+        <!-- Desglose de Totales -->
+        <% 
+            const subtotal = locals.detalles ? detalles.reduce((acc, i) => acc + (i.precio * i.cantidad), 0) : 0;
+            const impuesto = subtotal * 0.10;
+            const total = subtotal + impuesto;
+        %>
+        <div class="totals-container">
+            <div class="total-row">
+                <span>SUBTOTAL:</span>
+                <span>$<%= subtotal.toFixed(2) %></span>
+            </div>
+            <div class="total-row">
+                <span>PROPINA/TAX (10%):</span>
+                <span>$<%= impuesto.toFixed(2) %></span>
+            </div>
+            <div class="divider"></div>
+            <div class="total-row grand-total">
+                <span>TOTAL:</span>
+                <span>$<%= total.toFixed(2) %></span>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Pie del Ticket -->
+        <div class="text-center" style="margin-top: 6px;">
+            <p class="bold">¡Gracias por su preferencia!</p>
+            <p style="font-size: 9px; margin-top: 2px;">Solicite su cuenta en caja</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnNav = document.getElementById('btn-nav-pos');
+            const idPedido = '<%= id_pedido %>';
+
+            // Acción al presionar el botón de regresar
+            btnNav.addEventListener('click', (e) => {
+                e.stopPropagation(); // Evita que el evento se propague al body
+                window.location.href = `/pos/${idPedido}`;
+            });
+
+            // Lógica de Toggle en cualquier parte de la pantalla/página
+            document.body.addEventListener('click', () => {
+                const isVisible = btnNav.style.display === 'block';
+                if (isVisible) {
+                    btnNav.style.display = 'none';
+                } else {
+                    btnNav.style.display = 'block';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

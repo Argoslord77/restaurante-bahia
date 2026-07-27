@@ -905,21 +905,153 @@
             window.open(`/pos/precuenta/${id_pedido}`, '_blank');
         }
 
-        function checkoutOrder() {
-            const id_pedido = document.getElementById('pos_id_pedido').value;
-            const totalArticulos = carrito.length + historicoDetalles.length;
-            if(totalArticulos === 0) {
-                Swal.fire({
-                    title: 'SIN PRODUCTOS', 
-                    text: 'No se puede cobrar una comanda sin consumos.', 
+        async function checkoutOrder() {
+            // 1. Advertir si existen productos en la ronda de captura sin enviar a cocina
+            if (carrito.length > 0) {
+                const confirmacion = await Swal.fire({
+                    title: 'TIENES PLATILLOS EN CAPTURA',
+                    text: 'Hay productos en la ronda actual sin enviar a cocina. ¿Deseas cobrar únicamente lo registrado en el histórico o volver para enviarlos?',
                     icon: 'warning',
+                    showCancelButton: true,
                     confirmButtonColor: '#3b82f6',
-                    background: '#ffffff',
-                    color: '#0f172a'
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: 'COBRAR HISTÓRICO',
+                    cancelButtonText: 'VOLVER Y ENVIAR'
                 });
-                return;
+
+                if (!confirmacion.isConfirmed) return;
             }
-            window.location.href = `/pos/checkout/${id_pedido}`;
+
+            // 2. Calcular subtotal real consumido en el histórico (omitiendo cancelados)
+            let subtotalHistorico = 0;
+            if (historicoDetalles && historicoDetalles.length > 0) {
+                subtotalHistorico = historicoDetalles.reduce((acc, item) => {
+                    return item.estado !== 'cancelado' ? acc + (item.precio * item.cantidad) : acc;
+                }, 0);
+            }
+
+            if (subtotalHistorico <= 0) {
+                return Swal.fire({
+                    icon: 'warning',
+                    title: 'SIN CONSUMOS REGISTRADOS',
+                    text: 'No hay productos guardados en el histórico para efectuar el cobro.',
+                    confirmButtonColor: '#3b82f6'
+                });
+            }
+
+            const idPedido = document.getElementById('pos_id_pedido').value;
+
+            // 3. Ventana modal de Cobro con desglose y reglas dinámicas
+            const { value: formValues } = await Swal.fire({
+                title: 'PROCESAR COBRO DE COMANDA',
+                html: `
+                    <div class="text-left space-y-3 p-1">
+                        <div class="bg-slate-100 p-3 rounded-2xl border border-slate-200">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total a Cobrar:</span>
+                            <span class="text-2xl font-black text-slate-800">$${subtotalHistorico.toFixed(2)}</span>
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-black text-slate-700 uppercase block mb-1">Método de Pago</label>
+                            <select id="swal-metodo-pago" class="w-full bg-slate-50 border border-slate-300 font-bold text-xs rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <option value="efectivo">Efectivo</option>
+                                <option value="tarjeta">Tarjeta (Débito/Crédito)</option>
+                                <option value="transferencia">Transferencia</option>
+                            </select>
+                        </div>
+
+                        <div id="swal-monto-container">
+                            <label class="text-xs font-black text-slate-700 uppercase block mb-1">Monto Recibido</label>
+                            <input type="number" id="swal-monto-recibido" step="0.01" value="${subtotalHistorico.toFixed(2)}" class="w-full bg-slate-50 border border-slate-300 font-bold text-xs rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00">
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-200 flex items-center gap-2">
+                            <input type="checkbox" id="swal-es-cortesia" class="h-4 w-4 text-blue-600 rounded">
+                            <label for="swal-es-cortesia" class="text-xs font-bold text-slate-700 uppercase cursor-pointer">Marcar como Cortesía (100% Descuento)</label>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'FINALIZAR Y COBRAR',
+                cancelButtonText: 'CANCELAR',
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#64748b',
+                didOpen: () => {
+                    const selectMetodo = document.getElementById('swal-metodo-pago');
+                    const containerMonto = document.getElementById('swal-monto-container');
+                    const chkCortesia = document.getElementById('swal-es-cortesia');
+
+                    selectMetodo.addEventListener('change', () => {
+                        if (selectMetodo.value === 'efectivo') {
+                            containerMonto.style.display = 'block';
+                        } else {
+                            containerMonto.style.display = 'none';
+                        }
+                    });
+
+                    chkCortesia.addEventListener('change', () => {
+                        if (chkCortesia.checked) {
+                            containerMonto.style.display = 'none';
+                            selectMetodo.disabled = true;
+                        } else {
+                            selectMetodo.disabled = false;
+                            if (selectMetodo.value === 'efectivo') containerMonto.style.display = 'block';
+                        }
+                    });
+                },
+                preConfirm: () => {
+                    return {
+                        metodo_pago: document.getElementById('swal-metodo-pago').value,
+                        monto_recibido: parseFloat(document.getElementById('swal-monto-recibido').value) || 0,
+                        es_cortesia: document.getElementById('swal-es-cortesia').checked
+                    };
+                }
+            });
+
+            if (!formValues) return;
+
+            // 4. Envío de cobro al servidor
+            try {
+                const response = await fetch(`/pos/cobrar/${idPedido}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formValues)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    let mensajeExtra = '';
+                    if (data.detalles && data.detalles.cambio > 0) {
+                        mensajeExtra = `\nCambio a Entregar: $${data.detalles.cambio.toFixed(2)}`;
+                    }
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'VENTA FINALIZADA',
+                        text: `${data.message}${mensajeExtra}`,
+                        confirmButtonColor: '#10b981'
+                    }).then(() => {
+                        window.location.href = '/admin/dashboard';
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'ERROR EN EL COBRO',
+                        text: data.message || 'No se pudo procesar la transacción.',
+                        confirmButtonColor: '#ef4444'
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'ERROR DE RED',
+                    text: 'Ocurrió un error al procesar el pago.',
+                    confirmButtonColor: '#ef4444'
+                });
+            }
         }
 
         // Reproductor de sonido para notificaciones

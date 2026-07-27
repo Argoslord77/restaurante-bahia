@@ -30,6 +30,7 @@ const DashboardDependienteController = {
                         CONCAT('Mesa ', m.numero) AS nombre,
                         m.capacidad,
                         m.estado AS estado_mesa,
+                        m.ubicacion,
                         p.id AS id_pedido_activo,
                         p.estado_pedido,
                         p.estado_pago,
@@ -42,14 +43,15 @@ const DashboardDependienteController = {
                         AND dam.dependiente_id = ?
                     LEFT JOIN pedidos p 
                         ON m.id = p.id_mesa 
-                        AND p.estado_pago = 'no pagado'
                         AND p.turno_servicio_id = ?
+                        AND p.estado_pago != 'pagado'
+                        AND p.estado_pedido NOT IN ('cancelado', 'pagado')
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                     ORDER BY CAST(m.numero AS UNSIGNED) ASC
                 `;
                 paramsMesas = [usuarioId, turnoId];
             } else {
-                // Admin o Supervisor ve todo el plano
+                // Admin o Supervisor
                 queryMesas = `
                     SELECT 
                         m.id,
@@ -57,6 +59,7 @@ const DashboardDependienteController = {
                         CONCAT('Mesa ', m.numero) AS nombre,
                         m.capacidad,
                         m.estado AS estado_mesa,
+                        m.ubicacion,
                         p.id AS id_pedido_activo,
                         p.estado_pedido,
                         p.estado_pago,
@@ -67,11 +70,13 @@ const DashboardDependienteController = {
                     FROM mesas m
                     LEFT JOIN pedidos p 
                         ON m.id = p.id_mesa 
-                        AND p.estado_pago = 'no pagado'
+                        AND p.turno_servicio_id = ?
+                        AND p.estado_pago != 'pagado'
+                        AND p.estado_pedido NOT IN ('cancelado', 'pagado')
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                     ORDER BY CAST(m.numero AS UNSIGNED) ASC
                 `;
-                paramsMesas = [];
+                paramsMesas = [turnoId];
             }
 
             const [mesas] = await db.query(queryMesas, paramsMesas);
@@ -108,9 +113,9 @@ const DashboardDependienteController = {
                 queryStats = `
                     SELECT 
                         COUNT(DISTINCT dam.mesa_id) AS total_mesas,
-                        COUNT(DISTINCT CASE WHEN p.estado_pago = 'no pagado' THEN m.id END) AS mesas_ocupadas,
-                        SUM(CASE WHEN p.estado_pedido = 'pendiente' AND p.estado_pago = 'no pagado' THEN 1 ELSE 0 END) AS pedidos_pendientes,
-                        SUM(CASE WHEN p.estado_pedido = 'preparando' AND p.estado_pago = 'no pagado' THEN 1 ELSE 0 END) AS en_preparacion,
+                        COUNT(DISTINCT CASE WHEN p.estado_pago = 'pendiente' THEN m.id END) AS mesas_ocupadas,
+                        SUM(CASE WHEN p.estado_pedido = 'pendiente' AND p.estado_pago = 'pendiente' THEN 1 ELSE 0 END) AS pedidos_pendientes,
+                        SUM(CASE WHEN p.estado_pedido = 'preparando' AND p.estado_pago = 'pendiente' THEN 1 ELSE 0 END) AS en_preparacion,
                         (
                             SELECT COALESCE(ROUND(SUM(p2.total), 2), 0) 
                             FROM pedidos p2 
@@ -122,7 +127,7 @@ const DashboardDependienteController = {
                     INNER JOIN mesas m ON dam.mesa_id = m.id
                     LEFT JOIN pedidos p ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ? 
-                        AND p.estado_pago = 'no pagado'
+                        AND p.estado_pago = 'pendiente'
                     WHERE dam.dependiente_id = ?
                 `;
                 paramsStats = [turnoId, usuarioId, turnoId, usuarioId];
@@ -131,9 +136,9 @@ const DashboardDependienteController = {
                 queryStats = `
                     SELECT 
                         COUNT(DISTINCT m.id) AS total_mesas,
-                        COUNT(DISTINCT CASE WHEN p.estado_pago = 'no pagado' THEN m.id END) AS mesas_ocupadas,
-                        SUM(CASE WHEN p.estado_pedido = 'pendiente' AND p.estado_pago = 'no pagado' THEN 1 ELSE 0 END) AS pedidos_pendientes,
-                        SUM(CASE WHEN p.estado_pedido = 'preparando' AND p.estado_pago = 'no pagado' THEN 1 ELSE 0 END) AS en_preparacion,
+                        COUNT(DISTINCT CASE WHEN p.estado_pago = 'pendiente' THEN m.id END) AS mesas_ocupadas,
+                        SUM(CASE WHEN p.estado_pedido = 'pendiente' AND p.estado_pago = 'pendiente' THEN 1 ELSE 0 END) AS pedidos_pendientes,
+                        SUM(CASE WHEN p.estado_pedido = 'preparando' AND p.estado_pago = 'pendiente' THEN 1 ELSE 0 END) AS en_preparacion,
                         (
                             SELECT COALESCE(ROUND(SUM(p2.total), 2), 0) 
                             FROM pedidos p2 
@@ -143,7 +148,7 @@ const DashboardDependienteController = {
                     FROM mesas m
                     LEFT JOIN pedidos p ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ? 
-                        AND p.estado_pago = 'no pagado'
+                        AND p.estado_pago = 'pendiente'
                 `;
                 paramsStats = [turnoId, turnoId];
             }
