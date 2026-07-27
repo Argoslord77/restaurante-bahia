@@ -94,6 +94,11 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'monedas'){ %> active<% } %>" href="/admin/monedas">
+                <i class="fa-solid fa-coins me-2 text-dark"></i> Monedas / Tasas
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'settings'){ %> active<% } %>" href="/admin/configuracion">
                 <i class="fa-solid fa-cogs me-2 text-dark"></i> Configuración
             </a>

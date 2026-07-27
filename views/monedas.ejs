@@ -1,276 +1,424 @@
-<%- include('../partials/header') %>
-
-<div class="container-fluid my-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-coins me-2"></i>Gestión de Monedas y Tasas</h1>
-            <p class="text-muted small mb-0">Administra las divisas aceptadas en el negocio y configura la moneda local base.</p>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Monedas - Restaurante</title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
         </div>
-        <button type="button" class="btn btn-primary" onclick="abrirModalCrear()">
-            <i class="fas fa-plus me-1"></i> Nueva Moneda
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
         </button>
     </div>
 
-    <!-- Tabla de Monedas -->
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Código</th>
-                            <th>Nombre</th>
-                            <th class="text-center">Símbolo</th>
-                            <th class="text-end">Factor de Cambio</th>
-                            <th class="text-center">Tipo</th>
-                            <th class="text-center">Estado</th>
-                            <th class="text-end me-3">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% if (monedas && monedas.length > 0) { %>
-                            <% monedas.forEach(moneda => { %>
-                                <tr class="<%= moneda.activo ? '' : 'table-secondary opacity-75' %>">
-                                    <td class="fw-bold"><%= moneda.codigo %></td>
-                                    <td><%= moneda.nombre %></td>
-                                    <td class="text-center"><span class="badge bg-light text-dark border"><%= moneda.simbolo %></span></td>
-                                    <td class="text-end font-monospace">
-                                        <%= parseFloat(moneda.factor_cambio).toFixed(4) %>
-                                    </td>
-                                    <td class="text-center">
-                                        <% if (moneda.es_moneda_base) { %>
-                                            <span class="badge bg-success"><i class="fas fa-star me-1"></i>Moneda Base</span>
-                                        <% } else { %>
-                                            <span class="badge bg-secondary">Secundaria</span>
-                                        <% } %>
-                                    </td>
-                                    <td class="text-center">
-                                        <% if (moneda.activo) { %>
-                                            <span class="badge bg-primary">Activa</span>
-                                        <% } else { %>
-                                            <span class="badge bg-danger">Inactiva</span>
-                                        <% } %>
-                                    </td>
-                                    <td class="text-end">
-                                        <div class="btn-group btn-group-sm">
-                                            <% if (!moneda.es_moneda_base && moneda.activo) { %>
-                                                <button type="button" class="btn btn-outline-warning" title="Establecer como Moneda Base" onclick="establecerBase(<%= moneda.id %>, '<%= moneda.codigo %>')">
-                                                    <i class="fas fa-star"></i>
-                                                </button>
-                                            <% } %>
-                                            <button type="button" class="btn btn-outline-secondary" title="Editar" onclick='abrirModalEditar(<%- JSON.stringify(moneda) %>)'>
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <% if (!moneda.es_moneda_base) { %>
-                                                <button type="button" class="btn <%= moneda.activo ? 'btn-outline-danger' : 'btn-outline-success' %>" title="<%= moneda.activo ? 'Desactivar' : 'Activar' %>" onclick="toggleEstado(<%= moneda.id %>, <%= moneda.activo %>)">
-                                                    <i class="fas <%= moneda.activo ? 'fa-ban' : 'fa-check' %>"></i>
-                                                </button>
-                                            <% } %>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <% }); %>
-                        <% } else { %>
-                            <tr>
-                                <td colspan="7" class="text-center py-4 text-muted">No hay monedas registradas.</td>
-                            </tr>
-                        <% } %>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Formulario Moneda (Crear / Editar) -->
-<div class="modal fade" id="modalMoneda" tabindex="-1" aria-labelledby="modalMonedaTitle" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalMonedaTitle">Nueva Moneda</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="formMoneda" onsubmit="guardarMoneda(event)">
-                <div class="modal-body">
-                    <input type="hidden" id="monedaId" value="">
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('./includes/sideBarMenu') %>
+            
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                
+                <div class="flex-grow-1">
+                    <%- include('./includes/header', {encabezado_pagina: 'Configuración / Monedas', desc_pagina: 'Gestión de tipos de moneda y tasas de cambio', add_btn: true, btn_label: "Nueva Moneda", modal: "modalCrearMoneda"}) %>
                     
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="codigo" class="form-label">Código ISO <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control text-uppercase" id="codigo" maxlength="5" placeholder="EJ: USD, CUP" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="simbolo" class="form-label">Símbolo <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="simbolo" maxlength="5" placeholder="$" defaultValue="$" required>
-                        </div>
-                        <div class="col-12">
-                            <label for="nombre" class="form-label">Nombre de la Moneda <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="nombre" placeholder="Ej: Dólar Estadounidense" required>
-                        </div>
-                        <div class="col-12">
-                            <label for="factor_cambio" class="form-label">Factor de Cambio (Tasa respecto a Moneda Base)</label>
-                            <input type="number" step="0.0001" min="0.0001" class="form-control" id="factor_cambio" value="1.0000" required>
-                            <div class="form-text">Si se marca como moneda base, el factor se fijará automáticamente en 1.0000.</div>
-                        </div>
-                        <div class="col-12" id="wrapperEsBase">
-                            <div class="form-check form-switch mt-2">
-                                <input class="form-check-input" type="checkbox" id="es_moneda_base" onchange="gestionarToggleBase()">
-                                <label class="form-check-label fw-bold" for="es_moneda_base">Es Moneda Base del Sistema</label>
-                            </div>
+                    <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="tablaMonedas">
+                                <thead class="table-custom-thead text-uppercase fs-7">
+                                    <tr>
+                                        <th class="ps-4 py-3">Nombre</th>
+                                        <th class="py-3">Código ISO</th>
+                                        <th class="py-3">Símbolo</th>
+                                        <th class="py-3">Tasa de Cambio</th>
+                                        <th class="py-3 text-center">Tipo</th>
+                                        <th class="py-3 text-center">Estado</th>
+                                        <th class="text-center py-3" style="width: 160px;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!monedas || monedas.length === 0) { %>
+                                        <tr>
+                                            <td colspan="7" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-coins d-block fs-2 mb-2 text-secondary"></i> No hay monedas registradas.
+                                            </td>
+                                        </tr>
+                                    <% } else { %>
+                                        <% monedas.forEach(moneda => { %>
+                                            <tr>
+                                                <td class="ps-4 fw-semibold text-dark">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="fa-solid fa-money-bill-wave text-secondary"></i>
+                                                        <span><%= moneda.nombre %></span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="text-secondary bg-light border px-2 py-1 rounded small font-monospace"><%= moneda.codigo %></span>
+                                                </td>
+                                                <td class="fw-bold text-secondary"><%= moneda.simbolo %></td>
+                                                <td class="font-monospace"><%= moneda.factor_cambio %></td>
+                                                <td class="text-center">
+                                                    <% if (moneda.es_moneda_base) { %>
+                                                        <span class="badge bg-success text-white px-3 py-1 rounded-pill fs-7">
+                                                            <i class="fa-solid fa-star me-1"></i>Base Sistema
+                                                        </span>
+                                                    <% } else { %>
+                                                        <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 fs-7 btn-establecer-base"
+                                                                data-id="<%= moneda.id %>"
+                                                                data-nombre="<%= moneda.nombre %>"
+                                                                title="Establecer como moneda base">
+                                                            Secundaria
+                                                        </button>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-center">
+                                                    <% if (moneda.activo) { %>
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill small">Activo</span>
+                                                    <% } else { %>
+                                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill small">Inactivo</span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="btn-group gap-1">
+                                                        <button class="btn btn-sm btn-outline-secondary border-0"
+                                                                title="Editar" 
+                                                                data-bs-toggle="modal" 
+                                                                data-bs-target="#modalEditarMoneda"
+                                                                data-id="<%= moneda.id %>"
+                                                                data-nombre="<%= moneda.nombre %>"
+                                                                data-codigo="<%= moneda.codigo %>"
+                                                                data-simbolo="<%= moneda.simbolo %>"
+                                                                data-tasa="<%= moneda.tasa_cambio %>"
+                                                                data-base="<%= moneda.es_moneda_base %>">
+                                                            <i class="fa-solid fa-pen-to-square"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm <%= moneda.activo ? 'btn-outline-danger' : 'btn-outline-success' %> border-0 btn-cambiar-estado" 
+                                                                data-id="<%= moneda.id %>"
+                                                                data-nombre="<%= moneda.nombre %>"
+                                                                data-activo="<%= moneda.activo %>"
+                                                                title="<%= moneda.activo ? 'Desactivar Moneda' : 'Activar Moneda' %>">
+                                                            <i class="fa-solid <%= moneda.activo ? 'fa-user-slash' : 'fa-user-check' %>"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="btnGuardar">Guardar</button>
+
+                <div class="mt-auto">
+                    <%- include('./includes/footer') %>
                 </div>
-            </form>
+            </main>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- MODAL CREAR MONEDA -->
+    <div class="modal fade" id="modalCrearMoneda" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-coins me-2"></i>Registrar Nueva Moneda</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="formCrearMoneda">
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Nombre de la Moneda</label>
+                                <input type="text" id="crearNombre" name="nombre" class="form-control" placeholder="Ej. Peso Cubano" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small">Código ISO</label>
+                                <input type="text" id="crearCodigo" name="codigo" class="form-control" placeholder="Ej. CUP" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small">Símbolo</label>
+                                <input type="text" id="crearSimbolo" name="simbolo" class="form-control" placeholder="Ej. $" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Tasa de Cambio</label>
+                                <input type="number" step="0.0001" id="crearTasa" name="tasa_cambio" class="form-control" placeholder="1.0000" required>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="crearEsMonedaBase" name="es_moneda_base" value="1">
+                                    <label class="form-check-label fw-semibold text-secondary small" for="crearEsMonedaBase">
+                                        Establecer como moneda base del sistema
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top-0">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary px-4">Guardar Moneda</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
-<script>
-    let bsModalMoneda = null;
+    <!-- MODAL EDITAR MONEDA -->
+    <div class="modal fade" id="modalEditarMoneda" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-pen-to-square me-2"></i>Editar Datos de Moneda</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="formEditarMoneda">
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="editMonedaId" name="id">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Nombre de la Moneda</label>
+                                <input type="text" id="editNombre" name="nombre" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small">Código ISO</label>
+                                <input type="text" id="editCodigo" name="codigo" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small">Símbolo</label>
+                                <input type="text" id="editSimbolo" name="simbolo" class="form-control" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Tasa de Cambio</label>
+                                <input type="number" step="0.0001" id="editTasa" name="tasa_cambio" class="form-control" required>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="editEsMonedaBase" name="es_moneda_base" value="1">
+                                    <label class="form-check-label fw-semibold text-secondary small" for="editEsMonedaBase">
+                                        Establecer como moneda base del sistema
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top-0">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success btn-sm px-4">Actualizar Moneda</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
-    document.addEventListener('DOMContentLoaded', () => {
-        bsModalMoneda = new bootstrap.Modal(document.getElementById('modalMoneda'));
-    });
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        const bsModalCrear = new bootstrap.Modal(document.getElementById('modalCrearMoneda'));
+        const bsModalEditar = new bootstrap.Modal(document.getElementById('modalEditarMoneda'));
 
-    function gestionarToggleBase() {
-        const chkBase = document.getElementById('es_moneda_base');
-        const inputFactor = document.getElementById('factor_cambio');
-        if (chkBase.checked) {
-            inputFactor.value = "1.0000";
-            inputFactor.disabled = true;
-        } else {
-            inputFactor.disabled = false;
-        }
-    }
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById('formCrearMoneda').addEventListener('submit', (e) => saveMoneda(e, false));
+            document.getElementById('formEditarMoneda').addEventListener('submit', (e) => saveMoneda(e, true));
 
-    function abrirModalCrear() {
-        document.getElementById('formMoneda').reset();
-        document.getElementById('monedaId').value = '';
-        document.getElementById('modalMonedaTitle').innerText = 'Nueva Moneda';
-        document.getElementById('factor_cambio').disabled = false;
-        document.getElementById('es_moneda_base').disabled = false;
-        bsModalMoneda.show();
-    }
+            document.getElementById('tablaMonedas').addEventListener('click', function(e) {
+                const btnEstado = e.target.closest('.btn-cambiar-estado');
+                if (btnEstado) {
+                    const id = btnEstado.getAttribute('data-id');
+                    const nombre = btnEstado.getAttribute('data-nombre');
+                    const estadoActual = btnEstado.getAttribute('data-activo') === 'true' || btnEstado.getAttribute('data-activo') === '1';
+                    toggleEstado(id, nombre, estadoActual);
+                }
 
-    function abrirModalEditar(moneda) {
-        document.getElementById('formMoneda').reset();
-        document.getElementById('monedaId').value = moneda.id;
-        document.getElementById('modalMonedaTitle').innerText = `Editar Moneda: ${moneda.codigo}`;
-        document.getElementById('codigo').value = moneda.codigo;
-        document.getElementById('nombre').value = moneda.nombre;
-        document.getElementById('simbolo').value = moneda.simbolo;
-        document.getElementById('factor_cambio').value = parseFloat(moneda.factor_cambio).toFixed(4);
-        
-        const chkBase = document.getElementById('es_moneda_base');
-        chkBase.checked = !!moneda.es_moneda_base;
-
-        // Si es la moneda base actual, no permitimos desmarcarla desde edición rápida
-        if (moneda.es_moneda_base) {
-            chkBase.disabled = true;
-            document.getElementById('factor_cambio').disabled = true;
-        } else {
-            chkBase.disabled = false;
-            document.getElementById('factor_cambio').disabled = false;
-        }
-
-        bsModalMoneda.show();
-    }
-
-    async function guardarMoneda(event) {
-        event.preventDefault();
-
-        const id = document.getElementById('monedaId').value;
-        const payload = {
-            codigo: document.getElementById('codigo').value,
-            nombre: document.getElementById('nombre').value,
-            simbolo: document.getElementById('simbolo').value,
-            factor_cambio: parseFloat(document.getElementById('factor_cambio').value),
-            es_moneda_base: document.getElementById('es_moneda_base').checked
-        };
-
-        const url = id ? `/admin/monedas/api/${id}` : '/admin/monedas/api';
-        const method = id ? 'PUT' : 'POST';
-
-        try {
-            const res = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                const btnBase = e.target.closest('.btn-establecer-base');
+                if (btnBase) {
+                    const id = btnBase.getAttribute('data-id');
+                    const nombre = btnBase.getAttribute('data-nombre');
+                    setMonedaBase(id, nombre);
+                }
             });
-
-            const data = await res.json();
-
-            if (res.ok && data.success) {
-                bsModalMoneda.hide();
-                Swal.fire({
-                    icon: 'success',
-                    title: '¡Logrado!',
-                    text: data.message,
-                    timer: 1500,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                Swal.fire('Error', data.message || 'Ocurrió un inconveniente', 'error');
-            }
-        } catch (err) {
-            console.error(err);
-            Swal.fire('Error', 'No se pudo procesar la solicitud.', 'error');
-        }
-    }
-
-    async function establecerBase(id, codigo) {
-        const confirm = await Swal.fire({
-            title: `¿Convertir ${codigo} en Moneda Base?`,
-            text: "Todas las transacciones tomarán esta moneda como equivalencia 1.0000.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, cambiar',
-            cancelButtonText: 'Cancelar'
         });
 
-        if (!confirm.isConfirmed) return;
+        document.getElementById('modalCrearMoneda').addEventListener('hidden.bs.modal', () => {
+            document.getElementById('formCrearMoneda').reset();
+        });
 
-        try {
-            const res = await fetch(`/admin/monedas/api/${id}/establecer-base`, { method: 'PATCH' });
-            const data = await res.json();
+        const modalEditarElement = document.getElementById('modalEditarMoneda');
+        if (modalEditarElement) {
+            modalEditarElement.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const id = button.getAttribute('data-id');
+                const nombre = button.getAttribute('data-nombre');
+                const codigo = button.getAttribute('data-codigo');
+                const simbolo = button.getAttribute('data-simbolo');
+                const tasa = button.getAttribute('data-tasa');
+                const base = button.getAttribute('data-base');
 
-            if (res.ok && data.success) {
-                Swal.fire('Actualizado', data.message, 'success').then(() => location.reload());
-            } else {
-                Swal.fire('Error', data.message, 'error');
-            }
-        } catch (err) {
-            Swal.fire('Error', 'Error de red al establecer la moneda base.', 'error');
+                document.getElementById('editMonedaId').value = id;
+                document.getElementById('editNombre').value = nombre;
+                document.getElementById('editCodigo').value = codigo;
+                document.getElementById('editSimbolo').value = simbolo;
+                document.getElementById('editTasa').value = tasa;
+                document.getElementById('editEsMonedaBase').checked = (base === 'true' || base === '1');
+            });
         }
-    }
 
-    async function toggleEstado(id, estaActiva) {
-        const accion = estaActiva ? 'desactivar' : 'activar';
+        async function saveMoneda(e, esEdicion) {
+            e.preventDefault();
+            const formElement = esEdicion ? document.getElementById('formEditarMoneda') : document.getElementById('formCrearMoneda');
+            
+            // Extraer valores directamente por ID para garantizar el tipo y nombre exacto
+            const prefix = esEdicion ? 'edit' : 'crear';
+            const nombre = document.getElementById(`${prefix}Nombre`).value.trim();
+            const codigo = document.getElementById(`${prefix}Codigo`).value.trim();
+            const simbolo = document.getElementById(`${prefix}Simbolo`).value.trim();
+            const tasaVal = parseFloat(document.getElementById(`${prefix}Tasa`).value);
+            const esBase = document.getElementById(`${prefix}EsMonedaBase`).checked;
 
-        try {
-            const res = await fetch(`/admin/monedas/api/${id}/estado`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ activo: !estaActiva })
+            // Payload adaptado a los nombres más comunes de controladores Node/Express
+            const payload = {
+                nombre: nombre,
+                codigo: codigo,
+                simbolo: simbolo,
+                tasa_cambio: tasaVal,
+                factor_cambio: tasaVal, // Enviamos ambas variaciones por compatibilidad
+                es_moneda_base: esBase ? 1 : 0
+            };
+
+            let url = '/admin/api/crear-moneda';
+            let method = 'POST';
+
+            if (esEdicion) {
+                const id = document.getElementById('editMonedaId').value;
+                url = `/admin/api/act-moneda/${id}`;
+                method = 'PUT';
+            }
+
+            Swal.fire({
+                title: esEdicion ? 'Actualizando moneda...' : 'Guardando moneda...',
+                text: 'Por favor, espere.',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
             });
 
-            const data = await res.json();
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor.' }));
 
-            if (res.ok && data.success) {
-                location.reload();
-            } else {
-                Swal.fire('Error', data.message, 'error');
+                if (res.ok && (result.success || result.status === 'success')) {
+                    if (esEdicion) bsModalEditar.hide(); else bsModalCrear.hide();
+                    Swal.fire({
+                        title: esEdicion ? '¡Actualizado!' : '¡Registrado!',
+                        text: result.message || 'Operación realizada correctamente.',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        willClose: () => { location.reload(); }
+                    });
+                } else {
+                    Swal.fire('Error de Validación', result.message || 'Verifica los campos ingresados.', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                Swal.fire('Error de Red', err.message || 'Fallo de conexión con el servidor.', 'error');
             }
-        } catch (err) {
-            Swal.fire('Error', `No se pudo ${accion} la moneda.`, 'error');
         }
-    }
-</script>
 
-<%- include('../partials/footer') %>
+        function toggleEstado(id, nombreMoneda, estadoActual) {
+            const accion = estadoActual ? 'desactivar' : 'activar';
+            
+            Swal.fire({
+                title: '¿Confirmar Acción?',
+                text: `¿Desea ${accion} la moneda: ${nombreMoneda}?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: estadoActual ? '#d33' : '#198754',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: `Sí, ${accion}`,
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                    try {
+                        const res = await fetch(`/admin/api/moneda/${id}/estado`, { 
+                            method: 'PATCH', 
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ activo: !estadoActual })
+                        });
+                        const data = await res.json().catch(() => ({ success: false, message: 'Error al interpretar respuesta.' }));
+
+                        if (res.ok && (data.success || data.status === 'success')) {
+                            Swal.fire({
+                                title: '¡Actualizado!',
+                                text: data.message || `Moneda ${accion}da exitosamente.`,
+                                icon: 'success',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => { location.reload(); });
+                        } else {
+                            Swal.fire('Error', data.message || 'No se pudo cambiar el estado.', 'error');
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        Swal.fire('Error de Red', 'No se pudo conectar con el servidor.', 'error');
+                    }
+                }
+            });
+        }
+
+        function setMonedaBase(id, nombreMoneda) {
+            Swal.fire({
+                title: '¿Establecer como Base?',
+                text: `¿Desea establecer ${nombreMoneda} como la moneda principal del sistema?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, Establecer',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ title: 'Actualizando base...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                    try {
+                        const res = await fetch(`/admin/api/moneda/${id}/establecer-base`, { 
+                            method: 'PATCH', 
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        const data = await res.json().catch(() => ({ success: false, message: 'Error al interpretar respuesta.' }));
+
+                        if (res.ok && (data.success || data.status === 'success')) {
+                            Swal.fire({
+                                title: '¡Configurado!',
+                                text: data.message || 'Moneda base actualizada.',
+                                icon: 'success',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => { location.reload(); });
+                        } else {
+                            Swal.fire('Error', data.message || 'No se pudo actualizar la moneda base.', 'error');
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        Swal.fire('Error de Red', 'No se pudo conectar con el servidor.', 'error');
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

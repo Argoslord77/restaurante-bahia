@@ -128,6 +128,7 @@ const settingRoutes = require('./routes/settingRoutes');
 const entradaRoutes = require('./routes/entradaRoutes');
 const inventarioRoutes = require('./routes/inventarioRoutes');
 const turnoRoutes = require('./routes/turnoRoutes');
+const monedaRoutes = require('./routes/monedaRoutes');
 
 app.use('/', authRoutes);
 app.use('/admin', userRoutes);
@@ -143,6 +144,7 @@ app.use('/admin', transferenciaRoutes);
 app.use('/admin', entradaRoutes);
 app.use('/admin', inventarioRoutes);
 app.use('/admin', turnoRoutes);
+app.use('/admin', monedaRoutes);
 
 app.use(posRoutes);
 

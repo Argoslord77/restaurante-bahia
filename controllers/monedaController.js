@@ -9,7 +9,7 @@ exports.renderMonedas = async (req, res) => {
     try {
         const monedas = await MonedaService.obtenerTodas(false);
 
-        return res.render('monedas/index', {
+        return res.render('monedas', {
             title: 'Configuración de Monedas y Tasas',
             user: req.user,
             monedas,
@@ -49,13 +49,22 @@ exports.obtenerMonedasAPI = async (req, res) => {
  * POST /api/monedas
  */
 exports.crearMoneda = async (req, res) => {
-    const { codigo, nombre, simbolo, factor_cambio, es_moneda_base } = req.body;
+    // Ejemplo de cómo debería recibirlo el controlador:
+    const { nombre, codigo, simbolo, factor_cambio, tasa_cambio, es_moneda_base } = req.body;
 
-    // Validación sintáctica en controlador
-    if (!codigo || !nombre || factor_cambio === undefined || isNaN(factor_cambio) || parseFloat(factor_cambio) <= 0) {
-        return res.status(400).json({
-            success: false,
-            message: 'El código, nombre y un factor de cambio mayor a cero son obligatorios.'
+    // Convertimos a booleano de forma segura
+    const esBase = es_moneda_base === true || es_moneda_base === 1 || es_moneda_base === '1';
+
+    // Si es moneda base, el factor es 1; si no, tomamos el valor enviado
+    const tasaFinal = esBase ? 1 : parseFloat(factor_cambio || tasa_cambio);
+
+    // Validación de campos requeridos
+    if (!nombre || !codigo || (!esBase && (!tasaFinal || tasaFinal <= 0))) {
+        return res.status(400).json({ 
+            success: false, 
+            message: esBase 
+                ? 'El código y nombre son obligatorios.' 
+                : 'El código, nombre y un factor de cambio mayor a cero son obligatorios.' 
         });
     }
 
