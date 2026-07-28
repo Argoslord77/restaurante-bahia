@@ -31,7 +31,6 @@ exports.viewPOS = async (req, res) => {
     }
 };
 
-
 exports.initOrderManual = async (req, res) => {
     try {
         const { id_mesa } = req.body;
@@ -240,7 +239,6 @@ exports.viewPrecuenta = async (req, res) => {
     try {
         const id_pedido = req.params.id_pedido;
         
-        // Log de depuración para verificar el ID recibido en la consola del servidor
         console.log("ID de pedido recibido en backend:", id_pedido);
 
         if (!id_pedido || id_pedido === 'undefined') {
@@ -281,11 +279,13 @@ exports.viewPrecuenta = async (req, res) => {
 };
 
 /**
- * Procesa el cobro multimoneda/mixto de un pedido en una sola transacción SQL
+ * Procesa el cobro multimoneda/mixto de un pedido en una sola transacción SQL.
+ * Registra el excedente pagado como propina en la tabla 'pedidos'.
  */
 exports.procesarCobro = async (req, res) => {
     const { id_pedido } = req.params;
-    const { pagos, es_cortesia } = req.body; // 'pagos' es una lista: [{ metodo_pago, moneda_id, factor_cambio_aplicado, monto_moneda_origen, monto_equivalente_local, referencia }]
+    const { pagos, es_cortesia } = req.body; 
+    // 'pagos': [{ metodo_pago, moneda_id, factor_cambio_aplicado, monto_moneda_origen, monto_equivalente_local, referencia_transaccion }]
     
     const id_cajero = req.session?.user?.id || req.user?.id;
 
@@ -322,6 +322,7 @@ exports.procesarCobro = async (req, res) => {
         }
 
         let nuevo_estado_pago = 'pagado';
+        let propina = 0;
         const totalPagar = parseFloat(pedido.total);
 
         if (es_cortesia) {
@@ -332,18 +333,21 @@ exports.procesarCobro = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Debe proporcionar al menos un método de pago.' });
             }
 
-            // Validar que la suma equivalente cubra el total
+            // Validar que la suma equivalente cubra el total a pagar
             const totalRecibidoLocal = pagos.reduce((sum, p) => sum + parseFloat(p.monto_equivalente_local || 0), 0);
             
             if (totalRecibidoLocal < totalPagar - 0.01) { // margen de centavos por redondeo
                 await connection.rollback();
                 return res.status(400).json({ 
                     success: false, 
-                    message: `El monto total recibido ($${totalRecibidoLocal.toFixed(2)}) es inferior al total a pagar ($${totalPagar.toFixed(2)}).` 
+                    message: `El monto abonado ($${totalRecibidoLocal.toFixed(2)}) es inferior al total requerido ($${totalPagar.toFixed(2)}).` 
                 });
             }
 
-            // 2. Registrar cada abono en 'pagos_pedido'
+            // Calcular el excedente de pago y asignarlo como propina
+            propina = totalRecibidoLocal - totalPagar;
+
+            // 2. Registrar cada abono en la tabla 'pagos_pedido'
             for (const pago of pagos) {
                 await connection.query(`
                     INSERT INTO pagos_pedido 
@@ -361,15 +365,16 @@ exports.procesarCobro = async (req, res) => {
             }
         }
 
-        // 3. Actualizar la tabla 'pedidos'
+        // 3. Actualizar la tabla 'pedidos' con el estado de pago, la propina retenida y la fecha de cierre
         await connection.query(`
             UPDATE pedidos 
             SET estado_pedido = 'entregado',
                 estado_pago = ?,
+                propina = ?,
                 id_usuario_cajero = ?,
                 fecha_cierre = NOW()
             WHERE id = ?
-        `, [nuevo_estado_pago, id_cajero, id_pedido]);
+        `, [nuevo_estado_pago, propina, id_cajero, id_pedido]);
 
         // 4. Liberar la mesa asignada
         if (pedido.id_mesa) {
@@ -384,8 +389,11 @@ exports.procesarCobro = async (req, res) => {
 
         return res.json({
             success: true,
-            message: nuevo_estado_pago === 'cortesia' ? 'Orden cerrada como cortesía.' : 'Cobro multimoneda procesado con éxito.',
-            total_cobrado: totalPagar
+            message: nuevo_estado_pago === 'cortesia' 
+                ? 'Orden cerrada como cortesía.' 
+                : 'Cobro multimoneda procesado con éxito.',
+            total_cobrado: totalPagar,
+            propina_registrada: propina
         });
 
     } catch (error) {
@@ -396,4 +404,34 @@ exports.procesarCobro = async (req, res) => {
         connection.release();
     }
 };
- 
+
+/**
+ * Obtiene la lista de monedas congeladas y sus tasas asociadas al turno activo actual.
+ */
+exports.obtenerMonedasTurnoActivo = async (req, res) => {
+    try {
+        const [monedas] = await db.query(`
+            SELECT 
+                tm.moneda_id,
+                m.codigo,
+                m.nombre,
+                m.simbolo,
+                tm.factor_cambio
+            FROM turnos_monedas tm
+            INNER JOIN monedas m ON tm.moneda_id = m.id
+            INNER JOIN turnos_servicio t ON tm.turno_id = t.id
+            WHERE t.estado = 'abierto'
+        `);
+
+        return res.json({
+            success: true,
+            monedas: monedas
+        });
+    } catch (error) {
+        console.error('Error al consultar monedas del turno activo:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'No se pudieron consultar las monedas del turno.' 
+        });
+    }
+};

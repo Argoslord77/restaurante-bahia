@@ -932,14 +932,14 @@
                     icon: 'warning',
                     title: 'SIN CONSUMOS REGISTRADOS',
                     text: 'No hay productos guardados en el histórico para efectuar el cobro.',
-                    confirmButtonColor: '#3b82f6'
+                    timer: 3000,
+                    showConfirmButton: false
                 });
             }
 
             const totalConTax = subtotalHistorico * 1.10; // Incluyendo impuesto del 10%
             const idPedido = document.getElementById('pos_id_pedido').value;
 
-            // Obtener las monedas congeladas del turno activo
             let monedasTurno = [];
             try {
                 const resMonedas = await fetch('/api/pos/monedas-turno-activo');
@@ -954,21 +954,26 @@
             // Modal de Cobro Mixto / Multimoneda
             const { value: formValues } = await Swal.fire({
                 title: 'PROCESAR COBRO MULTIMONEDA',
-                width: '600px',
+                width: '650px',
                 html: `
                     <div class="text-left space-y-3 p-1">
-                        <div class="bg-slate-100 p-3 rounded-2xl border border-slate-200 flex justify-between items-center">
+                        <!-- Cabecera de Indicadores: Total, Restante y Excedente (Propina) -->
+                        <div class="bg-slate-100 p-3 rounded-2xl border border-slate-200 grid grid-cols-3 gap-2 text-center">
                             <div>
-                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total a Pagar:</span>
-                                <span class="text-2xl font-black text-slate-800" id="lbl-total-pagar">$${totalConTax.toFixed(2)}</span>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total a Pagar</span>
+                                <span class="text-xl font-black text-slate-800" id="lbl-total-pagar">$${totalConTax.toFixed(2)}</span>
                             </div>
-                            <div class="text-right">
-                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Restante:</span>
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Restante</span>
                                 <span class="text-xl font-black text-rose-600" id="lbl-restante">$${totalConTax.toFixed(2)}</span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Excedente (Propina)</span>
+                                <span class="text-xl font-black text-emerald-600" id="lbl-excedente">$0.00</span>
                             </div>
                         </div>
 
-                        <!-- Formulario para agregar una línea de pago -->
+                        <!-- Formulario de Entrada de Pago -->
                         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
@@ -989,12 +994,12 @@
 
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Monto en Moneda Origen</label>
+                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Monto Origen</label>
                                     <input type="number" id="swal-monto-origen" step="0.01" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2" placeholder="0.00">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Ref. Transacción (Opcional)</label>
-                                    <input type="text" id="swal-referencia" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2" placeholder="Ej: 123456">
+                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Ref. Transacción</label>
+                                    <input type="text" id="swal-referencia" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2" placeholder="Opcional">
                                 </div>
                             </div>
 
@@ -1003,7 +1008,10 @@
                             </button>
                         </div>
 
-                        <!-- Lista de abonos cargados -->
+                        <!-- Contenedor de Alerta Temporal dentro del Modal -->
+                        <div id="modal-alert-container" class="hidden p-2 rounded-lg text-xs font-bold text-center"></div>
+
+                        <!-- Lista de Abonos -->
                         <div class="border border-slate-200 rounded-xl overflow-hidden max-h-36 overflow-y-auto">
                             <table class="w-full text-xs text-left">
                                 <thead class="bg-slate-100 text-slate-600 font-black uppercase border-b border-slate-200">
@@ -1038,14 +1046,33 @@
                     const listaPagos = [];
                     const totalRequerido = totalConTax;
 
+                    // Helper para mostrar alertas efímeras
+                    const mostrarAlertaTemporal = (mensaje, esError = true) => {
+                        const alertBox = document.getElementById('modal-alert-container');
+                        alertBox.className = `p-2 rounded-lg text-xs font-bold text-center ${esError ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-100 text-emerald-700'}`;
+                        alertBox.textContent = mensaje;
+                        alertBox.classList.remove('hidden');
+
+                        setTimeout(() => {
+                            alertBox.classList.add('hidden');
+                        }, 3000); // Se oculta tras 3 segundos
+                    };
+
                     const updateTabla = () => {
                         const tbody = document.getElementById('tbl-pagos-body');
                         const lblRestante = document.getElementById('lbl-restante');
+                        const lblExcedente = document.getElementById('lbl-excedente');
                         
                         const totalAbonadoLocal = listaPagos.reduce((s, p) => s + p.monto_equivalente_local, 0);
-                        const restante = totalRequerido - totalAbonadoLocal;
+                        const diferencia = totalAbonadoLocal - totalRequerido;
 
-                        lblRestante.textContent = `$${Math.max(0, restante).toFixed(2)}`;
+                        if (diferencia >= 0) {
+                            lblRestante.textContent = `$0.00`;
+                            lblExcedente.textContent = `$${diferencia.toFixed(2)}`;
+                        } else {
+                            lblRestante.textContent = `$${Math.abs(diferencia).toFixed(2)}`;
+                            lblExcedente.textContent = `$0.00`;
+                        }
 
                         if (listaPagos.length === 0) {
                             tbody.innerHTML = `<tr><td colspan="4" class="p-3 text-center text-slate-400 font-bold italic">No se han registrado abonos</td></tr>`;
@@ -1084,7 +1111,8 @@
                         const referencia = document.getElementById('swal-referencia').value;
 
                         if (isNaN(monto_origen) || monto_origen <= 0) {
-                            return Swal.showValidationMessage('Ingrese un monto válido.');
+                            mostrarAlertaTemporal('Ingrese un monto válido mayor a cero.');
+                            return;
                         }
 
                         const monto_equivalente_local = monto_origen * factor_cambio;
@@ -1111,7 +1139,11 @@
                     const pagos = window._tempPagosModal || [];
 
                     if (!esCortesia && pagos.length === 0) {
-                        Swal.showValidationMessage('Debe agregar al menos una forma de pago.');
+                        const alertBox = document.getElementById('modal-alert-container');
+                        alertBox.className = 'p-2 rounded-lg text-xs font-bold text-center bg-rose-100 text-rose-700 border border-rose-200';
+                        alertBox.textContent = 'Debe agregar al menos una forma de pago.';
+                        alertBox.classList.remove('hidden');
+                        setTimeout(() => alertBox.classList.add('hidden'), 3000);
                         return false;
                     }
 
@@ -1138,7 +1170,8 @@
                         icon: 'success',
                         title: 'VENTA FINALIZADA',
                         text: data.message,
-                        confirmButtonColor: '#10b981'
+                        timer: 3000,
+                        showConfirmButton: false
                     }).then(() => {
                         window.location.href = '/admin/dashboard';
                     });
@@ -1147,7 +1180,8 @@
                         icon: 'error',
                         title: 'ERROR EN EL COBRO',
                         text: data.message || 'No se pudo procesar la transacción.',
-                        confirmButtonColor: '#ef4444'
+                        timer: 3000,
+                        showConfirmButton: false
                     });
                 }
             } catch (err) {
@@ -1156,7 +1190,8 @@
                     icon: 'error',
                     title: 'ERROR DE RED',
                     text: 'Ocurrió un error al procesar el pago.',
-                    confirmButtonColor: '#ef4444'
+                    timer: 3000,
+                    showConfirmButton: false
                 });
             }
         }

@@ -22,7 +22,7 @@ class OrderModel {
     async createEmptyOrder(id_mesa, id_usuario_mesero, turno_servicio_id) {
         const [result] = await db.query(`
             INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
-            VALUES (?, ?, ?, 'pendiente', 'no pagado')
+            VALUES (?, ?, ?, 'pendiente', 'pendiente')
         `, [id_mesa, id_usuario_mesero, turno_servicio_id]);
         return result.insertId;
     }

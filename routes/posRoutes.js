@@ -62,4 +62,7 @@ router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['sup
 // Renderiza el ticket optimizado para impresora térmica de 48mm
 router.get('/pos/precuenta/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'dependiente', 'capitan']), asegurarTurnoActivo, posController.viewPrecuenta);
 
+// Endpoint API para el cobro de una orden
+router.post('/pos/cobrar/:id_pedido', ensureAuthenticated, asegurarTurnoActivo, checkRole(['capitan', 'superadministrador', 'administrador', 'cajero', 'dependiente']), posController.procesarCobro);
+
 module.exports = router;
