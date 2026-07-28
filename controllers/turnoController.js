@@ -7,13 +7,14 @@ const TurnoService = require('../services/turnoService');
  */
 exports.renderTurnos = async (req, res) => {
     try {
-        const { turnoActivo, historial } = await TurnoService.obtenerDatosParaVista();
+        const { turnoActivo, historial, monedas } = await TurnoService.obtenerDatosParaVista();
 
         return res.render('caja/turnos', {
             title: 'Control de Turnos y Arqueo de Caja',
             user: req.user,
             turnoActivo,
             historial,
+            monedas,
             view: "turnos"
         });
     } catch (error) {
@@ -28,7 +29,7 @@ exports.renderTurnos = async (req, res) => {
  * POST /admin/turno/apertura
  */
 exports.abrirTurno = async (req, res) => {
-    const { monto_apertura, observaciones } = req.body;
+    const { monto_apertura, observaciones, monedas_turno } = req.body;
     const usuario_apertura_id = req.user.id; 
 
     // Validación básica sintáctica en controlador
@@ -40,7 +41,7 @@ exports.abrirTurno = async (req, res) => {
     }
 
     try {
-        const turnoId = await TurnoService.abrirNuevoTurno(usuario_apertura_id, monto_apertura, observaciones);
+        const turnoId = await TurnoService.abrirNuevoTurno(usuario_apertura_id, monto_apertura, observaciones, monedas_turno);
         
         return res.status(201).json({
             success: true,
@@ -114,6 +115,26 @@ exports.obtenerEstadoTurno = async (req, res) => {
         return res.status(500).json({ 
             success: false, 
             message: "Error al consultar el estado del turno desde el servicio." 
+        });
+    }
+};
+
+/**
+ * OBTENER MONEDAS Y TASAS DEL TURNO ACTIVO (JSON para el POS)
+ * GET /api/pos/monedas-turno-activo
+ */
+exports.obtenerMonedasTurnoActivo = async (req, res) => {
+    try {
+        const data = await TurnoService.obtenerMonedasTurnoActivo();
+        return res.status(200).json({
+            success: true,
+            ...data
+        });
+    } catch (error) {
+        console.error("Error en obtenerMonedasTurnoActivo (Controller):", error);
+        return res.status(400).json({
+            success: false,
+            message: error.message || "Error al obtener las monedas del turno activo."
         });
     }
 };

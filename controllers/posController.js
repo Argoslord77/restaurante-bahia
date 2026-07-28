@@ -281,13 +281,12 @@ exports.viewPrecuenta = async (req, res) => {
 };
 
 /**
- * Procesa el cobro de una orden POS alineado con el esquema real de pedidos
+ * Procesa el cobro multimoneda/mixto de un pedido en una sola transacción SQL
  */
 exports.procesarCobro = async (req, res) => {
     const { id_pedido } = req.params;
-    const { metodo_pago, monto_recibido, es_cortesia } = req.body;
+    const { pagos, es_cortesia } = req.body; // 'pagos' es una lista: [{ metodo_pago, moneda_id, factor_cambio_aplicado, monto_moneda_origen, monto_equivalente_local, referencia }]
     
-    // Obtenemos el ID del cajero desde la sesión actual del usuario
     const id_cajero = req.session?.user?.id || req.user?.id;
 
     if (!id_pedido) {
@@ -295,7 +294,7 @@ exports.procesarCobro = async (req, res) => {
     }
 
     if (!id_cajero) {
-        return res.status(401).json({ success: false, message: 'Sesión invalida. No se detectó cajero.' });
+        return res.status(401).json({ success: false, message: 'Sesión inválida. No se detectó cajero.' });
     }
 
     const connection = await db.getConnection();
@@ -303,7 +302,7 @@ exports.procesarCobro = async (req, res) => {
     try {
         await connection.beginTransaction();
 
-        // 1. Obtener los datos actuales del pedido
+        // 1. Obtener pedido y bloquear fila para la transacción
         const [filas] = await connection.query(`
             SELECT id, id_mesa, total, estado_pago 
             FROM pedidos 
@@ -323,24 +322,46 @@ exports.procesarCobro = async (req, res) => {
         }
 
         let nuevo_estado_pago = 'pagado';
-        let cambio = 0;
         const totalPagar = parseFloat(pedido.total);
 
-        // 2. Control de cortesía o pago normal
         if (es_cortesia) {
             nuevo_estado_pago = 'cortesia';
         } else {
-            if (metodo_pago === 'efectivo') {
-                const recibido = parseFloat(monto_recibido);
-                if (isNaN(recibido) || recibido < totalPagar) {
-                    await connection.rollback();
-                    return res.status(400).json({ success: false, message: 'Monto recibido insuficiente.' });
-                }
-                cambio = recibido - totalPagar;
+            if (!pagos || !Array.isArray(pagos) || pagos.length === 0) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: 'Debe proporcionar al menos un método de pago.' });
+            }
+
+            // Validar que la suma equivalente cubra el total
+            const totalRecibidoLocal = pagos.reduce((sum, p) => sum + parseFloat(p.monto_equivalente_local || 0), 0);
+            
+            if (totalRecibidoLocal < totalPagar - 0.01) { // margen de centavos por redondeo
+                await connection.rollback();
+                return res.status(400).json({ 
+                    success: false, 
+                    message: `El monto total recibido ($${totalRecibidoLocal.toFixed(2)}) es inferior al total a pagar ($${totalPagar.toFixed(2)}).` 
+                });
+            }
+
+            // 2. Registrar cada abono en 'pagos_pedido'
+            for (const pago of pagos) {
+                await connection.query(`
+                    INSERT INTO pagos_pedido 
+                    (pedido_id, metodo_pago, moneda_id, factor_cambio_aplicado, monto_moneda_origen, monto_equivalente_local, referencia_transaccion)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    id_pedido,
+                    pago.metodo_pago,
+                    pago.moneda_id || null,
+                    pago.factor_cambio_aplicado || 1.0000,
+                    pago.monto_moneda_origen,
+                    pago.monto_equivalente_local,
+                    pago.referencia_transaccion || null
+                ]);
             }
         }
 
-        // 3. Actualizar la tabla 'pedidos' según su esquema exacto
+        // 3. Actualizar la tabla 'pedidos'
         await connection.query(`
             UPDATE pedidos 
             SET estado_pedido = 'entregado',
@@ -350,22 +371,7 @@ exports.procesarCobro = async (req, res) => {
             WHERE id = ?
         `, [nuevo_estado_pago, id_cajero, id_pedido]);
 
-        // 4. Registrar la transacción en 'pagos_pedidos'
-        if (nuevo_estado_pago === 'pagado') {
-            await connection.query(`
-                INSERT INTO pagos_pedidos 
-                (id_pedido, metodo_pago, monto_recibido, monto_pagado, cambio_entregado)
-                VALUES (?, ?, ?, ?, ?)
-            `, [
-                id_pedido, 
-                metodo_pago, 
-                metodo_pago === 'efectivo' ? monto_recibido : totalPagar, 
-                totalPagar, 
-                cambio
-            ]);
-        }
-
-        // 5. Liberar la mesa
+        // 4. Liberar la mesa asignada
         if (pedido.id_mesa) {
             await connection.query(`
                 UPDATE mesas 
@@ -378,18 +384,13 @@ exports.procesarCobro = async (req, res) => {
 
         return res.json({
             success: true,
-            message: nuevo_estado_pago === 'cortesia' ? 'Orden cerrada como cortesía.' : 'Cobro procesado correctamente.',
-            detalles: {
-                total: totalPagar,
-                monto_recibido: metodo_pago === 'efectivo' ? parseFloat(monto_recibido) : totalPagar,
-                cambio: cambio,
-                estado_pago: nuevo_estado_pago
-            }
+            message: nuevo_estado_pago === 'cortesia' ? 'Orden cerrada como cortesía.' : 'Cobro multimoneda procesado con éxito.',
+            total_cobrado: totalPagar
         });
 
     } catch (error) {
         await connection.rollback();
-        console.error('Error durante la transacción de cobro:', error);
+        console.error('Error durante la transacción de cobro mixto:', error);
         return res.status(500).json({ success: false, message: 'Error en el servidor al ejecutar el cobro.' });
     } finally {
         connection.release();

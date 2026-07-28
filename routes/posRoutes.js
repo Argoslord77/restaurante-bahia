@@ -6,6 +6,7 @@ const { ensureAuthenticated, checkRole } = require('../middlewares/auth'); // Aj
 const { posValidationRules, handleValidationErrors } = require('../middlewares/validator');
 const { asegurarTurnoActivo } = require('../middlewares/verificarTurno');
 const monitorController = require('../controllers/monitorController');
+const turnoController = require('../controllers/turnoController');
 const STATUS = require('../config/orderStatus');
 
 // ========================================================
@@ -51,6 +52,9 @@ router.post('/api/pos/item-estado', ensureAuthenticated, asegurarTurnoActivo, ch
 
 // Endpoint de polling para consultar ítems en estado 'listo' de un pedido
 router.get('/api/pos/items-listos/:id_pedido', posController.getItemsListos);
+
+// Obtener monedas y tasas vigentes del turno activo para el modal de cobro POS
+router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'dependiente', 'dependiente']), turnoController.obtenerMonedasTurnoActivo);
 
 // ========================================================
 // VISTA PREVIA E IMPRESIÓN DE PRE-CUENTA

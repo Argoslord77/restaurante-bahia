@@ -906,11 +906,10 @@
         }
 
         async function checkoutOrder() {
-            // 1. Advertir si existen productos en la ronda de captura sin enviar a cocina
             if (carrito.length > 0) {
                 const confirmacion = await Swal.fire({
                     title: 'TIENES PLATILLOS EN CAPTURA',
-                    text: 'Hay productos en la ronda actual sin enviar a cocina. ¿Deseas cobrar únicamente lo registrado en el histórico o volver para enviarlos?',
+                    text: 'Hay productos en la ronda actual sin enviar a cocina. ¿Deseas cobrar únicamente lo registrado en el histórico?',
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#3b82f6',
@@ -918,11 +917,9 @@
                     confirmButtonText: 'COBRAR HISTÓRICO',
                     cancelButtonText: 'VOLVER Y ENVIAR'
                 });
-
                 if (!confirmacion.isConfirmed) return;
             }
 
-            // 2. Calcular subtotal real consumido en el histórico (omitiendo cancelados)
             let subtotalHistorico = 0;
             if (historicoDetalles && historicoDetalles.length > 0) {
                 subtotalHistorico = historicoDetalles.reduce((acc, item) => {
@@ -939,30 +936,90 @@
                 });
             }
 
+            const totalConTax = subtotalHistorico * 1.10; // Incluyendo impuesto del 10%
             const idPedido = document.getElementById('pos_id_pedido').value;
 
-            // 3. Ventana modal de Cobro con desglose y reglas dinámicas
+            // Obtener las monedas congeladas del turno activo
+            let monedasTurno = [];
+            try {
+                const resMonedas = await fetch('/api/pos/monedas-turno-activo');
+                const dataMonedas = await resMonedas.json();
+                if (dataMonedas.success) {
+                    monedasTurno = dataMonedas.monedas;
+                }
+            } catch (e) {
+                console.error("Error al consultar monedas del turno:", e);
+            }
+
+            // Modal de Cobro Mixto / Multimoneda
             const { value: formValues } = await Swal.fire({
-                title: 'PROCESAR COBRO DE COMANDA',
+                title: 'PROCESAR COBRO MULTIMONEDA',
+                width: '600px',
                 html: `
                     <div class="text-left space-y-3 p-1">
-                        <div class="bg-slate-100 p-3 rounded-2xl border border-slate-200">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total a Cobrar:</span>
-                            <span class="text-2xl font-black text-slate-800">$${subtotalHistorico.toFixed(2)}</span>
+                        <div class="bg-slate-100 p-3 rounded-2xl border border-slate-200 flex justify-between items-center">
+                            <div>
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total a Pagar:</span>
+                                <span class="text-2xl font-black text-slate-800" id="lbl-total-pagar">$${totalConTax.toFixed(2)}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Restante:</span>
+                                <span class="text-xl font-black text-rose-600" id="lbl-restante">$${totalConTax.toFixed(2)}</span>
+                            </div>
                         </div>
 
-                        <div>
-                            <label class="text-xs font-black text-slate-700 uppercase block mb-1">Método de Pago</label>
-                            <select id="swal-metodo-pago" class="w-full bg-slate-50 border border-slate-300 font-bold text-xs rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
-                                <option value="efectivo">Efectivo</option>
-                                <option value="tarjeta">Tarjeta (Débito/Crédito)</option>
-                                <option value="transferencia">Transferencia</option>
-                            </select>
+                        <!-- Formulario para agregar una línea de pago -->
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Método</label>
+                                    <select id="swal-metodo" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2">
+                                        <option value="efectivo">Efectivo</option>
+                                        <option value="tarjeta">Tarjeta</option>
+                                        <option value="transferencia">Transferencia</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Moneda</label>
+                                    <select id="swal-moneda" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2">
+                                        ${monedasTurno.map(m => `<option value="${m.moneda_id}" data-factor="${m.factor_cambio}" data-simbolo="${m.simbolo}">${m.codigo} (${m.simbolo}) - Tasa: ${parseFloat(m.factor_cambio).toFixed(2)}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Monto en Moneda Origen</label>
+                                    <input type="number" id="swal-monto-origen" step="0.01" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2" placeholder="0.00">
+                                </div>
+                                <div>
+                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Ref. Transacción (Opcional)</label>
+                                    <input type="text" id="swal-referencia" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2" placeholder="Ej: 123456">
+                                </div>
+                            </div>
+
+                            <button type="button" id="btn-add-pago" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black py-2 rounded-lg uppercase tracking-wider transition-all">
+                                + Agregar Forma de Pago
+                            </button>
                         </div>
 
-                        <div id="swal-monto-container">
-                            <label class="text-xs font-black text-slate-700 uppercase block mb-1">Monto Recibido</label>
-                            <input type="number" id="swal-monto-recibido" step="0.01" value="${subtotalHistorico.toFixed(2)}" class="w-full bg-slate-50 border border-slate-300 font-bold text-xs rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00">
+                        <!-- Lista de abonos cargados -->
+                        <div class="border border-slate-200 rounded-xl overflow-hidden max-h-36 overflow-y-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-slate-100 text-slate-600 font-black uppercase border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-2">Método</th>
+                                        <th class="p-2">Monto Origen</th>
+                                        <th class="p-2">Eq. Local</th>
+                                        <th class="p-2 text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbl-pagos-body">
+                                    <tr>
+                                        <td colspan="4" class="p-3 text-center text-slate-400 font-bold italic">No se han registrado abonos</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
 
                         <div class="pt-2 border-t border-slate-200 flex items-center gap-2">
@@ -978,40 +1035,95 @@
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#64748b',
                 didOpen: () => {
-                    const selectMetodo = document.getElementById('swal-metodo-pago');
-                    const containerMonto = document.getElementById('swal-monto-container');
-                    const chkCortesia = document.getElementById('swal-es-cortesia');
+                    const listaPagos = [];
+                    const totalRequerido = totalConTax;
 
-                    selectMetodo.addEventListener('change', () => {
-                        if (selectMetodo.value === 'efectivo') {
-                            containerMonto.style.display = 'block';
-                        } else {
-                            containerMonto.style.display = 'none';
+                    const updateTabla = () => {
+                        const tbody = document.getElementById('tbl-pagos-body');
+                        const lblRestante = document.getElementById('lbl-restante');
+                        
+                        const totalAbonadoLocal = listaPagos.reduce((s, p) => s + p.monto_equivalente_local, 0);
+                        const restante = totalRequerido - totalAbonadoLocal;
+
+                        lblRestante.textContent = `$${Math.max(0, restante).toFixed(2)}`;
+
+                        if (listaPagos.length === 0) {
+                            tbody.innerHTML = `<tr><td colspan="4" class="p-3 text-center text-slate-400 font-bold italic">No se han registrado abonos</td></tr>`;
+                            return;
                         }
+
+                        tbody.innerHTML = listaPagos.map((p, idx) => `
+                            <tr class="border-b border-slate-100">
+                                <td class="p-2 font-bold uppercase">${p.metodo_pago}</td>
+                                <td class="p-2 font-bold">${p.simbolo}${p.monto_moneda_origen.toFixed(2)}</td>
+                                <td class="p-2 font-black text-emerald-700">$${p.monto_equivalente_local.toFixed(2)}</td>
+                                <td class="p-2 text-center">
+                                    <button type="button" class="btn-remove-pago text-rose-500 font-bold" data-idx="${idx}">✕</button>
+                                </td>
+                            </tr>
+                        `).join('');
+
+                        document.querySelectorAll('.btn-remove-pago').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const index = parseInt(e.target.dataset.idx);
+                                listaPagos.splice(index, 1);
+                                updateTabla();
+                            });
+                        });
+                    };
+
+                    document.getElementById('btn-add-pago').addEventListener('click', () => {
+                        const selectMoneda = document.getElementById('swal-moneda');
+                        const optionSelected = selectMoneda.options[selectMoneda.selectedIndex];
+                        
+                        const metodo = document.getElementById('swal-metodo').value;
+                        const moneda_id = parseInt(selectMoneda.value);
+                        const factor_cambio = parseFloat(optionSelected.dataset.factor);
+                        const simbolo = optionSelected.dataset.simbolo;
+                        const monto_origen = parseFloat(document.getElementById('swal-monto-origen').value);
+                        const referencia = document.getElementById('swal-referencia').value;
+
+                        if (isNaN(monto_origen) || monto_origen <= 0) {
+                            return Swal.showValidationMessage('Ingrese un monto válido.');
+                        }
+
+                        const monto_equivalente_local = monto_origen * factor_cambio;
+
+                        listaPagos.push({
+                            metodo_pago: metodo,
+                            moneda_id: moneda_id,
+                            factor_cambio_aplicado: factor_cambio,
+                            monto_moneda_origen: monto_origen,
+                            monto_equivalente_local: monto_equivalente_local,
+                            referencia_transaccion: referencia,
+                            simbolo: simbolo
+                        });
+
+                        document.getElementById('swal-monto-origen').value = '';
+                        document.getElementById('swal-referencia').value = '';
+                        updateTabla();
                     });
 
-                    chkCortesia.addEventListener('change', () => {
-                        if (chkCortesia.checked) {
-                            containerMonto.style.display = 'none';
-                            selectMetodo.disabled = true;
-                        } else {
-                            selectMetodo.disabled = false;
-                            if (selectMetodo.value === 'efectivo') containerMonto.style.display = 'block';
-                        }
-                    });
+                    window._tempPagosModal = listaPagos;
                 },
                 preConfirm: () => {
+                    const esCortesia = document.getElementById('swal-es-cortesia').checked;
+                    const pagos = window._tempPagosModal || [];
+
+                    if (!esCortesia && pagos.length === 0) {
+                        Swal.showValidationMessage('Debe agregar al menos una forma de pago.');
+                        return false;
+                    }
+
                     return {
-                        metodo_pago: document.getElementById('swal-metodo-pago').value,
-                        monto_recibido: parseFloat(document.getElementById('swal-monto-recibido').value) || 0,
-                        es_cortesia: document.getElementById('swal-es-cortesia').checked
+                        pagos: pagos,
+                        es_cortesia: esCortesia
                     };
                 }
             });
 
             if (!formValues) return;
 
-            // 4. Envío de cobro al servidor
             try {
                 const response = await fetch(`/pos/cobrar/${idPedido}`, {
                     method: 'POST',
@@ -1022,15 +1134,10 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    let mensajeExtra = '';
-                    if (data.detalles && data.detalles.cambio > 0) {
-                        mensajeExtra = `\nCambio a Entregar: $${data.detalles.cambio.toFixed(2)}`;
-                    }
-
                     Swal.fire({
                         icon: 'success',
                         title: 'VENTA FINALIZADA',
-                        text: `${data.message}${mensajeExtra}`,
+                        text: data.message,
                         confirmButtonColor: '#10b981'
                     }).then(() => {
                         window.location.href = '/admin/dashboard';

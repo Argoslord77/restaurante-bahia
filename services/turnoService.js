@@ -1,5 +1,6 @@
 // services/turnoService.js
 const TurnoModel = require('../models/turnoModel');
+const db = require('../config/db');
 
 class TurnoService {
     /**
@@ -10,25 +11,29 @@ class TurnoService {
     }
 
     /**
-     * Retorna el conjunto del historial junto con el estado del turno actual
+     * Retorna el conjunto del historial junto con el estado del turno actual y monedas disponibles
      */
     static async obtenerDatosParaVista() {
         const turnoActivo = await TurnoModel.findActive();
         const historial = await TurnoModel.getHistorialCompleto(15);
-        return { turnoActivo, historial };
+        
+        // Obtener catálogo de monedas activas para el panel de apertura
+        const [monedas] = await db.query("SELECT id, codigo, nombre, simbolo, es_moneda_base, factor_cambio FROM monedas WHERE activo = 1 ORDER BY es_moneda_base DESC, codigo ASC");
+        
+        return { turnoActivo, historial, monedas };
     }
 
     /**
-     * Gestiona las reglas para abrir un turno nuevo
+     * Gestiona las reglas para abrir un turno nuevo guardando el snapshot de tasas
      */
-    static async abrirNuevoTurno(usuarioId, montoApertura, observaciones) {
+    static async abrirNuevoTurno(usuarioId, montoApertura, observaciones, monedasTurno = []) {
         // Validar si ya existe uno abierto
         const turnoExistente = await TurnoModel.findActive();
         if (turnoExistente) {
             throw new Error("Operación denegada. Ya existe un turno de servicio activo.");
         }
 
-        const turnoId = await TurnoModel.createApertura(usuarioId, montoApertura, observaciones);
+        const turnoId = await TurnoModel.createAperturaConMonedas(usuarioId, montoApertura, observaciones, monedasTurno);
         return turnoId;
     }
 
@@ -70,6 +75,41 @@ class TurnoService {
             diferencia,
             balance
         };
+    }
+
+    /**
+     * Obtiene las monedas habilitadas y sus tasas congeladas para el turno activo actual
+     */
+    static async obtenerMonedasTurnoActivo() {
+        const turnoActivo = await TurnoModel.findActive();
+        if (!turnoActivo) {
+            throw new Error("No hay un turno de servicio activo.");
+        }
+
+        // Consulta las monedas vinculadas al turno activo
+        const query = `
+            SELECT 
+                m.id AS moneda_id,
+                m.codigo,
+                m.nombre,
+                m.simbolo,
+                m.es_moneda_base,
+                COALESCE(mt.factor_cambio_turno, m.factor_cambio) AS factor_cambio
+            FROM monedas_turno mt
+            INNER JOIN monedas m ON mt.moneda_id = m.id
+            WHERE mt.turno_servicio_id = ? AND m.activo = 1
+        `;
+        const [rows] = await db.query(query, [turnoActivo.id]);
+
+        // Fallback de seguridad: Si el turno fue abierto antes de la tabla monedas_turno
+        if (rows.length === 0) {
+            const [monedasGlobales] = await db.query(
+                "SELECT id AS moneda_id, codigo, nombre, simbolo, es_moneda_base, factor_cambio FROM monedas WHERE activo = 1"
+            );
+            return { turno_id: turnoActivo.id, monedas: monedasGlobales };
+        }
+
+        return { turno_id: turnoActivo.id, monedas: rows };
     }
 }
 

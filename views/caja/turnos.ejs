@@ -62,6 +62,50 @@
                                                     </div>
                                                     <div class="form-text text-muted fs-7">Dinero físico asignado al cajero para dar vuelto / cambio.</div>
                                                 </div>
+
+                                                <!-- Selección de Monedas del Turno -->
+                                                <div class="col-12 mt-4">
+                                                    <h6 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="fa-solid fa-coins me-2 text-primary"></i>Configuración de Monedas para el Turno</h6>
+                                                    <div class="table-responsive">
+                                                        <table class="table table-bordered align-middle table-sm">
+                                                            <thead class="table-light fs-7 text-uppercase">
+                                                                <tr>
+                                                                    <th style="width: 40px;" class="text-center">Uso</th>
+                                                                    <th>Moneda</th>
+                                                                    <th>Código</th>
+                                                                    <th>Tasa / Factor de Cambio del Día</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <% if (typeof monedas !== 'undefined' && monedas.length > 0) { %>
+                                                                    <% monedas.forEach(m => { %>
+                                                                        <tr>
+                                                                            <td class="text-center">
+                                                                                <input type="checkbox" class="form-check-input chk-moneda-turno" 
+                                                                                       data-id="<%= m.id %>" 
+                                                                                       <%= m.es_moneda_base ? 'checked disabled' : 'checked' %>>
+                                                                            </td>
+                                                                            <td class="fw-semibold"><%= m.nombre %> (<%= m.simbolo %>)</td>
+                                                                            <td class="font-monospace"><%= m.codigo %></td>
+                                                                            <td>
+                                                                                <input type="number" step="0.0001" min="0.0001" 
+                                                                                       class="form-control form-control-sm tasa-moneda-input font-monospace" 
+                                                                                       data-id="<%= m.id %>"
+                                                                                       value="<%= parseFloat(m.factor_cambio || 1.0000).toFixed(4) %>" 
+                                                                                       <%= m.es_moneda_base ? 'readonly' : '' %>>
+                                                                            </td>
+                                                                        </tr>
+                                                                    <% }) %>
+                                                                <% } else { %>
+                                                                    <tr>
+                                                                        <td colspan="4" class="text-center text-muted fs-7">Moneda base por defecto (USD/CUP - 1.0000)</td>
+                                                                    </tr>
+                                                                <% } %>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+
                                                 <div class="col-12">
                                                     <label class="form-label fw-semibold text-secondary small">Notas de Apertura / Observaciones</label>
                                                     <textarea id="observaciones" class="form-control" rows="2" placeholder="Ej. Recibe personal matutino, fondo completo sin novedades en el conteo físico..."></textarea>
@@ -293,9 +337,23 @@
                 formApertura.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     
+                    // Extraer monedas seleccionadas con sus tasas ajustadas
+                    const monedasTurno = [];
+                    document.querySelectorAll('.chk-moneda-turno:checked').forEach(chk => {
+                        const monedaId = chk.getAttribute('data-id');
+                        const inputTasa = document.querySelector(`.tasa-moneda-input[data-id="${monedaId}"]`);
+                        if (inputTasa) {
+                            monedasTurno.push({
+                                moneda_id: parseInt(monedaId),
+                                factor_cambio_turno: parseFloat(inputTasa.value) || 1.0
+                            });
+                        }
+                    });
+
                     const data = {
                         monto_apertura: parseFloat(document.getElementById('monto_apertura').value),
-                        observaciones: document.getElementById('observaciones').value
+                        observaciones: document.getElementById('observaciones').value,
+                        monedas_turno: monedasTurno
                     };
 
                     Swal.fire({

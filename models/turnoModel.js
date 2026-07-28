@@ -13,16 +13,46 @@ class TurnoModel {
     }
 
     /**
-     * Inserta un nuevo registro de apertura de turno
+     * Inserta un nuevo registro de apertura de turno y congela las monedas seleccionadas (Transaccional)
+     */
+    static async createAperturaConMonedas(usuarioId, montoApertura, observaciones, monedasTurno = []) {
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            const queryTurno = `
+                INSERT INTO turnos_servicio 
+                (usuario_apertura_id, monto_apertura, observaciones, estado, fecha_apertura) 
+                VALUES (?, ?, ?, 'abierto', NOW())
+            `;
+            const [result] = await connection.query(queryTurno, [usuarioId, montoApertura, observaciones || null]);
+            const turnoId = result.insertId;
+
+            // Registrar snapshot de monedas para el turno activo
+            if (Array.isArray(monedasTurno) && monedasTurno.length > 0) {
+                const queryMoneda = `
+                    INSERT INTO monedas_turno (turno_servicio_id, moneda_id, factor_cambio_turno)
+                    VALUES ?
+                `;
+                const values = monedasTurno.map(m => [turnoId, m.moneda_id, m.factor_cambio_turno]);
+                await connection.query(queryMoneda, [values]);
+            }
+
+            await connection.commit();
+            return turnoId;
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    }
+
+    /**
+     * Inserta un nuevo registro de apertura de turno (Retrocompatibilidad)
      */
     static async createApertura(usuarioId, montoApertura, observaciones) {
-        const query = `
-            INSERT INTO turnos_servicio 
-            (usuario_apertura_id, monto_apertura, observaciones, estado, fecha_apertura) 
-            VALUES (?, ?, ?, 'abierto', NOW())
-        `;
-        const [result] = await db.query(query, [usuarioId, montoApertura, observaciones || null]);
-        return result.insertId;
+        return this.createAperturaConMonedas(usuarioId, montoApertura, observaciones, []);
     }
 
     /**
