@@ -351,7 +351,7 @@
                         precio: parseFloat(item.precio || item.precio_unitario),
                         cantidad: parseInt(item.cantidad),
                         estado: item.estado || item.estado_item || 'en_cocina',
-                        notas: item.notas_especiales || ''
+                        notas: item.notas_especiales || item.notas || ''
                     }));
                 } catch (e) {
                     console.error("Error al procesar el histórico de la orden:", e);
@@ -576,6 +576,13 @@
             renderCart();
         }
 
+        // Vacía el carrito inmediatamente sin pedir confirmación (para uso automático)
+        function vaciarCarritoDirecto() {
+            carrito = [];
+            renderCart();
+        }
+
+        // Vacía el carrito con confirmación (para el botón manual "Vaciar")
         function clearCart() {
             if (carrito.length === 0) return;
 
@@ -592,8 +599,7 @@
                 color: '#0f172a'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    carrito = [];
-                    renderCart();
+                    vaciarCarritoDirecto();
 
                     const Toast = Swal.mixin({
                         toast: true,
@@ -674,7 +680,7 @@
                 .reduce((sum, item) => sum + item.cantidad, 0);
 
             const totalPendientes = historicoDetalles
-                .filter(item => item.estado !== 'entregado')
+                .filter(item => item.estado !== 'entregado' && item.estado !== 'cancelado')
                 .reduce((sum, item) => sum + item.cantidad, 0);
 
             document.getElementById('history-servidos-count').textContent = totalServidos;
@@ -689,16 +695,21 @@
                 return;
             }
 
+            const estadosCancelables = ['en_cocina', 'en_bar', 'listo'];
+
             wrapper.innerHTML = '';
             historicoDetalles.forEach(item => {
                 const itemTotal = item.precio * item.cantidad;
+                const estadoLimpio = (item.estado || '').toLowerCase().trim();
                 
-                let badgeEstado = 'bg-amber-100 text-amber-800 border-amber-300';
-                if (item.estado === 'listo') badgeEstado = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-                if (item.estado === 'entregado') badgeEstado = 'bg-slate-200 text-slate-700 border-slate-300';
+                // Uso de !important (!) para sobrescribir el 'color: #fff' de Bootstrap .badge
+                let badgeEstado = 'bg-amber-100 !text-amber-950 border-amber-300 font-black';
+                if (estadoLimpio === 'listo') badgeEstado = 'bg-emerald-100 !text-emerald-900 border-emerald-300 font-black';
+                if (estadoLimpio === 'entregado') badgeEstado = 'bg-slate-200 !text-slate-800 border-slate-300 font-black';
+                if (estadoLimpio === 'cancelado') badgeEstado = 'bg-rose-100 !text-rose-900 border-rose-300 line-through font-black';
 
                 let botonAccion = '';
-                if (item.estado === 'listo') {
+                if (estadoLimpio === 'listo') {
                     botonAccion = `
                         <button type="button" 
                                 data-id="${item.id_detalle}"
@@ -708,25 +719,46 @@
                             <span class="text-white font-bold">Entregar</span>
                         </button>
                     `;
-                } else if (item.estado === 'entregado') {
+                } else if (estadoLimpio === 'entregado') {
                     botonAccion = `
                         <span class="text-xs font-bold text-slate-500 flex items-center gap-1">
                             <i class="fa-solid fa-circle-check text-emerald-600"></i> Servido
                         </span>
                     `;
+                } else if (estadoLimpio === 'cancelado') {
+                    botonAccion = `
+                        <span class="text-xs font-bold text-rose-600 flex items-center gap-1">
+                            <i class="fa-solid fa-ban text-rose-600"></i> Cancelado
+                        </span>
+                    `;
                 }
 
+                const esCancelable = estadosCancelables.includes(estadoLimpio);
+                const btnCancelar = esCancelable ? `
+                    <button type="button" 
+                            data-id="${item.id_detalle}" 
+                            data-estado="${item.estado}" 
+                            data-nombre="${item.nombre}"
+                            class="btn-cancel-item text-rose-500 hover:text-rose-700 text-xs font-black px-1.5 py-0.5 rounded hover:bg-rose-50 transition-colors"
+                            title="Cancelar ítem de comanda">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                ` : '';
+
                 const row = document.createElement('div');
-                row.className = 'bg-white p-2.5 rounded-xl border border-slate-200 flex flex-col gap-1 shadow-xs';
+                row.className = `bg-white p-2.5 rounded-xl border border-slate-200 flex flex-col gap-1 shadow-xs ${estadoLimpio === 'cancelado' ? 'opacity-60 bg-slate-50' : ''}`;
                 row.innerHTML = `
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
-                            <span class="font-black text-slate-800 text-xs uppercase d-block">${item.nombre}</span>
+                            <span class="font-black text-slate-800 text-xs uppercase d-block ${estadoLimpio === 'cancelado' ? 'line-through' : ''}">${item.nombre}</span>
                             <span class="text-slate-400 text-[10px] font-bold">Cant: ${item.cantidad} x $${item.precio.toFixed(2)}</span>
                         </div>
                         <div class="text-end flex flex-col items-end gap-1">
-                            <span class="font-black text-slate-800 text-xs d-block">$${itemTotal.toFixed(2)}</span>
-                            <span class="badge ${badgeEstado} border text-[9px] uppercase px-1.5 py-0.5 rounded font-black">${item.estado}</span>
+                            <div class="flex items-center gap-1.5">
+                                ${btnCancelar}
+                                <span class="font-black text-slate-800 text-xs d-block ${estadoLimpio === 'cancelado' ? 'line-through' : ''}">$${itemTotal.toFixed(2)}</span>
+                            </div>
+                            <span class="badge ${badgeEstado} border text-[10px] uppercase px-2 py-0.5 rounded">${item.estado}</span>
                         </div>
                     </div>
                     ${item.notas ? `<div class="text-[10px] text-slate-500 italic mt-0.5"><i class="fa-solid fa-pencil text-[9px] me-1"></i>${item.notas}</div>` : ''}
@@ -735,16 +767,113 @@
                 `;
                 wrapper.appendChild(row);
             });
+
+            recalcularTotales();
         }
 
-        // Delegación de eventos para el botón Entregar dentro del contenedor de histórico
+        // Delegación de eventos para las acciones dentro del contenedor de histórico (Entregar y Cancelar)
         document.getElementById('history-wrapper').addEventListener('click', (e) => {
-            const btn = e.target.closest('.btn-deliver-item');
-            if (btn) {
-                const idDetalle = btn.dataset.id;
+            const btnDeliver = e.target.closest('.btn-deliver-item');
+            if (btnDeliver) {
+                const idDetalle = btnDeliver.dataset.id;
                 marcarComoEntregado(idDetalle);
+                return;
+            }
+
+            const btnCancel = e.target.closest('.btn-cancel-item');
+            if (btnCancel) {
+                const idDetalle = btnCancel.dataset.id;
+                const estado = btnCancel.dataset.estado;
+                const nombre = btnCancel.dataset.nombre;
+                cancelarItemPedido(idDetalle, estado, nombre);
             }
         });
+
+        /**
+         * Llama al endpoint de posController.apiCancelarItem para cancelar un ítem del histórico
+         * @param {Number} idDetalle ID del detalle del pedido
+         * @param {String} estadoItem Estado actual del producto
+         * @param {String} nombreProducto Nombre del platillo
+         */
+        async function cancelarItemPedido(idDetalle, estadoItem, nombreProducto) {
+            const estadoLimpio = (estadoItem || '').toLowerCase().trim();
+            const estadosPermitidos = ['en_cocina', 'en_bar', 'listo'];
+
+            if (!estadosPermitidos.includes(estadoLimpio)) {
+                return Swal.fire({
+                    icon: 'error',
+                    title: 'NO CANCELABLE',
+                    text: `El ítem "${nombreProducto}" no se puede cancelar en su estado actual ('${estadoItem}').`,
+                    timer: 3500,
+                    showConfirmButton: false
+                });
+            }
+
+            const { value: motivo, isConfirmed } = await Swal.fire({
+                title: 'CANCELAR ÍTEM',
+                html: `<p class="text-xs text-slate-600 mb-2">¿Está seguro de cancelar <b>${nombreProducto}</b>?</p>`,
+                input: 'text',
+                inputLabel: 'Motivo de la cancelación',
+                inputPlaceholder: 'Ej: Cliente cambió de opinión / Error de comanda',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, cancelar ítem',
+                cancelButtonText: 'Volver',
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return '¡Debe ingresar un motivo para autorizar la cancelación!';
+                    }
+                }
+            });
+
+            if (!isConfirmed) return;
+
+            try {
+                const response = await fetch(`/pos/cancelar-item/${idDetalle}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ motivo: motivo.trim() })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const item = historicoDetalles.find(d => d.id_detalle == idDetalle);
+                    if (item) {
+                        item.estado = 'cancelado';
+                        item.notas = item.notas ? `${item.notas} | CANCELADO: ${motivo.trim()}` : `CANCELADO: ${motivo.trim()}`;
+                    }
+
+                    renderHistory();
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'ÍTEM CANCELADO',
+                        text: data.message || 'El producto fue cancelado correctamente.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'ERROR AL CANCELAR',
+                        text: data.message || 'No se pudo cancelar el producto.',
+                        timer: 3000,
+                        showConfirmButton: false
+                    });
+                }
+            } catch (error) {
+                console.error('Error al intentar cancelar el ítem:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'ERROR DE RED',
+                    text: 'Ocurrió un problema de conexión al procesar la cancelación.',
+                    timer: 3000,
+                    showConfirmButton: false
+                });
+            }
+        }
 
         /**
          * Llama al endpoint de posController.apiActualizarEstadoItem para marcar como 'entregado'
@@ -808,13 +937,15 @@
 
         function recalcularTotales() {
             const subtotalRondaNueva = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
-            const subtotalHistorico = historicoDetalles.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+            const subtotalHistorico = historicoDetalles.reduce((sum, item) => {
+                return item.estado !== 'cancelado' ? sum + (item.precio * item.cantidad) : sum;
+            }, 0);
             
             const subtotalTotal = subtotalRondaNueva + subtotalHistorico;
-            const totalConTax = subtotalTotal * 1.10;
 
+            // Actualizamos la UI con el monto neto real
             document.getElementById('summary-subtotal').textContent = `$${subtotalTotal.toFixed(2)}`;
-            document.getElementById('summary-total').textContent = `$${totalConTax.toFixed(2)}`;
+            document.getElementById('summary-total').textContent = `$${subtotalTotal.toFixed(2)}`;
         }
 
         //saveOrderToServer con asignación de ID de BD
@@ -870,7 +1001,7 @@
                         });
                     }
 
-                    clearCart();
+                    vaciarCarritoDirecto();
                     renderHistory();
 
                     Swal.fire({ 
@@ -906,20 +1037,36 @@
         }
 
         async function checkoutOrder() {
+            // 1. BLOQUEO: Ítems pendientes por enviar a cocina (captura activa)
             if (carrito.length > 0) {
-                const confirmacion = await Swal.fire({
-                    title: 'TIENES PLATILLOS EN CAPTURA',
-                    text: 'Hay productos en la ronda actual sin enviar a cocina. ¿Deseas cobrar únicamente lo registrado en el histórico?',
+                return Swal.fire({
                     icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#3b82f6',
-                    cancelButtonColor: '#64748b',
-                    confirmButtonText: 'COBRAR HISTÓRICO',
-                    cancelButtonText: 'VOLVER Y ENVIAR'
+                    title: 'PLATILLOS EN CAPTURA',
+                    text: 'Hay productos en la ronda actual sin enviar a cocina. Envíelos o limpie el carrito antes de cobrar.',
+                    timer: 3500,
+                    showConfirmButton: false
                 });
-                if (!confirmacion.isConfirmed) return;
             }
 
+            // 2. BLOQUEO: Ítems en el histórico que siguen pendientes de entrega en cocina/bar
+            if (historicoDetalles && historicoDetalles.length > 0) {
+                const pendientes = historicoDetalles.filter(item => {
+                    const estado = (item.estado || '').toLowerCase();
+                    return estado !== 'entregado' && estado !== 'cancelado';
+                });
+
+                if (pendientes.length > 0) {
+                    return Swal.fire({
+                        icon: 'warning',
+                        title: 'PLATILLOS PENDIENTES EN COCINA/BAR',
+                        text: `Existen ${pendientes.length} producto(s) en preparación (cocina/bar) que aún no se han marcado como entregados.`,
+                        timer: 4000,
+                        showConfirmButton: false
+                    });
+                }
+            }
+
+            // 3. CÁLCULO DEL SUBTOTAL (Solo ítems no cancelados)
             let subtotalHistorico = 0;
             if (historicoDetalles && historicoDetalles.length > 0) {
                 subtotalHistorico = historicoDetalles.reduce((acc, item) => {
@@ -1044,9 +1191,8 @@
                 cancelButtonColor: '#64748b',
                 didOpen: () => {
                     const listaPagos = [];
-                    const totalRequerido = totalConTax;
+                    const totalRequerido = subtotalHistorico; // Refleja el monto exacto neto de la BD
 
-                    // Helper para mostrar alertas efímeras
                     const mostrarAlertaTemporal = (mensaje, esError = true) => {
                         const alertBox = document.getElementById('modal-alert-container');
                         alertBox.className = `p-2 rounded-lg text-xs font-bold text-center ${esError ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-100 text-emerald-700'}`;
@@ -1055,7 +1201,7 @@
 
                         setTimeout(() => {
                             alertBox.classList.add('hidden');
-                        }, 3000); // Se oculta tras 3 segundos
+                        }, 3000);
                     };
 
                     const updateTabla = () => {
@@ -1272,7 +1418,6 @@
 
         // Detener al salir de la página
         window.addEventListener('beforeunload', detenerPollingItemsListos);
-
 
     </script>
     <!-- Sonido de Notificación de Platillo Listo -->

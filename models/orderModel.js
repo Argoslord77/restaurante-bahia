@@ -91,11 +91,13 @@ class OrderModel {
                 });
             }
 
-            // 2. Recalcular el subtotal total del pedido (histórico + nueva ronda)
+            // =========================================================================
+            // Recalcular subtotal acumulado excluyendo productos cancelados
+            // =========================================================================
             const [sumRows] = await connection.query(`
                 SELECT SUM(cantidad * precio_unitario) AS subtotal_acumulado
                 FROM detalles_pedido
-                WHERE id_pedido = ?
+                WHERE id_pedido = ? AND estado_item != 'cancelado'
             `, [id_pedido]);
 
             const subtotal = parseFloat(sumRows[0].subtotal_acumulado || 0);

@@ -7,7 +7,6 @@ const { posValidationRules, handleValidationErrors } = require('../middlewares/v
 const { asegurarTurnoActivo } = require('../middlewares/verificarTurno');
 const monitorController = require('../controllers/monitorController');
 const turnoController = require('../controllers/turnoController');
-const STATUS = require('../config/orderStatus');
 
 // ========================================================
 // RUTAS DEL DASHBOARD DEL DEPENDIENTE
@@ -47,14 +46,17 @@ router.get('/monitor/:area', ensureAuthenticated, asegurarTurnoActivo, checkRole
 // Endpoint API para la actualización de estados desde la interfaz de cocina/bar
 router.post('/api/monitor/cambiar-estado', ensureAuthenticated, asegurarTurnoActivo, checkRole(['superadministrador', 'administrador','jefe-cocina', 'bartender', 'cocinero']), monitorController.apiActualizarEstadoItem);
 
-// Endpoint API para la actualización de estados desde la interfaz de cocina/bar
-router.post('/api/pos/item-estado', ensureAuthenticated, asegurarTurnoActivo, checkRole(['dependiente', 'capitan']), posController.apiActualizarEstadoItem);
+// Endpoint API para la actualización de estados desde la interfaz POS (dependiente)
+router.post('/api/pos/item-estado', ensureAuthenticated, asegurarTurnoActivo, checkRole(['dependiente', 'capitan', 'administrador', 'superadministrador']), posController.apiActualizarEstadoItem);
+
+// Endpoint API para cancelar un ítem desde el POS (dependiente)
+router.put('/pos/cancelar-item/:id_detalle', ensureAuthenticated, asegurarTurnoActivo, checkRole(['dependiente', 'capitan', 'administrador', 'superadministrador']), posController.apiCancelarItem);
 
 // Endpoint de polling para consultar ítems en estado 'listo' de un pedido
 router.get('/api/pos/items-listos/:id_pedido', posController.getItemsListos);
 
 // Obtener monedas y tasas vigentes del turno activo para el modal de cobro POS
-router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'dependiente', 'dependiente']), turnoController.obtenerMonedasTurnoActivo);
+router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'dependiente']), turnoController.obtenerMonedasTurnoActivo);
 
 // ========================================================
 // VISTA PREVIA E IMPRESIÓN DE PRE-CUENTA

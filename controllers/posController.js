@@ -5,6 +5,7 @@ const RecetaService = require('../services/recetaService');
 const logger = require('../config/logger');
 const turnoService = require('../services/turnoService');
 const db = require('../config/db');
+const STATUS = require('../config/orderStatus');
 
 /**
  * Acceso directo al POS pasándole obligatoriamente el ID del pedido previamente inicializado
@@ -233,6 +234,74 @@ exports.apiActualizarEstadoItem = async (req, res) => {
 };
 
 /**
+ * API para cancelar un ítem de la comanda en el POS
+ * Permite la cancelación siempre que su estado sea 'en_cocina', 'en_bar' o 'listo'.
+ */
+exports.apiCancelarItem = async (req, res) => {
+    try {
+        const { id_detalle } = req.params;
+        const { motivo } = req.body;
+
+        if (!id_detalle) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'El ID del detalle del pedido es requerido.' 
+            });
+        }
+
+        // 1. Ajuste de columnas: id y notas_especiales
+        const [filas] = await db.query(
+            'SELECT id, id_pedido, estado_item, notas_especiales FROM detalles_pedido WHERE id = ?',
+            [id_detalle]
+        );
+
+        if (!filas || filas.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'El ítem solicitado no existe.' 
+            });
+        }
+
+        const detalle = filas[0];
+        const estadosPermitidos = [STATUS.ITEM.EN_COCINA, STATUS.ITEM.EN_BAR, STATUS.ITEM.LISTO];
+
+        if (!estadosPermitidos.includes(detalle.estado_item)) {
+            return res.status(400).json({
+                success: false,
+                message: `No se puede cancelar el producto en su estado actual ('${detalle.estado_item}').`
+            });
+        }
+
+        // 2. Concatenación usando notas_especiales
+        const motivoTexto = motivo && motivo.trim() ? motivo.trim() : 'Sin motivo especificado';
+        const notaActualizada = detalle.notas_especiales 
+            ? `${detalle.notas_especiales} | CANCELADO: ${motivoTexto}`
+            : `CANCELADO: ${motivoTexto}`;
+
+        // 3. UPDATE apuntando a `id` y `notas_especiales`
+        await db.query(
+            `UPDATE detalles_pedido 
+             SET estado_item = ?, 
+                 notas_especiales = ? 
+             WHERE id = ?`,
+            [STATUS.ITEM.CANCELADO, notaActualizada, id_detalle]
+        );
+
+        return res.json({
+            success: true,
+            message: 'El producto fue cancelado correctamente.'
+        });
+
+    } catch (error) {
+        console.error('Error al cancelar el ítem del pedido:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor al procesar la cancelación del producto.'
+        });
+    }
+};
+
+/**
  * Para imprimir/visualizar la precuenta de pedido desde la terminal POS
  */
 exports.viewPrecuenta = async (req, res) => {
@@ -263,8 +332,8 @@ exports.viewPrecuenta = async (req, res) => {
             SELECT dp.cantidad, pm.nombre, dp.precio_unitario AS precio
             FROM detalles_pedido dp
             INNER JOIN platillos_menu pm ON dp.id_platillo = pm.id
-            WHERE dp.id_pedido = ? AND dp.estado_item != 'cancelado'
-        `, [id_pedido]);
+            WHERE dp.id_pedido = ? AND dp.estado_item != ?
+        `, [id_pedido, STATUS.ITEM.CANCELADO]);
 
         res.render('precuenta', {
             id_pedido: pedido[0].id,
@@ -285,7 +354,6 @@ exports.viewPrecuenta = async (req, res) => {
 exports.procesarCobro = async (req, res) => {
     const { id_pedido } = req.params;
     const { pagos, es_cortesia } = req.body; 
-    // 'pagos': [{ metodo_pago, moneda_id, factor_cambio_aplicado, monto_moneda_origen, monto_equivalente_local, referencia_transaccion }]
     
     const id_cajero = req.session?.user?.id || req.user?.id;
 
@@ -321,9 +389,20 @@ exports.procesarCobro = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Este pedido ya fue cobrado o cerrado.' });
         }
 
+        // -------------------------------------------------------------------------
+        // RECALCULO DIRECTO DESDE BASE DE DATOS (EXCLUYENDO CANCELADOS)
+        // Evita inflar la cuenta si existían ítems anulados o discrepancias de total.
+        // -------------------------------------------------------------------------
+        const [filasSubtotal] = await connection.query(`
+            SELECT COALESCE(SUM(cantidad * precio_unitario), 0) AS total_real
+            FROM detalles_pedido
+            WHERE id_pedido = ? AND estado_item != ?
+        `, [id_pedido, STATUS.ITEM.CANCELADO]);
+
+        const totalPagar = parseFloat(filasSubtotal[0].total_real);
+
         let nuevo_estado_pago = 'pagado';
         let propina = 0;
-        const totalPagar = parseFloat(pedido.total);
 
         if (es_cortesia) {
             nuevo_estado_pago = 'cortesia';
@@ -333,7 +412,7 @@ exports.procesarCobro = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Debe proporcionar al menos un método de pago.' });
             }
 
-            // Validar que la suma equivalente cubra el total a pagar
+            // Validar que la suma equivalente cubra el total real a pagar
             const totalRecibidoLocal = pagos.reduce((sum, p) => sum + parseFloat(p.monto_equivalente_local || 0), 0);
             
             if (totalRecibidoLocal < totalPagar - 0.01) { // margen de centavos por redondeo
@@ -365,24 +444,26 @@ exports.procesarCobro = async (req, res) => {
             }
         }
 
-        // 3. Actualizar la tabla 'pedidos' con el estado de pago, la propina retenida y la fecha de cierre
+        // 3. Actualizar la tabla 'pedidos' con el total real neto, estado de pago, propina y fecha de cierre
         await connection.query(`
             UPDATE pedidos 
-            SET estado_pedido = 'entregado',
+            SET total = ?,
+                subtotal = ?,
+                estado_pedido = ?,
                 estado_pago = ?,
                 propina = ?,
                 id_usuario_cajero = ?,
                 fecha_cierre = NOW()
             WHERE id = ?
-        `, [nuevo_estado_pago, propina, id_cajero, id_pedido]);
+        `, [totalPagar, totalPagar, STATUS.PEDIDO.ENTREGADO, nuevo_estado_pago, propina, id_cajero, id_pedido]);
 
         // 4. Liberar la mesa asignada
         if (pedido.id_mesa) {
             await connection.query(`
                 UPDATE mesas 
-                SET estado = 'disponible' 
+                SET estado = ? 
                 WHERE id = ?
-            `, [pedido.id_mesa]);
+            `, [STATUS.MESA.LIBRE, pedido.id_mesa]);
         }
 
         await connection.commit();
