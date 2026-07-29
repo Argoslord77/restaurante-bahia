@@ -65,6 +65,6 @@ router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['sup
 router.get('/pos/precuenta/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'dependiente', 'capitan']), asegurarTurnoActivo, posController.viewPrecuenta);
 
 // Endpoint API para el cobro de una orden
-router.post('/pos/cobrar/:id_pedido', ensureAuthenticated, asegurarTurnoActivo, checkRole(['capitan', 'superadministrador', 'administrador', 'cajero', 'dependiente']), posController.procesarCobro);
+router.post('/pos/cobrar/:id_pedido', ensureAuthenticated, asegurarTurnoActivo, checkRole(['capitan', 'superadministrador', 'administrador', 'cajero', 'dependiente']), posController.procesarCobroAvanzado);
 
 module.exports = router;

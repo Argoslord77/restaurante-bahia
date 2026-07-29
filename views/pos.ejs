@@ -893,13 +893,16 @@
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    // Actualizar el estado localmente en el arreglo historicoDetalles
+                    // 1. Actualizar el estado localmente en el arreglo historicoDetalles
                     const item = historicoDetalles.find(d => d.id_detalle == id_detalle);
                     if (item) {
                         item.estado = 'entregado';
                     }
 
-                    // Volver a renderizar el histórico
+                    // 2. Registrar en el Set para evitar falsas alertas en el polling
+                    itemsListosAnteriores.add(parseInt(id_detalle));
+
+                    // 3. Volver a renderizar el histórico
                     renderHistory();
 
                     // Notificación visual rápida
@@ -1177,9 +1180,22 @@
                             </table>
                         </div>
 
-                        <div class="pt-2 border-t border-slate-200 flex items-center gap-2">
-                            <input type="checkbox" id="swal-es-cortesia" class="h-4 w-4 text-blue-600 rounded">
-                            <label for="swal-es-cortesia" class="text-xs font-bold text-slate-700 uppercase cursor-pointer">Marcar como Cortesía (100% Descuento)</label>
+                        <div class="pt-2 border-t border-slate-200 space-y-2">
+                            <!-- Opción Cortesía -->
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="swal-es-cortesia" class="h-4 w-4 text-blue-600 rounded">
+                                <label for="swal-es-cortesia" class="text-xs font-bold text-slate-700 uppercase cursor-pointer">
+                                    Marcar como Cortesía (100% Descuento)
+                                </label>
+                            </div>
+
+                            <!-- Opción Facturación / Crédito -->
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="swal-es-factura" class="h-4 w-4 text-emerald-600 rounded">
+                                <label for="swal-es-factura" class="text-xs font-bold text-slate-700 uppercase cursor-pointer flex items-center gap-1">
+                                    <i class="fa-solid fa-file-invoice text-emerald-600"></i> Facturar Orden (Crédito / CxC)
+                                </label>
+                            </div>
                         </div>
                     </div>
                 `,
@@ -1190,8 +1206,19 @@
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#64748b',
                 didOpen: () => {
+                    const chkCortesia = document.getElementById('swal-es-cortesia');
+                    const chkFactura = document.getElementById('swal-es-factura');
+
+                    chkCortesia.addEventListener('change', (e) => {
+                        if (e.target.checked) chkFactura.checked = false;
+                    });
+
+                    chkFactura.addEventListener('change', (e) => {
+                        if (e.target.checked) chkCortesia.checked = false;
+                    });
+
                     const listaPagos = [];
-                    const totalRequerido = subtotalHistorico; // Refleja el monto exacto neto de la BD
+                    const totalRequerido = totalConTax; // Refleja el monto exacto neto de la BD
 
                     const mostrarAlertaTemporal = (mensaje, esError = true) => {
                         const alertBox = document.getElementById('modal-alert-container');
@@ -1282,12 +1309,14 @@
                 },
                 preConfirm: () => {
                     const esCortesia = document.getElementById('swal-es-cortesia').checked;
+                    const esFactura = document.getElementById('swal-es-factura').checked;
                     const pagos = window._tempPagosModal || [];
 
-                    if (!esCortesia && pagos.length === 0) {
+                    // Si no es ni cortesía ni factura a crédito, requiere al menos una forma de pago
+                    if (!esCortesia && !esFactura && pagos.length === 0) {
                         const alertBox = document.getElementById('modal-alert-container');
                         alertBox.className = 'p-2 rounded-lg text-xs font-bold text-center bg-rose-100 text-rose-700 border border-rose-200';
-                        alertBox.textContent = 'Debe agregar al menos una forma de pago.';
+                        alertBox.textContent = 'Debe agregar al menos una forma de pago o seleccionar Factura/Cortesía.';
                         alertBox.classList.remove('hidden');
                         setTimeout(() => alertBox.classList.add('hidden'), 3000);
                         return false;
@@ -1295,7 +1324,8 @@
 
                     return {
                         pagos: pagos,
-                        es_cortesia: esCortesia
+                        es_cortesia: esCortesia,
+                        es_factura_credito: esFactura
                     };
                 }
             });
@@ -1306,7 +1336,7 @@
                 const response = await fetch(`/pos/cobrar/${idPedido}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formValues)
+                    body: JSON.stringify(formValues) // Envía { pagos, es_cortesia, es_factura_credito }
                 });
 
                 const data = await response.json();
