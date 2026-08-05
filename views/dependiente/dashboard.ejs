@@ -441,7 +441,11 @@
             html5QrcodeScanner.render(onScanSuccess, () => {});
         });
     </script>
+    <!-- Libs JS -->
+    <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             document.addEventListener('click', async function(e) {
@@ -472,6 +476,139 @@
                 }
             });
         });
+    </script>
+    <!-- Audio para alertas -->
+    <audio id="audioAlertaCliente" src="/sounds/alert-notification.mp3" preload="auto"></audio>
+
+    <script>
+    (() => {
+        let alertasProcesadas = new Set();
+        const POLLING_INTERVAL = 4000; // Sondeo cada 4 segundos
+
+        async function verificarAlertasCliente() {
+            try {
+                const response = await fetch('/pos/alertas-pendientes');
+                if (!response.ok) return;
+
+                const data = await response.json();
+                if (!data.success) return;
+
+                const { notificaciones = [], prePedidos = [] } = data.alertas || {};
+                let hayNuevasAlertas = false;
+
+                // 1. Procesar llamadas de clientes y solicitudes de cierre
+                for (const notif of notificaciones) {
+                    const key = `notif_${notif.id}`;
+                    if (!alertasProcesadas.has(key)) {
+                        alertasProcesadas.add(key);
+                        hayNuevasAlertas = true;
+
+                        const esCierre = notif.tipo === 'SOLICITUD_CIERRE';
+                        const titulo = esCierre ? '💳 Solicitud de Cuenta' : '🔔 Llamada de Cliente';
+                        const icono = esCierre ? 'warning' : 'info';
+                        
+                        // Evita el undefined leyendo la propiedad correcta
+                        const nombreMesa = notif.nombre_mesa || notif.numero || notif.mesa || 'N/A';
+
+                        Swal.fire({
+                            title: titulo,
+                            html: `<p class="fs-5 mb-0">Mesa <strong>${nombreMesa}</strong></p><p class="text-muted mt-2">${notif.mensaje}</p>`,
+                            icon: icono,
+                            confirmButtonText: 'Marcar Atendida',
+                            confirmButtonColor: '#0f172a',
+                            allowOutsideClick: false,
+                            customClass: {
+                                popup: 'rounded-4 border-0 shadow-lg'
+                            }
+                        }).then(async (result) => {
+                            if (result.isConfirmed) {
+                                await fetch(`/pos/notificaciones/${notif.id}/leer`, { method: 'POST' });
+                            }
+                        });
+                    }
+                }
+
+                // 2. Procesar Pre-pedidos agrupados por mesa
+                if (prePedidos.length > 0) {
+                    const prepedidosPorMesa = {};
+                    prePedidos.forEach(item => {
+                        if (!prepedidosPorMesa[item.id_mesa]) {
+                            prepedidosPorMesa[item.id_mesa] = {
+                                idMesa: item.id_mesa,
+                                numeroMesa: item.numero,
+                                items: []
+                            };
+                        }
+                        prepedidosPorMesa[item.id_mesa].items.push(item);
+                    });
+
+                    Object.values(prepedidosPorMesa).forEach(grupo => {
+                        const key = `pre_mesa_${grupo.idMesa}_count_${grupo.items.length}`;
+                        if (!alertasProcesadas.has(key)) {
+                            alertasProcesadas.add(key);
+                            hayNuevasAlertas = true;
+
+                            const resumenText = grupo.items
+                                .map(i => `<li class="list-group-item d-flex justify-content-between align-items-center bg-light border-0 py-2 mb-1 rounded-3">
+                                    <span><strong>${i.cantidad}x</strong> ${i.platillo}${i.notas_especiales ? `<small class="d-block text-warning-emphasis"><em>Nota: ${i.notas_especiales}</em></small>` : ''}</span>
+                                </li>`)
+                                .join('');
+
+                            Swal.fire({
+                                title: `🍽️ Pre-pedido: Mesa ${grupo.numeroMesa}`,
+                                html: `<div class="text-start mt-3">
+                                        <p class="text-secondary small fw-bold text-uppercase mb-2">Detalle de la selección:</p>
+                                        <ul class="list-group list-group-flush">${resumenText}</ul>
+                                       </div>`,
+                                icon: 'question',
+                                showCancelButton: true,
+                                showDenyButton: true,
+                                confirmButtonText: '<i class="fa-solid fa-cart-plus me-1"></i> Cargar al POS',
+                                denyButtonText: '<i class="fa-solid fa-trash me-1"></i> Descartar',
+                                cancelButtonText: '⏳ Luego',
+                                confirmButtonColor: '#10b981',
+                                denyButtonColor: '#ef4444',
+                                cancelButtonColor: '#64748b',
+                                allowOutsideClick: false,
+                                customClass: {
+                                    popup: 'rounded-4 border-0 shadow-lg'
+                                }
+                            }).then(async (result) => {
+                                if (result.isConfirmed) {
+                                    // Redirigir al controlador POS abriendo/cargando la comanda de esa mesa
+                                    window.location.href = `/pos/mesa/${grupo.idMesa}`;
+                                    await fetch(`/pos/mesas/${grupo.idMesa}/pre-pedidos`, { method: 'DELETE' });
+                                } else if (result.isDenied) {
+                                    await fetch(`/pos/mesas/${grupo.idMesa}/pre-pedidos`, { method: 'DELETE' });
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (hayNuevasAlertas) {
+                    reproducirSonidoAlerta();
+                }
+
+            } catch (err) {
+                console.error('Error en el sondeo de alertas:', err);
+            }
+        }
+
+        function reproducirSonidoAlerta() {
+            const audio = document.getElementById('audioAlertaCliente');
+            if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch(() => {
+                    console.warn('Reproducción de audio bloqueada hasta interacción del usuario.');
+                });
+            }
+        }
+
+        // Iniciar polling
+        setInterval(verificarAlertasCliente, POLLING_INTERVAL);
+        document.addEventListener('DOMContentLoaded', verificarAlertasCliente);
+    })();
     </script>
 </body>
 </html>

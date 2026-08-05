@@ -24,10 +24,6 @@ router.post('/pos/init-manual', ensureAuthenticated, checkRole(['superadministra
 // Variante 2: Entrada automática por lectura de Código QR físico
 router.get('/qr/:hash', ensureAuthenticated, posController.initOrderQR);
 
-// Interfaz fija del punto de venta acoplada al pedido en curso
-router.get('/pos/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.viewPOS);
-
-
 // ========================================================
 // ENDPOINTS ASÍNCRONOS (API)
 // ========================================================
@@ -58,6 +54,16 @@ router.get('/api/pos/items-listos/:id_pedido', posController.getItemsListos);
 // Obtener monedas y tasas vigentes del turno activo para el modal de cobro POS
 router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'dependiente']), turnoController.obtenerMonedasTurnoActivo);
 
+router.get('/pos/alertas-pendientes', asegurarTurnoActivo, posController.obtenerAlertasPendientes);
+
+router.post('/pos/notificaciones/:id/leer', asegurarTurnoActivo, posController.marcarNotificacionLeida);
+
+router.delete('/pos/pre-pedidos/:id', asegurarTurnoActivo, posController.eliminarPrePedido);
+
+router.get('/mesas/:idMesa/pre-pedidos', asegurarTurnoActivo, posController.obtenerPrePedidosMesa);
+
+router.delete('/mesas/:idMesa/pre-pedidos', asegurarTurnoActivo, posController.limpiarPrePedidosMesa);
+
 // ========================================================
 // VISTA PREVIA E IMPRESIÓN DE PRE-CUENTA
 // ========================================================
@@ -66,5 +72,8 @@ router.get('/pos/precuenta/:id_pedido', ensureAuthenticated, checkRole(['superad
 
 // Endpoint API para el cobro de una orden
 router.post('/pos/cobrar/:id_pedido', ensureAuthenticated, asegurarTurnoActivo, checkRole(['capitan', 'superadministrador', 'administrador', 'cajero', 'dependiente']), posController.procesarCobroAvanzado);
+
+// Interfaz fija del punto de venta acoplada al pedido en curso
+router.get('/pos/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.viewPOS);
 
 module.exports = router;

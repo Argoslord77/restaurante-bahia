@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restaurante Bahía — Menú digital</title>
+
+<!-- Carga local de Bootstrap CSS -->
+<link rel="stylesheet" href="/css/bootstrap.min.css">
+
+<!-- Carga local de Font Awesome 6 -->
+<link rel="stylesheet" href="/css/all.min.css">
+<style>
+  /* ---------- FUENTES LOCALES ---------- */
+  @font-face {
+    font-family: 'Fraunces';
+    src: url('/fonts/Fraunces-VariableFont_SOFT,WONK,opsz,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Fraunces';
+    src: url('/fonts/Fraunces-Italic-VariableFont_SOFT,WONK,opsz,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: italic;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Caveat';
+    src: url('/fonts/Caveat-VariableFont_wght.ttf') format('truetype');
+    font-weight: 600 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Work Sans';
+    src: url('/fonts/WorkSans-VariableFont_wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root{
+    --wine-950:#2a1120;
+    --wine-900:#3d1a2b;
+    --wine-800:#552339;
+    --saffron-500:#e8a33d;
+    --saffron-400:#f0b75e;
+    --terracotta-600:#c6472f;
+    --terracotta-700:#a83a26;
+    --olive-500:#8a9a5b;
+    --olive-700:#657140;
+    --cream-050:#fbf5ea;
+    --cream-100:#f6ecd9;
+    --cream-200:#efe0c4;
+    --ink-900:#26141c;
+    --ink-600:#5a4550;
+    --shadow-soft: 0 8px 24px rgba(42,17,32,0.10);
+    --shadow-lift: 0 14px 32px rgba(42,17,32,0.18);
+    --radius-lg: 22px;
+    --radius-md: 16px;
+    --radius-pill: 999px;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Work Sans', sans-serif;
+    background: var(--cream-100);
+    color: var(--ink-900);
+    -webkit-font-smoothing:antialiased;
+    padding-bottom: 96px;
+  }
+  ::selection{ background: var(--saffron-400); color: var(--ink-900); }
+
+  .page {
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--cream-100);
+    min-height: 100vh;
+    position: relative;
+    box-shadow: 0 0 60px rgba(42,17,32,0.08);
+    overflow: hidden; /* Corta cualquier elemento que intente salir del contenedor */
+  }
+
+  /* ---------- HERO ---------- */
+  .hero{
+    position:relative;
+    background: radial-gradient(120% 140% at 20% -10%, var(--wine-800) 0%, var(--wine-900) 45%, var(--wine-950) 100%);
+    color: var(--cream-050);
+    padding: 22px 22px 46px;
+    overflow:hidden;
+    border-bottom-left-radius: 32px;
+    border-bottom-right-radius: 32px;
+  }
+  .hero::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:
+      radial-gradient(circle at 85% 15%, rgba(232,163,61,0.20) 0%, transparent 45%),
+      radial-gradient(circle at 10% 90%, rgba(198,71,47,0.22) 0%, transparent 40%);
+    pointer-events:none;
+  }
+  
+  .logo-mark-img {
+    position: absolute;
+    top: 50%;
+    right: 20px; /* Se desplaza hacia la derecha para equilibrar con el texto */
+    transform: translateY(-50%);
+    width: 220px;
+    height: 220px;
+    background-image: url('/img/bahia_logotipo.png');
+    background-position: center;
+    background-size: contain; /* Muestra el logotipo completo sin recortar */
+    background-repeat: no-repeat;
+    filter: invert(1);
+    mix-blend-mode: screen; 
+    opacity: 0.08; /* Suavizado para que actúe realmente como marca de agua */
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
+  }
+
+  .top-row{
+    position:relative; z-index:1;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 26px;
+  }
+  .table-badge{
+    display:inline-flex; align-items:center; gap:6px;
+    background: rgba(251,245,234,0.12);
+    border:1px solid rgba(251,245,234,0.28);
+    color: var(--cream-050);
+    font-size: 12.5px;
+    font-weight:600;
+    letter-spacing:.03em;
+    padding: 7px 14px;
+    border-radius: var(--radius-pill);
+    backdrop-filter: blur(4px);
+  }
+  .table-badge .dot{ width:6px; height:6px; border-radius:50%; background: var(--saffron-500); }
+  
+  .btn-account-header{
+    display:inline-flex; align-items:center; gap:6px;
+    background: var(--terracotta-600);
+    border:1px solid rgba(251,245,234,0.28);
+    color: var(--cream-050);
+    font-size: 12.5px; font-weight:600;
+    padding: 7px 14px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+    transition: background .2s ease, transform .15s ease;
+  }
+  .btn-account-header:hover{ background: var(--terracotta-700); }
+  .btn-account-header:active{ transform: scale(0.96); }
+
+  .call-waiter{
+    display:inline-flex; align-items:center; gap:6px;
+    background: rgba(251,245,234,0.12);
+    border:1px solid rgba(251,245,234,0.28);
+    color: var(--cream-050);
+    font-size: 12.5px; font-weight:600;
+    padding: 7px 12px 7px 10px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+    transition: background .2s ease, transform .15s ease;
+  }
+  .call-waiter:hover{ background: rgba(251,245,234,0.2); }
+  .call-waiter:active{ transform: scale(0.96); }
+
+  .brand{ position:relative; z-index:1; }
+  .brand .eyebrow{
+    font-family:'Caveat', cursive;
+    font-size: 21px;
+    font-weight:600;
+    color: var(--saffron-400);
+    display:block;
+    margin-bottom: 2px;
+  }
+  .brand h1{
+    font-family:'Fraunces', serif;
+    font-size: 38px;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .brand p{
+    margin-top: 10px;
+    font-size: 11px;
+    color: rgba(251,245,234,0.72);
+    max-width: 280px;
+    line-height:1.45;
+  }
+
+  .search-wrap{
+    position:relative; z-index:1;
+    margin-top: 22px;
+    display:flex;
+    gap:8px;
+  }
+  .search-box{
+    flex:1;
+    display:flex; align-items:center; gap:8px;
+    background: var(--cream-050);
+    border-radius: var(--radius-pill);
+    padding: 12px 16px;
+    box-shadow: var(--shadow-soft);
+  }
+  .search-box input{
+    border:none; outline:none; background:transparent;
+    font-family:'Work Sans', sans-serif;
+    font-size: 14.5px;
+    color: var(--ink-900);
+    width:100%;
+  }
+  .search-box input::placeholder{ color: var(--ink-600); opacity:0.7; }
+
+  /* ---------- CATEGORY NAV ---------- */
+  .cat-nav{
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--cream-100);
+    padding: 16px 0 12px;
+    display:flex;
+    gap: 9px;
+    overflow-x:auto;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+    margin: -18px 0 4px;
+    padding-left: 22px;
+    padding-right: 22px;
+    border-bottom: 1px solid rgba(42,17,32,0.06);
+  }
+  .cat-nav::-webkit-scrollbar{ display:none; }
+  .cat-chip{
+    flex-shrink:0;
+    font-family:'Work Sans', sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink-900);
+    background: var(--cream-050);
+    border: 1.5px solid var(--cream-200);
+    padding: 9px 16px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+    white-space:nowrap;
+    display:flex; align-items:center; gap:6px;
+    transition: all .2s ease;
+  }
+  .cat-chip.active{
+    background: var(--terracotta-600);
+    border-color: var(--terracotta-600);
+    color: var(--cream-050);
+    box-shadow: 0 6px 16px rgba(198,71,47,0.32);
+  }
+
+  /* Asegurar que la barra de categorías permanezca pegada arriba */
+  .cat-nav {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    background: var(--cream-100);
+  }
+
+  /* Botón flotante para volver arriba */
+  .btn-scroll-top {
+    position: fixed;
+    bottom: 24px;
+    right: 20px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--terracotta-600);
+    color: var(--cream-050);
+    border: none;
+    box-shadow: 0 6px 18px rgba(42, 17, 32, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+    z-index: 40;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(15px);
+    transition: all 0.3s ease;
+  }
+
+  .btn-scroll-top.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .btn-scroll-top:hover {
+    background: var(--terracotta-700);
+    transform: translateY(-2px);
+  }
+
+  /* Ajuste de posición si la barra del carrito está activa */
+  .cart-bar.show ~ .btn-scroll-top {
+    bottom: 80px;
+  }
+
+  /* ---------- MODAL DE DETALLE DEL PLATILLO ---------- */
+  .dish-card .dish-icon {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .dish-card .dish-icon:hover {
+    transform: scale(1.06);
+  }
+
+  .dish-modal-content {
+    background: var(--cream-050) !important;
+    color: var(--ink-900) !important;
+    border-radius: 28px !important;
+    border: 1px solid rgba(251, 245, 234, 0.5);
+    overflow: hidden;
+    box-shadow: 0 24px 48px rgba(42, 17, 32, 0.35);
+    position: relative;
+  }
+
+  .btn-close-modal {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(42, 17, 32, 0.5);
+    color: var(--cream-050);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    z-index: 10;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: background 0.2s ease, transform 0.15s ease;
+  }
+  .btn-close-modal:hover {
+    background: var(--wine-950);
+    transform: scale(1.05);
+  }
+
+  .dish-modal-hero {
+    position: relative;
+    width: 100%;
+    height: 260px;
+    background: var(--cream-200);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dish-modal-img {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 72px;
+    color: var(--wine-900);
+  }
+
+  .dish-modal-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+  }
+
+  .dish-modal-content:hover .dish-modal-img img {
+    transform: scale(1.04);
+  }
+
+  .dish-modal-badge {
+    position: absolute;
+    bottom: 14px;
+    left: 16px;
+    background: rgba(42, 17, 32, 0.75);
+    color: var(--saffron-400);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 5px 12px;
+    border-radius: var(--radius-pill);
+    backdrop-filter: blur(6px);
+  }
+
+  .dish-modal-body {
+    padding: 22px 22px 26px;
+  }
+
+  .dish-modal-title {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--wine-950);
+    margin: 0;
+  }
+
+  .dish-modal-price {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--terracotta-600);
+    white-space: nowrap;
+  }
+
+  .dish-modal-desc {
+    font-size: 14px;
+    color: var(--ink-600);
+    line-height: 1.55;
+    margin-top: 6px;
+  }
+
+  /* ---------- SECTIONS & CARDS ---------- */
+  .menu-body{ padding: 6px 22px 20px; }
+  .section{ padding-top: 20px; scroll-margin-top: 78px; }
+  .section-head{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom: 14px;
+  }
+  .section-head h2{
+    font-family:'Fraunces', serif;
+    font-size: 23px;
+    font-weight: 600;
+    color: var(--wine-900);
+  }
+  .section-head .count{
+    font-size: 12.5px;
+    color: var(--ink-600);
+    font-weight:500;
+  }
+
+  .dish-grid{ display:flex; flex-direction:column; gap: 14px; }
+  .dish-card{
+    position:relative;
+    display:flex;
+    gap: 14px;
+    background: var(--cream-050);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow-soft);
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .dish-card:hover{ transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+
+  .dish-icon{
+    flex-shrink:0;
+    width: 64px; height: 64px;
+    border-radius: 16px;
+    display:flex; align-items:center; justify-content:center;
+    font-size: 24px;
+    background: var(--cream-200);
+  }
+
+  .dish-info{ flex:1; min-width:0; }
+  .dish-name{
+    font-family:'Fraunces', serif;
+    font-size: 16.5px;
+    font-weight: 600;
+    color: var(--ink-900);
+  }
+  .dish-desc{
+    font-size: 12.8px;
+    color: var(--ink-600);
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+
+  .dish-bottom{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top: 12px;
+  }
+  .price{
+    font-family:'Fraunces', serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--wine-900);
+  }
+
+  .add-btn{
+    display:flex; align-items:center; justify-content:center; gap:5px;
+    background: var(--terracotta-600);
+    color: var(--cream-050);
+    border:none;
+    font-weight:700;
+    font-size: 12.5px;
+    padding: 8px 15px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+  }
+  .add-btn:hover{ background: var(--terracotta-700); }
+
+  .qty-stepper{
+    display:flex; align-items:center; gap:10px;
+    background: var(--wine-950);
+    border-radius: var(--radius-pill);
+    padding: 5px 6px;
+  }
+  .qty-stepper button{
+    width:24px; height:24px;
+    border-radius:50%;
+    border:none;
+    background: rgba(251,245,234,0.14);
+    color: var(--cream-050);
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+  }
+
+  /* ---------- FLOATING CART & MODAL ---------- */
+  .cart-bar{
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%) translateY(120%);
+    width: calc(100% - 32px);
+    max-width: 448px;
+    background: var(--wine-950);
+    color: var(--cream-050);
+    border-radius: var(--radius-pill);
+    padding: 10px 10px 10px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    box-shadow: 0 16px 36px rgba(42,17,32,0.4);
+    z-index: 30;
+    transition: transform .35s ease;
+  }
+  .cart-bar.show{ transform: translateX(-50%) translateY(0); }
+  .cart-btn{
+    background: var(--terracotta-600);
+    color: var(--cream-050);
+    border:none;
+    font-weight:700;
+    font-size: 13.5px;
+    padding: 11px 20px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+  }
+
+  .ticket-modal {
+    background: var(--wine-950) !important;
+    color: var(--cream-050) !important;
+    border: 1px solid rgba(232, 163, 61, 0.3);
+    border-radius: var(--radius-lg);
+  }
+  .ticket-line { border-bottom: 1px dashed rgba(251, 245, 234, 0.2); margin: 12px 0; }
+  .toast{
+    position: fixed; left:50%; top: 18px;
+    transform: translateX(-50%) translateY(-140%);
+    background: var(--wine-950); color: var(--cream-050);
+    padding: 10px 18px; border-radius: var(--radius-pill);
+    z-index: 1060; transition: transform .3s ease;
+  }
+  .toast.show{ transform: translateX(-50%) translateY(0); }
+
+  @media (min-width: 760px){
+    body{ padding-bottom: 40px; background: var(--wine-950); }
+    .page { max-width: 900px; margin: 32px auto; border-radius: 32px; }
+    .dish-grid{ display:grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  }
+  @media (min-width: 1080px){ .page { max-width: 1020px; } .dish-grid{ grid-template-columns: repeat(3, 1fr); gap: 16px; } }
+
+  /* ---------- PIE DE MENÚ ¡BUEN PROVECHO! ---------- */
+  .menu-footer {
+    text-align: center;
+    padding: 40px 20px 50px;
+    width: 100%;
+  }
+
+  .enjoy-text {
+    font-family: 'Caveat', cursive;
+    font-size: 34px; /* Las fuentes manuscritas lucen mejor con un tamaño ligeramente mayor */
+    font-weight: 700;
+    color: var(--wine-950, #2a1120);
+    margin: 0;
+    text-align: center;
+  }
+
+  /* 1. Eliminar bordes redondeados inferiores en el héroe/cabecera */
+  .hero,
+  .header,
+  .hero-section {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* 2. Asegurar que la barra de categorías ocupe el 100% del ancho sin márgenes superiores */
+  .cat-nav {
+    width: 100%;
+    margin-top: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="hero">
+    <div class="logo-mark-img"></div>
+    <div class="top-row">
+      <div class="d-flex align-items-center gap-2">
+        <span class="table-badge"><span class="dot"></span> Mesa <%= id_mesa || '1' %></span>
+        <button class="btn-account-header" id="btnAccountHeader"><i class="fa-solid fa-receipt"></i> Mi Cuenta</button>
+      </div>
+      <button class="call-waiter" id="btnCallWaiter">
+        <i class="fa-solid fa-bell"></i> Llamar
+      </button>
+    </div>
+
+    <div class="brand">
+      <span class="eyebrow">Bienvenido a</span>
+      <h1>Bahía</h1>
+      <p>Cocina tradicional, bebidas y platos para compartir. Elige y disfruta.</p>
+    </div>
+
+    <div class="search-wrap">
+      <div class="search-box">
+        <i class="fa-solid fa-magnifying-glass" style="color: var(--ink-600);"></i>
+        <input id="searchInput" type="text" placeholder="Buscar un plato...">
+      </div>
+    </div>
+  </header>
+
+  <!-- Navegación por Categorías Cargadas Dinámicamente -->
+  <nav class="cat-nav" id="catNav"></nav>
+
+  <main class="menu-body" id="menuContainer">
+    <!-- El contenido del menú real se inyecta desde JS -->
+  </main>
+  <!-- PIE DE PÁGINA DEL MENÚ -->
+  <div class="menu-footer">
+    <p class="enjoy-text">¡Buen provecho!</p>
+  </div>
+  <!-- MODAL DE DETALLE DEL PLATILLO -->
+  <div class="modal fade" id="dishDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content dish-modal-content">
+        <button type="button" class="btn-close-modal" data-bs-dismiss="modal" aria-label="Cerrar">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+        
+        <div class="dish-modal-hero">
+          <div id="dishModalImage" class="dish-modal-img"></div>
+          <div class="dish-modal-badge" id="dishModalCategory">Categoría</div>
+        </div>
+
+        <div class="dish-modal-body">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <h3 class="dish-modal-title" id="dishModalTitle">Nombre del platillo</h3>
+            <span class="dish-modal-price" id="dishModalPrice">$0.00</span>
+          </div>
+
+          <p class="dish-modal-desc" id="dishModalDesc">Descripción del platillo...</p>
+
+          <div class="dish-modal-actions mt-4">
+            <button class="add-btn w-100 py-3 fs-6 rounded-pill justify-content-center shadow-sm" id="btnModalAddToCart">
+              <i class="fa-solid fa-plus me-1"></i> Agregar al pedido
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- BOTÓN FLOTANTE PARA VOLVER ARRIBA -->
+  <button id="btnScrollTop" class="btn-scroll-top" title="Volver arriba">
+    <i class="fa-solid fa-arrow-up"></i>
+  </button>
+</div>
+
+<!-- BARRA FLOTANTE DEL CARRITO -->
+<div class="cart-bar" id="cartBar">
+  <div class="cart-left">
+    <span class="items" id="cartItems">0 platos</span>
+    <span class="total" id="cartTotal">$0.00</span>
+  </div>
+  <button class="cart-btn" id="btnViewCart">
+    Ver mi cuenta <i class="fa-solid fa-arrow-right"></i>
+  </button>
+</div>
+
+<!-- MODAL: RESUMEN DE MI CUENTA -->
+<div class="modal fade" id="cuentaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content ticket-modal">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title font-fraunces"><i class="fa-solid fa-receipt"></i> Resumen de tu cuenta</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-center mb-3">
+          <small class="text-uppercase text-cream-muted">Restaurante Bahía — Mesa <%= id_mesa || '1' %></small>
+          <div class="ticket-line"></div>
+        </div>
+
+        <!-- SECCIÓN 1: ÍTEMS EN SELECCIÓN ACTUAL -->
+        <h6 class="fw-bold mb-2" style="color: var(--saffron-400);">Por solicitar:</h6>
+        <div id="modalOrderList"></div>
+
+        <!-- SECCIÓN 2: CONSUMOS YA REGISTRADOS EN MESA -->
+        <% if (typeof consumos !== 'undefined' && consumos.length > 0) { %>
+          <div class="ticket-line"></div>
+          <h6 class="fw-bold mb-2 text-white-50">Pedidos confirmados:</h6>
+          <div id="modalConsumosList">
+            <% consumos.forEach(item => { %>
+              <div class="d-flex justify-content-between align-items-center py-1 fs-6">
+                <div>
+                  <span class="fw-bold text-white-50"><%= item.cantidad %>x</span> 
+                  <span><%= item.nombre_platillo %></span>
+                  <small class="badge bg-secondary ms-1"><%= item.estado_item %></small>
+                </div>
+                <span class="fw-semibold">$<%= (parseFloat(item.precio_unitario || 0) * item.cantidad).toFixed(2) %></span>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+
+        <div class="ticket-line"></div>
+        <div class="d-flex justify-content-between align-items-center fw-bold fs-5 my-2">
+          <span>Total acumulado:</span>
+          <span id="modalTotalAmount" style="color: var(--saffron-400);">$0.00</span>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0 d-flex flex-column gap-2">
+        <button type="button" class="btn-account-header w-100 py-2.5 rounded-pill fw-bold justify-content-center" id="btnConfirmOrder">
+          <i class="fa-solid fa-receipt"></i> Solicitar / Confirmar Pedido
+        </button>
+
+        <% if (typeof pedidoActivo !== 'undefined' && pedidoActivo) { %>
+          <button type="button" class="btn btn-outline-warning w-100 py-2 rounded-pill fw-bold justify-content-center" id="btnSolicitarCierre">
+            <i class="fa-solid fa-cash-register"></i> Solicitar Cierre de Cuenta
+          </button>
+        <% } %>
+
+        <button type="button" class="btn btn-link text-white-50 btn-sm text-decoration-none" data-bs-dismiss="modal">Seguir pidiendo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <i class="fa-solid fa-check" style="color: var(--saffron-400);"></i>
+  <span id="toastMsg">Listo</span>
+</div>
+
+<script src="/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  // Datos inyectados desde Express / EJS
+  const ID_MESA = "<%= id_mesa %>";
+  const ID_PEDIDO_ACTIVO = "<%= (typeof pedidoActivo !== 'undefined' && pedidoActivo) ? pedidoActivo.id : '' %>";
+  const MENU_RAW = <%- JSON.stringify(menu || []) %>;
+  const CONSUMOS_RAW = <%- JSON.stringify(typeof consumos !== 'undefined' ? consumos : []) %>;
+  
+  const cart = {};
+
+  // Transformación o agrupamiento del menú por categoría si viene como un arreglo plano de platillos desde MySQL
+  function processMenuData(rawItems) {
+    if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
+    if (rawItems[0].platos) return rawItems; // Ya agrupado
+
+    const catMap = {};
+    rawItems.forEach(item => {
+      const catName = item.categoria || 'Menú';
+      if (!catMap[catName]) {
+        catMap[catName] = { id: catName.toLowerCase().replace(/\s+/g, '-'), nombre: catName, platos: [] };
+      }
+      catMap[catName].platos.push(item);
+    });
+    return Object.values(catMap);
+  }
+
+  const DATA = processMenuData(MENU_RAW);
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initMenu();
+    initEvents();
+  });
+
+  function initMenu() {
+    const catNav = document.getElementById('catNav');
+    const menuContainer = document.getElementById('menuContainer');
+    
+    catNav.innerHTML = '';
+    menuContainer.innerHTML = '';
+
+    if (!DATA || DATA.length === 0) {
+      menuContainer.innerHTML = '<p class="text-center py-5">No hay platos disponibles en este momento.</p>';
+      return;
+    }
+
+    DATA.forEach((cat, index) => {
+      const catSlug = 'cat-' + (cat.id || index);
+      
+      const chip = document.createElement('div');
+      chip.className = `cat-chip ${index === 0 ? 'active' : ''}`;
+      chip.dataset.target = catSlug;
+      chip.innerHTML = `<span class="ic"><i class="fa-solid ${cat.icono || 'fa-utensils'}"></i></span> ${cat.nombre}`;
+      catNav.appendChild(chip);
+
+      const sec = document.createElement('section');
+      sec.className = 'section';
+      sec.id = catSlug;
+      
+      const platos = cat.platos || [];
+      sec.innerHTML = `
+        <div class="section-head">
+          <h2>${cat.nombre}</h2>
+          <span class="count">${platos.length} ${platos.length === 1 ? 'opción' : 'opciones'}</span>
+        </div>
+        <div class="dish-grid">
+          ${platos.map(d => createDishCard(d, catSlug)).join('')}
+        </div>
+      `;
+      menuContainer.appendChild(sec);
+    });
+
+    initScrollObserver();
+  }
+
+  function createDishCard(d, catSlug) {
+    const priceFormatted = parseFloat(d.precio || 0).toFixed(2);
+    const iconMarkup = d.foto 
+      ? `<img src="/uploads/${d.foto}" style="width:100%;height:100%;object-fit:cover;border-radius:16px;">`
+      : `<i class="fa-solid ${d.icono || 'fa-utensils'}"></i>`;
+    
+    return `
+      <div class="dish-card" data-name="${(d.nombre || '').toLowerCase()}" data-id="${d.id}">
+        <div class="dish-icon" data-action="view-detail" data-id="${d.id}" title="Ver detalle">
+          ${iconMarkup}
+        </div>
+        <div class="dish-info">
+          <div class="dish-name">${d.nombre}</div>
+          <div class="dish-desc">${d.descripcion || ''}</div>
+          <div class="dish-bottom">
+            <span class="price">$${priceFormatted}</span>
+            <div class="qty-zone" id="qty-${d.id}">
+              <button class="add-btn" data-action="add" data-id="${d.id}">
+                <i class="fa-solid fa-plus"></i> Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- INTERACCIÓN CON EL BACKEND Y MANEJO DE EVENTOS (SIN INLINE ONCLICK) ---
+  function initEvents() {
+    // Dentro de initEvents() -> Escuchador de clics en #menuContainer
+    document.getElementById('menuContainer').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+
+      if (action === 'add') addItem(id);
+      else if (action === 'inc') incItem(id);
+      else if (action === 'dec') decItem(id);
+      else if (action === 'view-detail') openDishDetailModal(id);
+    });
+
+    // Función para poblar y abrir el Modal de Detalle
+    function openDishDetailModal(id) {
+      const dish = findDish(id);
+      if (!dish) return;
+
+      // Buscar el nombre de la categoría del platillo
+      let catName = 'Especialidad';
+      for (const cat of DATA) {
+        if ((cat.platos || []).some(p => String(p.id) === String(id))) {
+          catName = cat.nombre;
+          break;
+        }
+      }
+
+      // Cargar imagen o icono en el modal
+      const imgContainer = document.getElementById('dishModalImage');
+      if (dish.foto) {
+        imgContainer.innerHTML = `<img src="/uploads/${dish.foto}" alt="${dish.nombre}">`;
+      } else {
+        imgContainer.innerHTML = `<i class="fa-solid ${dish.icono || 'fa-utensils'}"></i>`;
+      }
+
+      document.getElementById('dishModalCategory').textContent = catName;
+      document.getElementById('dishModalTitle').textContent = dish.nombre;
+      document.getElementById('dishModalPrice').textContent = '$' + parseFloat(dish.precio || 0).toFixed(2);
+      document.getElementById('dishModalDesc').textContent = dish.descripcion || 'Sin descripción disponible para este platillo.';
+
+      // Configurar botón de agregar dentro del modal
+      const btnAdd = document.getElementById('btnModalAddToCart');
+      btnAdd.onclick = () => {
+        addItem(dish.id);
+        const modalEl = document.getElementById('dishDetailModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+      };
+
+      const modal = new bootstrap.Modal(document.getElementById('dishDetailModal'));
+      modal.show();
+    }
+
+    document.getElementById('searchInput').addEventListener('input', (e) => filterDishes(e.target.value));
+
+    // 1. Llamar Servicio / Mesero
+    document.getElementById('btnCallWaiter').addEventListener('click', async () => {
+      try {
+        const response = await fetch(`/cliente/llamar-servicio/${ID_MESA}`, { method: 'POST' });
+        const resData = await response.json();
+        if (resData.success) {
+          showToast(resData.message || 'Aviso enviado — un mesero llega enseguida');
+        } else {
+          showToast(resData.message || 'Error al solicitar el servicio');
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('Error de conexión al llamar al servicio');
+      }
+    });
+
+    document.getElementById('btnAccountHeader').addEventListener('click', abrirCuentaModal);
+    document.getElementById('btnViewCart').addEventListener('click', abrirCuentaModal);
+
+    // 2. Confirmar Pedido / Agregar a Preorden
+    document.getElementById('btnConfirmOrder').addEventListener('click', async () => {
+      const ids = Object.keys(cart);
+      if (ids.length === 0) {
+        showToast('Selecciona al menos un ítem');
+        return;
+      }
+
+      const items = ids.map(id => ({
+        id_platillo: id,
+        cantidad: cart[id],
+        notas_especiales: ''
+      }));
+
+      try {
+        const response = await fetch(`/cliente/agregar-a-preorden/${ID_MESA}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items })
+        });
+        const resData = await response.json();
+
+        if (resData.success) {
+          showToast(resData.message || 'Pre-pedido enviado correctamente');
+          // Limpiar carrito tras envío
+          ids.forEach(id => delete cart[id]);
+          ids.forEach(id => updateQtyZone(id));
+          updateCartBar();
+
+          const modalEl = document.getElementById('cuentaModal');
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
+        } else {
+          showToast(resData.message || 'Error al procesar el pre-pedido');
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('Error de conexión al enviar la orden');
+      }
+    });
+
+    // 3. Solicitar Cierre de Cuenta
+    const btnCierre = document.getElementById('btnSolicitarCierre');
+    if (btnCierre) {
+      btnCierre.addEventListener('click', async () => {
+        if (!ID_PEDIDO_ACTIVO) return;
+        try {
+          const response = await fetch(`/cliente/solicitar-cierre/${ID_PEDIDO_ACTIVO}`, { method: 'POST' });
+          const resData = await response.json();
+          if (resData.success) {
+            showToast(resData.message || 'Solicitud de cierre enviada');
+            const modalEl = document.getElementById('cuentaModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+          } else {
+            showToast(resData.message || 'Error al solicitar cierre');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Error de conexión al solicitar el cierre');
+        }
+      });
+    }
+
+    document.getElementById('catNav').addEventListener('click', (e) => {
+      const chip = e.target.closest('.cat-chip');
+      if (!chip) return;
+      document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const target = document.getElementById(chip.dataset.target);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // --- LÓGICA DE CONTROL DEL CARRITO Y BÚSQUEDA ---
+  function findDish(id) {
+    for (const cat of DATA) {
+      const found = (cat.platos || []).find(d => String(d.id) === String(id));
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function addItem(id) {
+    cart[id] = (cart[id] || 0) + 1;
+    updateQtyZone(id);
+    updateCartBar();
+  }
+
+  function incItem(id) {
+    cart[id]++;
+    updateQtyZone(id);
+    updateCartBar();
+  }
+
+  function decItem(id) {
+    cart[id]--;
+    if (cart[id] <= 0) delete cart[id];
+    updateQtyZone(id);
+    updateCartBar();
+  }
+
+  function updateQtyZone(id) {
+    const zone = document.getElementById('qty-' + id);
+    if (!zone) return;
+    const qty = cart[id] || 0;
+    if (qty > 0) {
+      zone.innerHTML = `
+        <div class="qty-stepper">
+          <button data-action="dec" data-id="${id}">−</button>
+          <span class="qty-val" style="color:#fff;">${qty}</span>
+          <button data-action="inc" data-id="${id}">+</button>
+        </div>`;
+    } else {
+      zone.innerHTML = `
+        <button class="add-btn" data-action="add" data-id="${id}">
+          <i class="fa-solid fa-plus"></i> Agregar
+        </button>`;
+    }
+  }
+
+  function updateCartBar() {
+    const ids = Object.keys(cart);
+    const totalItems = ids.reduce((s, id) => s + cart[id], 0);
+    const totalPrice = ids.reduce((s, id) => {
+      const dish = findDish(id);
+      return s + (cart[id] * (dish ? parseFloat(dish.precio) : 0));
+    }, 0);
+
+    document.getElementById('cartItems').textContent = `${totalItems} ${totalItems === 1 ? 'plato' : 'platos'}`;
+    document.getElementById('cartTotal').textContent = '$' + totalPrice.toFixed(2);
+    
+    const bar = document.getElementById('cartBar');
+    if (totalItems > 0) bar.classList.add('show');
+    else bar.classList.remove('show');
+  }
+
+  function abrirCuentaModal() {
+    const container = document.getElementById('modalOrderList');
+    const ids = Object.keys(cart);
+    
+    if (ids.length === 0) {
+      container.innerHTML = `<p class="text-center text-white-50 py-2 m-0">No has seleccionado nuevos platos en este pedido.</p>`;
+    } else {
+      container.innerHTML = ids.map(id => {
+        const item = findDish(id);
+        if (!item) return '';
+        const subtotal = (cart[id] * parseFloat(item.precio)).toFixed(2);
+        return `
+          <div class="d-flex justify-content-between align-items-center py-1 fs-6">
+            <div>
+              <span class="fw-bold" style="color:var(--saffron-400);">${cart[id]}x</span> 
+              <span>${item.nombre}</span>
+            </div>
+            <span class="fw-semibold">$${subtotal}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Cálculo total: Carrito actual + Consumos confirmados en la BD
+    const totalCarrito = ids.reduce((s, id) => {
+      const item = findDish(id);
+      return s + (cart[id] * (item ? parseFloat(item.precio) : 0));
+    }, 0);
+
+    const totalConsumos = CONSUMOS_RAW.reduce((s, c) => {
+      return s + (c.cantidad * parseFloat(c.precio_unitario || 0));
+    }, 0);
+
+    document.getElementById('modalTotalAmount').textContent = '$' + (totalCarrito + totalConsumos).toFixed(2);
+
+    const modal = new bootstrap.Modal(document.getElementById('cuentaModal'));
+    modal.show();
+  }
+
+  function filterDishes(query) {
+    const q = query.trim().toLowerCase();
+    document.querySelectorAll('.dish-card').forEach(card => {
+      const match = card.dataset.name.includes(q);
+      card.style.display = match ? 'flex' : 'none';
+    });
+
+    document.querySelectorAll('.section').forEach(sec => {
+      const visibleCards = sec.querySelectorAll('.dish-card:not([style*="display: none"])').length;
+      sec.style.display = (q === '' || visibleCards > 0) ? '' : 'none';
+    });
+  }
+
+  function initScrollObserver() {
+    const sections = document.querySelectorAll('.section');
+    const chips = document.querySelectorAll('.cat-chip');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          chips.forEach(c => c.classList.toggle('active', c.dataset.target === entry.target.id));
+        }
+      });
+    }, { rootMargin: '-40% 0px -50% 0px', threshold: 0 });
+
+    sections.forEach(s => observer.observe(s));
+  }
+
+  let toastTimer;
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+  }
+
+  // Mostrar/ocultar botón flotante según el scroll y desplazamiento suave hacia arriba
+  const btnScrollTop = document.getElementById('btnScrollTop');
+
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 300) {
+      btnScrollTop.classList.add('show');
+    } else {
+      btnScrollTop.classList.remove('show');
+    }
+  });
+
+  btnScrollTop.addEventListener('click', () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  });
+</script>
+</body>
+</html>

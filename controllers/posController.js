@@ -560,3 +560,119 @@ exports.obtenerMonedasTurnoActivo = async (req, res) => {
         });
     }
 };
+
+/*
+* Obtener alertas no leídas (llamadas, cierres y prepedidos)
+*/
+exports.obtenerAlertasPendientes = async (req, res) => {
+    try {
+        // 1. Notificaciones de llamada de servicio o solicitud de cierre no leídas
+        const [notificaciones] = await db.query(`
+            SELECT 
+                n.id, 
+                n.id_mesa, 
+                m.numero, 
+                n.tipo, 
+                n.mensaje, 
+                n.creado_en
+            FROM notificaciones_mesero n
+            JOIN mesas m ON n.id_mesa = m.id
+            WHERE n.leido = 0
+            ORDER BY n.creado_en ASC
+        `);
+
+        // 2. Pre-pedidos pendientes enviados por clientes
+        const [prePedidos] = await db.query(`
+            SELECT 
+                pp.id, 
+                pp.id_mesa, 
+                m.numero, 
+                p.nombre AS platillo, 
+                pp.cantidad, 
+                pp.notas_especiales, 
+                pp.creado_en
+            FROM pre_pedidos pp
+            JOIN mesas m ON pp.id_mesa = m.id
+            JOIN platillos_menu p ON pp.id_platillo = p.id
+            ORDER BY pp.creado_en ASC
+        `);
+
+        return res.json({
+            success: true,
+            alertas: {
+                notificaciones,
+                prePedidos,
+                total: notificaciones.length + prePedidos.length
+            }
+        });
+    } catch (error) {
+        console.error('Error al obtener alertas pendientes:', error);
+        return res.status(500).json({ success: false, mensaje: 'Error interno del servidor.' });
+    }
+};
+
+/*
+* Marcar notificación como leída
+*/ 
+exports.marcarNotificacionLeida = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.query('UPDATE notificaciones_mesero SET leido = 1 WHERE id = ?', [id]);
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Error al marcar notificación:', error);
+        return res.status(500).json({ success: false });
+    }
+};
+
+/*
+* Descartar o procesar prepedido
+*/ 
+exports.eliminarPrePedido = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.query('DELETE FROM pre_pedidos WHERE id = ?', [id]);
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Error al eliminar pre-pedido:', error);
+        return res.status(500).json({ success: false });
+    }
+};
+
+// Obtener detalles completos de los pre-pedidos de una mesa específica
+exports.obtenerPrePedidosMesa = async (req, res) => {
+    try {
+        const { idMesa } = req.params;
+
+        const [items] = await db.query(`
+            SELECT 
+                pp.id AS pre_pedido_id,
+                pp.id_platillo,
+                p.nombre,
+                p.precio,
+                pp.cantidad,
+                pp.notas_especiales
+            FROM pre_pedidos pp
+            JOIN platillos_menu p ON pp.id_platillo = p.id
+            WHERE pp.id_mesa = ?
+            ORDER BY pp.creado_en ASC
+        `, [idMesa]);
+
+        return res.json({ success: true, items });
+    } catch (error) {
+        console.error('Error al obtener pre-pedidos de la mesa:', error);
+        return res.status(500).json({ success: false, mensaje: 'Error al consultar pre-pedidos.' });
+    }
+};
+
+// Eliminar pre-pedidos de una mesa tras ser procesados o descartados
+exports.limpiarPrePedidosMesa = async (req, res) => {
+    try {
+        const { idMesa } = req.params;
+        await db.query('DELETE FROM pre_pedidos WHERE id_mesa = ?', [idMesa]);
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Error al limpiar pre-pedidos de la mesa:', error);
+        return res.status(500).json({ success: false, mensaje: 'Error al limpiar pre-pedidos.' });
+    }
+};

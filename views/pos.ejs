@@ -1449,8 +1449,193 @@
         // Detener al salir de la página
         window.addEventListener('beforeunload', detenerPollingItemsListos);
 
+        /**
+         * Procesa la confirmación de incorporación del pre-pedido al carrito
+         * @param {number} idMesa - ID de la mesa asociada
+         * @param {string} numeroMesa - Número o nombre visual de la mesa
+         */
+        async function cargarPrePedidoAlCarrito(idMesa, numeroMesa) {
+            try {
+                // 1. Verificar si la mesa activa en el POS coincide con la alerta
+                if (typeof mesaSeleccionada !== 'undefined' && mesaSeleccionada.id !== idMesa) {
+                    const cambiar = confirm(`La alerta pertenece a la Mesa ${numeroMesa}. ¿Deseas cambiar a esta mesa para cargar la ronda?`);
+                    if (!cambiar) return;
+                    // Función existente en tu POS para cambiar de mesa activa
+                    seleccionarMesa(idMesa); 
+                }
+
+                // 2. Consultar los ítems del pre-pedido
+                const response = await fetch(`/pos/mesas/${idMesa}/pre-pedidos`);
+                const data = await response.json();
+
+                if (!data.success || data.items.length === 0) {
+                    alert('No se encontraron ítems pendientes para esta mesa.');
+                    return;
+                }
+
+                // 3. Agregar cada ítem a la ronda actual del carrito en el cliente
+                data.items.forEach(item => {
+                    // Se utiliza la función nativa que ya maneja tu POS para añadir ítems al carrito
+                    if (typeof agregarAlCarrito === 'function') {
+                        agregarAlCarrito({
+                            id: item.id_platillo,
+                            nombre: item.nombre,
+                            precio: parseFloat(item.precio),
+                            cantidad: item.cantidad,
+                            notas: item.notas_especiales || ''
+                        });
+                    }
+                });
+
+                // 4. Limpiar los pre-pedidos de la base de datos para no repetirlos
+                await fetch(`/pos/mesas/${idMesa}/pre-pedidos`, { method: 'DELETE' });
+
+                // 5. Notificar al usuario y actualizar vista
+                if (typeof renderizarCarrito === 'function') renderizarCarrito();
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Pre-pedido cargado',
+                    text: `Se agregaron los ítems al carrito de la Mesa ${numeroMesa} como una nueva ronda.`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+            } catch (error) {
+                console.error('Error al importar pre-pedido al carrito:', error);
+                alert('Ocurrió un error al cargar el pre-pedido.');
+            }
+        }
+
+        /**
+         * Muestra el modal o dialogo de confirmación cuando llega la alerta
+         */
+        function mostrarAlertaPrePedido(idMesa, numeroMesa, resumenDetalle) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: `🍽️ Pre-pedido de Mesa ${numeroMesa}`,
+                    html: `<p>El cliente ha enviado la siguiente selección:</p><strong>${resumenDetalle}</strong>`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: '📥 Cargar al Carrito',
+                    denyButtonText: '🗑️ Descartar',
+                    cancelButtonText: '⏳ Decidir Luego',
+                    confirmButtonColor: '#28a745',
+                    denyButtonColor: '#dc3545'
+                }).then(async (result) => {
+                    if (result.isConfirmed) {
+                        await cargarPrePedidoAlCarrito(idMesa, numeroMesa);
+                    } else if (result.isDenied) {
+                        // Descartar pre-pedido sin agregar
+                        await fetch(`/pos/mesas/${idMesa}/pre-pedidos`, { method: 'DELETE' });
+                    }
+                });
+            } else {
+                if (confirm(`Mesa ${numeroMesa} envió pre-pedido:\n${resumenDetalle}\n\n¿Deseas cargarlo al carrito?`)) {
+                    cargarPrePedidoAlCarrito(idMesa, numeroMesa);
+                }
+            }
+        }
     </script>
     <!-- Sonido de Notificación de Platillo Listo -->
     <audio id="audio-notification" src="/sounds/notificacion-dependiente.mp3" preload="auto"></audio>
+    <!-- Audio para alertas -->
+    <audio id="audioAlertaCliente" src="/sounds/alert-notification.mp3" preload="auto"></audio>
+
+    <script>
+        //Para alertas de clientes (pre-pedidos/cierre de cuenta/llamado al dependiente)
+        (() => {
+            let alertasProcesadas = new Set();
+            const POLLING_INTERVAL = 5000; // 5 segundos
+
+            async function verificarAlertasCliente() {
+                try {
+                    const response = await fetch('/pos/alertas-pendientes');
+                    if (!response.ok) return;
+
+                    const data = await response.json();
+                    if (!data.success) return;
+
+                    const { notificaciones, prePedidos, total } = data.alertas;
+                    let hayNuevasAlertas = false;
+
+                    // Procesar llamadas y solicitudes de cierre
+                    notificaciones.forEach(notif => {
+                        const key = `notif_${notif.id}`;
+                        if (!alertasProcesadas.has(key)) {
+                            alertasProcesadas.add(key);
+                            hayNuevasAlertas = true;
+                            
+                            const titulo = notif.tipo === 'SOLICITUD_CIERRE' ? '💳 Solicitud de Cuenta' : '🔔 Llamada de Cliente';
+                            mostrarNotificacionUI(titulo, `Mesa ${notif.numero_mesa}: ${notif.mensaje}`, async () => {
+                                await fetch(`/pos/notificaciones/${notif.id}/leer`, { method: 'POST' });
+                            });
+                        }
+                    });
+
+                    // Procesar Pre-pedidos
+                    prePedidos.forEach(pre => {
+                        const key = `pre_${pre.id}`;
+                        if (!alertasProcesadas.has(key)) {
+                            alertasProcesadas.add(key);
+                            hayNuevasAlertas = true;
+                            
+                            const detalle = `${pre.cantidad}x ${pre.platillo}${pre.notas_especiales ? ` (${pre.notas_especiales})` : ''}`;
+                            mostrarNotificacionUI('🍽️ Pre-pedido Recibido', `Mesa ${pre.numero_mesa}: ${detalle}`, async () => {
+                                await fetch(`/pos/pre-pedidos/${pre.id}`, { method: 'DELETE' });
+                            });
+                        }
+                    });
+
+                    if (hayNuevasAlertas) {
+                        reproducirSonidoAlerta();
+                        if (typeof actualizarVistaSalon === 'function') {
+                            actualizarVistaSalon(); // Refresca el panel de mesas si la función existe en dashboard.ejs
+                        }
+                    }
+
+                } catch (err) {
+                    console.error('Error en el sondeo de alertas:', err);
+                }
+            }
+
+            function reproducirSonidoAlerta() {
+                const audio = document.getElementById('audioAlertaCliente');
+                if (audio) {
+                    audio.currentTime = 0;
+                    audio.play().catch(() => {
+                        // Previene bloqueos por políticas de Autoplay del navegador
+                        console.warn('Reproducción de audio bloqueada por el navegador. Interactúa con la página.');
+                    });
+                }
+            }
+
+            function mostrarNotificacionUI(titulo, mensaje, onDismiss) {
+                // Integración flexible con Toastr, SweetAlert2 o modales Bootstrap nativos
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: titulo,
+                        text: mensaje,
+                        icon: 'info',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: true,
+                        confirmButtonText: 'Entendido',
+                        timer: 10000
+                    }).then(() => {
+                        if (onDismiss) onDismiss();
+                    });
+                } else {
+                    alert(`${titulo}\n${mensaje}`);
+                    if (onDismiss) onDismiss();
+                }
+            }
+
+            // Iniciar polling
+            setInterval(verificarAlertasCliente, POLLING_INTERVAL);
+            document.addEventListener('DOMContentLoaded', verificarAlertasCliente);
+        })();
+    </script>
 </body>
 </html>

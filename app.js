@@ -129,6 +129,7 @@ const entradaRoutes = require('./routes/entradaRoutes');
 const inventarioRoutes = require('./routes/inventarioRoutes');
 const turnoRoutes = require('./routes/turnoRoutes');
 const monedaRoutes = require('./routes/monedaRoutes');
+const clienteRoutes = require('./routes/clienteRoutes'); 
 
 app.use('/', authRoutes);
 app.use('/admin', userRoutes);
@@ -147,6 +148,7 @@ app.use('/admin', turnoRoutes);
 app.use('/admin', monedaRoutes);
 
 app.use(posRoutes);
+app.use(clienteRoutes);
 
 // Ruta inicial 
 app.get('/', (req, res) => {
