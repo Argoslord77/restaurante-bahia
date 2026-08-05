@@ -1,0 +1,12 @@
+Basicamente la interaccion del cliente con la app se reduce a:
+1. Escanear (esa parte la vamos a saltar ya que es una interaccion fisica no de nuestra app) el QR de la mesa (este contiene el id de la mesa). Esta accion abre el navegador en la url: https://localhost:3000/cliente/dashboard/:id_mesa. Se le muestra el dashboard al cliente con el menu y toda la informacion necesaria en cuanto a platillos y cuenta.
+2. El cliente puede visualizar los platillos existentes en menu del restaurante.
+3. El cliente puede agregar platillos a un prepedido. La funcion de este prepedido (es el "resumen de orden" que se muestra en el dashboard del cliente) es que el cliente lleve cuenta de lo que ha consumido en la orden.
+4. El cliente puede llamar al dependiente clickeando el boton llamar en la parte superior, esto creara una notificacion en la aplicacion del dependiente asociado a la mesa en la distribucion de mesas durante el servicio.
+5. El dependiente puede solicitar el cierre de su cuenta lo que crea la correspondiente notificacion en la aplicacion del dependiente. 
+
+En el punto 2: POST /cliente/agregar-a-preorden/:id_mesa (agregarAPreorden): Recibe los ítems seleccionados desde el cliente y los añade al pedido mediante pedidoService.adicionarOrdenLote (o agregarProducto). Propongo no modificar el pedido en base de datos, si no en su lugar hacer un pre-pedido que sera guardado en una tabla con el mismo nombre vinculado a la mesa. Esos datos seran temporales, las entradas por platillo en en la tabla pre-pedido 
+
+[05-08-2026]
+
+El cliente en clienteController.js tiene 2 metodos que controlan la llamada al dependiente y la solicitud del cierre de cuenta. En estos metodos se escribe en las tablas pre_pedidos y notificaciones_mesero. Tanto en la vista de pos.ejs como en el dashboard.ejs del dependiente se debe de buscar periodicamente por entradas nuevas (no vistas) en cualesquiera de estas tablas y notificar inmediatamente al dependiente.

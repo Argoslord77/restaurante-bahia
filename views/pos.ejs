@@ -339,6 +339,41 @@
         let historicoDetalles = []; 
         let activeCategory = 'todos';
 
+        //Para agregar el prepedido del cliente al borrador de "nueva ronda" en el POS
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const prePedidoData = urlParams.get('cargarPrePedido');
+
+            if (prePedidoData) {
+                try {
+                    const items = JSON.parse(decodeURIComponent(prePedidoData));
+
+                    items.forEach(item => {
+                        // Utiliza la misma función con la que agregas platillos desde las tarjetas del menú:
+                        // Ejemplo: agregarAlCarrito(platilloId, nombre, precio, cantidad, notas);
+                        if (typeof agregarAlCarrito === 'function') {
+                            for (let i = 0; i < item.cantidad; i++) {
+                                agregarAlCarrito(item.id, item.nombre, item.precio, item.notas);
+                            }
+                        }
+                    });
+
+                    // Limpiar los query params de la URL para evitar re-inyecciones si el usuario recarga la página
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
+
+                    // Opcional: Limpiar la tabla de pre-pedidos de la mesa en segundo plano
+                    const idMesa = document.getElementById('pos-mesa-id')?.value;
+                    if (idMesa) {
+                        fetch(`/pos/mesas/${idMesa}/pre-pedidos`, { method: 'DELETE' });
+                    }
+
+                } catch (e) {
+                    console.error('Error al procesar los ítems del pre-pedido en el carrito:', e);
+                }
+            }
+        });
+
         document.addEventListener("DOMContentLoaded", () => {
             const rawDetails = `<%- typeof detallesActuales !== 'undefined' ? detallesActuales : '' %>`;
             if (rawDetails && rawDetails !== 'null' && rawDetails.trim() !== '') {

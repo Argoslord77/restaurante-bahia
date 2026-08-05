@@ -60,9 +60,9 @@ router.post('/pos/notificaciones/:id/leer', asegurarTurnoActivo, posController.m
 
 router.delete('/pos/pre-pedidos/:id', asegurarTurnoActivo, posController.eliminarPrePedido);
 
-router.get('/mesas/:idMesa/pre-pedidos', asegurarTurnoActivo, posController.obtenerPrePedidosMesa);
+router.get('/pos/mesas/:idMesa/pre-pedidos', asegurarTurnoActivo, posController.obtenerPrePedidosMesa);
 
-router.delete('/mesas/:idMesa/pre-pedidos', asegurarTurnoActivo, posController.limpiarPrePedidosMesa);
+router.delete('/pos/mesas/:idMesa/pre-pedidos', asegurarTurnoActivo, posController.limpiarPrePedidosMesa);
 
 // ========================================================
 // VISTA PREVIA E IMPRESIÓN DE PRE-CUENTA
@@ -72,6 +72,9 @@ router.get('/pos/precuenta/:id_pedido', ensureAuthenticated, checkRole(['superad
 
 // Endpoint API para el cobro de una orden
 router.post('/pos/cobrar/:id_pedido', ensureAuthenticated, asegurarTurnoActivo, checkRole(['capitan', 'superadministrador', 'administrador', 'cajero', 'dependiente']), posController.procesarCobroAvanzado);
+
+// Abrir/Obtener pedido activo de una mesa y cargar POS
+router.get('/pos/mesa/:idMesa', asegurarTurnoActivo, posController.abrirOObtenerPedidoMesa);
 
 // Interfaz fija del punto de venta acoplada al pedido en curso
 router.get('/pos/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.viewPOS);

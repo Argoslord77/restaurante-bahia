@@ -1,0 +1,3 @@
+Hay unos detalles con el comportamiento de la vista de cobro que haz de modificar: 
+1. Los mensajes de error en el modal deben de desaparecer pasados unos segundos.
+2. Necesitamos recoger los enxcedentes en el pago como propinas y llevar un registro de las propinas por mesas y por turno para el cuadre al final del dia (esta informacion por supuesto se analizara en caja no en el cobro de la cuenta de una orden). En el vale o ventana de cobro pone "Total a pagar" y "Restante" pero en esa misma cabecera debe de mostrase "Excedente" que es la propina. Opinion al respecto e ideas que puedas tener. 

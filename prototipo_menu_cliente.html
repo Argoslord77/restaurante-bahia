@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restaurante Bahía — Menú digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wine-950:#2a1120;
+    --wine-900:#3d1a2b;
+    --wine-800:#552339;
+    --saffron-500:#e8a33d;
+    --saffron-400:#f0b75e;
+    --terracotta-600:#c6472f;
+    --terracotta-700:#a83a26;
+    --olive-500:#8a9a5b;
+    --olive-700:#657140;
+    --cream-050:#fbf5ea;
+    --cream-100:#f6ecd9;
+    --cream-200:#efe0c4;
+    --ink-900:#26141c;
+    --ink-600:#5a4550;
+    --shadow-soft: 0 8px 24px rgba(42,17,32,0.10);
+    --shadow-lift: 0 14px 32px rgba(42,17,32,0.18);
+    --radius-lg: 22px;
+    --radius-md: 16px;
+    --radius-pill: 999px;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Work Sans', sans-serif;
+    background: var(--cream-100);
+    color: var(--ink-900);
+    -webkit-font-smoothing:antialiased;
+    padding-bottom: 96px;
+  }
+  ::selection{ background: var(--saffron-400); color: var(--ink-900); }
+
+  .page{
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--cream-100);
+    min-height: 100vh;
+    position: relative;
+    box-shadow: 0 0 60px rgba(42,17,32,0.08);
+  }
+
+  /* ---------- HERO ---------- */
+  .hero{
+    position:relative;
+    background: radial-gradient(120% 140% at 20% -10%, var(--wine-800) 0%, var(--wine-900) 45%, var(--wine-950) 100%);
+    color: var(--cream-050);
+    padding: 22px 22px 46px;
+    overflow:hidden;
+    border-bottom-left-radius: 32px;
+    border-bottom-right-radius: 32px;
+  }
+  .hero::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:
+      radial-gradient(circle at 85% 15%, rgba(232,163,61,0.20) 0%, transparent 45%),
+      radial-gradient(circle at 10% 90%, rgba(198,71,47,0.22) 0%, transparent 40%);
+    pointer-events:none;
+  }
+  
+  /* Marca de agua que cubre la totalidad del header */
+  .logo-mark-img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    object-fit: contain;
+    transform: translate(-50%, -50%);
+    width: 180px;
+    height: 180px;
+    background-image: url('bahia_logotipo_4.png');
+    background-position: center;
+    background-size: 165%; /* Escala la imagen para dejar el texto fuera del marco */
+    background-repeat: no-repeat;
+
+    /* Invierte la imagen para que el fondo sea negro y las letras/escudo blancos */
+    filter: invert(1);
+    /* Elimina el fondo negro resultante dejándolo transparente sobre el fondo del header */
+    mix-blend-mode: screen; 
+    /* Controla la intensidad de la marca de agua */
+    opacity: 0.15; 
+
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
+    }
+
+  .top-row{
+    position:relative; z-index:1;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 26px;
+  }
+  .table-badge{
+    display:inline-flex; align-items:center; gap:6px;
+    background: rgba(251,245,234,0.12);
+    border:1px solid rgba(251,245,234,0.28);
+    color: var(--cream-050);
+    font-size: 12.5px;
+    font-weight:600;
+    letter-spacing:.03em;
+    padding: 7px 14px;
+    border-radius: var(--radius-pill);
+    backdrop-filter: blur(4px);
+  }
+  .table-badge .dot{ width:6px; height:6px; border-radius:50%; background: var(--saffron-500); }
+  .call-waiter{
+    display:inline-flex; align-items:center; gap:6px;
+    background: rgba(251,245,234,0.12);
+    border:1px solid rgba(251,245,234,0.28);
+    color: var(--cream-050);
+    font-size: 12.5px; font-weight:600;
+    padding: 7px 12px 7px 10px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+    transition: background .2s ease, transform .15s ease;
+  }
+  .call-waiter:hover{ background: rgba(251,245,234,0.2); }
+  .call-waiter:active{ transform: scale(0.96); }
+  .call-waiter svg{ width:15px; height:15px; }
+
+  .brand{ position:relative; z-index:1; }
+  .brand .eyebrow{
+    font-family:'Caveat', cursive;
+    font-size: 21px;
+    font-weight:600;
+    color: var(--saffron-400);
+    display:block;
+    margin-bottom: 2px;
+  }
+  .brand h1{
+    font-family:'Fraunces', serif;
+    font-size: 38px;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .brand p{
+    margin-top: 10px;
+    font-size: 11px;
+    color: rgba(251,245,234,0.72);
+    max-width: 280px;
+    line-height:1.45;
+  }
+
+  .search-wrap{
+    position:relative; z-index:1;
+    margin-top: 22px;
+    display:flex;
+    gap:8px;
+  }
+  .search-box{
+    flex:1;
+    display:flex; align-items:center; gap:8px;
+    background: var(--cream-050);
+    border-radius: var(--radius-pill);
+    padding: 12px 16px;
+    box-shadow: var(--shadow-soft);
+  }
+  .search-box svg{ width:17px; height:17px; color: var(--ink-600); flex-shrink:0; }
+  .search-box input{
+    border:none; outline:none; background:transparent;
+    font-family:'Work Sans', sans-serif;
+    font-size: 14.5px;
+    color: var(--ink-900);
+    width:100%;
+  }
+  .search-box input::placeholder{ color: var(--ink-600); opacity:0.7; }
+
+  /* ---------- CATEGORY NAV ---------- */
+  .cat-nav{
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--cream-100);
+    padding: 16px 0 12px;
+    display:flex;
+    gap: 9px;
+    overflow-x:auto;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+    margin: -18px 0 4px;
+    padding-left: 22px;
+    padding-right: 22px;
+    border-bottom: 1px solid rgba(42,17,32,0.06);
+  }
+  .cat-nav::-webkit-scrollbar{ display:none; }
+  .cat-chip{
+    flex-shrink:0;
+    font-family:'Work Sans', sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink-900);
+    background: var(--cream-050);
+    border: 1.5px solid var(--cream-200);
+    padding: 9px 16px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+    white-space:nowrap;
+    display:flex; align-items:center; gap:6px;
+    transition: all .2s ease;
+  }
+  .cat-chip span.ic{ font-size:15px; }
+  .cat-chip.active{
+    background: var(--terracotta-600);
+    border-color: var(--terracotta-600);
+    color: var(--cream-050);
+    box-shadow: 0 6px 16px rgba(198,71,47,0.32);
+  }
+  .cat-chip:not(.active):hover{ border-color: var(--terracotta-600); }
+
+  /* ---------- SECTIONS ---------- */
+  .menu-body{ padding: 6px 22px 20px; }
+  .section{ padding-top: 20px; scroll-margin-top: 78px; }
+  .section-head{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom: 14px;
+  }
+  .section-head h2{
+    font-family:'Fraunces', serif;
+    font-size: 23px;
+    font-weight: 600;
+    color: var(--wine-900);
+  }
+  .section-head .count{
+    font-size: 12.5px;
+    color: var(--ink-600);
+    font-weight:500;
+  }
+
+  /* ---------- DISH TICKET CARD ---------- */
+  .dish-grid{ display:flex; flex-direction:column; gap: 14px; }
+
+  .dish-card{
+    position:relative;
+    display:flex;
+    gap: 14px;
+    background: var(--cream-050);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow-soft);
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .dish-card:hover{ transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+
+  .dish-icon{
+    flex-shrink:0;
+    width: 64px; height: 64px;
+    border-radius: 16px;
+    display:flex; align-items:center; justify-content:center;
+    font-size: 28px;
+  }
+
+  .dish-info{ flex:1; min-width:0; }
+  .dish-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .dish-name{
+    font-family:'Fraunces', serif;
+    font-size: 16.5px;
+    font-weight: 600;
+    color: var(--ink-900);
+    line-height:1.25;
+  }
+  .dish-desc{
+    font-size: 12.8px;
+    color: var(--ink-600);
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+  .dish-tags{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .tag{
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing:.02em;
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+  }
+  .tag.veg{ background: rgba(138,154,91,0.16); color: var(--olive-700); }
+  .tag.spicy{ background: rgba(198,71,47,0.12); color: var(--terracotta-700); }
+  .tag.chef{
+    font-family:'Caveat', cursive;
+    font-size: 14px;
+    font-weight:700;
+    background: none;
+    color: var(--saffron-500);
+    padding: 0 2px;
+  }
+
+  .dish-bottom{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top: 12px;
+  }
+  .price{
+    font-family:'Fraunces', serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--wine-900);
+  }
+
+  .add-btn{
+    display:flex; align-items:center; justify-content:center;
+    gap:5px;
+    background: var(--terracotta-600);
+    color: var(--cream-050);
+    border:none;
+    font-family:'Work Sans', sans-serif;
+    font-weight:700;
+    font-size: 12.5px;
+    padding: 8px 15px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+    transition: background .18s ease, transform .12s ease;
+  }
+  .add-btn:hover{ background: var(--terracotta-700); }
+  .add-btn:active{ transform: scale(0.94); }
+
+  .qty-stepper{
+    display:flex; align-items:center; gap:10px;
+    background: var(--wine-950);
+    border-radius: var(--radius-pill);
+    padding: 5px 6px;
+  }
+  .qty-stepper button{
+    width:24px; height:24px;
+    border-radius:50%;
+    border:none;
+    background: rgba(251,245,234,0.14);
+    color: var(--cream-050);
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    line-height:1;
+  }
+  .qty-stepper button:hover{ background: rgba(251,245,234,0.26); }
+  .qty-stepper .qty-val{
+    color: var(--cream-050);
+    font-weight:700;
+    font-size: 13px;
+    min-width: 14px;
+    text-align:center;
+  }
+
+  /* muesca de ticket en los bordes */
+  .dish-card::before, .dish-card::after{
+    content:"";
+    position:absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px; height:14px;
+    background: var(--cream-100);
+    border-radius:50%;
+  }
+  .dish-card::before{ left: -7px; }
+  .dish-card::after{ right: -7px; }
+
+  /* ---------- DIVIDER ---------- */
+  .pour-divider{
+    display:flex; align-items:center; gap:10px;
+    margin: 38px 0 18px;
+    color: var(--ink-600);
+  }
+  .pour-divider svg{ width: 26px; height:14px; flex-shrink:0; color: var(--terracotta-600); }
+  .pour-divider .line{ flex:1; height:1px; background: linear-gradient(90deg, var(--cream-200), transparent); }
+  .pour-divider span.txt{ font-family:'Caveat', cursive; font-size:16px; font-weight:600; }
+
+  /* ---------- LEYENDA ---------- */
+  .legend{
+    margin-top: 18px;
+    margin-bottom: 10px;
+    background: var(--cream-050);
+    border-radius: var(--radius-lg);
+    padding: 18px 18px 20px;
+    box-shadow: var(--shadow-soft);
+  }
+  .legend h3{
+    font-family:'Fraunces', serif;
+    font-size:15px;
+    margin-bottom:10px;
+    color: var(--wine-900);
+  }
+  .legend-row{ display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--ink-600); }
+  .legend-row div{ display:flex; align-items:center; gap:6px; }
+
+  .closing-note{
+    text-align:center;
+    margin-top: 26px;
+    font-family:'Caveat', cursive;
+    font-size: 19px;
+    color: var(--wine-900);
+  }
+
+  /* ---------- FLOATING CART ---------- */
+  .cart-bar{
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%) translateY(120%);
+    width: calc(100% - 32px);
+    max-width: 448px;
+    background: var(--wine-950);
+    color: var(--cream-050);
+    border-radius: var(--radius-pill);
+    padding: 10px 10px 10px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    box-shadow: 0 16px 36px rgba(42,17,32,0.4);
+    z-index: 30;
+    transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+  }
+  .cart-bar.show{ transform: translateX(-50%) translateY(0); }
+  .cart-left{ display:flex; flex-direction:column; }
+  .cart-left .items{ font-size: 11.5px; color: var(--saffron-400); font-weight:600; }
+  .cart-left .total{ font-family:'Fraunces', serif; font-size: 17px; font-weight:600; }
+  .cart-btn{
+    background: var(--terracotta-600);
+    color: var(--cream-050);
+    border:none;
+    font-weight:700;
+    font-size: 13.5px;
+    padding: 11px 20px;
+    border-radius: var(--radius-pill);
+    cursor:pointer;
+    display:flex; align-items:center; gap:6px;
+    transition: background .18s ease;
+  }
+  .cart-btn:hover{ background: var(--terracotta-700); }
+
+  /* ---------- TOAST ---------- */
+  .toast{
+    position: fixed;
+    left:50%;
+    top: 18px;
+    transform: translateX(-50%) translateY(-140%);
+    background: var(--wine-950);
+    color: var(--cream-050);
+    padding: 10px 18px;
+    border-radius: var(--radius-pill);
+    font-size: 13px;
+    font-weight:600;
+    z-index: 50;
+    box-shadow: var(--shadow-lift);
+    transition: transform .3s ease;
+    display:flex; align-items:center; gap:8px;
+  }
+  .toast.show{ transform: translateX(-50%) translateY(0); }
+  .toast svg{ width:15px; height:15px; color: var(--saffron-400); }
+
+  /* ---------- RESPONSIVE (desktop / tablet) ---------- */
+  @media (min-width: 760px){
+    body{ padding-bottom: 40px; background: var(--wine-950); }
+    .page{
+      max-width: 900px;
+      margin: 32px auto;
+      border-radius: 32px;
+      overflow: hidden;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+    }
+    .hero{ padding: 40px 48px 56px; border-radius:0; }
+    .brand h1{ font-size: 50px; }
+    .menu-body{ padding: 10px 48px 32px; }
+    .cat-nav{ padding-left:48px; padding-right:48px; top:0; }
+    .dish-grid{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .cart-bar{ max-width: 500px; }
+  }
+
+  @media (min-width: 1080px){
+    .dish-grid{ grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="hero">
+    <!-- Logotipo completo como marca de agua en el fondo del header -->
+    <img src="bahia_logotipo.png" alt="Restaurante Bahía" class="logo-mark-img">
+
+    <div class="top-row">
+      <span class="table-badge"><span class="dot"></span> Mesa 12</span>
+      <button class="call-waiter" onclick="showToast('Aviso enviado — un mesero llega enseguida')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Llamar
+      </button>
+    </div>
+
+    <div class="brand">
+      <span class="eyebrow">Bienvenido a</span>
+      <h1>Bahía</h1>
+      <p>Cocina tradicional cubana de temporada, vinos naturales y platos para compartir.Elige y disfruta.</p>
+    </div>
+
+    <div class="search-wrap">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="searchInput" type="text" placeholder="Buscar un plato, ej. pulpo…" oninput="filterDishes(this.value)">
+      </div>
+    </div>
+  </header>
+
+  <nav class="cat-nav" id="catNav">
+    <div class="cat-chip active" data-target="compartir"><span class="ic">🫒</span> Para compartir</div>
+    <div class="cat-chip" data-target="mar"><span class="ic">🦑</span> Del mar</div>
+    <div class="cat-chip" data-target="principales"><span class="ic">🍲</span> Principales</div>
+    <div class="cat-chip" data-target="postres"><span class="ic">🍮</span> Postres</div>
+    <div class="cat-chip" data-target="bebidas"><span class="ic">🍷</span> Bebidas</div>
+  </nav>
+
+  <main class="menu-body">
+
+    <!-- Leyenda antes del menú -->
+    <div class="legend" id="legendBox">
+      <h3>Antes de pedir</h3>
+      <div class="legend-row">
+        <div><span class="tag veg" style="padding:2px 8px;">V</span> Vegetariano</div>
+        <div><span class="tag spicy" style="padding:2px 8px;">P</span> Picante</div>
+        <div><span class="tag chef">★ Chef</span> Recomendado</div>
+      </div>
+    </div>
+
+    <section class="section" id="compartir">
+      <div class="section-head"><h2>Para compartir</h2><span class="count">4 platos</span></div>
+      <div class="dish-grid" id="grid-compartir"></div>
+    </section>
+
+    <div class="pour-divider">
+      <svg viewBox="0 0 26 14" fill="none"><path d="M2 2c4 8 8 10 11 10s7-2 11-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="line"></div><span class="txt">directo del mar</span><div class="line"></div>
+    </div>
+
+    <section class="section" id="mar">
+      <div class="section-head"><h2>Del mar</h2><span class="count">3 platos</span></div>
+      <div class="dish-grid" id="grid-mar"></div>
+    </section>
+
+    <div class="pour-divider">
+      <svg viewBox="0 0 26 14" fill="none"><path d="M2 2c4 8 8 10 11 10s7-2 11-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="line"></div><span class="txt">a fuego lento</span><div class="line"></div>
+    </div>
+
+    <section class="section" id="principales">
+      <div class="section-head"><h2>Platos principales</h2><span class="count">4 platos</span></div>
+      <div class="dish-grid" id="grid-principales"></div>
+    </section>
+
+    <div class="pour-divider">
+      <svg viewBox="0 0 26 14" fill="none"><path d="M2 2c4 8 8 10 11 10s7-2 11-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="line"></div><span class="txt">algo dulce</span><div class="line"></div>
+    </div>
+
+    <section class="section" id="postres">
+      <div class="section-head"><h2>Postres</h2><span class="count">3 platos</span></div>
+      <div class="dish-grid" id="grid-postres"></div>
+    </section>
+
+    <div class="pour-divider">
+      <svg viewBox="0 0 26 14" fill="none"><path d="M2 2c4 8 8 10 11 10s7-2 11-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="line"></div><span class="txt">para brindar</span><div class="line"></div>
+    </div>
+
+    <section class="section" id="bebidas">
+      <div class="section-head"><h2>Bebidas</h2><span class="count">4 opciones</span></div>
+      <div class="dish-grid" id="grid-bebidas"></div>
+    </section>
+
+    <p class="closing-note">¡Buen provecho!</p>
+  </main>
+</div>
+
+<div class="cart-bar" id="cartBar">
+  <div class="cart-left">
+    <span class="items" id="cartItems">0 platos</span>
+    <span class="total" id="cartTotal">$0.00</span>
+  </div>
+  <button class="cart-btn" onclick="showToast('Pedido enviado a cocina 👨‍🍳')">
+    Enviar pedido
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </button>
+</div>
+
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>
+  <span id="toastMsg">Listo</span>
+</div>
+
+<script>
+const DATA = {
+  compartir: [
+    {id:'c1', name:'Pan de ajo con alioli', desc:'Hogaza tibia, alioli casero y aceite de oliva virgen.', price:6.5, icon:'🥖', bg:'#f3e3c8', tags:['veg']},
+    {id:'c2', name:'Croquetas de jamón', desc:'Seis unidades, bechamel cremosa y jamón ibérico.', price:9.0, icon:'🥟', bg:'#f0dccb', tags:['chef']},
+    {id:'c3', name:'Hummus tibio con pita', desc:'Garbanzo, tahini, pimentón ahumado y pan pita al horno.', price:7.5, icon:'🫘', bg:'#e9e0c2', tags:['veg']},
+    {id:'c4', name:'Calamares a la andaluza', desc:'Fritos en aceite de oliva, limón y sal de mar.', price:11.0, icon:'🦑', bg:'#f0e2d4', tags:[]},
+  ],
+  mar: [
+    {id:'m1', name:'Pulpo a la brasa', desc:'Sobre puré de papa ahumado y pimentón de la Vera.', price:16.0, icon:'🐙', bg:'#f2ddd6', tags:['chef']},
+    {id:'m2', name:'Camarones al ajillo', desc:'Salteados en aceite de oliva, ajo tostado y guindilla.', price:14.5, icon:'🍤', bg:'#f4e0c9', tags:['spicy']},
+    {id:'m3', name:'Ceviche mediterráneo', desc:'Pesca del día, cítricos, hinojo y aceite de albahaca.', price:13.0, icon:'🐟', bg:'#e6e9d2', tags:[]},
+  ],
+  principales: [
+    {id:'p1', name:'Paella mixta (para 2)', desc:'Arroz bomba, mariscos, pollo de campo y azafrán.', price:24.0, icon:'🥘', bg:'#f5d9a3', tags:['chef']},
+    {id:'p2', name:'Risotto de hongos silvestres', desc:'Arborio cremoso, parmesano curado y trufa negra.', price:15.5, icon:'🍄', bg:'#e8ddc9', tags:['veg']},
+    {id:'p3', name:'Cordero al romero', desc:'Cocción lenta ocho horas, puré de raíces y jus.', price:19.0, icon:'🍖', bg:'#eeded3', tags:[]},
+    {id:'p4', name:'Berenjena rellena', desc:'Quinoa, tomate confitado, piñones y queso de cabra.', price:12.0, icon:'🍆', bg:'#e6ded0', tags:['veg']},
+  ],
+  postres: [
+    {id:'d1', name:'Crema catalana', desc:'Costra de caramelo crujiente y canela de Ceilán.', price:6.0, icon:'🍮', bg:'#f6e6bf', tags:['veg']},
+    {id:'d2', name:'Tarta de aceite de oliva', desc:'Bizcocho húmedo, ralladura de naranja y almendra.', price:6.5, icon:'🍰', bg:'#f0e3c9', tags:['veg']},
+    {id:'d3', name:'Sorbete de limón', desc:'Cítricos frescos y un toque de albahaca.', price:5.0, icon:'🍋', bg:'#eef0c8', tags:['veg']},
+  ],
+  bebidas: [
+    {id:'b1', name:'Copa de vino tinto Rioja', desc:'Crianza, notas a fruta roja y roble suave.', price:8.0, icon:'🍷', bg:'#e9cdd0', tags:[]},
+    {id:'b2', name:'Sangría de la casa', desc:'Jarra para compartir, fruta de temporada y canela.', price:18.0, icon:'🍹', bg:'#f0d2c4', tags:['chef']},
+    {id:'b3', name:'Mocktail Ánfora', desc:'Sin alcohol — cítricos, jengibre y romero.', price:7.0, icon:'🥤', bg:'#e3ecd6', tags:['veg']},
+    {id:'b4', name:'Agua con gas', desc:'Botella 500ml.', price:3.0, icon:'💧', bg:'#dceef0', tags:['veg']},
+  ],
+};
+
+const cart = {};
+
+function tagMarkup(tags){
+  return tags.map(t=>{
+    if(t==='veg') return '<span class="tag veg">V</span>';
+    if(t==='spicy') return '<span class="tag spicy">P</span>';
+    if(t==='chef') return '<span class="tag chef">★ Chef</span>';
+    return '';
+  }).join('');
+}
+
+function renderGrid(catKey){
+  const grid = document.getElementById('grid-'+catKey);
+  grid.innerHTML = DATA[catKey].map(d => `
+    <div class="dish-card" data-name="${d.name.toLowerCase()}" data-id="${d.id}">
+      <div class="dish-icon" style="background:${d.bg}">${d.icon}</div>
+      <div class="dish-info">
+        <div class="dish-top">
+          <div>
+            <div class="dish-name">${d.name}</div>
+          </div>
+        </div>
+        <div class="dish-desc">${d.desc}</div>
+        ${d.tags.length ? `<div class="dish-tags">${tagMarkup(d.tags)}</div>` : ''}
+        <div class="dish-bottom">
+          <span class="price">$${d.price.toFixed(2)}</span>
+          <div class="qty-zone" id="qty-${d.id}">
+            <button class="add-btn" onclick="addItem('${catKey}','${d.id}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Agregar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+Object.keys(DATA).forEach(renderGrid);
+
+function findDish(id){
+  for(const key in DATA){
+    const found = DATA[key].find(d=>d.id===id);
+    if(found) return found;
+  }
+}
+
+function addItem(catKey, id){
+  cart[id] = (cart[id]||0)+1;
+  updateQtyZone(id);
+  updateCartBar();
+}
+function incItem(id){ cart[id]++; updateQtyZone(id); updateCartBar(); }
+function decItem(id){
+  cart[id]--;
+  if(cart[id]<=0) delete cart[id];
+  updateQtyZone(id);
+  updateCartBar();
+}
+
+function updateQtyZone(id){
+  const zone = document.getElementById('qty-'+id);
+  const qty = cart[id]||0;
+  if(qty>0){
+    zone.innerHTML = `
+      <div class="qty-stepper">
+        <button onclick="decItem('${id}')">−</button>
+        <span class="qty-val">${qty}</span>
+        <button onclick="incItem('${id}')">+</button>
+      </div>`;
+  } else {
+    const dish = findDish(id);
+    const catKey = Object.keys(DATA).find(k=>DATA[k].some(d=>d.id===id));
+    zone.innerHTML = `
+      <button class="add-btn" onclick="addItem('${catKey}','${id}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Agregar
+      </button>`;
+  }
+}
+
+function updateCartBar(){
+  const ids = Object.keys(cart);
+  const totalItems = ids.reduce((s,id)=>s+cart[id],0);
+  const totalPrice = ids.reduce((s,id)=>s+cart[id]*findDish(id).price,0);
+  const bar = document.getElementById('cartBar');
+  document.getElementById('cartItems').textContent = totalItems + (totalItems===1?' plato':' platos');
+  document.getElementById('cartTotal').textContent = '$'+totalPrice.toFixed(2);
+  if(totalItems>0){ bar.classList.add('show'); } else { bar.classList.remove('show'); }
+}
+
+// category nav
+const chips = document.querySelectorAll('.cat-chip');
+chips.forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    chips.forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    document.getElementById(chip.dataset.target).scrollIntoView({behavior:'smooth', block:'start'});
+  });
+});
+
+// highlight active chip on scroll
+const sections = document.querySelectorAll('.section');
+const observer = new IntersectionObserver((entries)=>{
+  entries.forEach(entry=>{
+    if(entry.isIntersecting){
+      chips.forEach(c=>c.classList.toggle('active', c.dataset.target===entry.target.id));
+    }
+  });
+}, {rootMargin:'-40% 0px -50% 0px', threshold:0});
+sections.forEach(s=>observer.observe(s));
+
+// BÚSQUEDA
+function filterDishes(query){
+  const q = query.trim().toLowerCase();
+  
+  document.querySelectorAll('.dish-card').forEach(card=>{
+    const match = card.dataset.name.includes(q);
+    card.style.display = match ? 'flex' : 'none';
+  });
+
+  document.querySelectorAll('.section').forEach(sec=>{
+    const visibleCards = sec.querySelectorAll('.dish-card:not([style*="display: none"])').length;
+    const isVisible = (q === '' || visibleCards > 0);
+    
+    sec.style.display = isVisible ? '' : 'none';
+
+    const prevDivider = sec.previousElementSibling;
+    if(prevDivider && prevDivider.classList.contains('pour-divider')){
+      prevDivider.style.display = isVisible ? '' : 'none';
+    }
+  });
+
+  const legend = document.getElementById('legendBox');
+  if(legend) legend.style.display = q === '' ? '' : 'none';
+}
+
+// toast
+let toastTimer;
+function showToast(msg){
+  const toast = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>toast.classList.remove('show'), 2400);
+}
+</script>
+</body>
+</html>

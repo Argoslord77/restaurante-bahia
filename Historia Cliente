@@ -1,0 +1,21 @@
+Notas del contacto sobre necesidades particulares del sistema para el Restaurante Bahía.:
+De Ofertas, Cartas, precios Cuentas al cliente: 
+* Existencia de tres Cartas, y diferentes precios. platos con 3 precios a registrar en la cuenta según la Carta Menú Utiliza.
+1 -Carta Cup Nacionales,
+2- Carta con comisión ( la comisión no sale en la carta ni puede salir en la cuenta.....Pero se descuenta en del cuadre pues el efectivo pagado por comisión no va al propietario , se paga al beneficiario) 
+3- Carta pago por Zelle en USD. Todas las pagada en moneda extranjera deben tener la conversión y registro a la vez en CUP al cambio del día para el pago a trabajadores etc. ( Y sale las dos monedas en la cuenta)
+* Varias Monedas en uso y la opción de pagos con ella según valor al cambio. La cuenta debe expresar moneda utilzada para el cuadre de efectivo y valor total al cambio en CUp para los pagos trabajadores etcétera. Así mismo la opción de al inicio del día dar al sistema a como está el cambio.
+* Opción de vale pagado por Canales Digitales etcétera, efectivo que no aparece al momento del Cuadre.
+* Opción de vale pagado desde el extranjero, Zelle.
+* Opción de Vale pendiente de Pago.
+* Opción de Cobro a Entidades, Cuenta por pagar.
+* Opción de Cuenta de consumo interno, gratuidades , cortesía etcétera.
+* Opción de Cobro adicional % de servicio variable, este valor se deduce del efectivo del propietario en Cuadre pues va a los trabajadores.
+* Opción de descuento en la cuenta...por quejas por cortesía etcétera 
+Otros temas que conversamos:
+* En el cierre o arqueo final los cobros por % de servicios , Gastos por caja, pagos pendientes, efectivo tranferencia etc deben ser restados  de arqueo pues no existe el efectivo para el dueño.
+* Posibilidad de que el sistema trabaje separado caja e inventario, de tal manera que si falla algo en inventario se pueda crear la cuenta y cobrar siempre el servicio al cliente...previo permiso de los que administran el sistema 
+* Que en un inicio solo se tenga en cuenta en inventario la materia Prima principal del plato según ficha técnica 
+* Que se de entrada a ese elemento luego de porcionar en muchos casos.
+* Que de manera operativa se incluya plato para el momento que no existe en la Carta tradicional vigente ( Ej oferta del día)
+Que un inicio se arranque con caja y cuenta de Cliente, para por etapa ir insertando inventario.

@@ -676,3 +676,67 @@ exports.limpiarPrePedidosMesa = async (req, res) => {
         return res.status(500).json({ success: false, mensaje: 'Error al limpiar pre-pedidos.' });
     }
 };
+
+/*
+* Pivote para la opcion de agregar pre-pedido al POS
+*/
+exports.abrirOObtenerPedidoMesa = async (req, res) => {
+    try {
+        const { idMesa } = req.params;
+        const idUsuario = req.session.user ? req.session.user.id : null;
+
+        if (!idUsuario) {
+            return res.status(401).send('Sesión no válida o caducada.');
+        }
+
+        // 1. Obtener el turno de servicio activo
+        const [turnos] = await db.query(`
+            SELECT id FROM turnos_servicio 
+            WHERE estado = 'abierto' 
+            ORDER BY id DESC LIMIT 1
+        `);
+
+        if (turnos.length === 0) {
+            return res.status(400).send('No hay un turno de servicio abierto actualmente.');
+        }
+
+        const turnoServicioId = turnos[0].id;
+
+        // 2. Buscar si la mesa ya tiene un pedido activo
+        const [pedidosExistentes] = await db.query(`
+            SELECT id FROM pedidos 
+            WHERE id_mesa = ? 
+              AND estado_pago = 'pendiente' 
+              AND estado_pedido NOT IN ('cancelado')
+            ORDER BY id DESC LIMIT 1
+        `, [idMesa]);
+
+        let pedidoId;
+
+        if (pedidosExistentes.length > 0) {
+            pedidoId = pedidosExistentes[0].id;
+        } else {
+            const [resultado] = await db.query(`
+                INSERT INTO pedidos (
+                    id_mesa, 
+                    id_usuario_mesero, 
+                    turno_servicio_id, 
+                    estado_pedido, 
+                    estado_pago
+                ) VALUES (?, ?, ?, 'pendiente', 'pendiente')
+            `, [idMesa, idUsuario, turnoServicioId]);
+
+            pedidoId = resultado.insertId;
+            await db.query(`UPDATE mesas SET estado = 'ocupada' WHERE id = ?`, [idMesa]);
+        }
+
+        // 3. Reenviar los Query Parameters (donde viene cargarPrePedido)
+        const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+
+        return res.redirect(`/pos/${pedidoId}${queryString}`);
+
+    } catch (error) {
+        console.error('Error al abrir u obtener pedido de la mesa:', error);
+        return res.status(500).send('Error al procesar la apertura de la mesa.');
+    }
+};

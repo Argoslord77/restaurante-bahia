@@ -570,14 +570,22 @@
                                 denyButtonColor: '#ef4444',
                                 cancelButtonColor: '#64748b',
                                 allowOutsideClick: false,
-                                customClass: {
-                                    popup: 'rounded-4 border-0 shadow-lg'
-                                }
+                                customClass: { popup: 'rounded-4 border-0 shadow-lg' }
                             }).then(async (result) => {
                                 if (result.isConfirmed) {
-                                    // Redirigir al controlador POS abriendo/cargando la comanda de esa mesa
-                                    window.location.href = `/pos/mesa/${grupo.idMesa}`;
-                                    await fetch(`/pos/mesas/${grupo.idMesa}/pre-pedidos`, { method: 'DELETE' });
+                                    // Formatear los ítems del pre-pedido para transferirlos por la URL
+                                    const itemsPrePedido = grupo.items.map(item => ({
+                                        id: item.id_platillo,
+                                        nombre: item.platillo,
+                                        precio: parseFloat(item.precio),
+                                        cantidad: parseInt(item.cantidad),
+                                        notas: item.notas_especiales || ''
+                                    }));
+
+                                    const itemsParam = encodeURIComponent(JSON.stringify(itemsPrePedido));
+                                    
+                                    // Redirigir al POS pasando los ítems cargados en memoria
+                                    window.location.href = `/pos/mesa/${grupo.idMesa}?cargarPrePedido=${itemsParam}`;
                                 } else if (result.isDenied) {
                                     await fetch(`/pos/mesas/${grupo.idMesa}/pre-pedidos`, { method: 'DELETE' });
                                 }

@@ -1,0 +1,54 @@
+CREATE TABLE `pedidos` (
+    `id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `id_mesa` INT(11) NOT NULL,
+    `cliente_nombre` VARCHAR(100) NULL DEFAULT NULL COLLATE 'utf8mb4_general_ci',
+    `comensales` INT(11) NOT NULL DEFAULT '1',
+    `estado_pedido` ENUM('pendiente','preparando','listo','entregado','cancelado') NULL DEFAULT 'pendiente' COLLATE 'utf8mb4_general_ci',
+    `fecha_precuenta` DATETIME NULL DEFAULT NULL,
+    `impresiones_precuenta` INT(10) UNSIGNED NOT NULL DEFAULT '0',
+    `estado_pago` ENUM('pendiente','pagado','cortesia','facturado','cancelado') NOT NULL DEFAULT 'pendiente' COLLATE 'utf8mb4_general_ci',
+    `subtotal` DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+    `descuento` DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+    `impuesto` DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+    `total` DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+    `id_usuario_mesero` INT(11) NOT NULL,
+    `id_usuario_cajero` INT(11) NULL DEFAULT NULL,
+    `creado_en` TIMESTAMP NOT NULL DEFAULT current_timestamp(),
+    `actualizado_en` TIMESTAMP NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+    `fecha_cierre` DATETIME NULL DEFAULT NULL,
+    `turno_servicio_id` BIGINT(20) UNSIGNED NOT NULL,
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `fk_pedidos_mesa` (`id_mesa`) USING BTREE,
+    INDEX `fk_pedidos_mesero` (`id_usuario_mesero`) USING BTREE,
+    INDEX `fk_pedidos_cajero` (`id_usuario_cajero`) USING BTREE,
+    INDEX `fk_pedidos_turno` (`turno_servicio_id`) USING BTREE,
+    INDEX `idx_pedidos_mesa_estado` (`id_mesa`, `estado_pedido`, `estado_pago`) USING BTREE,
+    CONSTRAINT `fk_pedidos_cajero` FOREIGN KEY (`id_usuario_cajero`) REFERENCES `usuarios` (`id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    CONSTRAINT `fk_pedidos_mesa` FOREIGN KEY (`id_mesa`) REFERENCES `mesas` (`id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    CONSTRAINT `fk_pedidos_mesero` FOREIGN KEY (`id_usuario_mesero`) REFERENCES `usuarios` (`id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    CONSTRAINT `fk_pedidos_turno` FOREIGN KEY (`turno_servicio_id`) REFERENCES `turnos_servicio` (`id`) ON UPDATE RESTRICT ON DELETE RESTRICT
+)
+COLLATE='utf8mb4_general_ci'
+ENGINE=InnoDB
+AUTO_INCREMENT=20
+;
+
+CREATE TABLE `pagos_pedido` (
+    `id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `pedido_id` BIGINT(20) UNSIGNED NOT NULL,
+    `metodo_pago` ENUM('efectivo','tarjeta','transferencia','factura') NOT NULL COLLATE 'utf8mb4_general_ci',
+    `moneda_id` INT(11) NULL DEFAULT NULL,
+    `factor_cambio_aplicado` DECIMAL(12,4) NOT NULL DEFAULT '1.0000',
+    `monto_moneda_origen` DECIMAL(10,2) NOT NULL,
+    `monto_equivalente_local` DECIMAL(10,2) NOT NULL,
+    `referencia_transaccion` VARCHAR(100) NULL DEFAULT NULL COLLATE 'utf8mb4_general_ci',
+    `creado_en` TIMESTAMP NOT NULL DEFAULT current_timestamp(),
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `idx_pagos_pedido_id` (`pedido_id`) USING BTREE,
+    INDEX `idx_pagos_moneda_id` (`moneda_id`) USING BTREE,
+    CONSTRAINT `fk_pp_moneda_id` FOREIGN KEY (`moneda_id`) REFERENCES `monedas` (`id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    CONSTRAINT `fk_pp_pedido_id` FOREIGN KEY (`pedido_id`) REFERENCES `pedidos` (`id`) ON UPDATE RESTRICT ON DELETE CASCADE
+)
+COLLATE='utf8mb4_general_ci'
+ENGINE=InnoDB
+;
