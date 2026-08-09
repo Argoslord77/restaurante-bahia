@@ -153,13 +153,16 @@ const RecetaService = {
                     const factorMerma = ingrediente.porcentaje_merma > 0 ? (1 + (ingrediente.porcentaje_merma / 100)) : 1;
                     const cantidadRequerida = ingrediente.cantidad_requerida * cantidad * factorMerma;
 
+                    // SI EL STOCK ES INSUFICIENTE: Solo agregamos error si el ingrediente ES INDISPENSABLE (es_opcional === 0)
                     if (ingrediente.stock_disponible < cantidadRequerida) {
-                        errores.push({
-                            platillo: ingrediente.receta_id,
-                            ingrediente: ingrediente.producto_nombre,
-                            disponible: parseFloat(ingrediente.stock_disponible),
-                            requerido: parseFloat(cantidadRequerida.toFixed(4))
-                        });
+                        if (!ingrediente.es_opcional) { // <-- LÓGICA DE FLEXIBILIDAD
+                            errores.push({
+                                platillo: ingrediente.receta_id,
+                                ingrediente: ingrediente.producto_nombre,
+                                disponible: parseFloat(ingrediente.stock_disponible),
+                                requerido: parseFloat(cantidadRequerida.toFixed(4))
+                            });
+                        }
                     }
                 }
             }
@@ -245,7 +248,12 @@ const RecetaService = {
                     }
 
                     if (cantidadPendiente > 0.0001) { 
-                        throw new Error(`Inconsistencia de inventario de última hora: Stock insuficiente para el insumo "${ingrediente.producto_nombre}". Faltaron ${cantidadPendiente.toFixed(3)} unidades.`);
+                        // Si no es opcional, arroja excepción para hacer Rollback
+                        if (!ingrediente.es_opcional) {
+                            throw new Error(`Inconsistencia de inventario: Stock insuficiente para el insumo indispensable "${ingrediente.producto_nombre}". Faltaron ${cantidadPendiente.toFixed(3)} unidades.`);
+                        } else {
+                            logger.warn(`Ingrediente opcional "${ingrediente.producto_nombre}" agotado parcialmente en almacén ${almacenId}. Se descontó solo el stock disponible.`);
+                        }
                     }
                 }
             }
@@ -270,6 +278,15 @@ const RecetaService = {
         } catch (error) {
             logger.error('Error al obtener platillos por producto:', error);
             throw new Error('Error al obtener los platillos que usan este producto');
+        }
+    },
+
+    cambiarEstado: async (id, activa) => {
+        try {
+            await Receta.updateEstado(id, activa);
+        } catch (error) {
+            logger.error('Error al actualizar estado:', error);
+            throw new Error('Error al actualizar el estado de la receta');
         }
     }
 };

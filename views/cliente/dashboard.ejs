@@ -81,7 +81,7 @@
     min-height: 100vh;
     position: relative;
     box-shadow: 0 0 60px rgba(42,17,32,0.08);
-    overflow: hidden; /* Corta cualquier elemento que intente salir del contenedor */
+    overflow: hidden;
   }
 
   /* ---------- HERO ---------- */
@@ -91,8 +91,9 @@
     color: var(--cream-050);
     padding: 22px 22px 46px;
     overflow:hidden;
-    border-bottom-left-radius: 32px;
-    border-bottom-right-radius: 32px;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    margin-bottom: 0 !important;
   }
   .hero::before{
     content:"";
@@ -106,17 +107,17 @@
   .logo-mark-img {
     position: absolute;
     top: 50%;
-    right: 20px; /* Se desplaza hacia la derecha para equilibrar con el texto */
+    right: 20px;
     transform: translateY(-50%);
     width: 220px;
     height: 220px;
     background-image: url('/img/bahia_logotipo.png');
     background-position: center;
-    background-size: contain; /* Muestra el logotipo completo sin recortar */
+    background-size: contain;
     background-repeat: no-repeat;
     filter: invert(1);
     mix-blend-mode: screen; 
-    opacity: 0.08; /* Suavizado para que actúe realmente como marca de agua */
+    opacity: 0.08;
     pointer-events: none;
     user-select: none;
     z-index: 0;
@@ -220,18 +221,19 @@
   .cat-nav{
     position: sticky;
     top: 0;
-    z-index: 20;
+    z-index: 25;
     background: var(--cream-100);
-    padding: 16px 0 12px;
+    padding: 16px 22px 12px;
     display:flex;
     gap: 9px;
     overflow-x:auto;
     scrollbar-width:none;
     -ms-overflow-style:none;
-    margin: -18px 0 4px;
-    padding-left: 22px;
-    padding-right: 22px;
+    margin: 0;
+    width: 100%;
     border-bottom: 1px solid rgba(42,17,32,0.06);
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
   }
   .cat-nav::-webkit-scrollbar{ display:none; }
   .cat-chip{
@@ -254,14 +256,6 @@
     border-color: var(--terracotta-600);
     color: var(--cream-050);
     box-shadow: 0 6px 16px rgba(198,71,47,0.32);
-  }
-
-  /* Asegurar que la barra de categorías permanezca pegada arriba */
-  .cat-nav {
-    position: sticky;
-    top: 0;
-    z-index: 25;
-    background: var(--cream-100);
   }
 
   /* Botón flotante para volver arriba */
@@ -299,7 +293,6 @@
     transform: translateY(-2px);
   }
 
-  /* Ajuste de posición si la barra del carrito está activa */
   .cart-bar.show ~ .btn-scroll-top {
     bottom: 80px;
   }
@@ -460,6 +453,7 @@
     display:flex; align-items:center; justify-content:center;
     font-size: 24px;
     background: var(--cream-200);
+    overflow: hidden;
   }
 
   .dish-info{ flex:1; min-width:0; }
@@ -578,28 +572,11 @@
 
   .enjoy-text {
     font-family: 'Caveat', cursive;
-    font-size: 34px; /* Las fuentes manuscritas lucen mejor con un tamaño ligeramente mayor */
+    font-size: 34px;
     font-weight: 700;
     color: var(--wine-950, #2a1120);
     margin: 0;
     text-align: center;
-  }
-
-  /* 1. Eliminar bordes redondeados inferiores en el héroe/cabecera */
-  .hero,
-  .header,
-  .hero-section {
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    margin-bottom: 0 !important;
-  }
-
-  /* 2. Asegurar que la barra de categorías ocupe el 100% del ancho sin márgenes superiores */
-  .cat-nav {
-    width: 100%;
-    margin-top: 0 !important;
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
   }
 </style>
 </head>
@@ -638,10 +615,12 @@
   <main class="menu-body" id="menuContainer">
     <!-- El contenido del menú real se inyecta desde JS -->
   </main>
+
   <!-- PIE DE PÁGINA DEL MENÚ -->
   <div class="menu-footer">
     <p class="enjoy-text">¡Buen provecho!</p>
   </div>
+
   <!-- MODAL DE DETALLE DEL PLATILLO -->
   <div class="modal fade" id="dishDetailModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -672,6 +651,7 @@
       </div>
     </div>
   </div>
+
   <!-- BOTÓN FLOTANTE PARA VOLVER ARRIBA -->
   <button id="btnScrollTop" class="btn-scroll-top" title="Volver arriba">
     <i class="fa-solid fa-arrow-up"></i>
@@ -764,19 +744,42 @@
   
   const cart = {};
 
-  // Transformación o agrupamiento del menú por categoría si viene como un arreglo plano de platillos desde MySQL
+  // Mapeo automático de iconos según la categoría
+  function getIconForCategory(catName) {
+    const name = (catName || '').toLowerCase();
+    if (name.includes('bebida') || name.includes('trago') || name.includes('coctel') || name.includes('cerveza')) return 'fa-wine-glass';
+    if (name.includes('postre') || name.includes('dulce')) return 'fa-ice-cream';
+    if (name.includes('entrada') || name.includes('tapa')) return 'fa-utensils';
+    if (name.includes('platillo') || name.includes('fuerte') || name.includes('principal')) return 'fa-drumstick-bite';
+    if (name.includes('sopa') || name.includes('caldo')) return 'fa-bowl-rice';
+    return 'fa-utensils';
+  }
+
+  // Transformación y agrupamiento del menú plano por categoría
+  // Transformación y agrupamiento del menú por categoría
   function processMenuData(rawItems) {
     if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
-    if (rawItems[0].platos) return rawItems; // Ya agrupado
 
     const catMap = {};
     rawItems.forEach(item => {
-      const catName = item.categoria || 'Menú';
+      // Si categoria viene nula o vacía, le asigna 'General'
+      const catName = (item.categoria && String(item.categoria).trim() !== '') 
+        ? String(item.categoria).trim() 
+        : 'General';
+
+      const catIcon = getIconForCategory(catName);
+
       if (!catMap[catName]) {
-        catMap[catName] = { id: catName.toLowerCase().replace(/\s+/g, '-'), nombre: catName, platos: [] };
+        catMap[catName] = { 
+          id: catName.toLowerCase().replace(/[^a-z0-9]/g, '-'), 
+          nombre: catName, 
+          icono: catIcon,
+          platos: [] 
+        };
       }
       catMap[catName].platos.push(item);
     });
+
     return Object.values(catMap);
   }
 
@@ -805,7 +808,7 @@
       const chip = document.createElement('div');
       chip.className = `cat-chip ${index === 0 ? 'active' : ''}`;
       chip.dataset.target = catSlug;
-      chip.innerHTML = `<span class="ic"><i class="fa-solid ${cat.icono || 'fa-utensils'}"></i></span> ${cat.nombre}`;
+      chip.innerHTML = `<span class="ic"><i class="fa-solid ${cat.icono}"></i></span> ${cat.nombre}`;
       catNav.appendChild(chip);
 
       const sec = document.createElement('section');
@@ -832,7 +835,7 @@
     const priceFormatted = parseFloat(d.precio || 0).toFixed(2);
     const iconMarkup = d.foto 
       ? `<img src="/uploads/${d.foto}" style="width:100%;height:100%;object-fit:cover;border-radius:16px;">`
-      : `<i class="fa-solid ${d.icono || 'fa-utensils'}"></i>`;
+      : `<i class="fa-solid fa-utensils"></i>`;
     
     return `
       <div class="dish-card" data-name="${(d.nombre || '').toLowerCase()}" data-id="${d.id}">
@@ -855,9 +858,7 @@
     `;
   }
 
-  // --- INTERACCIÓN CON EL BACKEND Y MANEJO DE EVENTOS (SIN INLINE ONCLICK) ---
   function initEvents() {
-    // Dentro de initEvents() -> Escuchador de clics en #menuContainer
     document.getElementById('menuContainer').addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
@@ -871,49 +872,8 @@
       else if (action === 'view-detail') openDishDetailModal(id);
     });
 
-    // Función para poblar y abrir el Modal de Detalle
-    function openDishDetailModal(id) {
-      const dish = findDish(id);
-      if (!dish) return;
-
-      // Buscar el nombre de la categoría del platillo
-      let catName = 'Especialidad';
-      for (const cat of DATA) {
-        if ((cat.platos || []).some(p => String(p.id) === String(id))) {
-          catName = cat.nombre;
-          break;
-        }
-      }
-
-      // Cargar imagen o icono en el modal
-      const imgContainer = document.getElementById('dishModalImage');
-      if (dish.foto) {
-        imgContainer.innerHTML = `<img src="/uploads/${dish.foto}" alt="${dish.nombre}">`;
-      } else {
-        imgContainer.innerHTML = `<i class="fa-solid ${dish.icono || 'fa-utensils'}"></i>`;
-      }
-
-      document.getElementById('dishModalCategory').textContent = catName;
-      document.getElementById('dishModalTitle').textContent = dish.nombre;
-      document.getElementById('dishModalPrice').textContent = '$' + parseFloat(dish.precio || 0).toFixed(2);
-      document.getElementById('dishModalDesc').textContent = dish.descripcion || 'Sin descripción disponible para este platillo.';
-
-      // Configurar botón de agregar dentro del modal
-      const btnAdd = document.getElementById('btnModalAddToCart');
-      btnAdd.onclick = () => {
-        addItem(dish.id);
-        const modalEl = document.getElementById('dishDetailModal');
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        if (modal) modal.hide();
-      };
-
-      const modal = new bootstrap.Modal(document.getElementById('dishDetailModal'));
-      modal.show();
-    }
-
     document.getElementById('searchInput').addEventListener('input', (e) => filterDishes(e.target.value));
 
-    // 1. Llamar Servicio / Mesero
     document.getElementById('btnCallWaiter').addEventListener('click', async () => {
       try {
         const response = await fetch(`/cliente/llamar-servicio/${ID_MESA}`, { method: 'POST' });
@@ -932,7 +892,6 @@
     document.getElementById('btnAccountHeader').addEventListener('click', abrirCuentaModal);
     document.getElementById('btnViewCart').addEventListener('click', abrirCuentaModal);
 
-    // 2. Confirmar Pedido / Agregar a Preorden
     document.getElementById('btnConfirmOrder').addEventListener('click', async () => {
       const ids = Object.keys(cart);
       if (ids.length === 0) {
@@ -956,7 +915,6 @@
 
         if (resData.success) {
           showToast(resData.message || 'Pre-pedido enviado correctamente');
-          // Limpiar carrito tras envío
           ids.forEach(id => delete cart[id]);
           ids.forEach(id => updateQtyZone(id));
           updateCartBar();
@@ -973,7 +931,6 @@
       }
     });
 
-    // 3. Solicitar Cierre de Cuenta
     const btnCierre = document.getElementById('btnSolicitarCierre');
     if (btnCierre) {
       btnCierre.addEventListener('click', async () => {
@@ -1006,7 +963,42 @@
     });
   }
 
-  // --- LÓGICA DE CONTROL DEL CARRITO Y BÚSQUEDA ---
+  function openDishDetailModal(id) {
+    const dish = findDish(id);
+    if (!dish) return;
+
+    let catName = 'Especialidad';
+    for (const cat of DATA) {
+      if ((cat.platos || []).some(p => String(p.id) === String(id))) {
+        catName = cat.nombre;
+        break;
+      }
+    }
+
+    const imgContainer = document.getElementById('dishModalImage');
+    if (dish.foto) {
+      imgContainer.innerHTML = `<img src="/uploads/${dish.foto}" alt="${dish.nombre}">`;
+    } else {
+      imgContainer.innerHTML = `<i class="fa-solid fa-utensils"></i>`;
+    }
+
+    document.getElementById('dishModalCategory').textContent = catName;
+    document.getElementById('dishModalTitle').textContent = dish.nombre;
+    document.getElementById('dishModalPrice').textContent = '$' + parseFloat(dish.precio || 0).toFixed(2);
+    document.getElementById('dishModalDesc').textContent = dish.descripcion || 'Sin descripción disponible para este platillo.';
+
+    const btnAdd = document.getElementById('btnModalAddToCart');
+    btnAdd.onclick = () => {
+      addItem(dish.id);
+      const modalEl = document.getElementById('dishDetailModal');
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      if (modal) modal.hide();
+    };
+
+    const modal = new bootstrap.Modal(document.getElementById('dishDetailModal'));
+    modal.show();
+  }
+
   function findDish(id) {
     for (const cat of DATA) {
       const found = (cat.platos || []).find(d => String(d.id) === String(id));
@@ -1092,7 +1084,6 @@
       }).join('');
     }
 
-    // Cálculo total: Carrito actual + Consumos confirmados en la BD
     const totalCarrito = ids.reduce((s, id) => {
       const item = findDish(id);
       return s + (cart[id] * (item ? parseFloat(item.precio) : 0));
@@ -1144,7 +1135,6 @@
     toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
   }
 
-  // Mostrar/ocultar botón flotante según el scroll y desplazamiento suave hacia arriba
   const btnScrollTop = document.getElementById('btnScrollTop');
 
   window.addEventListener('scroll', () => {

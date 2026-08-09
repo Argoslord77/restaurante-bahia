@@ -34,6 +34,11 @@ class SettingService {
 
         return await SettingModel.updateBatch(processedSettings);
     }
+
+    // Alias para garantizar compatibilidad con invocaciones desde settingController.js
+    async updateSettings(formData) {
+        return await this.saveSettings(formData);
+    }
 }
 
 module.exports = new SettingService();

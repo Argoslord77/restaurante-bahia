@@ -84,7 +84,7 @@
                                                 </td>
                                                 <td>
                                                     <span class="badge bg-light text-secondary border text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                        <%= platillo.categoria %>
+                                                        <%= platillo.nombre_categoria || platillo.categoria %>
                                                     </span>
                                                 </td>
                                                 <td class="text-dark fw-bold">$<%= parseFloat(platillo.precio).toFixed(2) %></td>
@@ -163,11 +163,12 @@
                             <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Categoría</label>
                                 <select name="categoria" class="form-select text-capitalize" required>
-                                    <option value="entradas" selected>Entradas</option>
-                                    <option value="platos fuertes">Platos Fuertes</option>
-                                    <option value="postres">Postres</option>
-                                    <option value="bebidas">Bebidas</option>
-                                    <option value="cocteles">Cocteles</option>
+                                    <option value="" disabled selected>-- Seleccione una Categoría --</option>
+                                    <% if (typeof categorias !== 'undefined' && categorias.length > 0) { %>
+                                        <% categorias.forEach(cat => { %>
+                                            <option value="<%= cat.id %>"><%= cat.nombre %></option>
+                                        <% }); %>
+                                    <% } %>
                                 </select>
                             </div>
                             <div class="col-12">
@@ -222,11 +223,12 @@
                             <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Categoría</label>
                                 <select name="categoria" id="edit_categoria" class="form-select text-capitalize" required>
-                                    <option value="entradas">Entradas</option>
-                                    <option value="platos fuertes">Platos Fuertes</option>
-                                    <option value="postres">Postres</option>
-                                    <option value="bebidas">Bebidas</option>
-                                    <option value="cocteles">Cocteles</option>
+                                    <option value="" disabled>-- Seleccione una Categoría --</option>
+                                    <% if (typeof categorias !== 'undefined' && categorias.length > 0) { %>
+                                        <% categorias.forEach(cat => { %>
+                                            <option value="<%= cat.id %>"><%= cat.nombre %></option>
+                                        <% }); %>
+                                    <% } %>
                                 </select>
                             </div>
                             <div class="col-12">

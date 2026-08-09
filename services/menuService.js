@@ -62,6 +62,10 @@ class MenuService {
         });
     }
 
+    async getActiveCategories() {
+        return await MenuModel.getActiveCategories();
+    }
+
 }
 
 module.exports = new MenuService();

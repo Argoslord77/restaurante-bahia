@@ -36,15 +36,15 @@ const RecetaController = {
     // API: Obtener ingredientes de una receta por su receta_id (platilloId)
     getIngredientesByPlatillo: async (req, res) => {
         try {
-            const { platilloId } = req.params; // ID del maestro de la receta
+            const { platilloId } = req.params;
             const ingredientes = await RecetaService.obtenerPorPlatillo(platilloId);
             
-            // Mapeo seguro con la propiedad de base de datos unificada
             const mapeados = ingredientes.map(ing => ({
                 producto_id: ing.producto_id,
                 cantidad_requerida: ing.cantidad_requerida,
                 unidad_medida: ing.unidad_medida,
-                porcentaje_merma: ing.porcentaje_merma
+                porcentaje_merma: ing.porcentaje_merma,
+                es_opcional: ing.es_opcional // <-- EXPOSE A LA VISTA
             }));
 
             return res.status(200).json(mapeados);
@@ -177,6 +177,23 @@ const RecetaController = {
         } catch (error) {
             logger.error('Error al cargar configuración de receta:', error);
             res.status(500).render('error', { message: 'Error al cargar la configuración de receta' });
+        }
+    },
+
+    // API: Cambiar estado activo/inactivo (Desactivación lógica)
+    toggleEstadoReceta: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { activa } = req.body;
+
+            await RecetaService.cambiarEstado(id, activa);
+            return res.status(200).json({
+                success: true,
+                message: `Ficha técnica ${activa ? 'activada' : 'desactivada'} correctamente.`
+            });
+        } catch (error) {
+            logger.error('Error al cambiar estado de receta:', error);
+            return res.status(500).json({ success: false, message: 'No se pudo cambiar el estado de la receta' });
         }
     }
 };

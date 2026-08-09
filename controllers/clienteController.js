@@ -9,8 +9,22 @@ const ClienteController = {
     try {
       const { id_mesa } = req.params;
 
-      // 1. Obtener los platillos activos del menú
-      const menu = await MenuModel.getAll();
+      // 1. Obtener los platillos uniendo 'platillos_menu' con 'categorias_platillos'
+      // Usamos c.nombre como 'categoria' para que JS agrupe correctamente.
+      const [menu] = await db.query(
+        `SELECT 
+            pm.id, 
+            pm.nombre, 
+            pm.descripcion, 
+            pm.precio, 
+            pm.precio_alt, 
+            pm.foto, 
+            c.nombre AS categoria
+         FROM platillos_menu pm
+         LEFT JOIN categorias_platillos c ON pm.categoria = c.id
+         WHERE c.activo = 1 OR c.id IS NULL
+         ORDER BY c.nombre ASC, pm.nombre ASC`
+      );
 
       // 2. Consultar si existe la mesa
       const [mesa] = await db.query(
@@ -21,7 +35,7 @@ const ClienteController = {
         [id_mesa]
       );
 
-      if(!mesa){
+      if (!mesa || mesa.length === 0) {
         throw new Error("La mesa solicitada no existe.");
       }
 
@@ -37,7 +51,7 @@ const ClienteController = {
       let pedidoActivo = pedidos[0] || null;
       let consumos = [];
 
-      // 3. Si hay un pedido activo, obtener sus detalles
+      // Si hay un pedido activo, obtener sus detalles
       if (pedidoActivo) {
         const [detalles] = await db.query(
           `SELECT dp.id, dp.cantidad, dp.precio_unitario, dp.estado_item, pm.nombre AS nombre_platillo
@@ -65,7 +79,7 @@ const ClienteController = {
   /**
    * Guarda los ítems seleccionados en la tabla temporal 'pre_pedidos' vinculada a la mesa
    */
-    async agregarAPreorden(req, res) {
+  async agregarAPreorden(req, res) {
     try {
       const { id_mesa } = req.params;
       const { items } = req.body;
@@ -126,7 +140,6 @@ const ClienteController = {
     try {
       const { id_pedido } = req.params;
 
-      // Obtener el id_mesa del pedido para registrar la notificación
       const [pedidos] = await db.query(`SELECT id_mesa FROM pedidos WHERE id = ?`, [id_pedido]);
 
       if (pedidos.length === 0) {
@@ -135,7 +148,6 @@ const ClienteController = {
 
       const id_mesa = pedidos[0].id_mesa;
 
-      // Registrar notificación de cierre para el dependiente
       await db.query(
         `INSERT INTO notificaciones_mesero (id_mesa, id_pedido, tipo, mensaje, leido) 
          VALUES (?, ?, 'SOLICITUD_CIERRE', 'El cliente ha solicitado la cuenta', 0)`,

@@ -9,16 +9,18 @@ class MenuModel {
 
         const [rows] = await db.query(`
             SELECT
-                id,
-                nombre,
-                descripcion,
-                precio,
-                categoria,
-                precio_alt,
-                foto,
-                creado_en
-            FROM platillos_menu
-            ORDER BY categoria ASC, nombre ASC
+                p.id,
+                p.nombre,
+                p.descripcion,
+                p.precio,
+                p.categoria,
+                c.nombre AS nombre_categoria,
+                p.precio_alt,
+                p.foto,
+                p.creado_en
+            FROM platillos_menu p
+            LEFT JOIN categorias_platillos c ON p.categoria = c.id
+            ORDER BY c.nombre ASC, p.nombre ASC
         `);
 
         return rows;
@@ -171,6 +173,19 @@ class MenuModel {
             ORDER BY categoria ASC, nombre ASC
         `);
 
+        return rows;
+    }
+
+    /**
+     * Obtener todas las categorías de platillos activas para los selectores
+     */
+    async getActiveCategories() {
+        const [rows] = await db.query(`
+            SELECT id, nombre 
+            FROM categorias_platillos 
+            WHERE activo = 1 
+            ORDER BY nombre ASC
+        `);
         return rows;
     }
 

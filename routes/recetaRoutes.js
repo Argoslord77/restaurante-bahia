@@ -68,4 +68,10 @@ router.get('/api/recetas/producto/:productoId',
     recetaController.getPlatillosByProducto
 );
 
+// API: Cambiar estado activo/inactivo
+router.patch('/api/recetas/:id/estado',
+    ensureAuthenticated,
+    checkRole(['superadministrador', 'administrador']),
+    recetaController.toggleEstadoReceta
+);
 module.exports = router;

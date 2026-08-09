@@ -14,6 +14,7 @@ const Receta = {
                 rd.porcentaje_merma,
                 rd.costo_estimado,
                 rd.orden_preparacion,
+                rd.es_opcional, -- <-- NUEVO
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
                 c.nombre AS categoria_nombre,
@@ -28,7 +29,6 @@ const Receta = {
         return rows;
     },
 
-    // Obtener ingredientes con stock disponible filtrado estrictamente por un almacén específico
     getByPlatilloAndAlmacen: async (recetaId, almacenId) => {
         const query = `
             SELECT 
@@ -39,6 +39,7 @@ const Receta = {
                 rd.unidad_medida,
                 rd.porcentaje_merma,
                 rd.costo_estimado,
+                rd.es_opcional, -- <-- NUEVO
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
                 c.nombre AS categoria_nombre,
@@ -115,7 +116,7 @@ const Receta = {
     insertDetallesTransactional: async (connection, recetaId, detalles) => {
         const query = `
             INSERT INTO receta_detalles 
-            (receta_id, producto_id, cantidad, unidad_medida, porcentaje_merma, costo_estimado, orden_preparacion) 
+            (receta_id, producto_id, cantidad, unidad_medida, porcentaje_merma, costo_estimado, orden_preparacion, es_opcional) 
             VALUES ?
         `;
         const values = detalles.map((d, index) => [
@@ -125,7 +126,8 @@ const Receta = {
             d.unidad_medida,
             d.porcentaje_merma || 0.00,
             d.costo_estimado || 0.0000,
-            d.orden_preparacion || (index + 1)
+            d.orden_preparacion || (index + 1),
+            d.es_opcional ? 1 : 0 // <-- NUEVO
         ]);
         await connection.query(query, [values]);
     },
@@ -191,6 +193,11 @@ const Receta = {
         `;
         const [rows] = await db.query(query, [productoId]);
         return rows;
+    },
+
+    updateEstado: async (id, activa) => {
+        const query = 'UPDATE recetas SET activa = ? WHERE id = ?';
+        await db.query(query, [activa, id]);
     }
 };
 

@@ -8,9 +8,11 @@ module.exports = {
     listMenu: async (req, res) => {
         try {
             const platillos = await menuService.getAllItems();
+            const categorias = await menuService.getActiveCategories();
 
             res.render('admin/menu', {
                 platillos,
+                categorias,
                 user: req.user,
                 pageTitle: 'Gestión de Menú',
                 view: 'dishes'
