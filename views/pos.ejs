@@ -189,7 +189,7 @@
                                             </span>
                                         <% } %>
 
-                                        <span class="position-absolute top-0 end-0 bg-[#1e293b] text-white font-black px-3 py-1 m-2 rounded-xl text-xs shadow-sm tracking-wide">
+                                        <span class="position-absolute top-0 end-0 bg-[#1e293b] text-white font-black px-3 py-1 m-2 rounded-xl text-xs shadow-sm tracking-wide price-tag">
                                             $<%= parseFloat(platillo.precio).toFixed(2) %>
                                         </span>
                                     </div>
@@ -339,40 +339,102 @@
         let historicoDetalles = []; 
         let activeCategory = 'todos';
 
-        //Para agregar el prepedido del cliente al borrador de "nueva ronda" en el POS
-        document.addEventListener('DOMContentLoaded', () => {
+        // LÓGICA ROBUSTA DE EXTRACCIÓN Y DEPURACIÓN DEL PRE-PEDIDO DESDE LA URL
+        function procesarPrePedidoDesdeURL() {
             const urlParams = new URLSearchParams(window.location.search);
             const prePedidoData = urlParams.get('cargarPrePedido');
 
-            if (prePedidoData) {
-                try {
-                    const items = JSON.parse(decodeURIComponent(prePedidoData));
+            if (!prePedidoData) {
+                console.log('[POS Debug] No hay pre-pedido enviado en los parámetros de la URL.');
+                return;
+            }
 
-                    items.forEach(item => {
-                        // Utiliza la misma función con la que agregas platillos desde las tarjetas del menú:
-                        // Ejemplo: agregarAlCarrito(platilloId, nombre, precio, cantidad, notas);
-                        if (typeof agregarAlCarrito === 'function') {
-                            for (let i = 0; i < item.cantidad; i++) {
-                                agregarAlCarrito(item.id, item.nombre, item.precio, item.notas);
-                            }
-                        }
-                    });
+            console.log('[POS Debug] Parámetro RAW detectado en URL:', prePedidoData);
 
-                    // Limpiar los query params de la URL para evitar re-inyecciones si el usuario recarga la página
-                    const newUrl = window.location.pathname;
-                    window.history.replaceState({}, document.title, newUrl);
+            try {
+                const items = JSON.parse(decodeURIComponent(prePedidoData));
+                console.log('[POS Debug] Ítems parseados del pre-pedido:', items);
 
-                    // Opcional: Limpiar la tabla de pre-pedidos de la mesa en segundo plano
-                    const idMesa = document.getElementById('pos-mesa-id')?.value;
-                    if (idMesa) {
-                        fetch(`/pos/mesas/${idMesa}/pre-pedidos`, { method: 'DELETE' });
+                if (!Array.isArray(items) || items.length === 0) {
+                    console.warn('[POS Debug] El pre-pedido está vacío o no tiene formato de arreglo.');
+                    return;
+                }
+
+                let itemsInyectados = 0;
+
+                items.forEach(item => {
+                    let idBuscado = item.id_platillo || item.id_producto || item.id || item.producto_id;
+                    const cantidad = parseInt(item.cantidad, 10) || 1;
+                    const notas = item.notas_especiales || item.notas || '';
+
+                    let nombre = item.nombre || item.nombre_platillo;
+                    let precio = parseFloat(item.precio || item.precio_unitario);
+
+                    // BÚSQUEDA Y FALLBACK EN EL CATÁLOGO DOM
+                    let dishEl = null;
+
+                    // Si tenemos ID, buscamos por dataset id
+                    if (idBuscado !== undefined && idBuscado !== null) {
+                        idBuscado = String(idBuscado);
+                        dishEl = document.querySelector(`.dish-item[data-id="${idBuscado}"]`);
                     }
 
-                } catch (e) {
-                    console.error('Error al procesar los ítems del pre-pedido en el carrito:', e);
+                    // Fallback: Si no hay ID o no se encontró el nodo, buscar por el NOMBRE del platillo en la cuadrícula
+                    if (!dishEl && nombre) {
+                        const nombreBuscado = nombre.toLowerCase().trim();
+                        dishEl = Array.from(document.querySelectorAll('.dish-item')).find(el => {
+                            return el.dataset.name === nombreBuscado || 
+                                   el.querySelector('.card-title')?.textContent.trim().toLowerCase() === nombreBuscado;
+                        });
+
+                        if (dishEl) {
+                            idBuscado = dishEl.dataset.id;
+                            console.log(`[POS Debug] ID ${idBuscado} resuelto automáticamente en el DOM para "${nombre}".`);
+                        }
+                    }
+
+                    // Recuperar datos faltantes del elemento si no venían en el JSON
+                    if (dishEl) {
+                        if (!nombre) {
+                            nombre = dishEl.querySelector('.card-title')?.textContent.trim();
+                        }
+                        if (isNaN(precio)) {
+                            const priceText = dishEl.querySelector('.price-tag')?.textContent.replace('$', '').trim();
+                            precio = parseFloat(priceText);
+                        }
+                    }
+
+                    // Inyección al carrito si se determinaron las variables esenciales
+                    if (idBuscado && nombre && !isNaN(precio)) {
+                        for (let i = 0; i < cantidad; i++) {
+                            addToCart(idBuscado, nombre, precio);
+                        }
+
+                        if (notas) {
+                            const prodInCart = carrito.find(p => String(p.id) === String(idBuscado));
+                            if (prodInCart) prodInCart.notas = notas;
+                        }
+
+                        itemsInyectados++;
+                        console.log(`[POS Debug] Inyectado exitosamente: ${nombre} (ID: ${idBuscado}, Cantidad: x${cantidad})`);
+                    } else {
+                        console.error(`[POS Debug] ERROR: No se pudieron determinar los datos del producto:`, item);
+                    }
+                });
+
+                if (itemsInyectados > 0) {
+                    renderCart();
+                    console.log('[POS Debug] Carrito populado. Limpiando parámetros de la URL...');
+
+                    // Limpiar la URL manteniendo la vista limpia sin recargar
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
                 }
+
+            } catch (e) {
+                console.error('[POS Debug] Excepción al procesar los ítems del pre-pedido en el carrito:', e);
             }
-        });
+        }
 
         document.addEventListener("DOMContentLoaded", () => {
             const rawDetails = `<%- typeof detallesActuales !== 'undefined' ? detallesActuales : '' %>`;
@@ -396,6 +458,9 @@
             renderCart();
             renderHistory();
             setupEventListeners();
+            
+            // Ejecutar procesamiento del pre-pedido pasados por la URL al iniciar
+            procesarPrePedidoDesdeURL();
         });
 
         function setupEventListeners() {
@@ -483,7 +548,7 @@
 
                     const id = itemEl.dataset.id;
                     const nombre = itemEl.querySelector('.card-title').textContent.trim();
-                    const precioText = itemEl.querySelector('.position-absolute').textContent.replace('$', '').trim();
+                    const precioText = itemEl.querySelector('.price-tag').textContent.replace('$', '').trim();
                     addToCart(id, nombre, precioText);
                 }
             });
@@ -559,14 +624,17 @@
         }
 
         function addToCart(id, nombre, precio) {
-            const itemExistente = carrito.find(prod => prod.id === id);
+            const idString = String(id);
+            const precioFloat = typeof precio === 'number' ? precio : parseFloat(precio);
+
+            const itemExistente = carrito.find(prod => String(prod.id) === idString);
             if (itemExistente) {
                 itemExistente.cantidad += 1;
             } else {
                 carrito.push({
-                    id: id.toString(),
+                    id: idString,
                     nombre,
-                    precio: parseFloat(precio),
+                    precio: precioFloat,
                     cantidad: 1,
                     notas: ''
                 });
@@ -575,7 +643,8 @@
         }
 
         function updateQuantity(id, delta) {
-            const index = carrito.findIndex(prod => prod.id === id);
+            const idString = String(id);
+            const index = carrito.findIndex(prod => String(prod.id) === idString);
             if (index !== -1) {
                 carrito[index].cantidad += delta;
                 if (carrito[index].cantidad <= 0) carrito.splice(index, 1);
@@ -584,7 +653,8 @@
         }
 
         async function editItemNotes(id) {
-            const item = carrito.find(prod => prod.id === id);
+            const idString = String(id);
+            const item = carrito.find(prod => String(prod.id) === idString);
             if (!item) return;
 
             const { value: text } = await Swal.fire({
@@ -607,7 +677,8 @@
         }
 
         function removeItem(id) {
-            carrito = carrito.filter(prod => prod.id !== id);
+            const idString = String(id);
+            carrito = carrito.filter(prod => String(prod.id) !== idString);
             renderCart();
         }
 
@@ -1510,15 +1581,16 @@
 
                 // 3. Agregar cada ítem a la ronda actual del carrito en el cliente
                 data.items.forEach(item => {
-                    // Se utiliza la función nativa que ya maneja tu POS para añadir ítems al carrito
-                    if (typeof agregarAlCarrito === 'function') {
-                        agregarAlCarrito({
-                            id: item.id_platillo,
-                            nombre: item.nombre,
-                            precio: parseFloat(item.precio),
-                            cantidad: item.cantidad,
-                            notas: item.notas_especiales || ''
-                        });
+                    const idPlatillo = item.id_platillo || item.id_producto || item.id;
+                    const cantidad = parseInt(item.cantidad, 10) || 1;
+                    
+                    for (let i = 0; i < cantidad; i++) {
+                        addToCart(idPlatillo, item.nombre, item.precio);
+                    }
+
+                    if (item.notas_especiales || item.notas) {
+                        const inCart = carrito.find(p => String(p.id) === String(idPlatillo));
+                        if (inCart) inCart.notas = item.notas_especiales || item.notas;
                     }
                 });
 
@@ -1526,7 +1598,7 @@
                 await fetch(`/pos/mesas/${idMesa}/pre-pedidos`, { method: 'DELETE' });
 
                 // 5. Notificar al usuario y actualizar vista
-                if (typeof renderizarCarrito === 'function') renderizarCarrito();
+                renderCart();
                 
                 Swal.fire({
                     icon: 'success',
@@ -1579,7 +1651,7 @@
     <audio id="audioAlertaCliente" src="/sounds/alert-notification.mp3" preload="auto"></audio>
 
     <script>
-        //Para alertas de clientes (pre-pedidos/cierre de cuenta/llamado al dependiente)
+        // Script de detección de alertas y pre-pedidos en tiempo real para pos.ejs
         (() => {
             let alertasProcesadas = new Set();
             const POLLING_INTERVAL = 5000; // 5 segundos
@@ -1592,46 +1664,116 @@
                     const data = await response.json();
                     if (!data.success) return;
 
-                    const { notificaciones, prePedidos, total } = data.alertas;
+                    const { notificaciones, prePedidos } = data.alertas;
                     let hayNuevasAlertas = false;
 
-                    // Procesar llamadas y solicitudes de cierre
+                    // 1. Procesar Notificaciones Nativas (Llamadas de dependiente y Solicitud de Cuenta)
                     notificaciones.forEach(notif => {
                         const key = `notif_${notif.id}`;
                         if (!alertasProcesadas.has(key)) {
                             alertasProcesadas.add(key);
                             hayNuevasAlertas = true;
                             
-                            const titulo = notif.tipo === 'SOLICITUD_CIERRE' ? '💳 Solicitud de Cuenta' : '🔔 Llamada de Cliente';
-                            mostrarNotificacionUI(titulo, `Mesa ${notif.numero_mesa}: ${notif.mensaje}`, async () => {
+                            const esCierre = notif.tipo === 'SOLICITUD_CIERRE';
+                            const titulo = esCierre ? '💳 Solicitud de Cuenta' : '🔔 Llamada de Cliente';
+                            
+                            Swal.fire({
+                                title: titulo,
+                                html: `<p class="text-sm text-slate-700">Mesa <b>#${notif.numero_mesa}</b>: ${notif.mensaje}</p>`,
+                                icon: esCierre ? 'warning' : 'info',
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: true,
+                                confirmButtonText: 'Entendido',
+                                confirmButtonColor: '#3b82f6',
+                                timer: 10000
+                            }).then(async () => {
                                 await fetch(`/pos/notificaciones/${notif.id}/leer`, { method: 'POST' });
                             });
                         }
                     });
 
-                    // Procesar Pre-pedidos
-                    prePedidos.forEach(pre => {
-                        const key = `pre_${pre.id}`;
-                        if (!alertasProcesadas.has(key)) {
-                            alertasProcesadas.add(key);
-                            hayNuevasAlertas = true;
+                    // 2. Procesar Pre-pedidos con el formato idéntico al Dashboard
+                    if (prePedidos && prePedidos.length > 0) {
+                        // Agrupar pre-pedidos por id_mesa mapeando la propiedad 'numero'
+                        const agrupadosPorMesa = prePedidos.reduce((acc, item) => {
+                            if (!acc[item.id_mesa]) {
+                                // Usa directamente item.numero enviada desde la DB/API
+                                const numMesa = item.numero || item.numero_mesa || item.id_mesa;
+                                
+                                acc[item.id_mesa] = {
+                                    id_mesa: item.id_mesa,
+                                    numero_mesa: numMesa,
+                                    items: []
+                                };
+                            }
+                            acc[item.id_mesa].items.push(item);
+                            return acc;
+                        }, {});
+
+                        // Recorrer cada grupo de pre-pedido por mesa
+                        Object.values(agrupadosPorMesa).forEach(grupo => {
+                            const key = `pre_mesa_${grupo.id_mesa}_${grupo.items.map(i => i.id).join('_')}`;
                             
-                            const detalle = `${pre.cantidad}x ${pre.platillo}${pre.notas_especiales ? ` (${pre.notas_especiales})` : ''}`;
-                            mostrarNotificacionUI('🍽️ Pre-pedido Recibido', `Mesa ${pre.numero_mesa}: ${detalle}`, async () => {
-                                await fetch(`/pos/pre-pedidos/${pre.id}`, { method: 'DELETE' });
-                            });
-                        }
-                    });
+                            if (!alertasProcesadas.has(key)) {
+                                alertasProcesadas.add(key);
+                                hayNuevasAlertas = true;
+
+                                // Formatear el resumen de la comanda recibida
+                                const resumenHTML = grupo.items.map(i => 
+                                    `<div class="flex justify-between items-center text-xs border-b border-slate-100 py-1">
+                                        <span class="font-bold text-slate-800">${i.cantidad}x ${i.platillo || i.nombre}</span>
+                                        ${i.notas_especiales ? `<span class="text-amber-600 italic">(${i.notas_especiales})</span>` : ''}
+                                    </div>`
+                                ).join('');
+
+                                // Mostrar SweetAlert2 con el formato visual exacto del Dashboard
+                                Swal.fire({
+                                    title: `🍽️ Pre-pedido Recibido (Mesa #${grupo.numero_mesa})`,
+                                    html: `
+                                        <p class="text-xs text-slate-500 mb-2">El cliente ha enviado la siguiente selección desde su móvil:</p>
+                                        <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 text-left max-h-40 overflow-y-auto mb-2 space-y-1">
+                                            ${resumenHTML}
+                                        </div>
+                                        <p class="text-[11px] text-slate-400">¿Deseas agregar estos productos a la captura actual como nueva ronda?</p>
+                                    `,
+                                    icon: 'question',
+                                    showCancelButton: true,
+                                    showDenyButton: true,
+                                    confirmButtonText: '📥 Cargar al Carrito',
+                                    denyButtonText: '🗑️ Descartar',
+                                    cancelButtonText: '⏳ Decidir Luego',
+                                    confirmButtonColor: '#10b981',
+                                    denyButtonColor: '#ef4444',
+                                    cancelButtonColor: '#64748b',
+                                    background: '#ffffff',
+                                    color: '#0f172a'
+                                }).then(async (result) => {
+                                    if (result.isConfirmed) {
+                                        // Cargar los productos al carrito activo en el POS
+                                        await cargarPrePedidoAlCarrito(grupo.id_mesa, grupo.numero_mesa);
+                                    } else if (result.isDenied) {
+                                        // Descartar y limpiar de la base de datos
+                                        await fetch(`/pos/mesas/${grupo.id_mesa}/pre-pedidos`, { method: 'DELETE' });
+                                        const Toast = Swal.mixin({
+                                            toast: true,
+                                            position: 'top-end',
+                                            showConfirmButton: false,
+                                            timer: 2000
+                                        });
+                                        Toast.fire({ icon: 'info', title: 'Pre-pedido descartado' });
+                                    }
+                                });
+                            }
+                        });
+                    }
 
                     if (hayNuevasAlertas) {
                         reproducirSonidoAlerta();
-                        if (typeof actualizarVistaSalon === 'function') {
-                            actualizarVistaSalon(); // Refresca el panel de mesas si la función existe en dashboard.ejs
-                        }
                     }
 
                 } catch (err) {
-                    console.error('Error en el sondeo de alertas:', err);
+                    console.error('Error en el sondeo de alertas cliente:', err);
                 }
             }
 
@@ -1640,34 +1782,12 @@
                 if (audio) {
                     audio.currentTime = 0;
                     audio.play().catch(() => {
-                        // Previene bloqueos por políticas de Autoplay del navegador
-                        console.warn('Reproducción de audio bloqueada por el navegador. Interactúa con la página.');
+                        console.warn('Reproducción de sonido bloqueada por interacción del usuario.');
                     });
                 }
             }
 
-            function mostrarNotificacionUI(titulo, mensaje, onDismiss) {
-                // Integración flexible con Toastr, SweetAlert2 o modales Bootstrap nativos
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        title: titulo,
-                        text: mensaje,
-                        icon: 'info',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: true,
-                        confirmButtonText: 'Entendido',
-                        timer: 10000
-                    }).then(() => {
-                        if (onDismiss) onDismiss();
-                    });
-                } else {
-                    alert(`${titulo}\n${mensaje}`);
-                    if (onDismiss) onDismiss();
-                }
-            }
-
-            // Iniciar polling
+            // Iniciar el sondeo en segundo plano
             setInterval(verificarAlertasCliente, POLLING_INTERVAL);
             document.addEventListener('DOMContentLoaded', verificarAlertasCliente);
         })();
