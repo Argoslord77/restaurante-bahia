@@ -47,6 +47,9 @@
                                     <li class="nav-item">
                                         <button class="nav-link fw-semibold" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab"><i class="fa-solid fa-boxes-stacked me-1"></i> Inventario</button>
                                     </li>
+                                    <li class="nav-item">
+                                        <button class="nav-link fw-semibold" id="opciones-sistema-tab" data-bs-toggle="tab" data-bs-target="#opciones-sistema" type="button" role="tab"><i class="fa-solid fa-cogs me-1"></i> Opciones Generales</button>
+                                    </li>
                                 </ul>
                             </div>
                             
@@ -75,7 +78,7 @@
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <div>
                                             <h6 class="fw-bold mb-0">Categorías de Menú y Platillos</h6>
-                                            <small class="text-muted">Define las categorías de la carta y asigna su almacén predeterminado para el descuento automático de insumos al comandar.</small>
+                                            <small class="text-muted">Define las categorías de la carta y asigna su almacén predeterminado para el descuento automático de insumos al ordenar.</small>
                                         </div>
                                         <button type="button" class="btn btn-sm btn-primary" id="btnNuevaCategoria">
                                             <i class="fa-solid fa-plus me-1"></i> Nueva Categoría
@@ -87,6 +90,7 @@
                                             <thead class="table-light fs-7 text-uppercase">
                                                 <tr>
                                                     <th class="ps-3">Categoría de Menú</th>
+                                                    <th class="text-center">Tipo</th>
                                                     <th>Almacén de Despacho</th>
                                                     <th class="text-center">Platillos</th>
                                                     <th class="text-center">Estado</th>
@@ -100,6 +104,13 @@
                                                             <td class="ps-3 fw-bold">
                                                                 <%= cat.nombre %>
                                                                 <% if(cat.descripcion) { %><br><small class="text-muted fw-normal"><%= cat.descripcion %></small><% } %>
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <% if (cat.tipo === 'BEBIDAS') { %>
+                                                                    <span class="badge bg-info-subtle text-info border border-info"><i class="fa-solid fa-glass-water me-1"></i>Bebidas</span>
+                                                                <% } else { %>
+                                                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning"><i class="fa-solid fa-utensils me-1"></i>Comestibles</span>
+                                                                <% } %>
                                                             </td>
                                                             <td>
                                                                 <span class="badge bg-secondary-subtle text-dark border">
@@ -135,7 +146,7 @@
                                                     <% }) %>
                                                 <% } else { %>
                                                     <tr>
-                                                        <td colspan="5" class="text-center text-muted py-4">No hay categorías de menú registradas.</td>
+                                                        <td colspan="6" class="text-center text-muted py-4">No hay categorías de menú registradas.</td>
                                                     </tr>
                                                 <% } %>
                                             </tbody>
@@ -193,6 +204,33 @@
                                     </div>
                                 </div>
 
+                                <!-- PESTAÑA 6: OPCIONES GENERALES -->
+                                <div class="tab-pane fade" id="opciones-sistema" role="tabpanel">
+                                    <div class="row">
+                                        <div class="col-12 col-md-8">
+                                            <div class="p-3 border rounded shadow-sm bg-light d-flex align-items-center justify-content-between">
+                                                <div>
+                                                    <h6 class="fw-bold mb-1 text-dark">
+                                                        <%= settings.cliente_permite_prepedido ? settings.cliente_permite_prepedido.nombre : 'Permitir Pre-pedidos a Clientes' %>
+                                                    </h6>
+                                                    <small class="text-muted d-block">
+                                                        El cliente puede agregar prepedido a su orden en el menú de platillos.
+                                                    </small>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <span id="lbl_status_prepedido" class="badge <%= (settings.cliente_permite_prepedido && settings.cliente_permite_prepedido.valor === '1') ? 'bg-success-subtle text-success border border-success' : 'bg-danger-subtle text-danger border border-danger' %> px-2 py-1">
+                                                        <%= (settings.cliente_permite_prepedido && settings.cliente_permite_prepedido.valor === '1') ? 'Habilitado' : 'Deshabilitado' %>
+                                                    </span>
+                                                    <div class="form-check form-switch m-0 fs-4">
+                                                        <input class="form-check-input role-switch" type="checkbox" id="cfg_cliente_permite_prepedido" role="switch"
+                                                               <%= (settings.cliente_permite_prepedido && settings.cliente_permite_prepedido.valor === '1') ? 'checked' : '' %>>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
                             
                             <div class="card-footer bg-light p-3 d-flex justify-content-end border-top">
@@ -228,6 +266,15 @@
                         </div>
 
                         <div class="mb-3">
+                            <label class="form-label fw-semibold">Tipo de Despacho (POS) <span class="text-danger">*</span></label>
+                            <select class="form-select" id="cat_tipo" name="tipo" required>
+                                <option value="COMESTIBLES">Comestibles (Despacho Cocina)</option>
+                                <option value="BEBIDAS">Bebidas (Despacho Bar)</option>
+                            </select>
+                            <div class="form-text fs-7">Define la estación a la que pertenece esta categoría para los filtros de cocina/bar.</div>
+                        </div>
+
+                        <div class="mb-3">
                             <label class="form-label fw-semibold">Almacén de Despacho (Insumos/Receta)</label>
                             <select class="form-select" id="cat_almacen_id" name="almacen_id">
                                 <option value="">-- Sin almacén asignado --</option>
@@ -257,6 +304,49 @@
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
     <script>
+
+        // Manejo asíncrono e inmediato de la opción de prepedido por el cliente
+        document.getElementById('cfg_cliente_permite_prepedido').addEventListener('change', function() {
+            const isChecked = this.checked;
+            const nuevoValor = isChecked ? '1' : '0';
+            const badgeLabel = document.getElementById('lbl_status_prepedido');
+
+            fetch('/admin/configuracion/opcion-rapida', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clave: 'cliente_permite_prepedido',
+                    valor: nuevoValor
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (isChecked) {
+                        badgeLabel.textContent = 'Habilitado';
+                        badgeLabel.className = 'badge bg-success-subtle text-success border border-success px-2 py-1';
+                    } else {
+                        badgeLabel.textContent = 'Deshabilitado';
+                        badgeLabel.className = 'badge bg-danger-subtle text-danger border border-danger px-2 py-1';
+                    }
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Configuración actualizada!',
+                        text: data.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                } else {
+                    this.checked = !isChecked; // Revertir en caso de error
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(() => {
+                this.checked = !isChecked; // Revertir si la solicitud falla
+                Swal.fire('Error', 'No se pudo conectar con el servidor para actualizar la opción.', 'error');
+            });
+        });
+
         const modalCategoriaBs = new bootstrap.Modal(document.getElementById('modalCategoria'));
 
         // Guardar ajustes generales del sistema
@@ -325,7 +415,7 @@
                     tbody.innerHTML = '';
 
                     if(res.data.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">No hay categorías de menú registradas.</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">No hay categorías de menú registradas.</td></tr>`;
                         return;
                     }
 
@@ -337,9 +427,14 @@
                                 ${cat.nombre}
                                 ${cat.descripcion ? `<br><small class="text-muted fw-normal">${cat.descripcion}</small>` : ''}
                             </td>
+                            <td class="text-center">
+                                ${cat.tipo === 'BEBIDAS' 
+                                    ? '<span class="badge bg-info-subtle text-info border border-info"><i class="fa-solid fa-glass-water me-1"></i>Bebidas</span>' 
+                                    : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning"><i class="fa-solid fa-utensils me-1"></i>Comestibles</span>'}
+                            </td>
                             <td>
                                 <span class="badge bg-secondary-subtle text-dark border">
-                                    <i class="fa-solid fa-warehouse me-1"></i>${cat.almacen_nombre}
+                                    <i class="fa-solid fa-warehouse me-1"></i>${cat.almacen_nombre || 'Sin almacén'}
                                 </span>
                             </td>
                             <td class="text-center">${cat.total_platillos}</td>
@@ -368,6 +463,7 @@
         function abrirModalCategoria() {
             document.getElementById('formCategoriaModal').reset();
             document.getElementById('cat_id').value = '';
+            document.getElementById('cat_tipo').value = 'COMESTIBLES';
             document.getElementById('modalCatTitle').textContent = 'Nueva Categoría de Menú';
             modalCategoriaBs.show();
         }
@@ -375,6 +471,7 @@
         function editarCategoria(cat) {
             document.getElementById('cat_id').value = cat.id;
             document.getElementById('cat_nombre').value = cat.nombre;
+            document.getElementById('cat_tipo').value = cat.tipo || 'COMESTIBLES';
             document.getElementById('cat_descripcion').value = cat.descripcion || '';
             document.getElementById('cat_almacen_id').value = cat.almacen_id || '';
             document.getElementById('modalCatTitle').textContent = 'Editar Categoría de Menú';
@@ -386,6 +483,7 @@
             const payload = {
                 id: document.getElementById('cat_id').value,
                 nombre: document.getElementById('cat_nombre').value,
+                tipo: document.getElementById('cat_tipo').value,
                 descripcion: document.getElementById('cat_descripcion').value,
                 almacen_id: document.getElementById('cat_almacen_id').value
             };

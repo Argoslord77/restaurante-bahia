@@ -39,6 +39,10 @@ class SettingService {
     async updateSettings(formData) {
         return await this.saveSettings(formData);
     }
+
+    async actualizarClaveIndividual(clave, valor) {
+        return await SettingModel.updateSetting(clave, valor);
+    }
 }
 
 module.exports = new SettingService();

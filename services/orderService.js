@@ -52,7 +52,8 @@ class OrderService {
                 const precioReal = parseFloat(platillo.precio);
                 const cantidad = parseInt(item.cantidad, 10);
 
-                const esBebida = (platillo.categoria && platillo.categoria.toLowerCase().includes('bebida'));
+                // Determinación del destino y estado según el campo 'tipo' de categorias_platillos
+                const esBebida = (platillo.tipo_categoria === 'BEBIDAS');
                 const destino = esBebida ? 'bar' : 'cocina';
                 const estado_preparacion = esBebida ? STATUS.ITEM.EN_BAR : STATUS.ITEM.EN_COCINA;
 

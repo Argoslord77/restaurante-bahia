@@ -47,7 +47,7 @@ exports.getCategoriasPlatillos = async (req, res) => {
 
 exports.saveCategoriaPlatillo = async (req, res) => {
     try {
-        const { id, nombre, descripcion, almacen_id } = req.body;
+        const { id, nombre, descripcion, almacen_id, tipo } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.json({ success: false, message: "El nombre de la categoría es obligatorio." });
         }
@@ -55,7 +55,8 @@ exports.saveCategoriaPlatillo = async (req, res) => {
         const data = {
             nombre: nombre.trim(),
             descripcion: descripcion || null,
-            almacen_id: almacen_id || null
+            almacen_id: almacen_id || null,
+            tipo: tipo || 'COMESTIBLES'
         };
 
         if (id) {
@@ -90,5 +91,25 @@ exports.deleteCategoriaPlatillo = async (req, res) => {
     } catch (error) {
         console.error("Error al eliminar categoría:", error);
         res.json({ success: false, message: "No se puede eliminar la categoría porque tiene platillos asignados." });
+    }
+};
+
+exports.actualizarOpcionRapida = async (req, res) => {
+    try {
+        const { clave, valor } = req.body;
+
+        if (!clave) {
+            return res.status(400).json({ success: false, message: 'La clave de configuración es requerida.' });
+        }
+
+        await SettingService.actualizarClaveIndividual(clave, valor);
+
+        return res.json({
+            success: true,
+            message: 'Ajuste del sistema actualizado con éxito.'
+        });
+    } catch (error) {
+        console.error('Error al actualizar opción rápida de configuración:', error);
+        return res.status(500).json({ success: false, message: 'Error al actualizar el ajuste del sistema.' });
     }
 };

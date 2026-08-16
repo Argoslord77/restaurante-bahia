@@ -32,17 +32,12 @@ class MenuModel {
     async getById(id) {
 
         const [rows] = await db.query(`
-            SELECT
-                id,
-                nombre,
-                descripcion,
-                precio,
-                categoria,
-                precio_alt,
-                foto,
-                creado_en
-            FROM platillos_menu
-            WHERE id = ?
+            SELECT 
+                pm.*, 
+                cp.tipo AS tipo_categoria
+            FROM platillos_menu pm
+            LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
+            WHERE pm.id = ?
             LIMIT 1
         `, [id]);
 

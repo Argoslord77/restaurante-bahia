@@ -1,4 +1,5 @@
 const MenuModel = require('../models/menuModel');
+const settingModel = require('../models/settingModel');
 const db = require('../config/db');
 
 const ClienteController = {
@@ -9,7 +10,13 @@ const ClienteController = {
     try {
       const { id_mesa } = req.params;
 
-      // 1. Obtener los platillos uniendo 'platillos_menu' con 'categorias_platillos'
+      // 1. Obtener la configuración de pre-pedidos desde la BD
+      const configPrepedido = await settingModel.getByKey('cliente_permite_prepedido');
+      
+      // Evaluar si está activo (maneja valores '1', 1, 'true', true)
+      const permitePrepedido = configPrepedido && (configPrepedido.valor === '1' || configPrepedido.valor === true || configPrepedido.valor === 'true');
+
+      // 2. Obtener los platillos uniendo 'platillos_menu' con 'categorias_platillos'
       // Usamos c.nombre como 'categoria' para que JS agrupe correctamente.
       const [menu] = await db.query(
         `SELECT 
@@ -68,7 +75,8 @@ const ClienteController = {
         id_mesa,
         menu,
         pedidoActivo,
-        consumos
+        consumos,
+        permitePrepedido
       });
     } catch (error) {
       console.error('Error al cargar el dashboard de cliente:', error);

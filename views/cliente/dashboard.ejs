@@ -643,9 +643,15 @@
           <p class="dish-modal-desc" id="dishModalDesc">Descripción del platillo...</p>
 
           <div class="dish-modal-actions mt-4">
-            <button class="add-btn w-100 py-3 fs-6 rounded-pill justify-content-center shadow-sm" id="btnModalAddToCart">
-              <i class="fa-solid fa-plus me-1"></i> Agregar al pedido
-            </button>
+            <% if (typeof permitePrepedido !== 'undefined' && permitePrepedido) { %>
+              <button class="add-btn w-100 py-3 fs-6 rounded-pill justify-content-center shadow-sm" id="btnModalAddToCart">
+                <i class="fa-solid fa-plus me-1"></i> Agregar al pedido
+              </button>
+            <% } else { %>
+              <div class="alert alert-secondary text-center m-0 rounded-pill fs-7 text-dark fw-medium" role="alert">
+                <i class="fa-solid fa-circle-info me-1"></i> Pedidos atendidos directamente por el mesero
+              </div>
+            <% } %>
           </div>
         </div>
       </div>
@@ -684,8 +690,10 @@
         </div>
 
         <!-- SECCIÓN 1: ÍTEMS EN SELECCIÓN ACTUAL -->
-        <h6 class="fw-bold mb-2" style="color: var(--saffron-400);">Por solicitar:</h6>
-        <div id="modalOrderList"></div>
+        <% if (typeof permitePrepedido !== 'undefined' && permitePrepedido) { %>
+          <h6 class="fw-bold mb-2" style="color: var(--saffron-400);">Por solicitar:</h6>
+          <div id="modalOrderList"></div>
+        <% } %>
 
         <!-- SECCIÓN 2: CONSUMOS YA REGISTRADOS EN MESA -->
         <% if (typeof consumos !== 'undefined' && consumos.length > 0) { %>
@@ -712,9 +720,11 @@
         </div>
       </div>
       <div class="modal-footer border-0 pt-0 d-flex flex-column gap-2">
-        <button type="button" class="btn-account-header w-100 py-2.5 rounded-pill fw-bold justify-content-center" id="btnConfirmOrder">
-          <i class="fa-solid fa-receipt"></i> Solicitar / Confirmar Pedido
-        </button>
+        <% if (typeof permitePrepedido !== 'undefined' && permitePrepedido) { %>
+          <button type="button" class="btn-account-header w-100 py-2.5 rounded-pill fw-bold justify-content-center" id="btnConfirmOrder">
+            <i class="fa-solid fa-receipt"></i> Solicitar / Confirmar Pedido
+          </button>
+        <% } %>
 
         <% if (typeof pedidoActivo !== 'undefined' && pedidoActivo) { %>
           <button type="button" class="btn btn-outline-warning w-100 py-2 rounded-pill fw-bold justify-content-center" id="btnSolicitarCierre">
@@ -722,7 +732,7 @@
           </button>
         <% } %>
 
-        <button type="button" class="btn btn-link text-white-50 btn-sm text-decoration-none" data-bs-dismiss="modal">Seguir pidiendo</button>
+        <button type="button" class="btn btn-link text-white-50 btn-sm text-decoration-none" data-bs-dismiss="modal">Seguir explorando</button>
       </div>
     </div>
   </div>
@@ -739,6 +749,7 @@
   // Datos inyectados desde Express / EJS
   const ID_MESA = "<%= id_mesa %>";
   const ID_PEDIDO_ACTIVO = "<%= (typeof pedidoActivo !== 'undefined' && pedidoActivo) ? pedidoActivo.id : '' %>";
+  const PERMITE_PREPEDIDO = <%= (typeof permitePrepedido !== 'undefined' && permitePrepedido) ? true : false %>;
   const MENU_RAW = <%- JSON.stringify(menu || []) %>;
   const CONSUMOS_RAW = <%- JSON.stringify(typeof consumos !== 'undefined' ? consumos : []) %>;
   
@@ -755,14 +766,12 @@
     return 'fa-utensils';
   }
 
-  // Transformación y agrupamiento del menú plano por categoría
   // Transformación y agrupamiento del menú por categoría
   function processMenuData(rawItems) {
     if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
 
     const catMap = {};
     rawItems.forEach(item => {
-      // Si categoria viene nula o vacía, le asigna 'General'
       const catName = (item.categoria && String(item.categoria).trim() !== '') 
         ? String(item.categoria).trim() 
         : 'General';
@@ -837,6 +846,15 @@
       ? `<img src="/uploads/${d.foto}" style="width:100%;height:100%;object-fit:cover;border-radius:16px;">`
       : `<i class="fa-solid fa-utensils"></i>`;
     
+    // Condicionar la botonera según si la configuración permite prepedidos
+    const actionArea = PERMITE_PREPEDIDO 
+      ? `<div class="qty-zone" id="qty-${d.id}">
+           <button class="add-btn" data-action="add" data-id="${d.id}">
+             <i class="fa-solid fa-plus"></i> Agregar
+           </button>
+         </div>`
+      : ``;
+
     return `
       <div class="dish-card" data-name="${(d.nombre || '').toLowerCase()}" data-id="${d.id}">
         <div class="dish-icon" data-action="view-detail" data-id="${d.id}" title="Ver detalle">
@@ -847,11 +865,7 @@
           <div class="dish-desc">${d.descripcion || ''}</div>
           <div class="dish-bottom">
             <span class="price">$${priceFormatted}</span>
-            <div class="qty-zone" id="qty-${d.id}">
-              <button class="add-btn" data-action="add" data-id="${d.id}">
-                <i class="fa-solid fa-plus"></i> Agregar
-              </button>
-            </div>
+            ${actionArea}
           </div>
         </div>
       </div>
@@ -892,44 +906,47 @@
     document.getElementById('btnAccountHeader').addEventListener('click', abrirCuentaModal);
     document.getElementById('btnViewCart').addEventListener('click', abrirCuentaModal);
 
-    document.getElementById('btnConfirmOrder').addEventListener('click', async () => {
-      const ids = Object.keys(cart);
-      if (ids.length === 0) {
-        showToast('Selecciona al menos un ítem');
-        return;
-      }
-
-      const items = ids.map(id => ({
-        id_platillo: id,
-        cantidad: cart[id],
-        notas_especiales: ''
-      }));
-
-      try {
-        const response = await fetch(`/cliente/agregar-a-preorden/${ID_MESA}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items })
-        });
-        const resData = await response.json();
-
-        if (resData.success) {
-          showToast(resData.message || 'Pre-pedido enviado correctamente');
-          ids.forEach(id => delete cart[id]);
-          ids.forEach(id => updateQtyZone(id));
-          updateCartBar();
-
-          const modalEl = document.getElementById('cuentaModal');
-          const modal = bootstrap.Modal.getInstance(modalEl);
-          if (modal) modal.hide();
-        } else {
-          showToast(resData.message || 'Error al procesar el pre-pedido');
+    const btnConfirm = document.getElementById('btnConfirmOrder');
+    if (btnConfirm) {
+      btnConfirm.addEventListener('click', async () => {
+        const ids = Object.keys(cart);
+        if (ids.length === 0) {
+          showToast('Selecciona al menos un ítem');
+          return;
         }
-      } catch (err) {
-        console.error(err);
-        showToast('Error de conexión al enviar la orden');
-      }
-    });
+
+        const items = ids.map(id => ({
+          id_platillo: id,
+          cantidad: cart[id],
+          notas_especiales: ''
+        }));
+
+        try {
+          const response = await fetch(`/cliente/agregar-a-preorden/${ID_MESA}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items })
+          });
+          const resData = await response.json();
+
+          if (resData.success) {
+            showToast(resData.message || 'Pre-pedido enviado correctamente');
+            ids.forEach(id => delete cart[id]);
+            ids.forEach(id => updateQtyZone(id));
+            updateCartBar();
+
+            const modalEl = document.getElementById('cuentaModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+          } else {
+            showToast(resData.message || 'Error al procesar el pre-pedido');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Error de conexión al enviar la orden');
+        }
+      });
+    }
 
     const btnCierre = document.getElementById('btnSolicitarCierre');
     if (btnCierre) {
@@ -988,12 +1005,14 @@
     document.getElementById('dishModalDesc').textContent = dish.descripcion || 'Sin descripción disponible para este platillo.';
 
     const btnAdd = document.getElementById('btnModalAddToCart');
-    btnAdd.onclick = () => {
-      addItem(dish.id);
-      const modalEl = document.getElementById('dishDetailModal');
-      const modal = bootstrap.Modal.getInstance(modalEl);
-      if (modal) modal.hide();
-    };
+    if (btnAdd) {
+      btnAdd.onclick = () => {
+        addItem(dish.id);
+        const modalEl = document.getElementById('dishDetailModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+      };
+    }
 
     const modal = new bootstrap.Modal(document.getElementById('dishDetailModal'));
     modal.show();
@@ -1008,18 +1027,21 @@
   }
 
   function addItem(id) {
+    if (!PERMITE_PREPEDIDO) return;
     cart[id] = (cart[id] || 0) + 1;
     updateQtyZone(id);
     updateCartBar();
   }
 
   function incItem(id) {
+    if (!PERMITE_PREPEDIDO) return;
     cart[id]++;
     updateQtyZone(id);
     updateCartBar();
   }
 
   function decItem(id) {
+    if (!PERMITE_PREPEDIDO) return;
     cart[id]--;
     if (cart[id] <= 0) delete cart[id];
     updateQtyZone(id);
@@ -1027,6 +1049,7 @@
   }
 
   function updateQtyZone(id) {
+    if (!PERMITE_PREPEDIDO) return;
     const zone = document.getElementById('qty-' + id);
     if (!zone) return;
     const qty = cart[id] || 0;
@@ -1046,6 +1069,7 @@
   }
 
   function updateCartBar() {
+    if (!PERMITE_PREPEDIDO) return;
     const ids = Object.keys(cart);
     const totalItems = ids.reduce((s, id) => s + cart[id], 0);
     const totalPrice = ids.reduce((s, id) => {
@@ -1065,23 +1089,25 @@
     const container = document.getElementById('modalOrderList');
     const ids = Object.keys(cart);
     
-    if (ids.length === 0) {
-      container.innerHTML = `<p class="text-center text-white-50 py-2 m-0">No has seleccionado nuevos platos en este pedido.</p>`;
-    } else {
-      container.innerHTML = ids.map(id => {
-        const item = findDish(id);
-        if (!item) return '';
-        const subtotal = (cart[id] * parseFloat(item.precio)).toFixed(2);
-        return `
-          <div class="d-flex justify-content-between align-items-center py-1 fs-6">
-            <div>
-              <span class="fw-bold" style="color:var(--saffron-400);">${cart[id]}x</span> 
-              <span>${item.nombre}</span>
+    if (container) {
+      if (ids.length === 0) {
+        container.innerHTML = `<p class="text-center text-white-50 py-2 m-0">No has seleccionado nuevos platos en este pedido.</p>`;
+      } else {
+        container.innerHTML = ids.map(id => {
+          const item = findDish(id);
+          if (!item) return '';
+          const subtotal = (cart[id] * parseFloat(item.precio)).toFixed(2);
+          return `
+            <div class="d-flex justify-content-between align-items-center py-1 fs-6">
+              <div>
+                <span class="fw-bold" style="color:var(--saffron-400);">${cart[id]}x</span> 
+                <span>${item.nombre}</span>
+              </div>
+              <span class="fw-semibold">$${subtotal}</span>
             </div>
-            <span class="fw-semibold">$${subtotal}</span>
-          </div>
-        `;
-      }).join('');
+          `;
+        }).join('');
+      }
     }
 
     const totalCarrito = ids.reduce((s, id) => {

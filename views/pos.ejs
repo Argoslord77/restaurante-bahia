@@ -171,7 +171,7 @@
                             <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
                                  data-id="<%= platillo.id %>"
                                  data-name="<%= (platillo.nombre || '').toLowerCase() %>"
-                                 data-category="<%= (platillo.categoria || '').toLowerCase().trim() %>"
+                                 data-category="<%= String(platillo.nombre_categoria || platillo.categoria || '').toLowerCase().trim() %>"
                                  data-available="<%= esDisponible ? 'true' : 'false' %>">
                                 <div class="card dish-card h-100 bg-[#f8fafc] rounded-3xl shadow-xl overflow-hidden border border-slate-200/60 p-0 <%= !esDisponible ? 'out-of-stock' : '' %>">
                                     <div class="dish-img-wrapper">

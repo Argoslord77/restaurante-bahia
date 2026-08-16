@@ -37,7 +37,39 @@ const Setting = {
         } finally {
             connection.release();
         }
+    },
+
+    /**
+       * Actualiza el valor de una configuración si existe, 
+       * o inserta un nuevo registro si la clave no se encuentra registrada.
+       */
+  updateSetting: async (clave, valor) => {
+    try {
+      const sql = `
+        INSERT INTO configuraciones_sistema (clave, valor) 
+        VALUES (?, ?) 
+        ON DUPLICATE KEY UPDATE valor = VALUES(valor)
+      `;
+      
+      const [result] = await db.query(sql, [clave, valor]);
+      return result;
+    } catch (error) {
+      console.error('Error en settingModel.updateSetting:', error);
+      throw error;
     }
+  },
+
+    // Método para obtener un registro por su clave
+    getByKey: async (clave) => {
+        try {
+          const sql = `SELECT * FROM configuraciones_sistema WHERE clave = ? LIMIT 1`;
+          const [rows] = await db.query(sql, [clave]);
+          return rows.length > 0 ? rows[0] : null;
+        } catch (error) {
+          console.error('Error en settingModel.getByKey:', error);
+          throw error;
+        }
+    },
 };
 
 module.exports = Setting;
