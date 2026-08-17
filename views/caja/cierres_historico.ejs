@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= pageTitle || 'Histórico de Cierres y CxC - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                
+                <div class="flex-grow-1">
+                    <%- include('../includes/header', {
+                        encabezado_pagina: 'Finanzas / Histórico de Cierres y CxC', 
+                        desc_pagina: 'Auditoría de turnos cerrados y cobro retroactivo de facturas a crédito', 
+                        add_btn: false, 
+                        btn_label: "", 
+                        modal: ""
+                    }) %>
+
+                    <!-- TARJETAS DE MÉTRICAS GLOBALES ACUMULADAS -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="card card-custom shadow-sm border-0 h-100 p-3 bg-white">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <span class="text-secondary small fw-bold text-uppercase d-block mb-1">Turnos Cerrados</span>
+                                        <h4 class="fw-bold text-dark mb-0 font-monospace"><%= metricas.totalCierres %></h4>
+                                        <small class="text-muted fs-8">Instantáneas guardadas</small>
+                                    </div>
+                                    <div class="rounded-circle bg-dark-subtle p-3 text-dark">
+                                        <i class="fa-solid fa-folder-closed fs-4"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="card card-custom shadow-sm border-0 h-100 p-3 bg-white">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <span class="text-secondary small fw-bold text-uppercase d-block mb-1">Total Cobrado</span>
+                                        <h4 class="fw-bold text-success mb-0 font-monospace">$<%= metricas.totalRecaudado.toFixed(2) %></h4>
+                                        <small class="text-muted fs-8">Ingreso neto histórico</small>
+                                    </div>
+                                    <div class="rounded-circle bg-success-subtle p-3 text-success">
+                                        <i class="fa-solid fa-money-bill-trend-up fs-4"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="card card-custom shadow-sm border-0 h-100 p-3 bg-white">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <span class="text-secondary small fw-bold text-uppercase d-block mb-1">CxC Pendientes</span>
+                                        <h4 class="fw-bold text-primary mb-0 font-monospace">$<%= metricas.totalCxCPendiente.toFixed(2) %></h4>
+                                        <small class="text-muted fs-8"><%= metricas.cantidadFacturasPendientes %> facturas por liquidar</small>
+                                    </div>
+                                    <div class="rounded-circle bg-primary-subtle p-3 text-primary">
+                                        <i class="fa-solid fa-file-invoice-dollar fs-4"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="card card-custom shadow-sm border-0 h-100 p-3 bg-white">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <span class="text-secondary small fw-bold text-uppercase d-block mb-1">Turno Activo</span>
+                                        <h4 class="fw-bold text-dark mb-0 font-monospace">
+                                            <%= turnoActivo ? `#${turnoActivo.id}` : 'Ninguno' %>
+                                        </h4>
+                                        <small class="<%= turnoActivo ? 'text-success' : 'text-danger' %> fs-8 fw-bold">
+                                            <%= turnoActivo ? 'Listo para recibir cobros' : 'Sin turno abierto' %>
+                                        </small>
+                                    </div>
+                                    <div class="rounded-circle <%= turnoActivo ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' %> p-3">
+                                        <i class="fa-solid fa-cash-register fs-4"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PESTAÑAS: 1) HISTORIAL DE CIERRES | 2) FACTURAS POR COBRAR RETROACTIVAS -->
+                    <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
+                        <div class="card-header bg-white pt-3 px-4 border-0">
+                            <ul class="nav nav-tabs card-header-tabs" id="tabsHistorico" role="tablist">
+                                <li class="nav-item">
+                                    <button class="nav-link active fw-bold text-dark" id="tab-cierres-btn" data-bs-toggle="tab" data-bs-target="#tab-cierres" type="button">
+                                        <i class="fa-solid fa-clock-rotate-left me-1.5 text-primary"></i> Instantáneas de Cierres (<%= cierres.length %>)
+                                    </button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link fw-bold text-dark" id="tab-facturas-btn" data-bs-toggle="tab" data-bs-target="#tab-facturas" type="button">
+                                        <i class="fa-solid fa-file-invoice-dollar me-1.5 text-success"></i> Facturas por Cobrar Retroactivas
+                                        <span class="badge bg-danger rounded-pill ms-1.5"><%= facturasPendientes.length %></span>
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="tab-content p-0" id="tabsHistoricoContent">
+                            
+                            <!-- PESTAÑA 1: HISTORIAL DE CIERRES -->
+                            <div class="tab-pane fade show active" id="tab-cierres" role="tabpanel">
+                                <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <span class="text-secondary small fw-bold">Registro inmutable de turnos de servicio finalizados</span>
+                                    <input type="text" id="filtroCierres" class="form-control form-control-sm" placeholder="Buscar por fecha, responsable..." style="width: 240px;">
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" id="tablaCierresHistorico">
+                                        <thead class="table-custom-thead text-uppercase fs-7">
+                                            <tr>
+                                                <th class="ps-4 py-3" style="width: 80px;">Turno</th>
+                                                <th class="py-3">Fecha Cierre</th>
+                                                <th class="py-3">Responsables</th>
+                                                <th class="py-3">Cobrado en Caja</th>
+                                                <th class="py-3">Real vs Esperado</th>
+                                                <th class="py-3">Balance</th>
+                                                <th class="text-center py-3" style="width: 110px;">Instantánea</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <% if (cierres.length === 0) { %>
+                                                <tr><td colspan="7" class="text-center py-5 text-muted">No hay registros de cierres guardados aún.</td></tr>
+                                            <% } else { %>
+                                                <% cierres.forEach(c => { %>
+                                                    <tr>
+                                                        <td class="ps-4 font-monospace fw-bold text-dark">#<%= c.turno_servicio_id %></td>
+                                                        <td>
+                                                            <div class="fw-semibold text-dark fs-7"><%= new Date(c.fecha_cierre).toLocaleDateString() %></div>
+                                                            <div class="text-secondary fs-8"><%= new Date(c.fecha_cierre).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) %></div>
+                                                        </td>
+                                                        <td class="small">
+                                                            <span class="d-block text-dark fw-medium"><i class="fa-solid fa-user-lock text-danger me-1 fs-8"></i>Cerró: <%= c.usuario_cierre || 'N/A' %></span>
+                                                            <span class="text-muted fs-8"><i class="fa-solid fa-door-open text-primary me-1 fs-8"></i>Abrió: <%= c.usuario_apertura || 'N/A' %></span>
+                                                        </td>
+                                                        <td class="font-monospace fw-bold text-success fs-7">
+                                                            $<%= parseFloat(c.total_cobrado_caja).toFixed(2) %>
+                                                            <% if (parseFloat(c.total_propinas) > 0) { %>
+                                                                <small class="d-block text-muted fs-8">+ Prop: $<%= parseFloat(c.total_propinas).toFixed(2) %></small>
+                                                            <% } %>
+                                                        </td>
+                                                        <td class="small font-monospace">
+                                                            <div class="text-dark">Real: <strong>$<%= parseFloat(c.monto_real_entregado).toFixed(2) %></strong></div>
+                                                            <div class="text-muted fs-8">Esp: $<%= parseFloat(c.monto_esperado_caja).toFixed(2) %></div>
+                                                        </td>
+                                                        <td>
+                                                            <% 
+                                                                let badgeClass = 'bg-success text-white';
+                                                                let balanceLabel = 'Cuadrado';
+                                                                if (c.balance_estado === 'faltante') {
+                                                                    badgeClass = 'bg-danger text-white fw-bold';
+                                                                    balanceLabel = 'Faltante';
+                                                                } else if (c.balance_estado === 'sobrante') {
+                                                                    badgeClass = 'bg-info text-dark fw-bold';
+                                                                    balanceLabel = 'Sobrante';
+                                                                }
+                                                            %>
+                                                            <span class="badge <%= badgeClass %> px-2.5 py-1 rounded-pill fs-8 text-uppercase">
+                                                                <i class="fa-solid fa-scale-balanced me-1"></i><%= balanceLabel %>
+                                                            </span>
+                                                            <% if (parseFloat(c.diferencia) !== 0) { %>
+                                                                <span class="d-block font-monospace fs-8 mt-0.5 <%= parseFloat(c.diferencia) > 0 ? 'text-info' : 'text-danger' %>">
+                                                                    <%= parseFloat(c.diferencia) > 0 ? '+' : '' %>$<%= parseFloat(c.diferencia).toFixed(2) %>
+                                                                </span>
+                                                            <% } %>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <button class="btn btn-sm btn-outline-dark border-0 btn-ver-snapshot" 
+                                                                    data-id="<%= c.id %>"
+                                                                    title="Ver Instantánea Completa">
+                                                                <i class="fa-solid fa-magnifying-glass-chart fs-6"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                <% }) %>
+                                            <% } %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- PESTAÑA 2: CUENTAS POR COBRAR / FACTURAS RETROACTIVAS -->
+                            <div class="tab-pane fade" id="tab-facturas" role="tabpanel">
+                                <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <span class="text-secondary small fw-bold">Comandas históricas a crédito pendientes por cobrar</span>
+                                    <input type="text" id="filtroFacturas" class="form-control form-control-sm" placeholder="Buscar por comanda, mesa..." style="width: 240px;">
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" id="tablaFacturasHistorico">
+                                        <thead class="table-custom-thead text-uppercase fs-7">
+                                            <tr>
+                                                <th class="ps-4 py-3" style="width: 90px;">Comanda</th>
+                                                <th class="py-3">Fecha y Turno Origen</th>
+                                                <th class="py-3">Mesa Asignada</th>
+                                                <th class="py-3">Atendido Por</th>
+                                                <th class="py-3">Monto a Cobrar</th>
+                                                <th class="text-center py-3" style="width: 200px;">Acción de Cobro</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <% if (facturasPendientes.length === 0) { %>
+                                                <tr>
+                                                    <td colspan="6" class="text-center py-5 text-success fw-bold">
+                                                        <i class="fa-solid fa-circle-check fs-3 d-block mb-2 text-success"></i>
+                                                        ¡Excelente! No hay facturas ni cuentas pendientes por cobrar.
+                                                    </td>
+                                                </tr>
+                                            <% } else { %>
+                                                <% facturasPendientes.forEach(f => { %>
+                                                    <tr>
+                                                        <td class="ps-4 font-monospace fw-bold text-dark">#<%= f.id %></td>
+                                                        <td>
+                                                            <div class="fw-semibold text-dark fs-7"><%= new Date(f.fecha_pedido).toLocaleDateString() %></div>
+                                                            <div class="text-secondary fs-8">Turno Origen <strong>#<%= f.turno_servicio_id %></strong> (<%= new Date(f.fecha_turno).toLocaleDateString() %>)</div>
+                                                        </td>
+                                                        <td class="fw-semibold text-dark">
+                                                            <span class="badge bg-light text-dark border px-2.5 py-1 rounded-pill">
+                                                                <i class="fa-solid fa-table me-1 text-secondary"></i><%= f.nombre_mesa || 'Barra' %>
+                                                            </span>
+                                                        </td>
+                                                        <td class="text-secondary small"><%= f.mesero || 'Sin mesero' %></td>
+                                                        <td class="font-monospace fw-bold text-primary fs-6">$<%= parseFloat(f.total).toFixed(2) %></td>
+                                                        <td class="text-center">
+                                                            <button class="btn btn-sm btn-success px-3.5 py-1.5 rounded-pill fw-bold shadow-xs d-inline-flex align-items-center gap-1.5 btn-cobrar-factura-retroactiva"
+                                                                    data-id="<%= f.id %>"
+                                                                    data-total="<%= parseFloat(f.total).toFixed(2) %>"
+                                                                    data-turno="<%= f.turno_servicio_id %>">
+                                                                <i class="fa-solid fa-hand-holding-dollar"></i> Cobrar a Caja
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                <% }) %>
+                                            <% } %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-auto">
+                    <%- include('../includes/footer') %>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL PARA MOSTRAR LA INSTANTÁNEA COMPLETA -->
+    <div class="modal fade" id="modalSnapshotCierre" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white py-3">
+                    <h5 class="modal-title fw-bold fs-6">
+                        <i class="fa-solid fa-camera text-warning me-2"></i>Instantánea Financiera - Turno #<span id="snapTurnoId"></span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-4">
+                        <div class="col-md-6 border-end">
+                            <h6 class="fw-bold text-primary border-bottom pb-2 mb-3">
+                                <i class="fa-solid fa-scale-balanced me-2"></i>Cuadre y Auditoría de Caja
+                            </h6>
+                            <p class="mb-1 text-secondary small"><strong>Apertura:</strong> <span id="snapFechaAp" class="text-dark"></span></p>
+                            <p class="mb-2 text-secondary small"><strong>Cierre:</strong> <span id="snapFechaCr" class="text-dark"></span></p>
+                            <p class="mb-2 text-secondary small"><strong>Fondo Inicial:</strong> <span class="font-monospace fw-bold text-dark" id="snapFondoAp"></span></p>
+                            <hr class="my-2 text-muted">
+                            <p class="mb-1 text-secondary small"><strong>Esperado en Caja:</strong> <span class="font-monospace fw-bold text-dark" id="snapMontoEsp"></span></p>
+                            <p class="mb-1 text-secondary small"><strong>Entregado Real:</strong> <span class="font-monospace fw-bold text-dark" id="snapMontoReal"></span></p>
+                            <p class="mb-2 text-secondary small"><strong>Diferencia:</strong> <span class="font-monospace fw-bold" id="snapDif"></span></p>
+                            <p class="mb-3 text-secondary small"><strong>Estado Cuadre:</strong> <span class="badge text-uppercase fs-8" id="snapBadgeBalance"></span></p>
+                            
+                            <div class="p-2.5 bg-light rounded-3 border small">
+                                <strong class="text-secondary">Observaciones registradas:</strong>
+                                <p class="fst-italic text-muted mb-0 mt-1" id="snapObs">Sin notas.</p>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <h6 class="fw-bold text-success border-bottom pb-2 mb-3">
+                                <i class="fa-solid fa-coins me-2 text-warning"></i>Desglose de Ingresos y Monedas
+                            </h6>
+                            
+                            <div class="bg-light p-3 rounded-3 border mb-3 space-y-1 text-secondary small">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Cobrado en Caja:</span>
+                                    <strong class="text-success font-monospace" id="snapTotalCobrado">$0.00</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Cuentas por Cobrar (CxC):</span>
+                                    <strong class="text-primary font-monospace" id="snapTotalCxC">$0.00</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Pendientes de Pago:</span>
+                                    <strong class="text-warning-emphasis font-monospace" id="snapTotalPendiente">$0.00</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Cortesías (100%):</span>
+                                    <strong class="text-secondary font-monospace" id="snapTotalCortesia">$0.00</strong>
+                                </div>
+                                <div class="d-flex justify-content-between pt-1 border-top">
+                                    <span>Propinas Registradas:</span>
+                                    <strong class="text-dark font-monospace" id="snapTotalPropina">$0.00</strong>
+                                </div>
+                            </div>
+
+                            <h6 class="fw-bold text-dark fs-7 mb-2">Monedas Recaudadas en el Turno:</h6>
+                            <div id="snapDesgloseMonedas" class="d-flex flex-wrap gap-1.5"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top-0 fs-8 py-2">
+                    <span class="text-muted me-auto"><i class="fa-solid fa-lock me-1"></i>Instantánea inmutable almacenada en base de datos.</span>
+                    <button type="button" class="btn btn-secondary btn-sm px-4" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Libs JS -->
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        const modalSnapshot = new bootstrap.Modal(document.getElementById('modalSnapshotCierre'));
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Buscadores en vivo
+            document.getElementById('filtroCierres')?.addEventListener('input', function() {
+                const term = this.value.toLowerCase().trim();
+                document.querySelectorAll('#tablaCierresHistorico tbody tr').forEach(tr => {
+                    tr.style.display = tr.textContent.toLowerCase().includes(term) ? '' : 'none';
+                });
+            });
+
+            document.getElementById('filtroFacturas')?.addEventListener('input', function() {
+                const term = this.value.toLowerCase().trim();
+                document.querySelectorAll('#tablaFacturasHistorico tbody tr').forEach(tr => {
+                    tr.style.display = tr.textContent.toLowerCase().includes(term) ? '' : 'none';
+                });
+            });
+
+            // Abrir Modal de Instantánea
+            document.addEventListener('click', async (e) => {
+                const btnSnapshot = e.target.closest('.btn-ver-snapshot');
+                if (btnSnapshot) {
+                    const idCierre = btnSnapshot.getAttribute('data-id');
+
+                    try {
+                        const res = await fetch(`/admin/api/cierres-historico/${idCierre}`);
+                        const data = await res.json();
+
+                        if (data.success && data.cierre) {
+                            const c = data.cierre;
+
+                            document.getElementById('snapTurnoId').textContent = c.turno_servicio_id;
+                            document.getElementById('snapFechaAp').textContent = new Date(c.fecha_apertura).toLocaleString();
+                            document.getElementById('snapFechaCr').textContent = new Date(c.fecha_cierre).toLocaleString();
+                            document.getElementById('snapFondoAp').textContent = `$${parseFloat(c.fondo_apertura).toFixed(2)}`;
+                            document.getElementById('snapMontoEsp').textContent = `$${parseFloat(c.monto_esperado_caja).toFixed(2)}`;
+                            document.getElementById('snapMontoReal').textContent = `$${parseFloat(c.monto_real_entregado).toFixed(2)}`;
+                            
+                            const vDif = parseFloat(c.diferencia);
+                            const snapDif = document.getElementById('snapDif');
+                            snapDif.textContent = `${vDif >= 0 ? '+' : ''}$${vDif.toFixed(2)}`;
+                            snapDif.className = `font-monospace fw-bold ${vDif === 0 ? 'text-success' : (vDif > 0 ? 'text-info' : 'text-danger')}`;
+
+                            const badgeBal = document.getElementById('snapBadgeBalance');
+                            badgeBal.textContent = c.balance_estado;
+                            badgeBal.className = `badge text-uppercase fs-8 ${c.balance_estado === 'cuadrado' ? 'bg-success text-white' : (c.balance_estado === 'sobrante' ? 'bg-info text-dark' : 'bg-danger text-white')}`;
+
+                            document.getElementById('snapObs').textContent = c.observaciones || 'Sin notas registradas.';
+                            
+                            document.getElementById('snapTotalCobrado').textContent = `$${parseFloat(c.total_cobrado_caja).toFixed(2)}`;
+                            document.getElementById('snapTotalCxC').textContent = `$${parseFloat(c.total_cxc_facturas).toFixed(2)}`;
+                            document.getElementById('snapTotalPendiente').textContent = `$${parseFloat(c.total_pendiente_pago).toFixed(2)}`;
+                            document.getElementById('snapTotalCortesia').textContent = `$${parseFloat(c.total_cortesias).toFixed(2)}`;
+                            document.getElementById('snapTotalPropina').textContent = `$${parseFloat(c.total_propinas).toFixed(2)}`;
+
+                            const contMonedas = document.getElementById('snapDesgloseMonedas');
+                            if (c.desglose_monedas && c.desglose_monedas.length > 0) {
+                                contMonedas.innerHTML = c.desglose_monedas.map(m => `
+                                    <span class="badge bg-white text-dark border px-2.5 py-1.5 rounded-pill font-monospace small shadow-xs">
+                                        <strong>${m.codigo_moneda}:</strong> ${m.simbolo}${parseFloat(m.total_origen).toFixed(2)} 
+                                        <small class="text-muted">(Eq. $${parseFloat(m.total_local).toFixed(2)})</small>
+                                    </span>
+                                `).join('');
+                            } else {
+                                contMonedas.innerHTML = `<span class="text-muted fst-italic fs-8">Sin pagos multimoneda registrados.</span>`;
+                            }
+
+                            modalSnapshot.show();
+                        } else {
+                            Swal.fire('Error', 'No se pudo cargar la instantánea.', 'error');
+                        }
+                    } catch (err) {
+                        Swal.fire('Error de Red', 'Fallo al consultar la instantánea.', 'error');
+                    }
+                }
+            });
+
+            // Acción para Cobrar Facturas Retroactivas
+            document.addEventListener('click', async (e) => {
+                const btnCobro = e.target.closest('.btn-cobrar-factura-retroactiva');
+                if (btnCobro) {
+                    const idPedido = btnCobro.getAttribute('data-id');
+                    const totalPagar = btnCobro.getAttribute('data-total');
+                    const turnoOrigen = btnCobro.getAttribute('data-turno');
+
+                    let monedasTurno = [];
+                    try {
+                        const resM = await fetch('/api/pos/monedas-turno-activo');
+                        const dataM = await resM.json();
+                        if (dataM.success) monedasTurno = dataM.monedas || [];
+                    } catch (err) {}
+
+                    const { value: formValues } = await Swal.fire({
+                        title: `COBRO DE FACTURA RETROACTIVA`,
+                        width: '540px',
+                        html: `
+                            <div class="text-start p-2 space-y-3">
+                                <div class="bg-light p-3 rounded-3 border mb-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-secondary small">Comanda: <b>#${idPedido}</b></span>
+                                        <span class="text-secondary small">Turno Origen: <b>#${turnoOrigen}</b></span>
+                                    </div>
+                                    <div class="mt-1">
+                                        <span class="text-dark fw-bold fs-6">Saldo Total a Ingresar: <span class="text-primary font-monospace">$${totalPagar}</span></span>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label text-secondary small fw-bold">Método de Cobro Recibido</label>
+                                    <select id="swal-retro-metodo" class="form-select form-select-sm font-bold">
+                                        <option value="efectivo">Efectivo</option>
+                                        <option value="transferencia">Transferencia Bancaria</option>
+                                        <option value="tarjeta">Tarjeta</option>
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label text-secondary small fw-bold">Moneda de Pago</label>
+                                    <select id="swal-retro-moneda" class="form-select form-select-sm font-bold">
+                                        ${monedasTurno.map(m => `<option value="${m.moneda_id}" data-factor="${m.factor_cambio}">${m.codigo} (${m.simbolo}) - Tasa: ${parseFloat(m.factor_cambio).toFixed(2)}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label text-secondary small fw-bold">Referencia / Comprobante</label>
+                                    <input type="text" id="swal-retro-ref" class="form-control form-control-sm" placeholder="Ej: Factura liquidada por empresa / Transf #9876">
+                                </div>
+                            </div>
+                        `,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Confirmar e Ingresar a Caja',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#10b981',
+                        cancelButtonColor: '#6c757d',
+                        preConfirm: () => {
+                            const selM = document.getElementById('swal-retro-moneda');
+                            const opt = selM?.options[selM.selectedIndex];
+                            return {
+                                metodo_pago: document.getElementById('swal-retro-metodo').value,
+                                moneda_id: parseInt(selM?.value || 1),
+                                factor_cambio: parseFloat(opt?.dataset?.factor || 1.0),
+                                referencia: document.getElementById('swal-retro-ref').value || 'LIQUIDACIÓN CxC RETROACTIVA'
+                            };
+                        }
+                    });
+
+                    if (formValues) {
+                        Swal.fire({ title: 'Asentando cobro...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+                        try {
+                            const res = await fetch(`/admin/cierre-dia/liquidar-cuenta/${idPedido}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(formValues)
+                            });
+                            const data = await res.json();
+
+                            if (data.success) {
+                                Swal.fire({
+                                    title: '¡Cobro Liquidado!',
+                                    text: data.message,
+                                    icon: 'success',
+                                    timer: 2000,
+                                    showConfirmButton: false
+                                }).then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', data.message || 'No se pudo asentar el cobro.', 'error');
+                            }
+                        } catch (err) {
+                            Swal.fire('Error de Red', 'Fallo en la comunicación con el servidor.', 'error');
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

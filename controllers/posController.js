@@ -349,14 +349,22 @@ exports.viewPrecuenta = async (req, res) => {
 
 /**
  * Procesa el cobro de la orden admitiendo:
- * 1. Cobro por Factura (CxC / Crédito).
- * 2. Cortesías.
- * 3. Pendiente de Pago (Cierra comanda, asienta saldo pendiente y libera la mesa).
- * 4. Pagos Mixtos y Multimoneda con conversión automática a moneda local.
+ * 1. Descuentos o Aumentos (Recargos).
+ * 2. Desglose detallado de pagos multimoneda.
+ * 3. Cobro por Factura (CxC / Crédito), Cortesías o Pendiente de Pago.
+ * 4. Liberación garantizada de la mesa asignada.
  */
 exports.procesarCobroAvanzado = async (req, res) => {
     const { id_pedido } = req.params;
-    const { pagos, es_factura_credito, es_cortesia, es_pendiente_pago } = req.body; 
+    const { 
+        pagos, 
+        es_factura_credito, 
+        es_cortesia, 
+        es_pendiente_pago,
+        descuento = 0,
+        recargo = 0,
+        motivo_ajuste = null
+    } = req.body; 
     
     const id_cajero = req.session?.user?.id || req.user?.id;
 
@@ -392,17 +400,25 @@ exports.procesarCobroAvanzado = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Este pedido ya fue cobrado o cerrado previamente.' });
         }
 
-        // 2. Recalcular total real neto directamente desde la BD (excluyendo ítems cancelados)
+        // 2. Recalcular subtotal real neto directamente desde la BD (excluyendo ítems cancelados)
         const [filasSubtotal] = await connection.query(`
-            SELECT COALESCE(SUM(cantidad * precio_unitario), 0) AS total_real
+            SELECT COALESCE(SUM(cantidad * precio_unitario), 0) AS subtotal_real
             FROM detalles_pedido
             WHERE id_pedido = ? AND estado_item != ?
         `, [id_pedido, STATUS.ITEM.CANCELADO]);
 
-        const totalPagar = parseFloat(filasSubtotal[0].total_real);
+        const subtotal = parseFloat(filasSubtotal[0].subtotal_real || 0);
+        const impuesto = subtotal * 0.10; // 10% de impuesto
+        
+        const montoDescuento = Math.max(0, parseFloat(descuento) || 0);
+        const montoRecargo = Math.max(0, parseFloat(recargo) || 0);
+        
+        // Total a pagar neto con impuestos, descuentos y recargos
+        let totalPagar = Math.max(0, (subtotal + impuesto) - montoDescuento + montoRecargo);
 
         let nuevo_estado_pago = 'pagado';
         let propina = 0;
+        let desgloseMonedas = {};
 
         // -------------------------------------------------------------------------
         // OPCIÓN A: COBRO POR FACTURA (Cuentas por Cobrar / Crédito)
@@ -413,15 +429,16 @@ exports.procesarCobroAvanzado = async (req, res) => {
             await connection.query(`
                 INSERT INTO pagos_pedido 
                 (pedido_id, metodo_pago, moneda_id, factor_cambio_aplicado, monto_moneda_origen, monto_equivalente_local, referencia_transaccion)
-                VALUES (?, 'factura', NULL, 1.0000, ?, ?, 'CRÉDITO / PENDIENTE FACTURACIÓN')
-            `, [id_pedido, totalPagar, totalPagar]);
+                VALUES (?, 'factura', NULL, 1.0000, ?, ?, ?)
+            `, [id_pedido, totalPagar, totalPagar, `CRÉDITO / FACTURACIÓN ${motivo_ajuste ? '| ' + motivo_ajuste : ''}`]);
 
         } 
         // -------------------------------------------------------------------------
-        // OPCIÓN B: CORTESÍA
+        // OPCIÓN B: CORTESÍA (100% Descuento)
         // -------------------------------------------------------------------------
         else if (es_cortesia) {
             nuevo_estado_pago = 'cortesia';
+            totalPagar = 0;
         } 
         // -------------------------------------------------------------------------
         // OPCIÓN C: PENDIENTE DE PAGO (Cerrar orden y liberar mesa)
@@ -436,7 +453,7 @@ exports.procesarCobroAvanzado = async (req, res) => {
             `, [id_pedido, totalPagar, totalPagar]);
         } 
         // -------------------------------------------------------------------------
-        // OPCIÓN D: PAGOS MIXTOS Y MULTIMONEDA
+        // OPCIÓN D: PAGOS MIXTOS Y MULTIMONEDA CON DESGLOSE
         // -------------------------------------------------------------------------
         else {
             if (!pagos || !Array.isArray(pagos) || pagos.length === 0) {
@@ -452,12 +469,25 @@ exports.procesarCobroAvanzado = async (req, res) => {
             for (const pago of pagos) {
                 const factorCambio = parseFloat(pago.factor_cambio_aplicado || 1.0000);
                 const montoOrigen = parseFloat(pago.monto_moneda_origen || 0);
+                const codigoMoneda = pago.codigo_moneda || 'LOCAL';
                 
                 const montoLocal = pago.monto_equivalente_local 
                     ? parseFloat(pago.monto_equivalente_local) 
                     : (montoOrigen * factorCambio);
 
                 totalRecibidoLocal += montoLocal;
+
+                // Desglose por moneda
+                if (!desgloseMonedas[codigoMoneda]) {
+                    desgloseMonedas[codigoMoneda] = {
+                        codigo: codigoMoneda,
+                        simbolo: pago.simbolo || '$',
+                        total_origen: 0,
+                        total_local: 0
+                    };
+                }
+                desgloseMonedas[codigoMoneda].total_origen += montoOrigen;
+                desgloseMonedas[codigoMoneda].total_local += montoLocal;
 
                 await connection.query(`
                     INSERT INTO pagos_pedido 
@@ -489,8 +519,9 @@ exports.procesarCobroAvanzado = async (req, res) => {
         // 3. Actualizar la cabecera de 'pedidos'
         await connection.query(`
             UPDATE pedidos 
-            SET total = ?,
-                subtotal = ?,
+            SET subtotal = ?,
+                impuesto = ?,
+                total = ?,
                 estado_pedido = ?,
                 estado_pago = ?,
                 propina = ?,
@@ -498,22 +529,26 @@ exports.procesarCobroAvanzado = async (req, res) => {
                 fecha_cierre = NOW()
             WHERE id = ?
         `, [
+            subtotal,
+            impuesto,
             totalPagar, 
-            totalPagar, 
-            STATUS.PEDIDO.ENTREGADO || 'entregado', 
+            STATUS.PEDIDO?.ENTREGADO || 'entregado', 
             nuevo_estado_pago, 
             propina, 
             id_cajero, 
             id_pedido
         ]);
 
-        // 4. Liberar la mesa asignada
+        // 4. Liberar la mesa asignada inmediatamente y limpiar pre-pedidos huérfanos
         if (pedido.id_mesa) {
             await connection.query(`
                 UPDATE mesas 
-                SET estado = ? 
+                SET estado = 'libre' 
                 WHERE id = ?
-            `, [STATUS.MESA.LIBRE || 'libre', pedido.id_mesa]);
+            `, [pedido.id_mesa]);
+
+            // Limpieza de pre-pedidos de la mesa
+            await connection.query(`DELETE FROM pre_pedidos WHERE id_mesa = ?`, [pedido.id_mesa]);
         }
 
         await connection.commit();
@@ -522,7 +557,7 @@ exports.procesarCobroAvanzado = async (req, res) => {
         if (nuevo_estado_pago === 'facturado') {
             mensaje = 'Orden enviada a Facturación / CxC con éxito.';
         } else if (nuevo_estado_pago === 'cortesia') {
-            mensaje = 'Orden cerrada como cortesía.';
+            mensaje = 'Orden cerrada como cortesía (100% descuento).';
         } else if (nuevo_estado_pago === 'pendiente_pago') {
             mensaje = 'Orden cerrada como Pendiente de Pago. Mesa liberada con éxito.';
         }
@@ -531,8 +566,13 @@ exports.procesarCobroAvanzado = async (req, res) => {
             success: true,
             message: mensaje,
             estado_pago: nuevo_estado_pago,
+            subtotal,
+            impuesto,
+            descuento: montoDescuento,
+            recargo: montoRecargo,
             total_cobrado: totalPagar,
-            propina_registrada: propina
+            propina_registrada: propina,
+            desglose_monedas: Object.values(desgloseMonedas)
         });
 
     } catch (error) {

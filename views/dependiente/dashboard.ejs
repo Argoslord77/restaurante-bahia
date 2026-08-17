@@ -42,7 +42,7 @@
 
         /* --- CONTENEDOR CON ALTO LIMITADO Y DESAPILAMIENTO TRADICIONAL --- */
         .monitor-grid-container {
-            max-height: 70vh; 
+            max-height: 75vh; 
             overflow-y: auto;
             padding-right: 4px; 
         }
@@ -126,11 +126,10 @@
             margin-bottom: 4px;
         }
 
-        /* --- TAMAÑO DE TEXTO INCREMENTADO PARA CAPACIDAD Y UBICACIÓN --- */
         .monitor-footer-info {
             font-family: sans-serif;
-            font-size: 13px; /* Aumentado de 11px a 13px para mayor claridad */
-            color: #4b5563; /* Un tono ligeramente más oscuro para mejorar contraste */
+            font-size: 13px;
+            color: #4b5563;
             margin-top: 10px;
             padding-top: 8px;
             border-top: 1px dashed #e5e7eb;
@@ -164,71 +163,6 @@
         }
         .btn-monitor-pendiente i { color: #ffffff !important; }
         .btn-monitor-pendiente:hover { background-color: #d97706 !important; }
-
-        /* --- ESCÁNER QR --- */
-        #reader {
-            background: #ffffff !important; 
-            border: none !important;
-            padding: 0 !important;
-        }
-        #reader__scan_region {
-            background-color: #0f172a !important; 
-            border-radius: 12px !important;
-            overflow: hidden !important;
-        }
-        #reader__scan_region video {
-            width: 100% !important;
-            height: auto !important;
-            object-fit: cover !important;
-            border-radius: 12px !important;
-        }
-        #html5-qrcode-select-camera {
-            padding: 0.5rem 2rem 0.5rem 1rem;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: #475569;
-            background-color: #f1f5f9;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            width: 100%;
-            margin-bottom: 1rem;
-        }
-        #html5-qrcode-button-camera-start,
-        #html5-qrcode-button-camera-stop {
-            font-size: 0.8rem !important;
-            font-weight: 700 !important;
-            padding: 0.6rem 1.5rem !important;
-            border-radius: 10px !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.5px !important;
-            width: 100%;
-            margin-top: 5px;
-        }
-        #html5-qrcode-button-camera-start {
-            background-color: var(--bahia-dark) !important;
-            border: none !important;
-            color: #ffffff !important;
-        }
-        #html5-qrcode-button-camera-stop {
-            background-color: #fee2e2 !important;
-            color: #ef4444 !important;
-            border: 1px solid #fecaca !important;
-        }
-        .scanner-laser {
-            width: 100%;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, #f59e0b, transparent);
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 4;
-            box-shadow: 0px 0px 12px #f59e0b;
-            animation: scanningLaser 2s infinite ease-in-out;
-        }
-        @keyframes scanningLaser {
-            0%, 100% { top: 5%; opacity: 0.3; }
-            50% { top: 95%; opacity: 1; }
-        }
     </style>
 </head>
 <body>
@@ -250,7 +184,7 @@
         </div>
     </nav>
 
-    <div class="container py-4 px-3 px-md-4">
+    <div class="container-fluid py-4 px-3 px-md-5">
         <% if (locals.success_msg && success_msg.length > 0) { %>
             <div class="alert alert-success border-0 shadow-sm rounded-3 p-3 mb-4 d-flex align-items-center" role="alert">
                 <i class="fa-solid fa-circle-check fs-5 me-3 text-success"></i>
@@ -260,21 +194,21 @@
         <% } %>
 
         <div class="row g-4">
-            <!-- Sección Salón Principal -->
-            <div class="col-lg-8">
+            <!-- Sección Salón de Mesas (Ocupa el 100% del ancho) -->
+            <div class="col-12">
                 <div class="card panel-container border-0 mb-4">
                     <div class="card-header bg-white py-4 px-4 border-0 d-flex align-items-center justify-content-between flex-wrap gap-2">
                         <h5 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
-                            <i class="fa-solid fa-map text-secondary fs-5"></i>Salón Principal
+                            <i class="fa-solid fa-map text-secondary fs-5"></i>Salón de Mesas Asignadas
                         </h5>
                         <div class="d-flex gap-2">
-                            <span class="badge text-dark bg-light border px-2 py-1.5 rounded-pill small fw-medium">
+                            <span class="badge text-dark bg-light border px-2.5 py-1.5 rounded-pill small fw-medium">
                                 <i class="fa-solid fa-circle text-success me-1 small"></i> Libres
                             </span>
-                            <span class="badge text-dark bg-light border px-2 py-1.5 rounded-pill small fw-medium">
+                            <span class="badge text-dark bg-light border px-2.5 py-1.5 rounded-pill small fw-medium">
                                 <i class="fa-solid fa-circle text-warning me-1 small"></i> Pendientes
                             </span>
-                            <span class="badge text-dark bg-light border px-2 py-1.5 rounded-pill small fw-medium">
+                            <span class="badge text-dark bg-light border px-2.5 py-1.5 rounded-pill small fw-medium">
                                 <i class="fa-solid fa-circle text-danger me-1 small"></i> Ocupadas
                             </span>
                         </div>
@@ -282,12 +216,11 @@
                     
                     <div class="card-body px-4 pb-4 pt-0">
                         <div class="monitor-grid-container">
-                            <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-3 g-3">
+                            <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-4 g-3">
                                 <% if (locals.mesas && mesas.length > 0) { %>
                                     <% mesas.forEach(mesa => { 
                                         let estadoMesa = 'Libre';
                                         if (mesa.id_pedido_activo) {
-                                            // Priorizar pedido activo sobre la columna estática mesa.estado
                                             estadoMesa = (mesa.estado_pedido === 'pendiente') ? 'Pendiente' : 'Ocupada';
                                         } else if (mesa.estado && mesa.estado.toLowerCase() !== 'libre') {
                                             estadoMesa = mesa.estado;
@@ -304,12 +237,12 @@
                                                 </div>
 
                                                 <div class="monitor-mesa-body">
-                                                    <div class="text-center my-2">
-                                                        <i class="fa-solid fa-utensils fa-xl monitor-mesa-icon"></i>
+                                                    <div class="text-center my-3">
+                                                        <i class="fa-solid fa-utensils fa-2xl monitor-mesa-icon"></i>
                                                     </div>
                                                     
                                                     <div class="monitor-footer-info">
-                                                        <span class="d-block"><i class="fa-solid fa-users me-1"></i> Cap: <%= mesa.capacidad %></span>
+                                                        <span class="d-block"><i class="fa-solid fa-users me-1"></i> Capacidad: <strong><%= mesa.capacidad %> personas</strong></span>
                                                         <span class="d-block mt-1 text-truncate"><i class="fa-solid fa-layer-group me-1"></i> <%= mesa.ubicacion || 'Salón Principal' %></span>
                                                     </div>
                                                 </div>
@@ -317,15 +250,15 @@
                                                 <div class="p-2.5 bg-white border-top">
                                                     <% if (!mesa.id_pedido_activo) { %>
                                                         <button class="btn-monitor btn-monitor-libre abrir-mesa-btn" data-mesa-id="<%= mesa.id %>">
-                                                            <i class="fa-solid fa-plus"></i> Abrir
+                                                            <i class="fa-solid fa-plus"></i> Abrir Mesa
                                                         </button>
                                                     <% } else if (estadoMesa === 'Pendiente') { %>
                                                         <a href="/pos/<%= mesa.id_pedido_activo %>" class="btn-monitor btn-monitor-pendiente text-decoration-none">
-                                                            <i class="fa-solid fa-bell"></i> Atender
+                                                            <i class="fa-solid fa-bell"></i> Atender Pedido
                                                         </a>
                                                     <% } else { %>
                                                         <a href="/pos/<%= mesa.id_pedido_activo %>" class="btn-monitor btn-monitor-ocupada text-decoration-none">
-                                                            <i class="fa-solid fa-file-invoice-dollar"></i> &Oacute;rden
+                                                            <i class="fa-solid fa-file-invoice-dollar"></i> Ver Orden
                                                         </a>
                                                     <% } %>
                                                 </div>
@@ -335,7 +268,7 @@
                                 <% } else { %>
                                     <div class="col-12 text-center py-5 text-muted">
                                         <i class="fa-solid fa-border-none fa-3x mb-3 text-neutral-300"></i>
-                                        <p class="fw-medium">No hay distribución de mesas configurada.</p>
+                                        <p class="fw-medium">No hay distribución de mesas configurada para el día de hoy.</p>
                                     </div>
                                 <% } %>
                             </div>
@@ -343,104 +276,9 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Panel Lateral: Escáner -->
-            <div class="col-lg-4">
-                <div class="card panel-container border-0 overflow-hidden mb-4">
-                    <div class="card-header bg-white p-4 d-flex align-items-center justify-content-between border-0">
-                        <h5 class="mb-0 fs-6 fw-bold text-dark d-flex align-items-center gap-2">
-                            <i class="fa-solid fa-camera text-secondary"></i> Autologin por QR
-                        </h5>
-                        <span id="scannerStatusBadge" class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2.5 py-1 fw-bold small">
-                            <i class="fa-solid fa-circle me-1" style="font-size: 6px;"></i> Apagado
-                        </span>
-                    </div>
-                    
-                    <div class="card-body px-4 pb-4 pt-0">
-                        <div id="qrScannerAppWrapper" class="mb-3">
-                            <div id="reader" class="position-relative mx-auto rounded-3 border overflow-hidden bg-dark d-flex align-items-center justify-content-center" style="max-width: 100%; aspect-ratio: 4/3;">
-                                <div id="scannerOverlay" class="position-absolute d-flex flex-column align-items-center justify-content-center w-100 h-100" style="pointer-events: none; background: rgba(15, 23, 42, 0.45); z-index: 5; display: none !important;">
-                                    <div class="border border-warning rounded-3 position-relative shadow-lg" style="width: 160px; height: 160px; border-width: 2px !important; border-style: dashed !important;">
-                                        <div class="scanner-laser"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="scannerResultArea" class="p-3 rounded-3 bg-light text-center border" style="border-style: dashed !important; border-color: #cbd5e1 !important;">
-                            <div id="resultPlaceholder" class="text-muted small py-1 fw-medium">
-                                <i class="fa-solid fa-qrcode text-secondary me-1"></i> Listo para capturar lecturas
-                            </div>
-                            <div id="resultContent" style="display: none;">
-                                <div class="d-flex align-items-center justify-content-between bg-success bg-opacity-10 border border-success-subtle text-success rounded-3 p-2 mb-2">
-                                    <span class="small fw-bold"><i class="fa-solid fa-circle-check me-1"></i> Detectado</span>
-                                    <span id="resultTimestamp" class="text-muted" style="font-size: 11px; font-family: sans-serif;">00:00:00</span>
-                                </div>
-                                <div class="fs-5 fw-bold text-dark my-1" id="scannedDataValue">Mesa N/A</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="/js/libs/html5-qrcode.min.js" type="text/javascript"></script>
-    <script>
-        window.showScannedResult = function(decodedText) {
-            const resultArea = document.getElementById('scannerResultArea');
-            const placeholder = document.getElementById('resultPlaceholder');
-            const content = document.getElementById('resultContent');
-            const dataValue = document.getElementById('scannedDataValue');
-            const timestamp = document.getElementById('resultTimestamp');
-
-            if (resultArea && placeholder && content && dataValue && timestamp) {
-                resultArea.style.borderColor = "#22c55e";
-                resultArea.style.backgroundColor = "#f0fdf4";
-                placeholder.style.display = 'none';
-                content.style.display = 'block';
-                timestamp.textContent = new Date().toLocaleTimeString();
-                dataValue.innerHTML = `<i class="fa-solid fa-receipt me-2 text-success"></i>Mesa ID: <strong>${decodedText}</strong>`;
-            }
-        };
-
-        function onScanSuccess(decodedText) {
-            window.showScannedResult(decodedText);
-            let tableId = decodedText.includes('/') ? decodedText.split('/').pop() : decodedText;
-            tableId = tableId.trim();
-
-            const botonMesa = document.querySelector(`[data-mesa-id="${tableId}"]`);
-            setTimeout(() => {
-                if (!botonMesa) {
-                    window.location.href = `/pos/mesa/${tableId}`;
-                } else {
-                    const tarjetaMesa = botonMesa.closest('.monitor-mesa-card');
-                    const enlaceAtender = tarjetaMesa ? tarjetaMesa.querySelector('a[href^="/pos/"]') : null;
-                    if (enlaceAtender) {
-                        window.location.href = enlaceAtender.getAttribute('href');
-                    } else {
-                        botonMesa.click();
-                    }
-                }
-            }, 800);
-        }
-
-        document.addEventListener("DOMContentLoaded", function() {
-            const statusBadge = document.getElementById('scannerStatusBadge');
-            const overlay = document.getElementById('scannerOverlay');
-
-            if (statusBadge) {
-                statusBadge.className = "badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 small fw-bold";
-                statusBadge.innerHTML = '<i class="fa-solid fa-circle me-1" style="font-size: 6px; color: #16a34a;"></i> Activo';
-            }
-            if (overlay) overlay.setAttribute('style', 'pointer-events: none; background: rgba(15, 23, 42, 0.35); z-index: 5; display: flex !important;');
-
-            let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: 180, aspectRatio: 1.333333 }, false);
-            html5QrcodeScanner.render(onScanSuccess, () => {});
-        });
-    </script>
     <!-- Libs JS -->
     <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
@@ -453,7 +291,7 @@
                     const btn = e.target;
                     const idMesa = btn.getAttribute('data-mesa-id');
                     btn.disabled = true;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Abriendo...';
 
                     try {
                         const response = await fetch('/pos/init-manual', {
@@ -467,16 +305,17 @@
                         } else {
                             alert(data.message || 'Error al abrir mesa');
                             btn.disabled = false;
-                            btn.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir';
+                            btn.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
                         }
                     } catch (error) {
                         btn.disabled = false;
-                        btn.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir';
+                        btn.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
                     }
                 }
             });
         });
     </script>
+
     <!-- Audio para alertas -->
     <audio id="audioAlertaCliente" src="/sounds/alert-notification.mp3" preload="auto"></audio>
 
@@ -507,7 +346,6 @@
                         const titulo = esCierre ? '💳 Solicitud de Cuenta' : '🔔 Llamada de Cliente';
                         const icono = esCierre ? 'warning' : 'info';
                         
-                        // Evita el undefined leyendo la propiedad correcta
                         const nombreMesa = notif.nombre_mesa || notif.numero || notif.mesa || 'N/A';
 
                         Swal.fire({
@@ -573,7 +411,6 @@
                                 customClass: { popup: 'rounded-4 border-0 shadow-lg' }
                             }).then(async (result) => {
                                 if (result.isConfirmed) {
-                                    // Formatear los ítems del pre-pedido para transferirlos por la URL
                                     const itemsPrePedido = grupo.items.map(item => ({
                                         id: item.id_platillo,
                                         nombre: item.platillo,
@@ -583,8 +420,6 @@
                                     }));
 
                                     const itemsParam = encodeURIComponent(JSON.stringify(itemsPrePedido));
-                                    
-                                    // Redirigir al POS pasando los ítems cargados en memoria
                                     window.location.href = `/pos/mesa/${grupo.idMesa}?cargarPrePedido=${itemsParam}`;
                                 } else if (result.isDenied) {
                                     await fetch(`/pos/mesas/${grupo.idMesa}/pre-pedidos`, { method: 'DELETE' });

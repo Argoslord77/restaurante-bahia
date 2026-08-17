@@ -8,7 +8,7 @@ const DashboardDependienteController = {
         try {
             const turnoActivo = await turnoService.obtenerTurnoActivo();
 
-            //Si es depediente o capitan de salon
+            // Si es dependiente o capitán de salón y no hay turno abierto
             if (!turnoActivo && (req.user?.rol === 'dependiente' || req.user?.rol === 'capitan')) {
                 req.flash('error_msg', 'No hay un turno de servicio abierto. Contacta al administrador.');
                 return res.redirect('/logout');
@@ -18,11 +18,11 @@ const DashboardDependienteController = {
             const usuarioRol = req.user?.rol || 'dependiente';
             const turnoId = turnoActivo ? turnoActivo.id : null;
 
-            // Obtener mesas asignadas al dependiente (o todas si es admin)
             let queryMesas = '';
             let paramsMesas = [];
 
             if (usuarioRol === 'dependiente') {
+                // Filtramos ÚNICAMENTE por las asignaciones de hoy (CURDATE()) en asignaciones_diarias
                 queryMesas = `
                     SELECT 
                         m.id,
@@ -39,19 +39,22 @@ const DashboardDependienteController = {
                         u.usuario AS mesero_asignado,
                         TIMESTAMPDIFF(MINUTE, p.creado_en, NOW()) AS minutos_abiertos
                     FROM mesas m
-                    INNER JOIN detalle_asignacion_mesa dam ON m.id = dam.mesa_id 
-                        AND dam.dependiente_id = ?
+                    INNER JOIN detalle_asignacion_mesa dam ON m.id = dam.mesa_id
+                    INNER JOIN asignaciones_diarias ad ON dam.asignacion_diaria_id = ad.id
                     LEFT JOIN pedidos p 
                         ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ?
-                        AND p.estado_pago != 'pagado'
-                        AND p.estado_pedido NOT IN ('cancelado', 'pagado')
+                        AND p.estado_pago = 'pendiente'
+                        AND p.estado_pedido NOT IN ('cancelado', 'entregado_pagado')
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+                    WHERE dam.dependiente_id = ?
+                      AND ad.fecha = CURDATE()
+                    GROUP BY m.id
                     ORDER BY CAST(m.numero AS UNSIGNED) ASC
                 `;
-                paramsMesas = [usuarioId, turnoId];
+                paramsMesas = [turnoId, usuarioId];
             } else {
-                // Admin o Supervisor
+                // Admin, Capitán o Supervisor (Muestra todas las mesas del salón sin duplicados)
                 queryMesas = `
                     SELECT 
                         m.id,
@@ -71,9 +74,10 @@ const DashboardDependienteController = {
                     LEFT JOIN pedidos p 
                         ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ?
-                        AND p.estado_pago != 'pagado'
-                        AND p.estado_pedido NOT IN ('cancelado', 'pagado')
+                        AND p.estado_pago = 'pendiente'
+                        AND p.estado_pedido NOT IN ('cancelado', 'entregado_pagado')
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+                    GROUP BY m.id
                     ORDER BY CAST(m.numero AS UNSIGNED) ASC
                 `;
                 paramsMesas = [turnoId];
@@ -121,14 +125,16 @@ const DashboardDependienteController = {
                             FROM pedidos p2 
                             WHERE p2.turno_servicio_id = ? 
                               AND p2.id_usuario_mesero = ? 
-                              AND p2.estado_pago = 'pagado'
+                              AND p2.estado_pago IN ('pagado', 'cortesia', 'facturado')
                         ) AS ventas_del_turno
                     FROM detalle_asignacion_mesa dam
+                    INNER JOIN asignaciones_diarias ad ON dam.asignacion_diaria_id = ad.id
                     INNER JOIN mesas m ON dam.mesa_id = m.id
                     LEFT JOIN pedidos p ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ? 
                         AND p.estado_pago = 'pendiente'
                     WHERE dam.dependiente_id = ?
+                      AND ad.fecha = CURDATE()
                 `;
                 paramsStats = [turnoId, usuarioId, turnoId, usuarioId];
             } else {
@@ -143,7 +149,7 @@ const DashboardDependienteController = {
                             SELECT COALESCE(ROUND(SUM(p2.total), 2), 0) 
                             FROM pedidos p2 
                             WHERE p2.turno_servicio_id = ? 
-                              AND p2.estado_pago = 'pagado'
+                              AND p2.estado_pago = 'pendiente'
                         ) AS ventas_del_turno
                     FROM mesas m
                     LEFT JOIN pedidos p ON m.id = p.id_mesa 
@@ -160,7 +166,7 @@ const DashboardDependienteController = {
                 mesas_ocupadas: 0,
                 pedidos_pendientes: 0,
                 en_preparacion: 0,
-                 ventas_del_turno: 0
+                ventas_del_turno: 0
             };
         } catch (error) {
             console.error('Error en getDashboardStats:', error);

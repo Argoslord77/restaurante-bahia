@@ -36,7 +36,7 @@
                         modal: ""
                     }) %>
                     
-                    <div class="row mb-5">
+                    <div class="row mb-4">
                         <div class="col-12">
                             <% if (!turnoActivo) { %>
                                 <div class="alert alert-danger d-flex align-items-center p-3 shadow-sm border-0 mb-4 rounded-3" role="alert">
@@ -121,11 +121,35 @@
                                 </div>
 
                             <% } else { %>
-                                <div class="alert alert-success d-flex align-items-center p-3 shadow-sm border-0 mb-4 rounded-3" role="alert">
-                                    <i class="fa-solid fa-circle-check fa-2x text-success me-3"></i>
-                                    <div>
-                                        <h5 class="alert-heading fw-bold mb-1 fs-6 text-dark">Turno Actualmente Activo</h5>
-                                        <p class="mb-0 small text-secondary">ID de Turno en curso: <strong class="font-monospace text-dark">#<%= turnoActivo.id %></strong>. Iniciado en fecha: <span class="badge bg-white text-dark border"><%= new Date(turnoActivo.fecha_apertura).toLocaleString() %></span></p>
+                                <!-- TARJETA INFORMATIVA DEL TURNO ACTIVO + BOTONES DE ACCIÓN REFINADOS -->
+                                <div class="alert alert-success d-flex align-items-center justify-content-between p-3.5 shadow-sm border-0 mb-4 rounded-3 flex-wrap gap-3" role="alert">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fa-solid fa-circle-check fa-2x text-success me-3"></i>
+                                        <div>
+                                            <h5 class="alert-heading fw-bold mb-1 fs-6 text-dark">Turno Actualmente Activo</h5>
+                                            <p class="mb-0 small text-secondary">
+                                                ID en curso: <strong class="font-monospace text-dark">#<%= turnoActivo.id %></strong> | 
+                                                Apertura: <span class="badge bg-white text-dark border ms-1"><%= new Date(turnoActivo.fecha_apertura).toLocaleString() %></span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Grupo de botones con diseño suave (Marfil / Blanco con bordes y sombras finas) -->
+                                    <div class="d-flex align-items-center gap-2.5 flex-wrap">
+                                        <!-- Variante Salmón Suave para Cierre del Día -->
+                                        <a href="/admin/cierre-dia" 
+                                           class="btn border px-3.5 py-2 shadow-xs fw-bold rounded-pill d-inline-flex align-items-center gap-2 text-decoration-none"
+                                           style="background-color: #fff1f0; border-color: #ffccc7; color: #cf1322; font-size: 12px; height: 38px; line-height: 1; margin-right: 5px !important;">
+                                            <i class="fa-solid fa-calculator text-danger fs-6"></i>
+                                            <span>Cierre del Día / Cuentas</span>
+                                        </a>
+
+                                        <a href="/admin/cierres-historico" 
+                                           class="btn bg-white text-dark border border-slate-200 px-3.5 py-2 shadow-xs fw-bold rounded-pill d-inline-flex align-items-center gap-2 text-decoration-none"
+                                           style="font-size: 12px; height: 38px; line-height: 1;">
+                                            <i class="fa-solid fa-clock-rotate-left text-primary fs-6"></i>
+                                            <span>Histórico de Cierres</span>
+                                        </a>
                                     </div>
                                 </div>
 
@@ -164,7 +188,13 @@
                         </div>
                     </div>
 
-                    <h3 class="fs-5 fw-bold text-dark mb-3"><i class="fa-solid fa-folder-open text-secondary me-2"></i>Historial y Auditoría de Turnos Anteriores</h3>
+                    <!-- ENCABEZADO DE HISTORIAL CON ENLACE RÁPIDO A CIERRE DEL DÍA -->
+                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                        <h3 class="fs-5 fw-bold text-dark mb-0"><i class="fa-solid fa-folder-open text-secondary me-2"></i>Historial y Auditoría de Turnos Anteriores</h3>
+                        <a href="/admin/cierre-dia" class="btn btn-sm btn-outline-dark px-3 rounded-pill fw-semibold shadow-xs">
+                            <i class="fa-solid fa-file-invoice-dollar me-1 text-primary"></i> Ir a Cierre del Día / Auditoría de Cuentas
+                        </a>
+                    </div>
                     
                     <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
                         <div class="table-responsive">
@@ -275,6 +305,7 @@
         </div>
     </div>
 
+    <!-- MODAL DE AUDITORÍA DE TURNO -->
     <div class="modal fade" id="modalAuditarTurno" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content border-0 shadow">

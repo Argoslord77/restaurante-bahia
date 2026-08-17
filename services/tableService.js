@@ -86,18 +86,33 @@ class TableService {
         const hoy = new Date().toISOString().split('T')[0];
         let asignacionId;
 
-        // Comprobar si ya existe el encabezado de asignación para la fecha, área y turno
-        const existente = await DistributionModel.getByDateAndLocation(hoy, ubicacion, turnoId);
-        if (existente) {
-            asignacionId = existente.id;
+        // 1. Buscar o crear la asignación diaria para la fecha y ubicación vinculada al turno_id
+        const [existentes] = await db.query(
+            'SELECT id FROM asignaciones_diarias WHERE fecha = ? AND ubicacion = ? LIMIT 1',
+            [hoy, ubicacion]
+        );
+
+        if (existentes.length > 0) {
+            asignacionId = existentes[0].id;
+            if (turnoId) {
+                await db.query('UPDATE asignaciones_diarias SET turno_id = ? WHERE id = ?', [turnoId, asignacionId]);
+            }
         } else {
-            asignacionId = await DistributionModel.createAssignment(hoy, ubicacion, turnoId);
+            const [resultado] = await db.query(
+                'INSERT INTO asignaciones_diarias (fecha, ubicacion, turno_id) VALUES (?, ?, ?)',
+                [hoy, ubicacion, turnoId]
+            );
+            asignacionId = resultado.insertId;
         }
 
-        // Procesar de manera segura cada mesa de forma incremental sin interferir con las otras
+        // 2. Insertar o actualizar cada detalle de mesa
         for (const asign of asignaciones) {
             if (asign.mesaId && asign.dependienteId) {
-                await DistributionModel.upsertDetail(asignacionId, asign.mesaId, asign.dependienteId);
+                await db.query(`
+                    INSERT INTO detalle_asignacion_mesa (asignacion_diaria_id, mesa_id, dependiente_id)
+                    VALUES (?, ?, ?)
+                    ON DUPLICATE KEY UPDATE dependiente_id = VALUES(dependiente_id)
+                `, [asignacionId, asign.mesaId, asign.dependienteId]);
             }
         }
         return true;
