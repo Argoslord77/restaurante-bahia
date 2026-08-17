@@ -1146,7 +1146,7 @@
         }
 
         async function checkoutOrder() {
-            // 1. BLOQUEO: Ítems pendientes por enviar a cocina (captura activa)
+            // 1. Validar que no existan ítems en la ronda activa sin enviar
             if (carrito.length > 0) {
                 return Swal.fire({
                     icon: 'warning',
@@ -1157,7 +1157,7 @@
                 });
             }
 
-            // 2. BLOQUEO: Ítems en el histórico que siguen pendientes de entrega en cocina/bar
+            // 2. Validar que todos los ítems hayan sido entregados o cancelados
             if (historicoDetalles && historicoDetalles.length > 0) {
                 const pendientes = historicoDetalles.filter(item => {
                     const estado = (item.estado || '').toLowerCase();
@@ -1175,7 +1175,7 @@
                 }
             }
 
-            // 3. CÁLCULO DEL SUBTOTAL (Solo ítems no cancelados)
+            // 3. Cálculo de total neto
             let subtotalHistorico = 0;
             if (historicoDetalles && historicoDetalles.length > 0) {
                 subtotalHistorico = historicoDetalles.reduce((acc, item) => {
@@ -1193,7 +1193,7 @@
                 });
             }
 
-            const totalConTax = subtotalHistorico * 1.10; // Incluyendo impuesto del 10%
+            const totalConTax = subtotalHistorico * 1.10;
             const idPedido = document.getElementById('pos_id_pedido').value;
 
             let monedasTurno = [];
@@ -1207,13 +1207,12 @@
                 console.error("Error al consultar monedas del turno:", e);
             }
 
-            // Modal de Cobro Mixto / Multimoneda
+            // Modal SweetAlert2 con multimoneda y control Pendiente de Pago
             const { value: formValues } = await Swal.fire({
                 title: 'PROCESAR COBRO MULTIMONEDA',
                 width: '650px',
                 html: `
                     <div class="text-left space-y-3 p-1">
-                        <!-- Cabecera de Indicadores: Total, Restante y Excedente (Propina) -->
                         <div class="bg-slate-100 p-3 rounded-2xl border border-slate-200 grid grid-cols-3 gap-2 text-center">
                             <div>
                                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total a Pagar</span>
@@ -1229,7 +1228,6 @@
                             </div>
                         </div>
 
-                        <!-- Formulario de Entrada de Pago -->
                         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
@@ -1264,10 +1262,8 @@
                             </button>
                         </div>
 
-                        <!-- Contenedor de Alerta Temporal dentro del Modal -->
                         <div id="modal-alert-container" class="hidden p-2 rounded-lg text-xs font-bold text-center"></div>
 
-                        <!-- Lista de Abonos -->
                         <div class="border border-slate-200 rounded-xl overflow-hidden max-h-36 overflow-y-auto">
                             <table class="w-full text-xs text-left">
                                 <thead class="bg-slate-100 text-slate-600 font-black uppercase border-b border-slate-200">
@@ -1287,6 +1283,14 @@
                         </div>
 
                         <div class="pt-2 border-t border-slate-200 space-y-2">
+                            <!-- Opción Pendiente de Pago -->
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="swal-es-pendiente-pago" class="h-4 w-4 text-amber-600 rounded">
+                                <label for="swal-es-pendiente-pago" class="text-xs font-bold text-slate-700 uppercase cursor-pointer flex items-center gap-1">
+                                    <i class="fa-solid fa-clock text-amber-600"></i> Marcar como Pendiente de Pago (Cerrar y Liberar Mesa)
+                                </label>
+                            </div>
+
                             <!-- Opción Cortesía -->
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" id="swal-es-cortesia" class="h-4 w-4 text-blue-600 rounded">
@@ -1314,27 +1318,38 @@
                 didOpen: () => {
                     const chkCortesia = document.getElementById('swal-es-cortesia');
                     const chkFactura = document.getElementById('swal-es-factura');
+                    const chkPendiente = document.getElementById('swal-es-pendiente-pago');
+
+                    chkPendiente.addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            chkCortesia.checked = false;
+                            chkFactura.checked = false;
+                        }
+                    });
 
                     chkCortesia.addEventListener('change', (e) => {
-                        if (e.target.checked) chkFactura.checked = false;
+                        if (e.target.checked) {
+                            chkFactura.checked = false;
+                            chkPendiente.checked = false;
+                        }
                     });
 
                     chkFactura.addEventListener('change', (e) => {
-                        if (e.target.checked) chkCortesia.checked = false;
+                        if (e.target.checked) {
+                            chkCortesia.checked = false;
+                            chkPendiente.checked = false;
+                        }
                     });
 
                     const listaPagos = [];
-                    const totalRequerido = totalConTax; // Refleja el monto exacto neto de la BD
+                    const totalRequerido = totalConTax;
 
                     const mostrarAlertaTemporal = (mensaje, esError = true) => {
                         const alertBox = document.getElementById('modal-alert-container');
                         alertBox.className = `p-2 rounded-lg text-xs font-bold text-center ${esError ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-100 text-emerald-700'}`;
                         alertBox.textContent = mensaje;
                         alertBox.classList.remove('hidden');
-
-                        setTimeout(() => {
-                            alertBox.classList.add('hidden');
-                        }, 3000);
+                        setTimeout(() => alertBox.classList.add('hidden'), 3000);
                     };
 
                     const updateTabla = () => {
@@ -1416,13 +1431,13 @@
                 preConfirm: () => {
                     const esCortesia = document.getElementById('swal-es-cortesia').checked;
                     const esFactura = document.getElementById('swal-es-factura').checked;
+                    const esPendientePago = document.getElementById('swal-es-pendiente-pago').checked;
                     const pagos = window._tempPagosModal || [];
 
-                    // Si no es ni cortesía ni factura a crédito, requiere al menos una forma de pago
-                    if (!esCortesia && !esFactura && pagos.length === 0) {
+                    if (!esCortesia && !esFactura && !esPendientePago && pagos.length === 0) {
                         const alertBox = document.getElementById('modal-alert-container');
                         alertBox.className = 'p-2 rounded-lg text-xs font-bold text-center bg-rose-100 text-rose-700 border border-rose-200';
-                        alertBox.textContent = 'Debe agregar al menos una forma de pago o seleccionar Factura/Cortesía.';
+                        alertBox.textContent = 'Debe agregar al menos una forma de pago o seleccionar Pendiente de Pago, Factura o Cortesía.';
                         alertBox.classList.remove('hidden');
                         setTimeout(() => alertBox.classList.add('hidden'), 3000);
                         return false;
@@ -1431,7 +1446,8 @@
                     return {
                         pagos: pagos,
                         es_cortesia: esCortesia,
-                        es_factura_credito: esFactura
+                        es_factura_credito: esFactura,
+                        es_pendiente_pago: esPendientePago
                     };
                 }
             });
@@ -1442,7 +1458,7 @@
                 const response = await fetch(`/pos/cobrar/${idPedido}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formValues) // Envía { pagos, es_cortesia, es_factura_credito }
+                    body: JSON.stringify(formValues)
                 });
 
                 const data = await response.json();

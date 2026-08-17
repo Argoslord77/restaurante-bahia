@@ -60,10 +60,13 @@ class TurnoModel {
      */
     static async sumVentasPorTurno(turnoId) {
         const [rows] = await db.query(
-            "SELECT COALESCE(SUM(total), 0) AS total_ventas FROM pedidos WHERE turno_servicio_id = ? AND estado = 'pagado'",
+            `SELECT COALESCE(SUM(total), 0) AS total_ventas 
+             FROM pedidos 
+             WHERE turno_servicio_id = ? 
+               AND estado_pago IN ('pagado', 'facturado', 'cortesia')`,
             [turnoId]
         );
-        return parseFloat(rows[0].total_ventas);
+        return parseFloat(rows[0].total_ventas || 0);
     }
 
     /**

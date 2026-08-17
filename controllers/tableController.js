@@ -14,10 +14,15 @@ exports.listTables = async (req, res) => {
         // Capturar áreas únicas del mobiliario actual
         const areas = [...new Set(tables.map(t => t.ubicacion || 'Salon Principal'))];
         
-        // Consultar la distribución únicamente si hay un turno activo
+        // Consultar la distribución de todas las áreas si hay un turno activo
         let distributionToday = {};
         if (hayTurnoActivo) {
-            distributionToday = await tableService.getDistributionToday(areas[0] || 'Salon Principal', turnoActivo.id) || {};
+            for (const area of areas) {
+                const distArea = await tableService.getDistributionToday(area, turnoActivo.id);
+                if (distArea) {
+                    distributionToday = { ...distributionToday, ...distArea };
+                }
+            }
         }
 
         const serverIp = process.env.SERVER_IP || 'localhost';
@@ -27,7 +32,7 @@ exports.listTables = async (req, res) => {
             waiters,
             areas,
             distributionToday,
-            hayTurnoActivo, // Nueva bandera enviada a la vista
+            hayTurnoActivo,
             turnoActivo,
             user: req.user,
             view: 'table',
@@ -39,26 +44,55 @@ exports.listTables = async (req, res) => {
     }
 };
 
-// Guardar la distribución enviada en formato JSON
+// Guardar la distribución enviada en formato JSON vinculada al turno activo
 exports.saveDistribution = async (req, res) => {
     try {
-        const { ubicacion, asignaciones } = req.body;
-        if (!ubicacion || !Array.isArray(asignaciones)) {
+        const { asignaciones } = req.body;
+        if (!Array.isArray(asignaciones)) {
             return res.status(400).json({ success: false, message: 'Parámetros de distribución inválidos.' });
         }
 
-        await tableService.saveDistribution(ubicacion, asignaciones);
-        return res.status(200).json({ success: true, message: 'Distribución del salón guardada correctamente para el día de hoy.' });
+        // Obtener el turno activo para vincular la distribución
+        const turnoActivo = await TurnoService.obtenerTurnoActivo();
+        if (!turnoActivo) {
+            return res.status(400).json({ success: false, message: 'No hay un turno de servicio abierto.' });
+        }
+
+        // Agrupar asignaciones por ubicación para guardarlas con su área correspondiente
+        const tables = await tableService.getAllTables();
+        const tableAreaMap = tables.reduce((acc, t) => {
+            acc[t.id] = t.ubicacion || 'Salon Principal';
+            return acc;
+        }, {});
+
+        // Agrupar las asignaciones por ubicación
+        const asignacionesPorArea = {};
+        for (const asign of asignaciones) {
+            const area = tableAreaMap[asign.mesaId] || req.body.ubicacion || 'Salon Principal';
+            if (!asignacionesPorArea[area]) asignacionesPorArea[area] = [];
+            asignacionesPorArea[area].push(asign);
+        }
+
+        // Guardar por cada área vinculando el turno activo
+        for (const [area, listaAsignaciones] of Object.entries(asignacionesPorArea)) {
+            await tableService.saveDistribution(area, listaAsignaciones, turnoActivo.id);
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Distribución del salón guardada correctamente para el turno activo.' 
+        });
     } catch (error) {
         console.error('Error al guardar distribución:', error);
         return res.status(500).json({ success: false, message: 'Error interno al procesar la distribución.' });
     }
 };
 
-// 2. CREAR NUEVA MESA
+// 2. CREAR NUEVA MESA (con soporte de carta)
 exports.createTable = async (req, res) => {
     try {
         const numero = req.body.numero ? req.body.numero.trim() : '';
+        const carta = req.body.carta ? req.body.carta.trim() : 'CUP';
         const ubicacion = req.body.ubicacion ? req.body.ubicacion.trim() : 'Salon Principal';
         const { capacidad, estado } = req.body;
 
@@ -66,9 +100,9 @@ exports.createTable = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El código o número de mesa es obligatorio.' });
         }
 
-        // Se envían ÚNICAMENTE los campos existentes en tu estructura SQL
         await tableService.createTable({
             numero,
+            carta,
             ubicacion,
             capacidad: parseInt(capacidad, 10) || 2,
             estado: estado || 'libre'
@@ -89,7 +123,7 @@ exports.updateTable = async (req, res) => {
     try {
         const { id } = req.params;
         const numero = req.body.numero ? req.body.numero.trim() : '';
-        const carta = req.body.carta ? req.body.carta.trim() : '';
+        const carta = req.body.carta ? req.body.carta.trim() : 'CUP';
         const ubicacion = req.body.ubicacion ? req.body.ubicacion.trim() : 'Salon Principal';
         const { capacidad, estado } = req.body;
 
@@ -97,7 +131,6 @@ exports.updateTable = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El número de mesa es obligatorio.' });
         }
 
-        // Removida la lógica e intentos de mutación del campo inexistente auto_hash
         const updateData = {
             numero,
             carta,
@@ -132,4 +165,4 @@ exports.deleteTable = async (req, res) => {
         console.error('Error crítico al eliminar mesa:', error);
         return res.status(500).json({ success: false, message: 'Error interno del servidor al procesar la baja.' });
     }
-}; 
+};

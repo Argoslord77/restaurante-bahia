@@ -528,28 +528,41 @@
             }
 
             function guardarMapaDistribucion() {
-                if(mapaDistribucionTemporal.length === 0) {
-                    Swal.fire('Info', 'No has realizado ningún cambio nuevo en el salón.', 'info');
+                if (mapaDistribucionTemporal.length === 0) {
+                    Swal.fire('Info', 'No has realizado ningún cambio en la distribución.', 'info');
                     return;
                 }
 
-                const primeraMesa = document.querySelector('.card-mesa-elemento');
-                const ubicacionArea = primeraMesa ? primeraMesa.getAttribute('data-area') : 'Salon Principal';
+                Swal.fire({
+                    title: 'Guardando distribución...',
+                    text: 'Por favor espere.',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
 
                 fetch('/admin/mesas/distribucion', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ubicacion: ubicacionArea, asignaciones: mapaDistribucionTemporal })
+                    body: JSON.stringify({ asignaciones: mapaDistribucionTemporal })
                 })
                 .then(res => res.json())
                 .then(data => {
-                    if(data.success) {
-                        Swal.fire('¡Éxito!', data.message, 'success').then(() => window.location.reload());
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: data.message,
+                            timer: 1800,
+                            showConfirmButton: false
+                        }).then(() => window.location.reload());
                     } else {
-                        Swal.fire('Error', data.message, 'error');
+                        Swal.fire('Error', data.message || 'No se pudo guardar la distribución.', 'error');
                     }
                 })
-                .catch(() => Swal.fire('Error', 'No se pudo comunicar el mapa al servidor.', 'error'));
+                .catch(err => {
+                    console.error('Error al guardar distribución:', err);
+                    Swal.fire('Error', 'No se pudo comunicar con el servidor.', 'error');
+                });
             }
 
             document.getElementById('formCrearMesa').addEventListener('submit', function(e) {

@@ -351,11 +351,12 @@ exports.viewPrecuenta = async (req, res) => {
  * Procesa el cobro de la orden admitiendo:
  * 1. Cobro por Factura (CxC / Crédito).
  * 2. Cortesías.
- * 3. Pagos Mixtos y Multimoneda con conversión automática a moneda local.
+ * 3. Pendiente de Pago (Cierra comanda, asienta saldo pendiente y libera la mesa).
+ * 4. Pagos Mixtos y Multimoneda con conversión automática a moneda local.
  */
 exports.procesarCobroAvanzado = async (req, res) => {
     const { id_pedido } = req.params;
-    const { pagos, es_factura_credito, es_cortesia } = req.body; 
+    const { pagos, es_factura_credito, es_cortesia, es_pendiente_pago } = req.body; 
     
     const id_cajero = req.session?.user?.id || req.user?.id;
 
@@ -386,7 +387,7 @@ exports.procesarCobroAvanzado = async (req, res) => {
 
         const pedido = filas[0];
 
-        if (['pagado', 'cortesia', 'facturado'].includes(pedido.estado_pago)) {
+        if (['pagado', 'cortesia', 'facturado', 'pendiente_pago'].includes(pedido.estado_pago)) {
             await connection.rollback();
             return res.status(400).json({ success: false, message: 'Este pedido ya fue cobrado o cerrado previamente.' });
         }
@@ -423,12 +424,27 @@ exports.procesarCobroAvanzado = async (req, res) => {
             nuevo_estado_pago = 'cortesia';
         } 
         // -------------------------------------------------------------------------
-        // OPCIÓN C: PAGOS MIXTOS Y MULTIMONEDA
+        // OPCIÓN C: PENDIENTE DE PAGO (Cerrar orden y liberar mesa)
+        // -------------------------------------------------------------------------
+        else if (es_pendiente_pago) {
+            nuevo_estado_pago = 'pendiente_pago';
+
+            await connection.query(`
+                INSERT INTO pagos_pedido 
+                (pedido_id, metodo_pago, moneda_id, factor_cambio_aplicado, monto_moneda_origen, monto_equivalente_local, referencia_transaccion)
+                VALUES (?, 'pendiente', NULL, 1.0000, ?, ?, 'PENDIENTE DE PAGO / MESA LIBERADA')
+            `, [id_pedido, totalPagar, totalPagar]);
+        } 
+        // -------------------------------------------------------------------------
+        // OPCIÓN D: PAGOS MIXTOS Y MULTIMONEDA
         // -------------------------------------------------------------------------
         else {
             if (!pagos || !Array.isArray(pagos) || pagos.length === 0) {
                 await connection.rollback();
-                return res.status(400).json({ success: false, message: 'Debe proporcionar al menos un método de pago.' });
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Debe proporcionar al menos un método de pago o marcar Pendiente de Pago/Cortesía/Factura.' 
+                });
             }
 
             let totalRecibidoLocal = 0;
@@ -437,7 +453,6 @@ exports.procesarCobroAvanzado = async (req, res) => {
                 const factorCambio = parseFloat(pago.factor_cambio_aplicado || 1.0000);
                 const montoOrigen = parseFloat(pago.monto_moneda_origen || 0);
                 
-                // Conversión explícita a moneda local: Monto Local = Monto Origen * Factor Cambio
                 const montoLocal = pago.monto_equivalente_local 
                     ? parseFloat(pago.monto_equivalente_local) 
                     : (montoOrigen * factorCambio);
@@ -468,7 +483,6 @@ exports.procesarCobroAvanzado = async (req, res) => {
                 });
             }
 
-            // Asignar excedente como propina
             propina = totalRecibidoLocal - totalPagar;
         }
 
@@ -504,13 +518,18 @@ exports.procesarCobroAvanzado = async (req, res) => {
 
         await connection.commit();
 
+        let mensaje = 'Cobro procesado con éxito.';
+        if (nuevo_estado_pago === 'facturado') {
+            mensaje = 'Orden enviada a Facturación / CxC con éxito.';
+        } else if (nuevo_estado_pago === 'cortesia') {
+            mensaje = 'Orden cerrada como cortesía.';
+        } else if (nuevo_estado_pago === 'pendiente_pago') {
+            mensaje = 'Orden cerrada como Pendiente de Pago. Mesa liberada con éxito.';
+        }
+
         return res.json({
             success: true,
-            message: nuevo_estado_pago === 'facturado'
-                ? 'Orden enviada a Facturación / CxC con éxito.'
-                : (nuevo_estado_pago === 'cortesia' 
-                    ? 'Orden cerrada como cortesía.' 
-                    : 'Cobro procesado con éxito.'),
+            message: mensaje,
             estado_pago: nuevo_estado_pago,
             total_cobrado: totalPagar,
             propina_registrada: propina
