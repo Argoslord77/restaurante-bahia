@@ -13,6 +13,7 @@ class TableService {
             const mesa = {
                 id: row.id,
                 numero: row.numero,
+                carta: row.carta,
                 capacidad: row.capacidad,
                 estado: row.estado,
                 ubicacion: row.ubicacion,

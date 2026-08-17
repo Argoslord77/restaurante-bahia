@@ -89,6 +89,7 @@ exports.updateTable = async (req, res) => {
     try {
         const { id } = req.params;
         const numero = req.body.numero ? req.body.numero.trim() : '';
+        const carta = req.body.carta ? req.body.carta.trim() : '';
         const ubicacion = req.body.ubicacion ? req.body.ubicacion.trim() : 'Salon Principal';
         const { capacidad, estado } = req.body;
 
@@ -99,6 +100,7 @@ exports.updateTable = async (req, res) => {
         // Removida la lógica e intentos de mutación del campo inexistente auto_hash
         const updateData = {
             numero,
+            carta,
             ubicacion,
             capacidad: parseInt(capacidad, 10) || 2,
             estado

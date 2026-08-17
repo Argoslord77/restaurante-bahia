@@ -8,6 +8,7 @@ const Table = {
             SELECT 
                 m.id, 
                 m.numero, 
+                m.carta, 
                 m.capacidad, 
                 m.estado, 
                 m.ubicacion, 
@@ -49,11 +50,11 @@ const Table = {
 
     // Actualizar los datos de una mesa (incluyendo ubicación y estado)
     update: async (id, data) => {
-        const { numero, capacidad, estado, ubicacion } = data;
+        const { numero, carta, capacidad, estado, ubicacion } = data;
         
         return await db.query(
-            'UPDATE mesas SET numero = ?, capacidad = ?, estado = ?, ubicacion = ? WHERE id = ?',
-            [numero, capacidad, estado, ubicacion, id]
+            'UPDATE mesas SET numero = ?, carta = ?, capacidad = ?, estado = ?, ubicacion = ? WHERE id = ?',
+            [numero, carta, capacidad, estado, ubicacion, id]
         );
     },
 
