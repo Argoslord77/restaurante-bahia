@@ -25,11 +25,12 @@ module.exports = {
 
     // 2. CREAR PLATILLO (Optimizado para SweetAlert2 via API Fetch)
     createDish: async (req, res) => {
-        const { nombre, descripcion, precio, categoria, precio_alt } = req.body;
+        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd } = req.body;
         const foto = req.file ? req.file.filename : null;
 
         try {
             const finalPrecioAlt = precio_alt && precio_alt.trim() !== '' ? parseFloat(precio_alt) : null;
+            const finalPrecioUsd = precio_usd && precio_usd.trim() !== '' ? parseFloat(precio_usd) : null;
             const finalFoto = foto && foto.trim() !== '' ? foto.trim() : null;
 
             await menuService.createItem({
@@ -38,6 +39,7 @@ module.exports = {
                 precio: parseFloat(precio),
                 categoria: categoria.trim(),
                 precio_alt: finalPrecioAlt,
+                precio_usd: finalPrecioUsd,
                 foto: finalFoto
             });
 
@@ -65,13 +67,14 @@ module.exports = {
     // 3. EDITAR PLATILLO (Optimizado para SweetAlert2 via API Fetch)
     updateDish: async (req, res) => {
         const { id } = req.params;
-        const { nombre, descripcion, precio, categoria, precio_alt, fotoActual } = req.body;
+        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, fotoActual } = req.body;
 
         // Si viene una nueva foto, usamos esa; de lo contrario, conservamos la actual
         const foto = req.file ? req.file.filename : (fotoActual && fotoActual !== 'null' ? fotoActual.trim() : null);
 
         try {
             const finalPrecioAlt = precio_alt && precio_alt.trim() !== '' ? parseFloat(precio_alt) : null;
+            const finalPrecioUsd = precio_usd && precio_usd.trim() !== '' ? parseFloat(precio_usd) : null;
 
             // Si se subió una nueva foto y existía una foto previa válida, eliminamos el archivo antiguo
             if (req.file && fotoActual && fotoActual !== 'null' && fotoActual.trim() !== '') {
@@ -89,6 +92,7 @@ module.exports = {
                 precio: parseFloat(precio),
                 categoria: categoria.trim(),
                 precio_alt: finalPrecioAlt,
+                precio_usd: finalPrecioUsd,
                 foto: foto
             });
 

@@ -62,10 +62,12 @@ class TableService {
         return rows;
     }
 
-    // Obtener el mapeo de la distribución de hoy
-    async getDistributionToday(ubicacion) {
+    // Obtener el mapeo de la distribución asociada al turno activo
+    async getDistributionToday(ubicacion, turnoId = null) {
         const hoy = new Date().toISOString().split('T')[0];
-        const asignacion = await DistributionModel.getByDateAndLocation(hoy, ubicacion);
+        
+        // Se consulta la asignación pasando la fecha, ubicación y opcionalmente el turno
+        const asignacion = await DistributionModel.getByDateAndLocation(hoy, ubicacion, turnoId);
         
         if (!asignacion) return null;
         
@@ -78,17 +80,17 @@ class TableService {
         }, {});
     }
 
-    // Guardar o actualizar la distribución diaria de forma incremental (Upsert)
-    async saveDistribution(ubicacion, asignaciones) {
+    // Guardar o actualizar la distribución diaria de forma incremental (Upsert) vinculada al turno
+    async saveDistribution(ubicacion, asignaciones, turnoId = null) {
         const hoy = new Date().toISOString().split('T')[0];
         let asignacionId;
 
-        // Comprobar si ya existe el encabezado de asignación para la fecha y área actual
-        const existente = await DistributionModel.getByDateAndLocation(hoy, ubicacion);
+        // Comprobar si ya existe el encabezado de asignación para la fecha, área y turno
+        const existente = await DistributionModel.getByDateAndLocation(hoy, ubicacion, turnoId);
         if (existente) {
             asignacionId = existente.id;
         } else {
-            asignacionId = await DistributionModel.createAssignment(hoy, ubicacion);
+            asignacionId = await DistributionModel.createAssignment(hoy, ubicacion, turnoId);
         }
 
         // Procesar de manera segura cada mesa de forma incremental sin interferir con las otras

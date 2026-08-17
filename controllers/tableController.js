@@ -1,16 +1,24 @@
 // controllers/tableController.js
 const tableService = require('../services/tableService');
+const TurnoService = require('../services/turnoService');
 
 exports.listTables = async (req, res) => {
     try {
+        // 1. Verificar si existe un turno activo
+        const turnoActivo = await TurnoService.obtenerTurnoActivo();
+        const hayTurnoActivo = !!turnoActivo;
+
         const tables = await tableService.getAllTables();
         const waiters = await tableService.getActiveWaiters();
         
-        // Capturar áreas únicas del mobiliario actual (Uso de 'Salon Principal' sin acento)
+        // Capturar áreas únicas del mobiliario actual
         const areas = [...new Set(tables.map(t => t.ubicacion || 'Salon Principal'))];
         
-        // Consultar la distribución de la primera área por defecto o procesar el mapa completo de hoy
-        const distributionToday = await tableService.getDistributionToday(areas[0] || 'Salon Principal');
+        // Consultar la distribución únicamente si hay un turno activo
+        let distributionToday = {};
+        if (hayTurnoActivo) {
+            distributionToday = await tableService.getDistributionToday(areas[0] || 'Salon Principal', turnoActivo.id) || {};
+        }
 
         const serverIp = process.env.SERVER_IP || 'localhost';
 
@@ -18,7 +26,9 @@ exports.listTables = async (req, res) => {
             tables,
             waiters,
             areas,
-            distributionToday: distributionToday || {}, // Enviado como objeto para indexación directa
+            distributionToday,
+            hayTurnoActivo, // Nueva bandera enviada a la vista
+            turnoActivo,
             user: req.user,
             view: 'table',
             serverIp

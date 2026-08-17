@@ -2,7 +2,16 @@
 const db = require('../config/db');
 
 const Distribution = {
-    // Obtener la asignación de una ubicación en la fecha actual
+    // Obtener la asignación principal vinculada a un turno activo y ubicación específica
+    getByTurnoAndLocation: async (turnoId, ubicacion) => {
+        const [rows] = await db.query(
+            'SELECT id FROM asignaciones_diarias WHERE turno_id = ? AND ubicacion = ?',
+            [turnoId, ubicacion]
+        );
+        return rows[0];
+    },
+
+    // Obtener la asignación por fecha y ubicación (compatibilidad con consultas históricas)
     getByDateAndLocation: async (fecha, ubicacion) => {
         const [rows] = await db.query(
             'SELECT id FROM asignaciones_diarias WHERE fecha = ? AND ubicacion = ?',
@@ -23,16 +32,16 @@ const Distribution = {
         return rows;
     },
 
-    // Crear el encabezado de la asignación diaria
-    createAssignment: async (fecha, ubicacion) => {
+    // Crear la asignación diaria vinculada opcionalmente al turno_id y/o fecha
+    createAssignment: async (fecha, ubicacion, turnoId = null) => {
         const [result] = await db.query(
-            'INSERT INTO asignaciones_diarias (fecha, ubicacion) VALUES (?, ?)',
-            [fecha, ubicacion]
+            'INSERT INTO asignaciones_diarias (fecha, ubicacion, turno_id) VALUES (?, ?, ?)',
+            [fecha, ubicacion, turnoId]
         );
         return result.insertId;
     },
 
-    // NUEVO MÉTODO: Guarda o actualiza el registro por lote/fila individual (Upsert por Mesa)
+    // Guarda o actualiza el registro de mesa por dependiente (Upsert por Mesa)
     upsertDetail: async (asignacionId, mesaId, dependienteId) => {
         return await db.query(
             `INSERT INTO detalle_asignacion_mesa (asignacion_diaria_id, mesa_id, dependiente_id) 

@@ -48,7 +48,7 @@
                     <div class="alert alert-warning d-flex align-items-center justify-content-between shadow-sm border-0 mb-4" id="bannerDistribucion">
                         <div class="d-flex align-items-center gap-2">
                             <i class="fa-solid fa-triangle-exclamation fs-5 text-warning"></i>
-                            <span class="small fw-medium text-dark">Atención: Hay <strong><%= mesasSinAsignar %></strong> mesas sin dependiente asignado para la jornada de hoy.</span>
+                            <span class="small fw-medium text-dark">Atención: Hay <strong><%= mesasSinAsignar %></strong> mesas sin dependiente asignado para el turno activo.</span>
                         </div>
                         <button class="btn btn-sm btn-dark small px-3 rounded-pill" id="btnAlertaAsignar">Asignar Ahora</button>
                     </div>
@@ -57,12 +57,12 @@
                 <% if (user.rol === 'superadministrador' || user.rol === 'administrador' || user.rol === 'capitan') { %>
                     <div class="card p-3 mb-4 shadow-sm bg-light border-0">
                         <div class="row g-3 align-items-center justify-content-between">
-                            <div class="col-md-6 d-flex align-items-center gap-2">
+                            <div class="col-md-7 d-flex align-items-center gap-2">
                                 <label class="form-label m-0 small fw-bold text-secondary text-nowrap">
                                     <i class="fa-solid fa-user-tie text-primary"></i> Seleccionar Dependiente:
                                 </label>
                                 <select id="selectPintarDependiente" class="form-select form-select-sm border-2" style="font-family: sans-serif; font-size: 11px;">
-                                    <option value="">-- Elegir de la Lista --</option>
+                                    <option value="">-- Todos / Elegir de la Lista --</option>
                                     <% waiters.forEach(waiter => { %>
                                         <option value="<%= waiter.id %>">
                                             <%= waiter.nombre %> <%= (waiter.rol && waiter.rol.toLowerCase() === 'capitan') ? '(Capitán)' : '' %>
@@ -70,7 +70,10 @@
                                     <% }) %>
                                 </select>
                             </div>
-                            <div class="col-md-6 text-md-end d-flex gap-2 justify-content-md-end">
+                            <div class="col-md-5 text-md-end d-flex gap-2 justify-content-md-end">
+                                <button id="btnModoEditarDistribucion" class="btn btn-sm btn-outline-primary px-3 shadow-sm" style="font-family: sans-serif; font-size: 11px;">
+                                    <i class="fa-solid fa-paint-roller me-1"></i> Asignar / Editar Distribución
+                                </button>
                                 <button id="btnGuardarDistribucion" class="btn btn-sm btn-success px-4 shadow-sm" style="display:none; font-family: sans-serif; font-size: 11px;">
                                     <i class="fa-solid fa-floppy-disk"></i> Guardar Distribución
                                 </button>
@@ -90,8 +93,14 @@
                         </div>
                     <% } %>
 
-                    <% tables.forEach(mesa => { %>
-                        <div class="col card-mesa-elemento" data-mesa-id="<%= mesa.id %>" data-area="<%= mesa.ubicacion %>">
+                    <% tables.forEach(mesa => { 
+                        let asignado = distributionToday[mesa.id];
+                        let dependienteIdAsignado = asignado ? (asignado.dependiente_id || asignado.id || '') : '';
+                    %>
+                        <div class="col card-mesa-elemento" 
+                             data-mesa-id="<%= mesa.id %>" 
+                             data-area="<%= mesa.ubicacion %>" 
+                             data-dependiente-id="<%= dependienteIdAsignado %>">
                             <div class="restaurant-card p-3 border rounded-3 bg-white shadow-sm h-100 d-flex flex-column justify-content-between card-custom">
                                 
                                 <div>
@@ -106,7 +115,7 @@
                                             <div class="status-badge badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
                                                 <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Ocupada
                                             </div>
-                                        <% } else if (mesa.estado === 'desocupando') { %>
+                                        <% } else if (mesa.estado === 'desocupandose') { %>
                                             <div class="status-badge badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3 py-1 d-flex align-items-center gap-1">
                                                 <i class="fa-solid fa-circle" style="font-size: 7px;"></i> Limpieza
                                             </div>
@@ -121,11 +130,14 @@
                                         <% } %>
                                     </div>
 
-                                    <div class="badge-waiter-assigned alert alert-info p-1 px-2 mb-2 rounded-2 border-0 d-flex align-items-center gap-1 text-truncate fs-8" style="font-size: 11px;">
-                                        <i class="fa-solid fa-user-tag text-info"></i> 
-                                        <span class="label-waiter-name text-dark">
-                                            <%= distributionToday[mesa.id] ? distributionToday[mesa.id].nombre : 'Sin Asignar' %>
-                                        </span>
+                                    <div class="badge-waiter-assigned alert alert-info p-1 px-2 mb-2 rounded-2 border-0 d-flex align-items-center justify-content-between gap-1 text-truncate fs-8" style="font-size: 11px;">
+                                        <div class="d-flex align-items-center gap-1 text-truncate">
+                                            <i class="fa-solid fa-user-tag text-info"></i> 
+                                            <span class="label-waiter-name text-dark">
+                                                <%= distributionToday[mesa.id] ? distributionToday[mesa.id].nombre : 'Sin Asignar' %>
+                                            </span>
+                                        </div>
+                                        <span class="badge bg-light text-dark border fw-bold px-2 py-1"><%= mesa.carta || 'CUP' %></span>
                                     </div>
 
                                     <p class="waiter-name text-muted text-uppercase fw-semibold mb-2" style="font-size: 0.75rem;">
@@ -164,7 +176,12 @@
                                     <div class="d-flex justify-content-end gap-2 mt-2 pt-2 border-top card-footer-section action-crud-buttons">
                                         <button class="btn btn-sm d-flex align-items-center justify-content-center btn-editar bg-secondary text-white border-secondary shadow-sm" 
                                                 style="width: 32px; height: 32px;" title="Editar Mesa"
-                                                data-id="<%= mesa.id %>" data-numero="<%= mesa.numero %>" data-capacidad="<%= mesa.capacidad %>" data-estado="<%= mesa.estado %>" data-ubicacion="<%= mesa.ubicacion %>">
+                                                data-id="<%= mesa.id %>" 
+                                                data-numero="<%= mesa.numero %>" 
+                                                data-capacidad="<%= mesa.capacidad %>" 
+                                                data-estado="<%= mesa.estado %>" 
+                                                data-ubicacion="<%= mesa.ubicacion %>"
+                                                data-carta="<%= mesa.carta || 'CUP' %>">
                                             <i class="fa-solid fa-gear text-white" style="font-size: 14px;"></i>
                                         </button>
                                         <button class="btn btn-sm d-flex align-items-center justify-content-center bg-danger text-white border-danger shadow-sm btn-eliminar-mesa" 
@@ -186,6 +203,7 @@
         </div>
     </div>
 
+    <!-- MODAL CREAR MESA -->
     <div class="modal fade" id="modalCrearMesa" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered px-3">
             <div class="modal-content border-0 shadow">
@@ -204,19 +222,27 @@
                                 <label class="form-label fw-semibold text-secondary small">Capacidad Máxima</label>
                                 <input type="number" name="capacidad" class="form-control" value="2" min="1" required>
                             </div>
-                            <div class="col-12">
-                                <label class="form-label fw-semibold text-secondary small">Ubicación / Área</label>
-                                <input type="text" name="ubicacion" class="form-control" value="Salon Principal" required>
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold text-secondary small">Carta / Tarifa Asignada</label>
+                                <select name="carta" class="form-select fw-bold" required>
+                                    <option value="CUP" selected>Carta CUP (Moneda Nacional)</option>
+                                    <option value="COMISION">Carta Comisión</option>
+                                    <option value="ZELLE">Carta Zelle</option>
+                                </select>
                             </div>
-                            <div class="col-12">
+                            <div class="col-sm-6">
                                 <label class="form-label fw-semibold text-secondary small">Estado Inicial</label>
                                 <select name="estado" class="form-select text-capitalize" required>
                                     <option value="libre" selected>Libre</option>
                                     <option value="ocupada">Ocupada</option>
-                                    <option value="desocupando">Desocupando</option>
+                                    <option value="desocupandose">Desocupándose</option>
                                     <option value="reservada">Reservada</option>
                                     <option value="mantenimiento">Mantenimiento</option>
                                 </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Ubicación / Área</label>
+                                <input type="text" name="ubicacion" class="form-control" value="Salon Principal" required>
                             </div>
                         </div>
                     </div>
@@ -229,6 +255,7 @@
         </div>
     </div>
 
+    <!-- MODAL EDITAR MESA -->
     <div class="modal fade" id="modalEditarMesa" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered px-3">
             <div class="modal-content border-0 shadow">
@@ -248,19 +275,27 @@
                                 <label class="form-label fw-semibold text-secondary small">Capacidad</label>
                                 <input type="number" name="capacidad" id="editCapacidad" class="form-control" min="1" required>
                             </div>
-                            <div class="col-12">
-                                <label class="form-label fw-semibold text-secondary small">Ubicación / Área</label>
-                                <input type="text" name="ubicacion" id="editUbicacion" class="form-control" required>
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold text-secondary small">Carta / Moneda de Cobro</label>
+                                <select name="carta" id="editCarta" class="form-select fw-bold" required>
+                                    <option value="CUP">Carta CUP (Moneda Nacional)</option>
+                                    <option value="COMISION">Carta Comisión</option>
+                                    <option value="ZELLE">Carta Zelle</option>
+                                </select>
                             </div>
-                            <div class="col-12">
+                            <div class="col-sm-6">
                                 <label class="form-label fw-semibold text-secondary small">Estado</label>
                                 <select name="estado" id="editEstado" class="form-select" required>
                                     <option value="libre">Libre</option>
                                     <option value="ocupada">Ocupada</option>
-                                    <option value="desocupando">Desocupando</option>
+                                    <option value="desocupandose">Desocupándose</option>
                                     <option value="reservada">Reservada</option>
                                     <option value="mantenimiento">Mantenimiento</option>
                                 </select>
+                            </div>>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Ubicación / Área</label>
+                                <input type="text" name="ubicacion" id="editUbicacion" class="form-control" required>
                             </div>
 
                             <div class="col-12 text-center mt-3 pt-3 border-top" id="qrContainerWrapper">
@@ -291,27 +326,89 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
+            const hayTurnoActivo = <%- JSON.stringify(hayTurnoActivo) %>;
+            const distributionToday = <%- JSON.stringify(distributionToday || {}) %>;
+
+            if (!hayTurnoActivo) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin Turno Activo',
+                    text: 'No hay un turno de servicio abierto. Debes abrir un turno en la caja para poder gestionar o asignar la distribución de mesas.',
+                    confirmButtonText: 'Ir a Control de Turnos',
+                    showCancelButton: true,
+                    cancelButtonText: 'Permanecer aquí',
+                    confirmButtonColor: '#0d6efd',
+                    cancelButtonColor: '#6c757d'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = '/admin/turnos-servicio';
+                    }
+                });
+            } else {
+                const tieneAsignaciones = Object.keys(distributionToday).length > 0;
+                if (!tieneAsignaciones) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Distribución Pendiente',
+                        text: 'El turno activo no cuenta con una distribución de mesas configurada. Por favor, haz clic en "Asignar / Editar Distribución" para asignar los dependientes.',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#0d6efd'
+                    });
+                }
+            }
+
             let modoPintura = false;
             let mapaDistribucionTemporal = [];
 
             const contenedorMesas = document.getElementById('contenedorMesas');
             const selectPintarDependiente = document.getElementById('selectPintarDependiente');
+            const btnModoEditarDistribucion = document.getElementById('btnModoEditarDistribucion');
             const btnGuardarDistribucion = document.getElementById('btnGuardarDistribucion');
             const btnCancelarDistribucion = document.getElementById('btnCancelarDistribucion');
             const btnAlertaAsignar = document.getElementById('btnAlertaAsignar');
 
-            if (btnAlertaAsignar) {
-                btnAlertaAsignar.addEventListener('click', function() {
-                    selectPintarDependiente.focus();
-                    Swal.fire('Info', 'Selecciona un dependiente de la lista para activar el modo pintura.', 'info');
+            function filtrarMesasPorDependiente(dependienteIdSelected) {
+                const cartasMesas = document.querySelectorAll('.card-mesa-elemento');
+                
+                cartasMesas.forEach(colMesa => {
+                    const depId = colMesa.getAttribute('data-dependiente-id');
+                    if (!dependienteIdSelected || dependienteIdSelected === "" || depId === dependienteIdSelected) {
+                        colMesa.style.display = 'block';
+                    } else {
+                        colMesa.style.display = 'none';
+                    }
                 });
             }
 
             if (selectPintarDependiente) {
                 selectPintarDependiente.addEventListener('change', function() {
-                    if(this.value && !modoPintura) {
-                        activarModoDistribucion();
+                    if (!modoPintura) {
+                        filtrarMesasPorDependiente(this.value);
                     }
+                });
+            }
+
+            if (btnModoEditarDistribucion) {
+                btnModoEditarDistribucion.addEventListener('click', function() {
+                    if (!hayTurnoActivo) {
+                        Swal.fire('Acción Denegada', 'No puedes asignar mesas sin un turno de servicio activo.', 'warning');
+                        return;
+                    }
+                    if (!selectPintarDependiente.value) {
+                        Swal.fire('Selecciona un Dependiente', 'Elige un dependiente en el selector para comenzar a asignarle mesas.', 'info');
+                    }
+                    activarModoDistribucion();
+                });
+            }
+
+            if (btnAlertaAsignar) {
+                btnAlertaAsignar.addEventListener('click', function() {
+                    if (!hayTurnoActivo) {
+                        Swal.fire('Atención', 'Debe haber un turno activo para realizar asignaciones.', 'warning');
+                        return;
+                    }
+                    activarModoDistribucion();
+                    selectPintarDependiente.focus();
                 });
             }
 
@@ -324,9 +421,11 @@
             }
 
             function activarModoDistribucion() {
-                if(!selectPintarDependiente.value) return;
                 modoPintura = true;
+                filtrarMesasPorDependiente('');
+                
                 contenedorMesas.classList.add('modo-pintura-activa');
+                if (btnModoEditarDistribucion) btnModoEditarDistribucion.style.display = 'none';
                 btnGuardarDistribucion.style.display = 'inline-block';
                 btnCancelarDistribucion.style.display = 'inline-block';
                 document.querySelectorAll('.action-crud-buttons').forEach(el => el.style.setProperty('display', 'none', 'important'));
@@ -335,6 +434,7 @@
             function desactivarModoDistribucion() {
                 modoPintura = false;
                 contenedorMesas.classList.remove('modo-pintura-activa');
+                if (btnModoEditarDistribucion) btnModoEditarDistribucion.style.display = 'inline-block';
                 btnGuardarDistribucion.style.display = 'none';
                 btnCancelarDistribucion.style.display = 'none';
                 document.querySelectorAll('.action-crud-buttons').forEach(el => el.style.removeProperty('display'));
@@ -343,21 +443,23 @@
 
             if (contenedorMesas) {
                 contenedorMesas.addEventListener('click', function(e) {
-                    
                     const cardElement = e.target.closest('.restaurant-card');
                     if (cardElement && modoPintura) {
                         if (e.target.closest('.action-crud-buttons')) return;
 
                         const dependienteId = selectPintarDependiente.value;
-                        const nombreDependiente = selectPintarDependiente.options[selectPintarDependiente.selectedIndex].text;
-                        
-                        if(!dependienteId) return;
+                        if (!dependienteId) {
+                            Swal.fire('Atención', 'Por favor selecciona un dependiente primero en la lista para asignarle esta mesa.', 'warning');
+                            return;
+                        }
 
+                        const nombreDependiente = selectPintarDependiente.options[selectPintarDependiente.selectedIndex].text;
                         const colContenedor = cardElement.closest('.card-mesa-elemento');
                         const mesaId = colContenedor.getAttribute('data-mesa-id');
 
                         cardElement.querySelector('.label-waiter-name').innerText = nombreDependiente;
                         cardElement.style.borderColor = '#198754';
+                        colContenedor.setAttribute('data-dependiente-id', dependienteId);
 
                         mapaDistribucionTemporal = mapaDistribucionTemporal.filter(item => item.mesaId !== mesaId);
                         mapaDistribucionTemporal.push({ mesaId, dependienteId });
@@ -367,18 +469,19 @@
                     const botonEditar = e.target.closest('.btn-editar');
                     if (botonEditar) {
                         e.preventDefault();
-                        
                         const tableId = botonEditar.getAttribute('data-id');
                         const numero = botonEditar.getAttribute('data-numero');
                         const ubicacion = botonEditar.getAttribute('data-ubicacion');
                         const capacidad = botonEditar.getAttribute('data-capacidad');
                         const estado = botonEditar.getAttribute('data-estado');
+                        const carta = botonEditar.getAttribute('data-carta') || 'CUP';
 
                         document.getElementById('editId').value = tableId;
                         document.getElementById('editNumero').value = numero;
                         document.getElementById('editUbicacion').value = ubicacion;
                         document.getElementById('editCapacidad').value = capacidad;
                         document.getElementById('editEstado').value = estado;
+                        document.getElementById('editCarta').value = carta;
 
                         const qrcodeDiv = document.getElementById('qrcode');
                         qrcodeDiv.innerHTML = "";
@@ -440,7 +543,8 @@
                     numero: this.numero.value,
                     capacidad: this.capacidad.value,
                     ubicacion: this.ubicacion.value,
-                    estado: this.estado.value
+                    estado: this.estado.value,
+                    carta: this.carta.value
                 };
 
                 fetch('/admin/mesas/crear', {
@@ -468,7 +572,8 @@
                     numero: this.numero.value,
                     capacidad: this.capacidad.value,
                     ubicacion: this.ubicacion.value,
-                    estado: this.estado.value
+                    estado: this.estado.value,
+                    carta: this.carta.value
                 };
 
                 fetch(`/admin/mesas/editar/${id}`, {

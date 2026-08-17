@@ -52,15 +52,16 @@
                                     <tr>
                                         <th class="ps-4 py-3">Nombre del Platillo</th>
                                         <th class="py-3">Categoría</th>
-                                        <th class="py-3">Precio Principal</th>
+                                        <th class="py-3">Precio Principal (CUP)</th>
                                         <th class="py-3">Precio Alt.</th>
+                                        <th class="py-3">Precio (USD/Zelle)</th>
                                         <th class="text-center py-3" style="width: 200px;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <% if (platillos.length === 0) { %>
                                         <tr id="filaSinPlatillosOriginal">
-                                            <td colspan="5" class="text-center py-5 text-muted">
+                                            <td colspan="6" class="text-center py-5 text-muted">
                                                 <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i> No hay platillos registrados en el menú.
                                             </td>
                                         </tr>
@@ -91,6 +92,9 @@
                                                 <td class="text-secondary small">
                                                     <%= (platillo.precio_alt) ? '$' + parseFloat(platillo.precio_alt).toFixed(2) : '-' %>
                                                 </td>
+                                                <td class="text-success small fw-semibold">
+                                                    <%= (platillo.precio_usd) ? '$' + parseFloat(platillo.precio_usd).toFixed(2) : '-' %>
+                                                </td>
                                                 <td class="text-center">
                                                     <div class="btn-group gap-1">
                                                         <button class="btn btn-sm btn-outline-secondary border-0"
@@ -103,6 +107,7 @@
                                                             data-precio="<%= platillo.precio %>"
                                                             data-categoria="<%= platillo.categoria %>"
                                                             data-precio_alt="<%= platillo.precio_alt %>"
+                                                            data-precio_usd="<%= platillo.precio_usd %>"
                                                             data-foto="<%= platillo.foto %>">
                                                             <i class="fa-solid fa-pen-to-square"></i>
                                                         </button>
@@ -118,7 +123,7 @@
                                         <% }) %>
                                     <% } %>
                                     <tr id="filaNoCoincidenciasMenu" style="display: none;">
-                                        <td colspan="5" class="text-center py-5 text-muted">
+                                        <td colspan="6" class="text-center py-5 text-muted">
                                             <i class="fas fa-filter d-block mb-2 fs-3 text-secondary opacity-50"></i>
                                             No se encontraron platillos que coincidan con la búsqueda.
                                         </td>
@@ -152,13 +157,17 @@
                                 <label class="form-label fw-semibold text-secondary small">Descripción</label>
                                 <textarea name="descripcion" class="form-control" rows="2"></textarea>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label fw-semibold text-secondary small">Precio Principal ($)</label>
                                 <input type="number" step="0.01" name="precio" class="form-control" required>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold text-secondary small">Precio Alternativo <span class="text-muted">(Opcional)</span></label>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small">Precio Alt. <span class="text-muted">(Opt.)</span></label>
                                 <input type="number" step="0.01" name="precio_alt" class="form-control">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small">Precio USD / Zelle <span class="text-muted">(Opt.)</span></label>
+                                <input type="number" step="0.01" name="precio_usd" class="form-control">
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Categoría</label>
@@ -212,13 +221,17 @@
                                 <label class="form-label fw-semibold text-secondary small">Descripción</label>
                                 <textarea name="descripcion" id="edit_descripcion" class="form-control" rows="2"></textarea>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label fw-semibold text-secondary small">Precio Principal ($)</label>
                                 <input type="number" step="0.01" name="precio" id="edit_precio" class="form-control" required>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold text-secondary small">Precio Alternativo</label>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small">Precio Alt.</label>
                                 <input type="number" step="0.01" name="precio_alt" id="edit_precio_alt" class="form-control">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small">Precio USD / Zelle</label>
+                                <input type="number" step="0.01" name="precio_usd" id="edit_precio_usd" class="form-control">
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Categoría</label>
@@ -306,6 +319,7 @@
                 const precio = button.getAttribute('data-precio');
                 const categoria = button.getAttribute('data-categoria');
                 const precioAlt = button.getAttribute('data-precio_alt');
+                const precioUsd = button.getAttribute('data-precio_usd');
                 const foto = button.getAttribute('data-foto');
 
                 document.getElementById('edit_id').value = id || '';
@@ -314,6 +328,7 @@
                 document.getElementById('edit_precio').value = precio || '';
                 document.getElementById('edit_categoria').value = categoria || '';
                 document.getElementById('edit_precio_alt').value = (precioAlt && precioAlt !== 'null') ? precioAlt : '';
+                document.getElementById('edit_precio_usd').value = (precioUsd && precioUsd !== 'null') ? precioUsd : '';
                 document.getElementById('edit_foto').value = (foto && foto !== 'null') ? foto : '';
 
                 const thumbContainer = document.getElementById('thumbnail_container');

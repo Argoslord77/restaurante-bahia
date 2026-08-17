@@ -16,6 +16,7 @@ class MenuModel {
                 p.categoria,
                 c.nombre AS nombre_categoria,
                 p.precio_alt,
+                p.precio_usd,
                 p.foto,
                 p.creado_en
             FROM platillos_menu p
@@ -55,6 +56,7 @@ class MenuModel {
             precio,
             categoria,
             precio_alt,
+            precio_usd,
             foto
         } = data;
 
@@ -65,15 +67,17 @@ class MenuModel {
                 precio,
                 categoria,
                 precio_alt,
+                precio_usd,
                 foto
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [
             nombre,
             descripcion,
             precio,
             categoria,
             precio_alt,
+            precio_usd,
             foto
         ]);
 
@@ -91,6 +95,7 @@ class MenuModel {
             precio,
             categoria,
             precio_alt,
+            precio_usd,
             foto
         } = data;
 
@@ -102,6 +107,7 @@ class MenuModel {
                 precio = ?,
                 categoria = ?,
                 precio_alt = ?,
+                precio_usd = ?,
                 foto = ?
             WHERE id = ?
         `, [
@@ -110,6 +116,7 @@ class MenuModel {
             precio,
             categoria,
             precio_alt,
+            precio_usd,
             foto,
             id
         ]);
@@ -143,6 +150,7 @@ class MenuModel {
                 precio,
                 categoria,
                 precio_alt,
+                precio_usd,
                 foto
             FROM platillos_menu
             WHERE categoria = ?
@@ -162,6 +170,7 @@ class MenuModel {
                 id,
                 nombre,
                 precio,
+                precio_usd,
                 categoria,
                 foto
             FROM platillos_menu
