@@ -136,6 +136,9 @@
             <div class="col-md-7 col-lg-8 py-3 menu-section custom-scrollbar" id="section-menu">
                 <div class="d-flex gap-2 overflow-x-auto pb-2 mb-2 custom-scrollbar px-1" id="category-filters">
                     <button class="btn category-btn active font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="todos">Todos</button>
+                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm bg-warning text-dark border-0" data-category="especiales del día">
+                        ⭐ Platillos del Día
+                    </button>
                     <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="entradas">Entradas</button>
                     <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="platos fuertes">Platos Fuertes</button>
                     <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="postres">Postres</button>
@@ -168,22 +171,27 @@
                     <% if (locals.platillos && platillos.length > 0) { %>
                         <% platillos.forEach(platillo => { %>
                             <% const esDisponible = typeof platillo.disponible === 'undefined' || platillo.disponible === 1 || platillo.disponible === true; %>
+                            <% const esDelDia = platillo.es_platillo_dia === true; %>
                             <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
                                  data-id="<%= platillo.id %>"
                                  data-name="<%= (platillo.nombre || '').toLowerCase() %>"
                                  data-category="<%= String(platillo.nombre_categoria || platillo.categoria || '').toLowerCase().trim() %>"
                                  data-available="<%= esDisponible ? 'true' : 'false' %>">
-                                <div class="card dish-card h-100 bg-[#f8fafc] rounded-3xl shadow-xl overflow-hidden border border-slate-200/60 p-0 <%= !esDisponible ? 'out-of-stock' : '' %>">
+                                <div class="card dish-card h-100 bg-[#f8fafc] rounded-3xl shadow-xl overflow-hidden <%= esDelDia ? 'border-2 border-amber-400' : 'border border-slate-200/60' %> p-0 <%= !esDisponible ? 'out-of-stock' : '' %>">
                                     <div class="dish-img-wrapper">
                                         <% if (platillo.foto && platillo.foto !== 'null') { %>
                                             <img src="/uploads/<%= platillo.foto %>" alt="<%= platillo.nombre %>">
                                         <% } else { %>
                                             <div class="w-100 h-100 d-flex align-items-center justify-content-center text-slate-400 bg-slate-200/60">
-                                                <i class="fa-solid fa-bowl-food fa-2xl"></i>
+                                                <i class="fa-solid <%= platillo.tipo_categoria === 'BEBIDAS' ? 'fa-wine-glass text-info' : 'fa-bowl-food text-amber-500' %> fa-2xl"></i>
                                             </div>
                                         <% } %>
                                         
-                                        <% if (!esDisponible) { %>
+                                        <% if (esDelDia) { %>
+                                            <span class="position-absolute top-0 start-0 bg-amber-500 text-dark font-black px-2.5 py-1 m-2 rounded-xl text-[10px] shadow-sm tracking-wide uppercase">
+                                                ⭐ Especial
+                                            </span>
+                                        <% } else if (!esDisponible) { %>
                                             <span class="position-absolute top-0 start-0 bg-rose-600 text-white font-black px-2.5 py-1 m-2 rounded-xl text-[10px] shadow-sm tracking-wide uppercase">
                                                 Agotado
                                             </span>
@@ -549,7 +557,9 @@
                     const id = itemEl.dataset.id;
                     const nombre = itemEl.querySelector('.card-title').textContent.trim();
                     const precioText = itemEl.querySelector('.price-tag').textContent.replace('$', '').trim();
-                    addToCart(id, nombre, precioText);
+                    const esPlatilloDia = itemEl.dataset.category === 'especiales del día';
+                    
+                    addToCart(id, nombre, precioText, esPlatilloDia);
                 }
             });
 
@@ -623,11 +633,11 @@
             }
         }
 
-        function addToCart(id, nombre, precio) {
+        function addToCart(id, nombre, precio, esPlatilloDia = false) {
             const idString = String(id);
             const precioFloat = typeof precio === 'number' ? precio : parseFloat(precio);
 
-            const itemExistente = carrito.find(prod => String(prod.id) === idString);
+            const itemExistente = carrito.find(prod => String(prod.id) === idString && prod.es_platillo_dia === esPlatilloDia);
             if (itemExistente) {
                 itemExistente.cantidad += 1;
             } else {
@@ -636,7 +646,8 @@
                     nombre,
                     precio: precioFloat,
                     cantidad: 1,
-                    notas: ''
+                    notas: '',
+                    es_platillo_dia: esPlatilloDia
                 });
             }
             renderCart();

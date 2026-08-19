@@ -1,26 +1,65 @@
+// controllers/posController.js
 const menuService = require('../services/menuService');
 const orderService = require('../services/orderService');
 const orderModel = require('../models/orderModel');
 const RecetaService = require('../services/recetaService');
 const logger = require('../config/logger');
 const turnoService = require('../services/turnoService');
+const platilloDiaModel = require('../models/platilloDiaModel');
 const db = require('../config/db');
 const STATUS = require('../config/orderStatus');
 
 /**
  * Acceso directo al POS pasándole obligatoriamente el ID del pedido previamente inicializado
+ * Carga tanto el menú regular como los Platillos y Tragos del Día del turno activo
  */
 exports.viewPOS = async (req, res) => {
     try {
         const { id_pedido } = req.params;
         
-        // Obtener los detalles actuales si la comanda ya tenía platillos guardados previamente
+        // 1. Obtener los detalles actuales si la comanda ya tenía platillos guardados previamente
         const detallesActuales = await orderModel.getOrderDetails(id_pedido);
-        const platillos = await menuService.getAllItems();
+        
+        // 2. Obtener platillos regulares de 'platillos_menu'
+        const platillosRegulares = await menuService.getAllItems();
+
+        // 3. Obtener Platillos y Tragos del Día de 'platillos_dia' para el turno activo
+        const turnoActivo = await turnoService.obtenerTurnoActivo();
+        let platillosDia = [];
+        if (turnoActivo) {
+            platillosDia = await platilloDiaModel.getByTurno(turnoActivo.id);
+        }
+
+        // Formatear platillos del día para integrarlos a la cuadrícula del POS
+        const platillosDiaFormateados = platillosDia.map(pd => ({
+            id: pd.id,
+            nombre: pd.nombre,
+            descripcion: pd.descripcion,
+            precio: pd.precio,
+            precio_alt: pd.precio_alt,
+            precio_usd: pd.precio_usd,
+            foto: pd.foto,
+            categoria: 'Especiales del Día',
+            nombre_categoria: 'Especiales del Día',
+            tipo_categoria: pd.tipo, // 'COMESTIBLES' o 'BEBIDAS'
+            es_platillo_dia: true,
+            disponible: 1
+        }));
+
+        // Fusión: Platillos del día al principio + Menú regular
+        const todosLosPlatillos = [...platillosDiaFormateados, ...platillosRegulares];
+
+        // Obtener el número de mesa asociado
+        const [ped] = await db.query(
+            'SELECT m.numero AS nombre_mesa FROM pedidos p LEFT JOIN mesas m ON p.id_mesa = m.id WHERE p.id = ?', 
+            [id_pedido]
+        );
+        const nombreMesa = ped[0] ? `Mesa ${ped[0].nombre_mesa}` : 'Mesa Activa';
 
         res.render('pos', {
-            platillos,
+            platillos: todosLosPlatillos,
             id_pedido,
+            nombre_mesa: nombreMesa,
             detallesActuales: JSON.stringify(detallesActuales),
             user: req.user || { nombre: 'Dependiente', id: 1 },
             pageTitle: 'Orden Interactiva - Restaurante Bahía',
@@ -145,15 +184,16 @@ exports.apiVerifyStock = async (req, res) => {
 };
 
 /**
- * Obtiene los items listos en los pedidos activos
+ * Obtiene los items listos en los pedidos activos (Soporta platillos_menu y platillos_dia)
  */
 exports.obtenerItemsListosPedido = async (req, res) => {
     try {
         const { id_pedido } = req.params;
         const [rows] = await db.query(
-            `SELECT dp.id AS id_detalle, dp.estado_item, pl.nombre AS nombre_platillo
+            `SELECT dp.id AS id_detalle, dp.estado_item, COALESCE(pl.nombre, pd.nombre, 'Producto') AS nombre_platillo
              FROM detalles_pedido dp
-             INNER JOIN platillos_menu pl ON dp.id_platillo = pl.id
+             LEFT JOIN platillos_menu pl ON dp.id_platillo = pl.id
+             LEFT JOIN platillos_dia pd ON dp.id_platillo = pd.id
              WHERE dp.id_pedido = ? AND dp.estado_item = ?`,
             [id_pedido, STATUS.ITEM.LISTO]
         );
@@ -302,13 +342,11 @@ exports.apiCancelarItem = async (req, res) => {
 };
 
 /**
- * Para imprimir/visualizar la precuenta de pedido desde la terminal POS
+ * Para imprimir/visualizar la precuenta de pedido desde la terminal POS (Soporta platillos_menu y platillos_dia)
  */
 exports.viewPrecuenta = async (req, res) => {
     try {
         const id_pedido = req.params.id_pedido;
-        
-        console.log("ID de pedido recibido en backend:", id_pedido);
 
         if (!id_pedido || id_pedido === 'undefined') {
             return res.status(400).send('Error: ID de pedido no válido o no enviado.');
@@ -327,11 +365,15 @@ exports.viewPrecuenta = async (req, res) => {
             return res.status(404).send('Pedido no encontrado');
         }
 
-        // Consulta de ítems consumidos
+        // Consulta de ítems consumidos con soporte híbrido de tablas
         const [detalles] = await db.query(`
-            SELECT dp.cantidad, pm.nombre, dp.precio_unitario AS precio
+            SELECT 
+                dp.cantidad, 
+                COALESCE(pm.nombre, pd.nombre, 'Producto') AS nombre, 
+                dp.precio_unitario AS precio
             FROM detalles_pedido dp
-            INNER JOIN platillos_menu pm ON dp.id_platillo = pm.id
+            LEFT JOIN platillos_menu pm ON dp.id_platillo = pm.id
+            LEFT JOIN platillos_dia pd ON dp.id_platillo = pd.id
             WHERE dp.id_pedido = ? AND dp.estado_item != ?
         `, [id_pedido, STATUS.ITEM.CANCELADO]);
 
@@ -594,22 +636,10 @@ exports.procesarCobro = exports.procesarCobroAvanzado;
  */
 exports.obtenerMonedasTurnoActivo = async (req, res) => {
     try {
-        const [monedas] = await db.query(`
-            SELECT 
-                tm.moneda_id,
-                m.codigo,
-                m.nombre,
-                m.simbolo,
-                tm.factor_cambio
-            FROM turnos_monedas tm
-            INNER JOIN monedas m ON tm.moneda_id = m.id
-            INNER JOIN turnos_servicio t ON tm.turno_id = t.id
-            WHERE t.estado = 'abierto'
-        `);
-
+        const data = await turnoService.obtenerMonedasTurnoActivo();
         return res.json({
             success: true,
-            monedas: monedas
+            monedas: data.monedas
         });
     } catch (error) {
         console.error('Error al consultar monedas del turno activo:', error);
@@ -630,7 +660,7 @@ exports.obtenerAlertasPendientes = async (req, res) => {
             SELECT 
                 n.id, 
                 n.id_mesa, 
-                m.numero, 
+                m.numero AS numero_mesa, 
                 n.tipo, 
                 n.mensaje, 
                 n.creado_en
@@ -640,19 +670,20 @@ exports.obtenerAlertasPendientes = async (req, res) => {
             ORDER BY n.creado_en ASC
         `);
 
-        // 2. Pre-pedidos pendientes enviados por clientes
+        // 2. Pre-pedidos pendientes enviados por clientes (soporta platillos_menu y platillos_dia)
         const [prePedidos] = await db.query(`
             SELECT 
                 pp.id, 
                 pp.id_mesa, 
-                m.numero, 
-                p.nombre AS platillo, 
+                m.numero AS numero_mesa, 
+                COALESCE(p.nombre, pd.nombre, 'Platillo') AS platillo, 
                 pp.cantidad, 
                 pp.notas_especiales, 
                 pp.creado_en
             FROM pre_pedidos pp
             JOIN mesas m ON pp.id_mesa = m.id
-            JOIN platillos_menu p ON pp.id_platillo = p.id
+            LEFT JOIN platillos_menu p ON pp.id_platillo = p.id
+            LEFT JOIN platillos_dia pd ON pp.id_platillo = pd.id
             ORDER BY pp.creado_en ASC
         `);
 
@@ -707,12 +738,14 @@ exports.obtenerPrePedidosMesa = async (req, res) => {
             SELECT 
                 pp.id AS pre_pedido_id,
                 pp.id_platillo,
-                p.nombre,
-                p.precio,
+                COALESCE(p.nombre, pd.nombre, 'Platillo') AS nombre,
+                COALESCE(p.precio, pd.precio, 0) AS precio,
                 pp.cantidad,
                 pp.notas_especiales
             FROM pre_pedidos pp
-            JOIN platillos_menu p ON pp.id_platillo = p.id
+            JOIN mesas m ON pp.id_mesa = m.id
+            LEFT JOIN platillos_menu p ON pp.id_platillo = p.id
+            LEFT JOIN platillos_dia pd ON pp.id_platillo = pd.id
             WHERE pp.id_mesa = ?
             ORDER BY pp.creado_en ASC
         `, [idMesa]);

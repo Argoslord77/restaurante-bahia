@@ -1,11 +1,8 @@
+// models/orderModel.js
 const db = require('../config/db');
 const STATUS = require('../config/orderStatus');
 
 class OrderModel {
-    /**
-     * Obtiene el pedido activo 'pendiente' o 'preparando' de una mesa
-     * @param {Number} id_mesa 
-     */
     async getActiveOrderByMesa(id_mesa) {
         const [rows] = await db.query(`
             SELECT id, id_mesa, cliente_nombre, comensales, estado_pedido, estado_pago, subtotal, total, id_usuario_mesero
@@ -16,9 +13,6 @@ class OrderModel {
         return rows[0] || null;
     }
 
-    /**
-     * Crea un pedido inicial vacío asignado a una mesa
-     */
     async createEmptyOrder(id_mesa, id_usuario_mesero, turno_servicio_id) {
         const [result] = await db.query(`
             INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
@@ -27,9 +21,6 @@ class OrderModel {
         return result.insertId;
     }
 
-    /**
-     * Busca una mesa por su hash de auto_activación
-     */
     async getMesaByHash(hash) {
         const [rows] = await db.query(`
             SELECT m.* FROM mesas m
@@ -41,39 +32,54 @@ class OrderModel {
     }
 
     /**
-     * Obtiene los detalles/renglones actuales de un pedido
+     * Obtiene los detalles/renglones actuales de un pedido (Distingue platillos_menu vs platillos_dia)
      */
     async getOrderDetails(id_pedido) {
         const [rows] = await db.query(`
-            SELECT dp.*, pm.nombre, pm.precio 
+            SELECT 
+                dp.id AS id_detalle,
+                dp.id_pedido,
+                dp.id_platillo,
+                dp.es_platillo_dia,
+                dp.cantidad,
+                dp.precio_unitario AS precio,
+                dp.notas_especiales AS notas,
+                dp.estado_item AS estado,
+                CASE 
+                    WHEN dp.es_platillo_dia = 1 THEN COALESCE(pd.nombre, pm.nombre, 'Platillo del Día')
+                    ELSE COALESCE(pm.nombre, pd.nombre, 'Producto')
+                END AS nombre
             FROM detalles_pedido dp
-            INNER JOIN platillos_menu pm ON dp.id_platillo = pm.id
+            LEFT JOIN platillos_menu pm ON dp.id_platillo = pm.id AND dp.es_platillo_dia = 0
+            LEFT JOIN platillos_dia pd ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
             WHERE dp.id_pedido = ?
+            ORDER BY dp.id ASC
         `, [id_pedido]);
         return rows;
     }
 
     /**
-     * Agrega una nueva ronda de platillos al pedido sin borrar el histórico previo
-     * Y REACTIVA la comanda a 'pendiente' para que reaparezca en los monitores de producción.
+     * Inserta la ronda actual y actualiza el pedido a 'pendiente' para monitores de cocina/bar
      */
     async appendOrderItems(id_pedido, items) {
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction();
-
             const insertedItems = [];
 
-            // 1. Inserción de cada ítem de la ronda actual
             const insertQuery = `
-                INSERT INTO detalles_pedido (id_pedido, id_platillo, cantidad, precio_unitario, notas_especiales, estado_item)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO detalles_pedido (
+                    id_pedido, id_platillo, es_platillo_dia, cantidad, precio_unitario, notas_especiales, estado_item
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
             `;
 
             for (const item of items) {
+                const esDia = item.es_platillo_dia ? 1 : 0;
+                
                 const [res] = await connection.query(insertQuery, [
                     id_pedido,
                     item.id,
+                    esDia,
                     item.cantidad,
                     item.precio,
                     item.notas || null,
@@ -83,6 +89,7 @@ class OrderModel {
                 insertedItems.push({
                     id_detalle: res.insertId,
                     id_platillo: item.id,
+                    es_platillo_dia: esDia,
                     nombre: item.nombre,
                     precio: item.precio,
                     cantidad: item.cantidad,
@@ -91,9 +98,6 @@ class OrderModel {
                 });
             }
 
-            // =========================================================================
-            // Recalcular subtotal acumulado excluyendo productos cancelados
-            // =========================================================================
             const [sumRows] = await connection.query(`
                 SELECT SUM(cantidad * precio_unitario) AS subtotal_acumulado
                 FROM detalles_pedido
@@ -104,9 +108,6 @@ class OrderModel {
             const impuesto = subtotal * 0.10;
             const total = subtotal + impuesto;
 
-            // 3. ACTUALIZACIÓN CLAVE: 
-            // Forzar estado_pedido = 'pendiente' (STATUS.PEDIDO.PENDIENTE)
-            // para reactivar la comanda en los monitores de cocina y bar
             await connection.query(`
                 UPDATE pedidos 
                 SET subtotal = ?, 
@@ -130,46 +131,32 @@ class OrderModel {
         }
     }
 
-    /**
-     * Obtiene los detalles de un pedido que están en estado 'listo'
-     */
     async getItemsListosByPedido(id_pedido) {
         const query = `
             SELECT 
                 dp.id AS id_detalle,
                 dp.id_pedido,
                 dp.id_platillo,
-                p.nombre AS nombre_platillo,
+                dp.es_platillo_dia,
+                CASE 
+                    WHEN dp.es_platillo_dia = 1 THEN COALESCE(pd.nombre, p.nombre, 'Platillo del Día')
+                    ELSE COALESCE(p.nombre, pd.nombre, 'Producto')
+                END AS nombre_platillo,
                 dp.cantidad,
                 dp.estado_item AS estado
             FROM detalles_pedido dp
-            JOIN platillos_menu p ON dp.id_platillo = p.id
+            LEFT JOIN platillos_menu p ON dp.id_platillo = p.id AND dp.es_platillo_dia = 0
+            LEFT JOIN platillos_dia pd ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
             WHERE dp.id_pedido = ? AND dp.estado_item = 'listo'
         `;
         const [rows] = await db.query(query, [id_pedido]);
         return rows;
     }
 
-    /**
-     * Actualiza el estado de un renglón/detalle específico de una comanda.
-     * @param {number|string} idDetalle - ID del renglón en la tabla `detalle_pedidos`.
-     * @param {string} nuevoEstado - Nuevo estado ('pendiente', 'en_preparacion', 'listo', 'entregado', 'cancelado').
-     * @returns {Promise<boolean>} Retorna true si la actualización afectó al menos una fila.
-     */
     async updateItemStatus(idDetalle, nuevoEstado) {
-      const query = `
-        UPDATE detalles_pedido 
-        SET estado_item = ? 
-        WHERE id = ?
-      `;
-
-      try {
+        const query = `UPDATE detalles_pedido SET estado_item = ? WHERE id = ?`;
         const [result] = await db.execute(query, [nuevoEstado, idDetalle]);
         return result.affectedRows > 0;
-      } catch (error) {
-        console.error('Error en orderModel.updateItemStatus:', error);
-        throw error;
-      }
     }
 }
 
