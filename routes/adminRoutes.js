@@ -52,6 +52,13 @@ router.post('/menu/crear', upload.single('foto'), menuValidationRules.create, ha
 router.post('/menu/editar/:id', upload.single('foto'), menuValidationRules.update, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.updateDish);
 router.post('/menu/eliminar/:id', menuValidationRules.delete, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.deleteDish);
 
+// ==========================================
+// MÓDULO: PLATILLOS DEL DÍA (TURNO ACTIVO)
+// ==========================================
+router.post('/menu/platillo-dia/crear', upload.single('foto'), ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.createPlatilloDia);
+router.post('/menu/platillo-dia/reutilizar/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.reutilizarPlatilloDia);
+router.delete('/menu/platillo-dia/eliminar/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.deletePlatilloDia);
+
 // Nueva acción para guardar la distribución por lote (Permite Capitán)
 router.post('/mesas/distribucion', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'capitan']), asegurarTurnoActivo, tableController.saveDistribution);
 

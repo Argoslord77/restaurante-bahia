@@ -446,6 +446,12 @@
   }
   .dish-card:hover{ transform: translateY(-2px); box-shadow: var(--shadow-lift); }
 
+  /* Borde ámbar elegante para los platillos del día */
+  .dish-card.special-card {
+    border: 1.5px solid var(--saffron-500);
+    background: #fffdf9;
+  }
+
   .dish-icon{
     flex-shrink:0;
     width: 64px; height: 64px;
@@ -751,6 +757,7 @@
   const ID_PEDIDO_ACTIVO = "<%= (typeof pedidoActivo !== 'undefined' && pedidoActivo) ? pedidoActivo.id : '' %>";
   const PERMITE_PREPEDIDO = <%= (typeof permitePrepedido !== 'undefined' && permitePrepedido) ? true : false %>;
   const MENU_RAW = <%- JSON.stringify(menu || []) %>;
+  const PLATILLOS_DIA_RAW = <%- JSON.stringify(typeof platillosDelDia !== 'undefined' ? platillosDelDia : []) %>;
   const CONSUMOS_RAW = <%- JSON.stringify(typeof consumos !== 'undefined' ? consumos : []) %>;
   
   const cart = {};
@@ -758,6 +765,7 @@
   // Mapeo automático de iconos según la categoría
   function getIconForCategory(catName) {
     const name = (catName || '').toLowerCase();
+    if (name.includes('especial') || name.includes('del día') || name.includes('del dia')) return 'fa-star text-warning';
     if (name.includes('bebida') || name.includes('trago') || name.includes('coctel') || name.includes('cerveza')) return 'fa-wine-glass';
     if (name.includes('postre') || name.includes('dulce')) return 'fa-ice-cream';
     if (name.includes('entrada') || name.includes('tapa')) return 'fa-utensils';
@@ -766,33 +774,50 @@
     return 'fa-utensils';
   }
 
-  // Transformación y agrupamiento del menú por categoría
-  function processMenuData(rawItems) {
-    if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
+  // Transformación y agrupamiento del menú por categoría (Platillos del día arriba de primero)
+  function processMenuData(rawItems, platillosDia) {
+    const list = [];
 
-    const catMap = {};
-    rawItems.forEach(item => {
-      const catName = (item.categoria && String(item.categoria).trim() !== '') 
-        ? String(item.categoria).trim() 
-        : 'General';
+    // 1. Incorporar la sección especial "Platillos del Día" en la parte superior si existen
+    if (Array.isArray(platillosDia) && platillosDia.length > 0) {
+      list.push({
+        id: 'platillos-del-dia',
+        nombre: 'Especiales del Día',
+        icono: 'fa-star text-warning',
+        esEspecial: true,
+        platos: platillosDia.map(p => ({ ...p, categoria: 'Especiales del Día', es_platillo_dia: 1 }))
+      });
+    }
 
-      const catIcon = getIconForCategory(catName);
+    // 2. Agrupar el menú regular
+    if (Array.isArray(rawItems) && rawItems.length > 0) {
+      const catMap = {};
+      rawItems.forEach(item => {
+        const catName = (item.categoria && String(item.categoria).trim() !== '') 
+          ? String(item.categoria).trim() 
+          : 'General';
 
-      if (!catMap[catName]) {
-        catMap[catName] = { 
-          id: catName.toLowerCase().replace(/[^a-z0-9]/g, '-'), 
-          nombre: catName, 
-          icono: catIcon,
-          platos: [] 
-        };
-      }
-      catMap[catName].platos.push(item);
-    });
+        const catIcon = getIconForCategory(catName);
 
-    return Object.values(catMap);
+        if (!catMap[catName]) {
+          catMap[catName] = { 
+            id: catName.toLowerCase().replace(/[^a-z0-9]/g, '-'), 
+            nombre: catName, 
+            icono: catIcon,
+            esEspecial: false,
+            platos: [] 
+          };
+        }
+        catMap[catName].platos.push(item);
+      });
+
+      list.push(...Object.values(catMap));
+    }
+
+    return list;
   }
 
-  const DATA = processMenuData(MENU_RAW);
+  const DATA = processMenuData(MENU_RAW, PLATILLOS_DIA_RAW);
 
   document.addEventListener('DOMContentLoaded', () => {
     initMenu();
@@ -831,7 +856,7 @@
           <span class="count">${platos.length} ${platos.length === 1 ? 'opción' : 'opciones'}</span>
         </div>
         <div class="dish-grid">
-          ${platos.map(d => createDishCard(d, catSlug)).join('')}
+          ${platos.map(d => createDishCard(d, catSlug, cat.esEspecial)).join('')}
         </div>
       `;
       menuContainer.appendChild(sec);
@@ -840,11 +865,11 @@
     initScrollObserver();
   }
 
-  function createDishCard(d, catSlug) {
+  function createDishCard(d, catSlug, esEspecial = false) {
     const priceFormatted = parseFloat(d.precio || 0).toFixed(2);
     const iconMarkup = d.foto 
       ? `<img src="/uploads/${d.foto}" style="width:100%;height:100%;object-fit:cover;border-radius:16px;">`
-      : `<i class="fa-solid fa-utensils"></i>`;
+      : `<i class="fa-solid ${d.tipo === 'BEBIDAS' ? 'fa-wine-glass text-info' : 'fa-utensils'}"></i>`;
     
     // Condicionar la botonera según si la configuración permite prepedidos
     const actionArea = PERMITE_PREPEDIDO 
@@ -856,12 +881,15 @@
       : ``;
 
     return `
-      <div class="dish-card" data-name="${(d.nombre || '').toLowerCase()}" data-id="${d.id}">
+      <div class="dish-card ${esEspecial ? 'special-card' : ''}" data-name="${(d.nombre || '').toLowerCase()}" data-id="${d.id}">
         <div class="dish-icon" data-action="view-detail" data-id="${d.id}" title="Ver detalle">
           ${iconMarkup}
         </div>
         <div class="dish-info">
-          <div class="dish-name">${d.nombre}</div>
+          <div class="dish-name d-flex align-items-center justify-content-between">
+            <span>${d.nombre}</span>
+            ${esEspecial ? '<span class="badge bg-warning text-dark fs-8 rounded-pill">Especial</span>' : ''}
+          </div>
           <div class="dish-desc">${d.descripcion || ''}</div>
           <div class="dish-bottom">
             <span class="price">$${priceFormatted}</span>
@@ -996,7 +1024,7 @@
     if (dish.foto) {
       imgContainer.innerHTML = `<img src="/uploads/${dish.foto}" alt="${dish.nombre}">`;
     } else {
-      imgContainer.innerHTML = `<i class="fa-solid fa-utensils"></i>`;
+      imgContainer.innerHTML = `<i class="fa-solid ${dish.tipo === 'BEBIDAS' ? 'fa-wine-glass text-info' : 'fa-utensils'}"></i>`;
     }
 
     document.getElementById('dishModalCategory').textContent = catName;
