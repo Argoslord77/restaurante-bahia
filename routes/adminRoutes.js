@@ -58,6 +58,7 @@ router.post('/menu/eliminar/:id', menuValidationRules.delete, handleValidationEr
 router.post('/menu/platillo-dia/crear', upload.single('foto'), ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.createPlatilloDia);
 router.post('/menu/platillo-dia/reutilizar/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.reutilizarPlatilloDia);
 router.delete('/menu/platillo-dia/eliminar/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.deletePlatilloDia);
+router.post('/menu/platillo-dia/editar/:id', upload.single('foto'), ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.updatePlatilloDia);
 
 // Nueva acción para guardar la distribución por lote (Permite Capitán)
 router.post('/mesas/distribucion', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'capitan']), asegurarTurnoActivo, tableController.saveDistribution);

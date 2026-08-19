@@ -177,6 +177,45 @@ module.exports = {
         }
     },
 
+    // EDITAR PLATILLO DEL DÍA DEL TURNO ACTIVO
+    updatePlatilloDia: async (req, res) => {
+        const { id } = req.params;
+        const { nombre, descripcion, precio, precio_alt, precio_usd, tipo, fotoActual } = req.body;
+        const foto = req.file ? req.file.filename : (fotoActual && fotoActual !== 'null' ? fotoActual.trim() : null);
+
+        try {
+            const finalPrecioAlt = precio_alt && precio_alt.trim() !== '' ? parseFloat(precio_alt) : null;
+            const finalPrecioUsd = precio_usd && precio_usd.trim() !== '' ? parseFloat(precio_usd) : null;
+
+            if (req.file && fotoActual && fotoActual !== 'null' && fotoActual.trim() !== '') {
+                const rutaFotoVieja = path.join(__dirname, '../public/uploads', fotoActual.trim());
+                fs.unlink(rutaFotoVieja, () => {});
+            }
+
+            await platilloDiaModel.update(id, {
+                nombre: nombre.trim(),
+                descripcion: descripcion ? descripcion.trim() : null,
+                precio: parseFloat(precio),
+                precio_alt: finalPrecioAlt,
+                precio_usd: finalPrecioUsd,
+                tipo: tipo || 'COMESTIBLES',
+                foto: foto
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: `¡"${nombre.trim()}" se actualizó correctamente!`
+            });
+        } catch (error) {
+            console.error('Error al editar platillo del día:', error);
+            if (req.file) {
+                const rutaFotoError = path.join(__dirname, '../public/uploads', req.file.filename);
+                fs.unlink(rutaFotoError, () => {});
+            }
+            return res.status(400).json({ success: false, message: error.message || 'No se pudo actualizar el platillo del día.' });
+        }
+    },
+
     // Reutilizar / Clonar Platillo del Día Histórico al Turno Activo
     reutilizarPlatilloDia: async (req, res) => {
         const { id } = req.params;
