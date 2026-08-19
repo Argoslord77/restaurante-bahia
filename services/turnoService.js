@@ -18,7 +18,9 @@ class TurnoService {
         const historial = await TurnoModel.getHistorialCompleto(15);
         
         // Obtener catálogo de monedas activas para el panel de apertura
-        const [monedas] = await db.query("SELECT id, codigo, nombre, simbolo, es_moneda_base, factor_cambio FROM monedas WHERE activo = 1 ORDER BY es_moneda_base DESC, codigo ASC");
+        const [monedas] = await db.query(
+            "SELECT id, codigo, nombre, simbolo, es_moneda_base, factor_cambio FROM monedas WHERE activo = 1 ORDER BY es_moneda_base DESC, codigo ASC"
+        );
         
         return { turnoActivo, historial, monedas };
     }
@@ -110,36 +112,82 @@ class TurnoService {
             const diferencia = parseFloat(montoCierreReal) - montoEsperado;
             const balanceEstado = Math.abs(diferencia) < 0.01 ? 'cuadrado' : (diferencia > 0 ? 'sobrante' : 'faltante');
 
-            // 4. Insertar la instantánea en 'cierres_servicio'
-            await connection.query(`
-                INSERT INTO cierres_servicio (
-                    turno_servicio_id, usuario_cierre_id, fecha_cierre,
-                    fondo_apertura, total_cobrado_caja, total_propinas,
-                    total_cxc_facturas, total_pendiente_pago, total_cortesias,
-                    monto_esperado_caja, monto_real_entregado, diferencia, balance_estado,
-                    total_pedidos, pedidos_pagados, pedidos_facturados, pedidos_pendientes,
-                    desglose_monedas, observaciones
-                ) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `, [
-                turnoId,
-                usuarioCierreId,
-                fondoApertura,
-                total_cobrado_caja,
-                total_propinas,
-                total_cxc_facturas,
-                total_pendiente_pago,
-                total_cortesias,
-                montoEsperado,
-                montoCierreReal,
-                diferencia,
-                balanceEstado,
-                pedidos.length,
-                pedidos_pagados,
-                pedidos_facturados,
-                pedidos_pendientes,
-                JSON.stringify(desglosePagos),
-                observacionesCierre || null
-            ]);
+            // 4. Asegurar que la tabla 'cierres_servicio' exista y guardar la instantánea
+            try {
+                await connection.query(`
+                    CREATE TABLE IF NOT EXISTS \`cierres_servicio\` (
+                        \`id\` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+                        \`turno_servicio_id\` BIGINT(20) UNSIGNED NOT NULL,
+                        \`fecha_cierre\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+                        \`usuario_cierre_id\` INT(11) NOT NULL,
+                        \`fondo_apertura\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`total_cobrado_caja\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`total_propinas\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`total_cxc_facturas\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`total_pendiente_pago\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`total_cortesias\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`monto_esperado_caja\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`monto_real_entregado\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`diferencia\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`balance_estado\` ENUM('cuadrado','sobrante','faltante') NOT NULL DEFAULT 'cuadrado',
+                        \`total_pedidos\` INT(11) NOT NULL DEFAULT 0,
+                        \`pedidos_pagados\` INT(11) NOT NULL DEFAULT 0,
+                        \`pedidos_facturados\` INT(11) NOT NULL DEFAULT 0,
+                        \`pedidos_pendientes\` INT(11) NOT NULL DEFAULT 0,
+                        \`desglose_monedas\` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+                        \`observaciones\` TEXT DEFAULT NULL,
+                        \`creado_en\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+                        PRIMARY KEY (\`id\`),
+                        UNIQUE KEY \`uk_cierre_turno\` (\`turno_servicio_id\`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+                `);
+
+                await connection.query(`
+                    INSERT INTO cierres_servicio (
+                        turno_servicio_id, usuario_cierre_id, fecha_cierre,
+                        fondo_apertura, total_cobrado_caja, total_propinas,
+                        total_cxc_facturas, total_pendiente_pago, total_cortesias,
+                        monto_esperado_caja, monto_real_entregado, diferencia, balance_estado,
+                        total_pedidos, pedidos_pagados, pedidos_facturados, pedidos_pendientes,
+                        desglose_monedas, observaciones
+                    ) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                        usuario_cierre_id = VALUES(usuario_cierre_id),
+                        fondo_apertura = VALUES(fondo_apertura),
+                        total_cobrado_caja = VALUES(total_cobrado_caja),
+                        total_propinas = VALUES(total_propinas),
+                        total_cxc_facturas = VALUES(total_cxc_facturas),
+                        total_pendiente_pago = VALUES(total_pendiente_pago),
+                        total_cortesias = VALUES(total_cortesias),
+                        monto_esperado_caja = VALUES(monto_esperado_caja),
+                        monto_real_entregado = VALUES(monto_real_entregado),
+                        diferencia = VALUES(diferencia),
+                        balance_estado = VALUES(balance_estado),
+                        desglose_monedas = VALUES(desglose_monedas),
+                        observaciones = VALUES(observaciones)
+                `, [
+                    turnoId,
+                    usuarioCierreId,
+                    fondoApertura,
+                    total_cobrado_caja,
+                    total_propinas,
+                    total_cxc_facturas,
+                    total_pendiente_pago,
+                    total_cortesias,
+                    montoEsperado,
+                    montoCierreReal,
+                    diferencia,
+                    balanceEstado,
+                    pedidos.length,
+                    pedidos_pagados,
+                    pedidos_facturados,
+                    pedidos_pendientes,
+                    JSON.stringify(desglosePagos),
+                    observacionesCierre || null
+                ]);
+            } catch (errSnapshot) {
+                console.warn('[TurnoService] Advertencia al persistir instantánea en cierres_servicio:', errSnapshot.message);
+            }
 
             // 5. Actualizar el estado del turno a 'cerrado' en 'turnos_servicio'
             await connection.query(`
@@ -173,6 +221,7 @@ class TurnoService {
 
         } catch (error) {
             await connection.rollback();
+            console.error('Error en TurnoService.cerrarTurnoActivo:', error);
             throw error;
         } finally {
             connection.release();
