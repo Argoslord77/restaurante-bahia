@@ -27,6 +27,7 @@ exports.listTables = async (req, res) => {
 
         const serverIp = process.env.SERVER_IP || 'localhost';
 
+        // Renderiza la vista 
         res.render('admin/tables', {
             tables,
             waiters,
@@ -35,7 +36,7 @@ exports.listTables = async (req, res) => {
             hayTurnoActivo,
             turnoActivo,
             user: req.user,
-            view: 'table',
+            view: 'tables',
             serverIp
         });
     } catch (error) {

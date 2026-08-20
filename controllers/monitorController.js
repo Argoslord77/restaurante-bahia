@@ -1,3 +1,4 @@
+// controllers/monitorController.js
 const db = require('../config/db');
 const STATUS = require('../config/orderStatus');
 
@@ -41,21 +42,27 @@ exports.viewMonitor = async (req, res) => {
             ? (STATUS.ITEM.EN_COCINA || 'en_cocina') 
             : (STATUS.ITEM.EN_BAR || 'en_bar');
 
-        // QUERY OPTIMIZADA CON SEGURIDAD PARA MULTI-RONDAS:
+        // QUERY CON RESOLUCIÓN CONDICIONAL (platillos_menu + platillos_dia):
         const query = `
             SELECT 
                 pd.id AS detalle_id,
                 pd.id_pedido,
+                pd.id_platillo,
+                pd.es_platillo_dia,
                 pd.cantidad,
                 pd.notas_especiales,
                 pd.estado_item,
                 p.id_mesa,
                 m.numero AS numero_mesa,
-                pl.nombre AS nombre_platillo
+                CASE 
+                    WHEN pd.es_platillo_dia = 1 THEN COALESCE(p_dia.nombre, pl.nombre, 'Platillo del Día')
+                    ELSE COALESCE(pl.nombre, p_dia.nombre, 'Platillo')
+                END AS nombre_platillo
             FROM detalles_pedido pd
-            JOIN pedidos p ON pd.id_pedido = p.id
-            JOIN mesas m ON p.id_mesa = m.id
-            JOIN platillos_menu pl ON pd.id_platillo = pl.id
+            INNER JOIN pedidos p ON pd.id_pedido = p.id
+            INNER JOIN mesas m ON p.id_mesa = m.id
+            LEFT JOIN platillos_menu pl ON pd.id_platillo = pl.id AND pd.es_platillo_dia = 0
+            LEFT JOIN platillos_dia p_dia ON pd.id_platillo = p_dia.id AND pd.es_platillo_dia = 1
             WHERE LOWER(pd.estado_item) = LOWER(?)
               AND LOWER(p.estado_pedido) NOT IN ('cerrado', 'pagado', 'cancelado')
             ORDER BY p.creado_en ASC, pd.id ASC
@@ -161,16 +168,22 @@ exports.getComandasAPI = async (req, res) => {
             SELECT 
                 pd.id AS detalle_id,
                 pd.id_pedido,
+                pd.id_platillo,
+                pd.es_platillo_dia,
                 pd.cantidad,
                 pd.notas_especiales,
                 pd.estado_item,
                 p.id_mesa,
                 m.numero AS numero_mesa,
-                pl.nombre AS nombre_platillo
+                CASE 
+                    WHEN pd.es_platillo_dia = 1 THEN COALESCE(p_dia.nombre, pl.nombre, 'Platillo del Día')
+                    ELSE COALESCE(pl.nombre, p_dia.nombre, 'Platillo')
+                END AS nombre_platillo
             FROM detalles_pedido pd
-            JOIN pedidos p ON pd.id_pedido = p.id
-            JOIN mesas m ON p.id_mesa = m.id
-            JOIN platillos_menu pl ON pd.id_platillo = pl.id
+            INNER JOIN pedidos p ON pd.id_pedido = p.id
+            INNER JOIN mesas m ON p.id_mesa = m.id
+            LEFT JOIN platillos_menu pl ON pd.id_platillo = pl.id AND pd.es_platillo_dia = 0
+            LEFT JOIN platillos_dia p_dia ON pd.id_platillo = p_dia.id AND pd.es_platillo_dia = 1
             WHERE LOWER(pd.estado_item) = LOWER(?)
               AND LOWER(p.estado_pedido) NOT IN ('cerrado', 'pagado', 'cancelado')
             ORDER BY p.creado_en ASC, pd.id ASC

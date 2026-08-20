@@ -5,7 +5,7 @@ const db = require('../config/db');
 
 class TableService {
 
-    // Listar todas las mesas ordenadas por ubicación y número mapeando el objeto orden_activa
+    // Listar todas las mesas ordenadas mapeando tanto orden_activa como variables planas para la vista
     async getAllTables() {
         const rows = await TableModel.getAll();
         
@@ -19,6 +19,9 @@ class TableService {
                 ubicacion: row.ubicacion,
                 creado_en: row.creado_en,
                 actualizado_en: row.actualizado_en,
+                pedido_id: row.orden_id || null,
+                pedido_estado: row.orden_estado || null,
+                total_productos: parseInt(row.total_productos, 10) || 0,
                 orden_activa: null
             };
 
@@ -58,30 +61,35 @@ class TableService {
     // Obtener los usuarios activos que tengan el rol de dependiente o capitan
     async getActiveWaiters() {
         const [rows] = await db.query(
-            "SELECT id, nombre, rol FROM usuarios WHERE rol IN ('dependiente', 'capitan') ORDER BY nombre ASC"
+            "SELECT id, CONCAT(nombre, ' ', apellidos) AS nombre, rol FROM usuarios WHERE rol IN ('dependiente', 'capitan', 'administrador', 'superadministrador') AND activo = 1 ORDER BY nombre ASC"
         );
         return rows;
     }
 
     // Obtener el mapeo de la distribución asociada al turno activo
     async getDistributionToday(ubicacion, turnoId = null) {
-        const hoy = new Date().toISOString().split('T')[0];
-        
-        // Se consulta la asignación pasando la fecha, ubicación y opcionalmente el turno
-        const asignacion = await DistributionModel.getByDateAndLocation(hoy, ubicacion, turnoId);
-        
-        if (!asignacion) return null;
-        
-        const detalles = await DistributionModel.getDetailsByAssignmentId(asignacion.id);
-        
-        // Retornamos un objeto indexado por mesa_id para búsqueda rápida O(1) en la vista
-        return detalles.reduce((acc, cur) => {
-            acc[cur.mesa_id] = { id: cur.dependiente_id, nombre: cur.dependiente_nombre };
+        if (!turnoId) return null;
+
+        const [distRows] = await db.query(`
+            SELECT 
+                dam.mesa_id,
+                dam.dependiente_id,
+                CONCAT(u.nombre, ' ', u.apellidos) AS dependiente_nombre
+            FROM asignaciones_diarias ad
+            INNER JOIN detalle_asignacion_mesa dam ON ad.id = dam.asignacion_diaria_id
+            INNER JOIN usuarios u ON dam.dependiente_id = u.id
+            WHERE ad.turno_id = ? AND ad.ubicacion = ?
+        `, [turnoId, ubicacion]);
+
+        if (distRows.length === 0) return null;
+
+        return distRows.reduce((acc, cur) => {
+            acc[cur.mesa_id] = { id: cur.dependiente_id, dependiente_id: cur.dependiente_id, nombre: cur.dependiente_nombre };
             return acc;
         }, {});
     }
 
-    // Guardar o actualizar la distribución diaria de forma incremental (Upsert) vinculada al turno
+    // Guardar o actualizar la distribución diaria vinculada al turno
     async saveDistribution(ubicacion, asignaciones, turnoId = null) {
         const hoy = new Date().toISOString().split('T')[0];
         let asignacionId;

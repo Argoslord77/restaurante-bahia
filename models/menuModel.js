@@ -6,24 +6,24 @@ class MenuModel {
      * Obtener todos los platillos
      */
     async getAll() {
-
-        const [rows] = await db.query(`
-            SELECT
-                p.id,
-                p.nombre,
-                p.descripcion,
-                p.precio,
-                p.categoria,
-                c.nombre AS nombre_categoria,
-                p.precio_alt,
-                p.precio_usd,
-                p.foto,
-                p.creado_en
-            FROM platillos_menu p
-            LEFT JOIN categorias_platillos c ON p.categoria = c.id
-            ORDER BY c.nombre ASC, p.nombre ASC
-        `);
-
+        const query = `
+            SELECT 
+                pm.id,
+                pm.nombre,
+                pm.descripcion,
+                pm.precio,
+                pm.precio_alt,
+                pm.precio_usd,
+                pm.foto,
+                pm.categoria AS categoria_id,
+                cp.nombre AS nombre_categoria,
+                cp.tipo AS tipo_categoria,
+                1 AS disponible
+            FROM platillos_menu pm
+            LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
+            ORDER BY cp.nombre ASC, pm.nombre ASC
+        `;
+        const [rows] = await db.query(query);
         return rows;
     }
 

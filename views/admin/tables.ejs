@@ -652,6 +652,17 @@
                 }
             });
         }
+
+        // Redirigir al POS de la orden al hacer clic en el botón de Orden activa
+        document.addEventListener('click', function(e) {
+            const btnVerOrden = e.target.closest('.btn-ver-orden');
+            if (btnVerOrden) {
+                const pedidoId = btnVerOrden.getAttribute('data-pedido-id');
+                if (pedidoId) {
+                    window.location.href = `/pos/${pedidoId}`;
+                }
+            }
+        });
     </script>
 </body>
 </html>

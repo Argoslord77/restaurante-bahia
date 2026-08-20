@@ -2,7 +2,7 @@
 const db = require('../config/db');
 
 const Table = {
-    // Listar todas las mesas ordenadas por ubicación y número con su orden activa
+    // Listar todas las mesas únicas con su pedido activo (si existe)
     getAll: async () => {
         const queryStr = `
             SELECT 
@@ -16,10 +16,16 @@ const Table = {
                 m.actualizado_en,
                 p.id AS orden_id,
                 p.estado_pedido AS orden_estado,
-                (SELECT COALESCE(SUM(dp.cantidad), 0) FROM detalles_pedido dp WHERE dp.id_pedido = p.id AND dp.estado_item != 'cancelado') AS total_productos
+                COALESCE(SUM(CASE WHEN dp.estado_item != 'cancelado' THEN dp.cantidad ELSE 0 END), 0) AS total_productos
             FROM mesas m
-            LEFT JOIN pedidos p ON m.id = p.id_mesa AND p.estado_pedido != 'cancelado' AND p.estado_pedido != 'entregado_pagado'
-            ORDER BY m.ubicacion ASC, m.numero ASC
+            -- Unir ÚNICAMENTE el pedido activo no cerrado de la mesa
+            LEFT JOIN pedidos p ON m.id = p.id_mesa 
+                AND p.estado_pago = 'pendiente' 
+                AND p.fecha_cierre IS NULL 
+                AND p.estado_pedido != 'cancelado'
+            LEFT JOIN detalles_pedido dp ON p.id = dp.id_pedido
+            GROUP BY m.id
+            ORDER BY m.ubicacion ASC, CAST(REGEXP_REPLACE(m.numero, '[^0-9]', '') AS UNSIGNED) ASC, m.numero ASC
         `;
         const [rows] = await db.query(queryStr);
         return rows;

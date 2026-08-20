@@ -134,15 +134,23 @@
         <div class="row h-100">
             <!-- Panel Izquierdo: Catálogo de Platillos -->
             <div class="col-md-7 col-lg-8 py-3 menu-section custom-scrollbar" id="section-menu">
+                <!-- Barra de Categorías -->
                 <div class="d-flex gap-2 overflow-x-auto pb-2 mb-2 custom-scrollbar px-1" id="category-filters">
-                    <button class="btn category-btn active font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="todos">Todos</button>
-                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm bg-warning text-dark border-0" data-category="especiales del día">
+                    <button class="btn category-btn active font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="todos">
+                        Todos
+                    </button>
+                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm bg-warning text-dark border-0" data-category="platillos_dia">
                         ⭐ Platillos del Día
                     </button>
-                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="entradas">Entradas</button>
-                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="platos fuertes">Platos Fuertes</button>
-                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="postres">Postres</button>
-                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="bebidas">Bebidas</button>
+                    
+                    <% if (locals.categorias && Array.isArray(categorias) && categorias.length > 0) { %>
+                        <% categorias.forEach(cat => { %>
+                            <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm bg-[#1e293b] text-white border border-slate-700/60" 
+                                    data-category="<%= cat.nombre.toLowerCase().trim() %>">
+                                <%= cat.nombre %>
+                            </button>
+                        <% }) %>
+                    <% } %>
                 </div>
 
                 <div class="mb-3 px-1">
@@ -171,12 +179,15 @@
                     <% if (locals.platillos && platillos.length > 0) { %>
                         <% platillos.forEach(platillo => { %>
                             <% const esDisponible = typeof platillo.disponible === 'undefined' || platillo.disponible === 1 || platillo.disponible === true; %>
-                            <% const esDelDia = platillo.es_platillo_dia === true; %>
+                            <% const esDelDia = platillo.es_platillo_dia === true || platillo.es_platillo_dia === 1; %>
+                            
                             <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
                                  data-id="<%= platillo.id %>"
                                  data-name="<%= (platillo.nombre || '').toLowerCase() %>"
                                  data-category="<%= String(platillo.nombre_categoria || platillo.categoria || '').toLowerCase().trim() %>"
+                                 data-es-dia="<%= esDelDia ? '1' : '0' %>"
                                  data-available="<%= esDisponible ? 'true' : 'false' %>">
+                                
                                 <div class="card dish-card h-100 bg-[#f8fafc] rounded-3xl shadow-xl overflow-hidden <%= esDelDia ? 'border-2 border-amber-400' : 'border border-slate-200/60' %> p-0 <%= !esDisponible ? 'out-of-stock' : '' %>">
                                     <div class="dish-img-wrapper">
                                         <% if (platillo.foto && platillo.foto !== 'null') { %>
@@ -189,7 +200,7 @@
                                         
                                         <% if (esDelDia) { %>
                                             <span class="position-absolute top-0 start-0 bg-amber-500 text-dark font-black px-2.5 py-1 m-2 rounded-xl text-[10px] shadow-sm tracking-wide uppercase">
-                                                ⭐ Especial
+                                                ⭐ Especial del Día
                                             </span>
                                         <% } else if (!esDisponible) { %>
                                             <span class="position-absolute top-0 start-0 bg-rose-600 text-white font-black px-2.5 py-1 m-2 rounded-xl text-[10px] shadow-sm tracking-wide uppercase">
@@ -557,7 +568,7 @@
                     const id = itemEl.dataset.id;
                     const nombre = itemEl.querySelector('.card-title').textContent.trim();
                     const precioText = itemEl.querySelector('.price-tag').textContent.replace('$', '').trim();
-                    const esPlatilloDia = itemEl.dataset.category === 'especiales del día';
+                    const esPlatilloDia = itemEl.dataset.esDia === 'true';
                     
                     addToCart(id, nombre, precioText, esPlatilloDia);
                 }
@@ -595,10 +606,20 @@
             let visibleCount = 0;
 
             dishes.forEach(item => {
-                const itemCategory = item.dataset.category || '';
-                const itemName = item.dataset.name || '';
+                const itemCategory = item.getAttribute('data-category') || '';
+                const itemName = item.getAttribute('data-name') || '';
+                const esDia = item.getAttribute('data-es-dia') === '1';
 
-                const matchesCategory = (activeCategory === 'todos' || itemCategory === activeCategory);
+                let matchesCategory = false;
+
+                if (activeCategory === 'todos') {
+                    matchesCategory = true;
+                } else if (activeCategory === 'platillos_dia') {
+                    matchesCategory = esDia;
+                } else {
+                    matchesCategory = (!esDia && itemCategory === activeCategory);
+                }
+
                 const matchesSearch = (searchQuery === '' || itemName.includes(searchQuery));
 
                 if (matchesCategory && matchesSearch) {
@@ -610,10 +631,12 @@
             });
 
             const noDishesMsg = document.getElementById('no-dishes-msg');
-            if (visibleCount === 0) {
-                noDishesMsg.classList.remove('hidden');
-            } else {
-                noDishesMsg.classList.add('hidden');
+            if (noDishesMsg) {
+                if (visibleCount === 0) {
+                    noDishesMsg.classList.remove('hidden');
+                } else {
+                    noDishesMsg.classList.add('hidden');
+                }
             }
         }
 
