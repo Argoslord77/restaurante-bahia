@@ -28,8 +28,12 @@ module.exports = {
                 pageTitle: 'Gestión de Menú y Platillos del Día',
                 view: 'dishes',
                 turnoActivo,
+                // Variables originales
                 platillosDiaActivos,
-                platillosDiaHistoricos
+                platillosDiaHistoricos,
+                // Alias para compatibilidad con la vista
+                platillosDiaTurno: platillosDiaActivos,
+                historicoPlatillosDia: platillosDiaHistoricos
             });
         } catch (error) {
             console.error('Error al listar el menú:', error);
@@ -218,25 +222,30 @@ module.exports = {
 
     // Reutilizar / Clonar Platillo del Día Histórico al Turno Activo
     reutilizarPlatilloDia: async (req, res) => {
-        const { id } = req.params;
         try {
+            const { id } = req.params;
             const turnoActivo = await turnoService.obtenerTurnoActivo();
+
             if (!turnoActivo) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Debe abrir un turno de servicio para poder agregar platillos del día.'
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'No hay un turno de servicio abierto actualmente.' 
                 });
             }
 
-            await platilloDiaModel.clonarAlTurnoActual(id, turnoActivo.id, req.user.id);
+            const usuarioId = req.session?.user?.id || req.user?.id || null;
+            await platilloDiaModel.clonarAlTurnoActual(id, turnoActivo.id, usuarioId);
 
-            return res.status(200).json({
-                success: true,
-                message: 'Platillo histórico incorporado con éxito al turno activo.'
+            return res.json({ 
+                success: true, 
+                message: 'Platillo/trago agregado al turno activo con éxito.' 
             });
         } catch (error) {
             console.error('Error al reutilizar platillo del día:', error);
-            return res.status(500).json({ success: false, message: error.message || 'No se pudo agregar al turno actual.' });
+            return res.status(400).json({ 
+                success: false, 
+                message: error.message || 'Error al reutilizar el platillo.' 
+            });
         }
     },
 

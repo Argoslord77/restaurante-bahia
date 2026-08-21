@@ -270,6 +270,7 @@ exports.apiCancelarItem = async (req, res) => {
     }
 };
 
+//viewPrecuenta
 exports.viewPrecuenta = async (req, res) => {
     try {
         const id_pedido = req.params.id_pedido;
@@ -286,10 +287,16 @@ exports.viewPrecuenta = async (req, res) => {
         if (!pedido || pedido.length === 0) return res.status(404).send('Pedido no encontrado');
 
         const [detalles] = await db.query(`
-            SELECT dp.cantidad, COALESCE(pm.nombre, pd.nombre, 'Producto') AS nombre, dp.precio_unitario AS precio
+            SELECT 
+                dp.cantidad, 
+                CASE 
+                    WHEN dp.es_platillo_dia = 1 THEN COALESCE(pd.nombre, pm.nombre, 'Platillo del Día')
+                    ELSE COALESCE(pm.nombre, pd.nombre, 'Producto')
+                END AS nombre, 
+                dp.precio_unitario AS precio
             FROM detalles_pedido dp
-            LEFT JOIN platillos_menu pm ON dp.id_platillo = pm.id
-            LEFT JOIN platillos_dia pd ON dp.id_platillo = pd.id
+            LEFT JOIN platillos_menu pm ON dp.id_platillo = pm.id AND dp.es_platillo_dia = 0
+            LEFT JOIN platillos_dia pd ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
             WHERE dp.id_pedido = ? AND dp.estado_item != ?
         `, [id_pedido, STATUS.ITEM.CANCELADO]);
 

@@ -547,12 +547,12 @@
                 applyFilters();
             });
 
-            // Agregar del Menú
+            // Agregar del Menú al Carrito
             document.getElementById('dishes-grid').addEventListener('click', async (e) => {
                 const card = e.target.closest('.dish-card');
                 if (card) {
                     const itemEl = card.closest('.dish-item');
-                    if (itemEl.dataset.available === 'false') {
+                    if (itemEl.getAttribute('data-available') === 'false' || itemEl.dataset.available === 'false') {
                         Swal.fire({
                             icon: 'warning',
                             title: 'PLATILLO AGOTADO',
@@ -565,14 +565,38 @@
                         return;
                     }
 
-                    const id = itemEl.dataset.id;
+                    const id = itemEl.getAttribute('data-id') || itemEl.dataset.id;
                     const nombre = itemEl.querySelector('.card-title').textContent.trim();
                     const precioText = itemEl.querySelector('.price-tag').textContent.replace('$', '').trim();
-                    const esPlatilloDia = itemEl.dataset.esDia === 'true';
+                    
+                    // LECTURA ROBUSTA: Soporta '1', 1, 'true' o true
+                    const esDiaAttr = itemEl.getAttribute('data-es-dia');
+                    const esPlatilloDia = (esDiaAttr === '1' || esDiaAttr === 'true' || itemEl.dataset.esDia === '1' || itemEl.dataset.esDia === 'true');
                     
                     addToCart(id, nombre, precioText, esPlatilloDia);
                 }
             });
+
+            function addToCart(id, nombre, precio, esPlatilloDia = false) {
+                const idString = String(id);
+                const precioFloat = typeof precio === 'number' ? precio : parseFloat(precio);
+                const esDia = Boolean(esPlatilloDia === true || esPlatilloDia === 1 || esPlatilloDia === '1' || esPlatilloDia === 'true');
+
+                const itemExistente = carrito.find(prod => String(prod.id) === idString && prod.es_platillo_dia === esDia);
+                if (itemExistente) {
+                    itemExistente.cantidad += 1;
+                } else {
+                    carrito.push({
+                        id: idString,
+                        nombre,
+                        precio: precioFloat,
+                        cantidad: 1,
+                        notas: '',
+                        es_platillo_dia: esDia
+                    });
+                }
+                renderCart();
+            }
 
             // Acciones de Ítems dentro del Carrito Activo
             document.getElementById('cart-wrapper').addEventListener('click', (e) => {
@@ -654,26 +678,6 @@
                 cartTrigger.style.display = 'flex';
                 backMenuBtn.style.display = 'none';
             }
-        }
-
-        function addToCart(id, nombre, precio, esPlatilloDia = false) {
-            const idString = String(id);
-            const precioFloat = typeof precio === 'number' ? precio : parseFloat(precio);
-
-            const itemExistente = carrito.find(prod => String(prod.id) === idString && prod.es_platillo_dia === esPlatilloDia);
-            if (itemExistente) {
-                itemExistente.cantidad += 1;
-            } else {
-                carrito.push({
-                    id: idString,
-                    nombre,
-                    precio: precioFloat,
-                    cantidad: 1,
-                    notas: '',
-                    es_platillo_dia: esPlatilloDia
-                });
-            }
-            renderCart();
         }
 
         function updateQuantity(id, delta) {

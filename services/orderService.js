@@ -39,32 +39,53 @@ class OrderService {
                 let esBebida = false;
                 let nombreProducto = '';
                 let precioReal = 0;
+                
+                // Conversión booleana segura
+                const esPlatilloDiaFlag = Boolean(
+                    item.es_platillo_dia === true || 
+                    item.es_platillo_dia === 1 || 
+                    item.es_platillo_dia === '1' || 
+                    item.es_platillo_dia === 'true'
+                );
                 let esPlatilloDia = false;
 
-                // 1. Si viene explícitamente marcado como platillo del día o no existe en el menú regular
-                const platilloDia = await platilloDiaModel.getById(item.id);
-                const platilloMenu = await MenuModel.getById(item.id);
-
-                if (item.es_platillo_dia || (platilloDia && !platilloMenu)) {
-                    if (!platilloDia) {
+                if (esPlatilloDiaFlag) {
+                    const platilloDia = await platilloDiaModel.getById(item.id);
+                    if (platilloDia) {
+                        esPlatilloDia = true;
+                        esBebida = (platilloDia.tipo === 'BEBIDAS');
+                        nombreProducto = platilloDia.nombre;
+                        precioReal = parseFloat(platilloDia.precio);
+                    } else {
                         throw new Error(`El platillo del día con ID ${item.id} no existe.`);
                     }
-                    esPlatilloDia = true;
-                    esBebida = (platilloDia.tipo === 'BEBIDAS');
-                    nombreProducto = platilloDia.nombre;
-                    precioReal = parseFloat(platilloDia.precio);
-                } else if (platilloMenu) {
-                    esPlatilloDia = false;
-                    esBebida = (platilloMenu.tipo_categoria === 'BEBIDAS');
-                    nombreProducto = platilloMenu.nombre;
-                    precioReal = parseFloat(platilloMenu.precio);
                 } else {
-                    throw new Error(`El producto seleccionado (ID ${item.id}) no existe en el catálogo.`);
+                    const platilloMenu = await MenuModel.getById(item.id);
+                    if (platilloMenu) {
+                        esPlatilloDia = false;
+                        const tipoCat = String(platilloMenu.tipo_categoria || platilloMenu.tipo || '').toUpperCase();
+                        esBebida = (tipoCat === 'BEBIDAS');
+                        nombreProducto = platilloMenu.nombre;
+                        precioReal = parseFloat(platilloMenu.precio);
+                    } else {
+                        // Fallback de seguridad: si no está en platillos_menu, buscar en platillos_dia
+                        const platilloDia = await platilloDiaModel.getById(item.id);
+                        if (platilloDia) {
+                            esPlatilloDia = true;
+                            esBebida = (platilloDia.tipo === 'BEBIDAS');
+                            nombreProducto = platilloDia.nombre;
+                            precioReal = parseFloat(platilloDia.precio);
+                        } else {
+                            throw new Error(`El producto seleccionado (ID ${item.id}) no existe en el catálogo.`);
+                        }
+                    }
                 }
 
-                const cantidad = parseInt(item.cantidad, 10);
+                const cantidad = parseInt(item.cantidad, 10) || 1;
                 const destino = esBebida ? 'bar' : 'cocina';
-                const estado_preparacion = esBebida ? STATUS.ITEM.EN_BAR : STATUS.ITEM.EN_COCINA;
+                const estado_preparacion = esBebida 
+                    ? (STATUS.ITEM.EN_BAR || 'en_bar') 
+                    : (STATUS.ITEM.EN_COCINA || 'en_cocina');
 
                 verifiedItems.push({
                     id: item.id,

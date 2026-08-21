@@ -74,7 +74,7 @@ class OrderModel {
             `;
 
             for (const item of items) {
-                const esDia = item.es_platillo_dia ? 1 : 0;
+                const esDia = (item.es_platillo_dia === true || item.es_platillo_dia === 1 || item.es_platillo_dia === '1') ? 1 : 0;
                 
                 const [res] = await connection.query(insertQuery, [
                     id_pedido,

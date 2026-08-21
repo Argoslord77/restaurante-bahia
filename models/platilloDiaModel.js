@@ -38,7 +38,8 @@ class PlatilloDiaModel {
     }
 
     /**
-     * Obtiene el catálogo histórico de platillos del día
+     * Obtiene el catálogo histórico de platillos del día SIN DUPLICADOS
+     * Agrupa por nombre y muestra la última versión registrada de cada platillo
      */
     static async getHistorico() {
         const [rows] = await db.query(`
@@ -55,6 +56,12 @@ class PlatilloDiaModel {
                 pd.turno_servicio_id,
                 ts.fecha_apertura AS fecha_turno
             FROM platillos_dia pd
+            INNER JOIN (
+                -- Obtiene el ID más reciente de cada platillo único por nombre
+                SELECT MAX(id) AS max_id
+                FROM platillos_dia
+                GROUP BY LOWER(TRIM(nombre))
+            ) ultimos ON pd.id = ultimos.max_id
             INNER JOIN turnos_servicio ts ON pd.turno_servicio_id = ts.id
             ORDER BY pd.id DESC
             LIMIT 100
@@ -78,7 +85,7 @@ class PlatilloDiaModel {
             usuario_id
         } = data;
 
-        // Comprobación anti-duplicado en el mismo turno
+        // Comprobación anti-duplicado estricta en el mismo turno
         const [existente] = await db.query(
             "SELECT id FROM platillos_dia WHERE turno_servicio_id = ? AND LOWER(TRIM(nombre)) = LOWER(TRIM(?)) LIMIT 1",
             [turno_servicio_id, nombre]
@@ -107,45 +114,6 @@ class PlatilloDiaModel {
     }
 
     /**
-     * Actualiza los datos de un platillo del día en el turno activo
-     */
-    static async update(id, data) {
-        const {
-            nombre,
-            descripcion,
-            precio,
-            precio_alt,
-            precio_usd,
-            tipo,
-            foto
-        } = data;
-
-        const [result] = await db.query(`
-            UPDATE platillos_dia
-            SET 
-                nombre = ?,
-                descripcion = ?,
-                precio = ?,
-                precio_alt = ?,
-                precio_usd = ?,
-                tipo = ?,
-                foto = ?
-            WHERE id = ?
-        `, [
-            nombre.trim(),
-            descripcion || null,
-            precio,
-            precio_alt || null,
-            precio_usd || null,
-            tipo || 'COMESTIBLES',
-            foto,
-            id
-        ]);
-
-        return result.affectedRows;
-    }
-
-    /**
      * Reutiliza / Clona un platillo del día histórico hacia el turno activo
      */
     static async clonarAlTurnoActual(platilloDiaId, nuevoTurnoId, usuarioId) {
@@ -160,7 +128,7 @@ class PlatilloDiaModel {
             [nuevoTurnoId, p.nombre]
         );
         if (enTurno.length > 0) {
-            throw new Error(`"${p.nombre}" ya se encuentra activo en el turno actual.`);
+            throw new Error(`"${p.nombre}" ya se encuentra agregado al turno activo.`);
         }
 
         return await this.create({
@@ -176,9 +144,16 @@ class PlatilloDiaModel {
         });
     }
 
-    /**
-     * Elimina un platillo del día del turno actual
-     */
+    static async update(id, data) {
+        const { nombre, descripcion, precio, precio_alt, precio_usd, tipo, foto } = data;
+        const [result] = await db.query(`
+            UPDATE platillos_dia
+            SET nombre = ?, descripcion = ?, precio = ?, precio_alt = ?, precio_usd = ?, tipo = ?, foto = ?
+            WHERE id = ?
+        `, [nombre.trim(), descripcion || null, precio, precio_alt || null, precio_usd || null, tipo || 'COMESTIBLES', foto, id]);
+        return result.affectedRows;
+    }
+
     static async delete(id) {
         const [result] = await db.query("DELETE FROM platillos_dia WHERE id = ?", [id]);
         return result.affectedRows;
