@@ -3,21 +3,14 @@ const TurnoModel = require('../models/turnoModel');
 const db = require('../config/db');
 
 class TurnoService {
-    /**
-     * Retorna el turno activo actual
-     */
     static async obtenerTurnoActivo() {
         return await TurnoModel.findActive();
     }
 
-    /**
-     * Retorna el conjunto del historial junto con el estado del turno actual y monedas disponibles
-     */
     static async obtenerDatosParaVista() {
         const turnoActivo = await TurnoModel.findActive();
         const historial = await TurnoModel.getHistorialCompleto(15);
         
-        // Obtener catálogo de monedas activas para el panel de apertura
         const [monedas] = await db.query(
             "SELECT id, codigo, nombre, simbolo, es_moneda_base, factor_cambio FROM monedas WHERE activo = 1 ORDER BY es_moneda_base DESC, codigo ASC"
         );
@@ -25,11 +18,7 @@ class TurnoService {
         return { turnoActivo, historial, monedas };
     }
 
-    /**
-     * Gestiona las reglas para abrir un turno nuevo guardando el snapshot de tasas
-     */
     static async abrirNuevoTurno(usuarioId, montoApertura, observaciones, monedasTurno = []) {
-        // Validar si ya existe uno abierto
         const turnoExistente = await TurnoModel.findActive();
         if (turnoExistente) {
             throw new Error("Operación denegada. Ya existe un turno de servicio activo.");
@@ -40,7 +29,8 @@ class TurnoService {
     }
 
     /**
-     * Cierra el turno activo y guarda la instantánea en cierres_servicio
+     * Cierra el turno activo y genera la instantánea en cierres_servicio
+     * Contempla cobros directos y cobros retroactivos en el mismo turno
      */
     static async cerrarTurnoActivo(usuarioCierreId, montoCierreReal, observacionesCierre) {
         const turnoActivo = await this.obtenerTurnoActivo();
@@ -54,7 +44,7 @@ class TurnoService {
         try {
             await connection.beginTransaction();
 
-            // 1. Obtener todas las comandas del turno
+            // 1. Obtener todas las comandas asignadas a este turno
             const [pedidos] = await connection.query(`
                 SELECT 
                     id, id_mesa, total, subtotal, descuento, propina, estado_pago, estado_pedido
@@ -62,11 +52,11 @@ class TurnoService {
                 WHERE turno_servicio_id = ?
             `, [turnoId]);
 
-            // 2. Obtener el desglose de pagos multimoneda
+            // 2. Desglose real de dinero recaudado por método y moneda
             const [desglosePagos] = await connection.query(`
                 SELECT 
                     pp.metodo_pago,
-                    COALESCE(m.codigo, 'CUP') AS codigo_moneda,
+                    COALESCE(m.codigo, 'LOCAL') AS codigo_moneda,
                     COALESCE(m.simbolo, '$') AS simbolo,
                     SUM(pp.monto_moneda_origen) AS total_origen,
                     SUM(pp.monto_equivalente_local) AS total_local
@@ -78,7 +68,7 @@ class TurnoService {
                 GROUP BY pp.metodo_pago, m.codigo, m.simbolo
             `, [turnoId]);
 
-            // 3. Cálculos del consolidado
+            // 3. Totales consolidados
             let total_cobrado_caja = 0;
             let total_propinas = 0;
             let total_cxc_facturas = 0;
@@ -112,7 +102,7 @@ class TurnoService {
             const diferencia = parseFloat(montoCierreReal) - montoEsperado;
             const balanceEstado = Math.abs(diferencia) < 0.01 ? 'cuadrado' : (diferencia > 0 ? 'sobrante' : 'faltante');
 
-            // 4. Asegurar que la tabla 'cierres_servicio' exista y guardar la instantánea
+            // 4. Persistir la instantánea en cierres_servicio
             try {
                 await connection.query(`
                     CREATE TABLE IF NOT EXISTS \`cierres_servicio\` (
@@ -186,10 +176,10 @@ class TurnoService {
                     observacionesCierre || null
                 ]);
             } catch (errSnapshot) {
-                console.warn('[TurnoService] Advertencia al persistir instantánea en cierres_servicio:', errSnapshot.message);
+                console.warn('[TurnoService] Advertencia al persistir instantánea:', errSnapshot.message);
             }
 
-            // 5. Actualizar el estado del turno a 'cerrado' en 'turnos_servicio'
+            // 5. Cerrar el turno en turnos_servicio
             await connection.query(`
                 UPDATE turnos_servicio 
                 SET estado = 'cerrado',
@@ -213,6 +203,7 @@ class TurnoService {
                 turnoId,
                 fondoApertura,
                 totalCobrado: total_cobrado_caja,
+                totalPropinas: total_propinas,
                 montoEsperado,
                 montoReal: montoCierreReal,
                 diferencia,
@@ -228,16 +219,12 @@ class TurnoService {
         }
     }
 
-    /**
-     * Obtiene las monedas habilitadas y sus tasas congeladas para el turno activo actual
-     */
     static async obtenerMonedasTurnoActivo() {
         const turnoActivo = await TurnoModel.findActive();
         if (!turnoActivo) {
             throw new Error("No hay un turno de servicio activo.");
         }
 
-        // Consulta las monedas vinculadas al turno activo
         const query = `
             SELECT 
                 m.id AS moneda_id,
@@ -252,7 +239,6 @@ class TurnoService {
         `;
         const [rows] = await db.query(query, [turnoActivo.id]);
 
-        // Fallback de seguridad: Si el turno fue abierto antes de la tabla monedas_turno
         if (rows.length === 0) {
             const [monedasGlobales] = await db.query(
                 "SELECT id AS moneda_id, codigo, nombre, simbolo, es_moneda_base, factor_cambio FROM monedas WHERE activo = 1"

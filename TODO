@@ -1,19 +1,32 @@
-🛠️ 2. Estrategia por Módulos y Cambios en el CódigoRequisito 
-1: CRUD de Monedas (Configuración Base)Controlador/Servicio: Crear monedaController.js y monedaService.js.Funcionalidades:Alta, baja lógica (activo = 0), modificación y listado de monedas.Definición de la moneda local predeterminada (es_moneda_base = 1).Validación: El factor_cambio de la moneda base siempre debe ser 1.0000.Requisito 2: Apertura y Gestión del Turno (monedas_turno)Actualmente, TurnoService.abrirNuevoTurno toma monto_apertura y observaciones. Modificaremos la lógica de apertura para guardar el snapshot de tasas de cambio del día.  Flujo en Apertura de Turno:En la vista caja/turnos.ejs, al abrir turno, el sistema despliega el catálogo de monedas activas con sus tasas por defecto.  El cajero puede marcar las monedas que aceptará en la jornada y ajustar la tasa del día si aplica.En TurnoService.abrirNuevoTurno:  Se inicia una transacción en MySQL.Se inserta el registro en turnos_servicio.  Se iteran las monedas seleccionadas y se guardan en monedas_turno vinculando turno_servicio_id con el factor_cambio_turno congelado.Endpoint para la POS Modal/Cobro:Servir un endpoint GET /api/pos/monedas-turno-activo que devuelva únicamente las monedas habilitadas en el turno actual con su factor de cambio vigente para el cálculo inmediato del cambio/vuelto.Requisito 3: Interfaz POS y Transaccionalidad de Cobros Mixtos (Split Payments)Sustituiremos la función de cobro simplificada actual en checkoutOrder dentro del POS (vista HTML) por un Modal de Cobro Dinámico Multimoneda.  ┌────────────────────────────────────────────────────────────────────────┐
-│                        MODAL COBRO COMANDA #20                         │
-├────────────────────────────────────────────────────────────────────────┤
-│ Total Orden: $10,000.00 CUP                                            │
-│ Abonado:      $4,000.00 CUP | Pendiente: $6,000.00 CUP                   │
-├────────────────────────────────────────────────────────────────────────┤
-│ + [Efectivo USD ]  -> Cantidad: $20.00  (Tasa: 120)  = $2,400.00 CUP [X]│
-│ + [Transferencia]  -> Cantidad: $1,600.00 CUP         = $1,600.00 CUP [X]│
-├────────────────────────────────────────────────────────────────────────┤
-│ Agregar Nuevo Abono:                                                   │
-│ Forma de Pago: [ Efectivo USD ▼ ]  Monto: [ 20.00 ]  [+ AGREGAR ABONO] │
-├────────────────────────────────────────────────────────────────────────┤
-│ [ Marcar Cuenta Completa como FACTURA (Crédito Empresa) ]               │
-├────────────────────────────────────────────────────────────────────────┤
-│ CAMBIO A ENTREGAR: $0.00 CUP               [ FINALIZAR Y COBRAR ]      │
-└────────────────────────────────────────────────────────────────────────┘
-Reglas del Servicio de Cobro en Backend (pedidoService.js / posController.js):Cobro por Factura: Si el pedido se liquida mediante la opción Factura, el estado_pago del pedido cambia a 'facturado', se crea el registro en pagos_pedido con metodo_pago = 'factura' y se cierra la mesa liberándola sin exigir pago inmediato en caja.Pagos Mixtos y Conversión:Cada abono se convierte a equivalente en moneda local:$$\text{Monto Local} = \text{Monto Origen} \times \text{Factor Cambio Turno}$$Se insertan $N$ registros en la tabla pagos_pedido.Mantenimiento del Arqueo de Caja:
-En TurnoService.cerrarTurnoActivo, actualizaremos sumVentasPorTurno para calcular los ingresos desglosados por tipo de moneda y por método de pago (efectivo, tarjeta, transferencia, factura), permitiendo un arqueo exacto.  Requisito 4: Módulo CRUD de Facturación y Cuentas por Cobrar (CxC)Se creará un módulo independiente /admin/facturacion con los siguientes subcomponentes:Listado de Cuentas Pendientes por Facturación:SELECT * FROM pedidos WHERE estado_pago = 'facturado' AND id NOT IN (SELECT pedido_id FROM factura_pedidos)Generación / Creación de Factura:Permite seleccionar una o más comandas/órdenes pertenecientes a un mismo cliente/empresa.Genera el correlativo de factura (numero_factura) y calcula el total consolidado.Asocia las órdenes en la tabla pivote factura_pedidos.Cobro / Saldo de Factura:Módulo para abonar o saldar facturas emitidas a crédito, actualizando el estado de la factura ('pagado_parcial', 'pagado').Vistas e Impresión:Vista de impresión en PDF/HTML con membrete del restaurante, listado de comandas cobradas y desglose de impuestos.📋 Plan de Trabajo RecomendadoPaso 1: Ejecutar el script SQL proporcionado para actualizar la base de datos MariaDB.Paso 2: Implementar el CRUD de Monedas y actualizar el formulario de Apertura de Turno en turnos.ejs / turnoController.js.  Paso 3: Refactorizar el endpoint de cobro (checkoutOrder en la vista POS y en el controlador) para admitir el array de pagos mixtos y registrarlos en pagos_pedido.  Paso 4: Construir las vistas y controlador de Facturación y CxC.
+IMPORTANTE HOY:
+1. Preparar la ficha tecnica para contener campos indispensables y opcionales a fin de que no todos los ingredientes sean necesarios y que no se detenga la venta por falta de stock en el area especifica (cocina/bar)
+2. Hacer los cambios necesarios en el cobro de cuentas de mesas (cambios sugeridos por Juan Carlos y Asis)
+ºººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººº
+Notas del contacto sobre necesidades particulares del sistema para el Restaurante Bahía.:
+De Ofertas, Cartas, precios Cuentas al cliente: 
+* Existencia de tres Cartas, y diferentes precios. platos con 3 precios a registrar en la cuenta según la Carta Menú Utiliza.
+1 -Carta Cup Nacionales, [OKOKOK]
+2- Carta con comisión ( la comisión no sale en la carta ni puede salir en la cuenta.....Pero se descuenta en del cuadre pues el efectivo pagado por comisión no va al propietario , se paga al beneficiario) [OKOKOK]
+3- Carta pago por Zelle en USD. Todas las pagada en moneda extranjera deben tener la conversión y registro a la vez en CUP al cambio del día para el pago a trabajadores etc. ( Y sale las dos monedas en la cuenta) [OKOKOK]
+* Varias Monedas en uso y la opción de pagos con ella según valor al cambio. La cuenta debe expresar moneda utilzada para el cuadre de efectivo y valor total al cambio en CUp para los pagos trabajadores etcétera. Así mismo la opción de al inicio del día dar al sistema a como está el cambio. [OKOKOK]
+* Opción de vale pagado por Canales Digitales etcétera, efectivo que no aparece al momento del Cuadre. [OKOKOK]
+* Opción de vale pagado desde el extranjero, Zelle. [OKOKOK]
+* Opción de Vale pendiente de Pago. [OKOKOK]
+* Opción de Cobro a Entidades, Cuenta por pagar.[OKOKOK]
+* Opción de Cuenta de consumo interno, gratuidades , cortesía etcétera. [OKOKOK]
+* Opción de Cobro adicional % de servicio variable, este valor se deduce del efectivo del propietario en Cuadre pues va a los trabajadores.
+* Opción de descuento en la cuenta...por quejas por cortesía etcétera [OKOKOK]
+Otros temas que conversamos:
+* En el cierre o arqueo final los cobros por % de servicios , Gastos por caja, pagos pendientes, efectivo tranferencia etc deben ser restados  de arqueo pues no existe el efectivo para el dueño. [OKOKOK]
+* Posibilidad de que el sistema trabaje separado caja e inventario, de tal manera que si falla algo en inventario se pueda crear la cuenta y cobrar siempre el servicio al cliente...previo permiso de los que administran el sistema  [OKOKOK]
+* Que en un inicio solo se tenga en cuenta en inventario la materia Prima principal del plato según ficha técnica 
+* Que se de entrada a ese elemento luego de porcionar en muchos casos.
+* Que de manera operativa se incluya plato para el momento que no existe en la Carta tradicional vigente ( Ej oferta del día)
+Que un inicio se arranque con caja y cuenta de Cliente, para por etapa ir insertando inventario.
+ºººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººººº
+4. Construir las vistas y controlador de Facturación y CxC. [OKOKOK]
+5. Hacer la vista/modelo/controlador de Caja para el control de ingresos/gastos en el dia. [OKOKOK]
+6. Si el platillos del dia esta ya en el turno de servicio activo, si llegara a abrirse el historial de platillos del dia no debe de permitirsele ser agregado nuevamente para evitar duplicados en el registro de platillos del dia para el turno activo, puedes desactivar el boton y revisar el id de un platillo del dia antes de agregarlo a un turno de servicio. Agrega ademas un buscador en el registro de platillos del dia para filtrar cuando sean unos cuantos registro. Necesitamos la opcion de editar un platillo del dia para cambios  de precios, nombre, etc. [OKOKOK]
+7. Actualizar el monitor de cocina y bar para que muestre los pedidos de platillos del dia [OKOKOK]
+8. Las notificaciones no estan reproduciendose 
+9. Hacer un polling en el dashboard para actualizar el movimiento del restaurante 

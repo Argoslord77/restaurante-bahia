@@ -27,6 +27,8 @@ const { ensureAuthenticated, checkRole } = require('../middlewares/auth');
 
 // URL Real: GET http://localhost:3000/admin/dashboard
 router.get('/dashboard', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), dashboardController.index);
+// Endpoint API para polling periódico del Dashboard
+router.get('/api/dashboard/metrics', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), dashboardController.apiMetrics);
 
 // ==========================================
 // MÓDULO: GESTIÓN DE MESAS

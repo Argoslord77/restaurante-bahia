@@ -12,19 +12,14 @@ const STATUS = require('../config/orderStatus');
 
 /**
  * Acceso directo al POS pasándole obligatoriamente el ID del pedido previamente inicializado
- * Carga menú regular, Platillos del Día del turno activo y Categorías Reales de la BD
  */
 exports.viewPOS = async (req, res) => {
     try {
         const { id_pedido } = req.params;
         
-        // 1. Obtener detalles previos si existen
         const detallesActuales = await orderModel.getOrderDetails(id_pedido);
-        
-        // 2. Obtener platillos regulares de 'platillos_menu'
         const platillosRegulares = await menuService.getAllItems();
 
-        // 3. Obtener el turno de servicio activo
         const [turnos] = await db.query(`
             SELECT id FROM turnos_servicio 
             WHERE estado = 'abierto' 
@@ -37,15 +32,8 @@ exports.viewPOS = async (req, res) => {
         if (turnoActivoId) {
             const [pDiaRows] = await db.query(`
                 SELECT 
-                    pd.id,
-                    pd.nombre,
-                    pd.descripcion,
-                    pd.precio,
-                    pd.precio_alt,
-                    pd.precio_usd,
-                    pd.tipo,
-                    pd.foto,
-                    pd.activo
+                    pd.id, pd.nombre, pd.descripcion, pd.precio, pd.precio_alt,
+                    pd.precio_usd, pd.tipo, pd.foto, pd.activo
                 FROM platillos_dia pd
                 WHERE pd.turno_servicio_id = ? AND pd.activo = 1
                 ORDER BY pd.id ASC
@@ -53,7 +41,6 @@ exports.viewPOS = async (req, res) => {
             platillosDia = pDiaRows;
         }
 
-        // Formatear platillos del día para integrarlos a la cuadrícula del POS
         const platillosDiaFormateados = platillosDia.map(pd => ({
             id: pd.id,
             nombre: pd.nombre,
@@ -64,15 +51,13 @@ exports.viewPOS = async (req, res) => {
             foto: pd.foto,
             categoria: 'Especiales del Día',
             nombre_categoria: 'Especiales del Día',
-            tipo_categoria: pd.tipo, // 'COMESTIBLES' o 'BEBIDAS'
+            tipo_categoria: pd.tipo,
             es_platillo_dia: true,
             disponible: 1
         }));
 
-        // Fusión: Platillos del día al principio + Menú regular
         const todosLosPlatillos = [...platillosDiaFormateados, ...platillosRegulares];
 
-        // 4. Categorías reales activas de la BD
         const [categoriasActivas] = await db.query(`
             SELECT id, nombre, tipo 
             FROM categorias_platillos 
@@ -80,7 +65,6 @@ exports.viewPOS = async (req, res) => {
             ORDER BY nombre ASC
         `);
 
-        // 5. Número de mesa asociado
         const [ped] = await db.query(
             'SELECT m.numero AS nombre_mesa FROM pedidos p LEFT JOIN mesas m ON p.id_mesa = m.id WHERE p.id = ?', 
             [id_pedido]
@@ -103,7 +87,6 @@ exports.viewPOS = async (req, res) => {
     }
 };
 
-// ... el resto de métodos se mantienen intactos ...
 exports.initOrderManual = async (req, res) => {
     try {
         const { id_mesa } = req.body;
@@ -116,16 +99,10 @@ exports.initOrderManual = async (req, res) => {
 
         const pedido = await orderService.getOrCreateOrderForMesa(id_mesa, userId, turnoActivo.id);
 
-        return res.json({ 
-            success: true, 
-            pedidoId: pedido.id 
-        });
+        return res.json({ success: true, pedidoId: pedido.id });
     } catch (error) {
         console.error(error);
-        return res.status(400).json({ 
-            success: false, 
-            message: error.message 
-        });
+        return res.status(400).json({ success: false, message: error.message });
     }
 };
 
@@ -270,7 +247,6 @@ exports.apiCancelarItem = async (req, res) => {
     }
 };
 
-//viewPrecuenta
 exports.viewPrecuenta = async (req, res) => {
     try {
         const id_pedido = req.params.id_pedido;
@@ -312,6 +288,10 @@ exports.viewPrecuenta = async (req, res) => {
     }
 };
 
+/**
+ * PROCESAMIENTO AVANZADO DE COBRO (CORREGIDO)
+ * Garantiza la asociación del cobro al turno de servicio activo
+ */
 exports.procesarCobroAvanzado = async (req, res) => {
     const { id_pedido } = req.params;
     const { pagos, es_factura_credito, es_cortesia, es_pendiente_pago, descuento = 0, recargo = 0, motivo_ajuste = null } = req.body; 
@@ -320,11 +300,18 @@ exports.procesarCobroAvanzado = async (req, res) => {
     if (!id_pedido) return res.status(400).json({ success: false, message: 'ID de pedido no proporcionado.' });
     if (!id_cajero) return res.status(401).json({ success: false, message: 'Sesión inválida. No se detectó cajero.' });
 
+    // Obtener el turno de servicio activo
+    const turnoActivo = await turnoService.obtenerTurnoActivo();
+    if (!turnoActivo) {
+        return res.status(400).json({ success: false, message: 'No hay un turno de servicio abierto para recibir el cobro.' });
+    }
+    const turnoActivoId = turnoActivo.id;
+
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
-        const [filas] = await connection.query('SELECT id, id_mesa, total, estado_pago FROM pedidos WHERE id = ? FOR UPDATE', [id_pedido]);
+        const [filas] = await connection.query('SELECT id, id_mesa, total, estado_pago, turno_servicio_id FROM pedidos WHERE id = ? FOR UPDATE', [id_pedido]);
         if (!filas || filas.length === 0) {
             await connection.rollback();
             return res.status(404).json({ success: false, message: 'El pedido no existe.' });
@@ -349,7 +336,6 @@ exports.procesarCobroAvanzado = async (req, res) => {
 
         let nuevo_estado_pago = 'pagado';
         let propina = 0;
-        let desgloseMonedas = {};
 
         if (es_factura_credito) {
             nuevo_estado_pago = 'facturado';
@@ -378,15 +364,8 @@ exports.procesarCobroAvanzado = async (req, res) => {
             for (const pago of pagos) {
                 const factorCambio = parseFloat(pago.factor_cambio_aplicado || 1.0000);
                 const montoOrigen = parseFloat(pago.monto_moneda_origen || 0);
-                const codigoMoneda = pago.codigo_moneda || 'LOCAL';
                 const montoLocal = pago.monto_equivalente_local ? parseFloat(pago.monto_equivalente_local) : (montoOrigen * factorCambio);
                 totalRecibidoLocal += montoLocal;
-
-                if (!desgloseMonedas[codigoMoneda]) {
-                    desgloseMonedas[codigoMoneda] = { codigo: codigoMoneda, simbolo: pago.simbolo || '$', total_origen: 0, total_local: 0 };
-                }
-                desgloseMonedas[codigoMoneda].total_origen += montoOrigen;
-                desgloseMonedas[codigoMoneda].total_local += montoLocal;
 
                 await connection.query(
                     `INSERT INTO pagos_pedido (pedido_id, metodo_pago, moneda_id, factor_cambio_aplicado, monto_moneda_origen, monto_equivalente_local, referencia_transaccion)
@@ -402,9 +381,32 @@ exports.procesarCobroAvanzado = async (req, res) => {
             propina = totalRecibidoLocal - totalPagar;
         }
 
+        // ASOCIACIÓN EXPLÍCITA AL TURNO ACTIVO AL MOMENTO DEL COBRO
         await connection.query(
-            `UPDATE pedidos SET subtotal = ?, impuesto = ?, total = ?, estado_pedido = ?, estado_pago = ?, propina = ?, id_usuario_cajero = ?, fecha_cierre = NOW() WHERE id = ?`,
-            [subtotal, impuesto, totalPagar, STATUS.PEDIDO?.ENTREGADO || 'entregado', nuevo_estado_pago, propina, id_cajero, id_pedido]
+            `UPDATE pedidos 
+             SET subtotal = ?, 
+                 descuento = ?,
+                 impuesto = ?, 
+                 total = ?, 
+                 estado_pedido = ?, 
+                 estado_pago = ?, 
+                 propina = ?, 
+                 id_usuario_cajero = ?, 
+                 turno_servicio_id = ?, 
+                 fecha_cierre = NOW() 
+             WHERE id = ?`,
+            [
+                subtotal, 
+                montoDescuento, 
+                impuesto, 
+                totalPagar, 
+                STATUS.PEDIDO?.ENTREGADO || 'entregado', 
+                nuevo_estado_pago, 
+                propina, 
+                id_cajero, 
+                turnoActivoId, 
+                id_pedido
+            ]
         );
 
         if (pedido.id_mesa) {
@@ -514,13 +516,17 @@ exports.abrirOObtenerPedidoMesa = async (req, res) => {
 
         const turnoServicioId = turnos[0].id;
         const [pedidosExistentes] = await db.query(
-            "SELECT id FROM pedidos WHERE id_mesa = ? AND estado_pago = 'pendiente' AND estado_pedido NOT IN ('cancelado') ORDER BY id DESC LIMIT 1",
+            "SELECT id, turno_servicio_id FROM pedidos WHERE id_mesa = ? AND estado_pago = 'pendiente' AND estado_pedido NOT IN ('cancelado') ORDER BY id DESC LIMIT 1",
             [idMesa]
         );
 
         let pedidoId;
         if (pedidosExistentes.length > 0) {
             pedidoId = pedidosExistentes[0].id;
+            // Si la mesa continuaba abierta de un turno anterior, actualizar al turno activo actual
+            if (pedidosExistentes[0].turno_servicio_id !== turnoServicioId) {
+                await db.query("UPDATE pedidos SET turno_servicio_id = ? WHERE id = ?", [turnoServicioId, pedidoId]);
+            }
         } else {
             const [resultado] = await db.query(
                 "INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago) VALUES (?, ?, ?, 'pendiente', 'pendiente')",

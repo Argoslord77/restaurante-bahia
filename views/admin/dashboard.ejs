@@ -50,57 +50,73 @@
         <div class="row">
            <%- include('../includes/sideBarMenu') %> 
             
-            <!-- SE AGREGARON CLASES FLEXBOX AQUÍ PARA EL FOOTER STICKY -->
             <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
                 
-                <!-- Todo el contenido superior se envuelve en este div con mb-auto -->
                 <div class="mb-auto">
-                    <%- include('../includes/header', {encabezado_pagina: 'Panel de Control', desc_pagina: 'Resumen operativo en tiempo real.', add_btn: false}) %>
-                    
-                    <% if (mostrarAlertaTurno) { %>
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 5px solid #dc3545;">
-                            <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> ¡Sistema Bloqueado!</h4>
-                            <p>No se ha detectado ningún <strong>Turno de Servicio Activo</strong> en el restaurante. Todas las operaciones críticas de salón, &oacute;rdenes y transferencias de almacén están suspendidas temporalmente.</p>
-                            <hr>
-                            <p class="mb-0">Por favor, diríjase al módulo de cajas y realice la <strong>Apertura de Turno</strong> para restablecer las operaciones del staff.</p>
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <%- include('../includes/header', {encabezado_pagina: 'Panel de Control', desc_pagina: 'Resumen operativo en tiempo real.', add_btn: false}) %>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-light text-muted border d-inline-flex align-items-center gap-1.5 px-2.5 py-1.5 rounded-pill fs-8">
+                                <span class="spinner-grow text-success" id="indicadorPolling" style="width: 8px; height: 8px;" role="status"></span>
+                                <span id="textoPolling">En vivo (10s)</span>
+                            </span>
                         </div>
-                    <% } %>
+                    </div>
                     
+                    <div id="contenedorAlertaTurno">
+                        <% if (mostrarAlertaTurno) { %>
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 5px solid #dc3545;">
+                                <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> ¡Sistema Bloqueado!</h4>
+                                <p>No se ha detectado ningún <strong>Turno de Servicio Activo</strong> en el restaurante. Todas las operaciones críticas de salón, órdenes y transferencias de almacén están suspendidas temporalmente.</p>
+                                <hr>
+                                <p class="mb-0">Por favor, diríjase al módulo de cajas y realice la <strong>Apertura de Turno</strong> para restablecer las operaciones del staff.</p>
+                            </div>
+                        <% } %>
+                    </div>
+                    
+                    <!-- TARJETAS DE MÉTRICAS PRINCIPALES -->
                     <div class="row g-3 mb-4">
+                        <!-- Mesas Activas -->
                         <div class="col-12 col-sm-6 col-xl-3">
                             <div class="card card-custom shadow-sm p-3">
                                 <div class="text-muted text-uppercase fs-7 fw-semibold">Mesas Activas</div>
                                 <div class="d-flex align-items-baseline justify-content-between mt-2">
-                                    <span class="fs-2 fw-bold text-dark"><%= metrics.mesasOcupadas %> / <%= metrics.mesasTotales %></span>
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">
+                                    <span class="fs-2 fw-bold text-dark" id="metricMesasActivas"><%= metrics.mesasOcupadas %> / <%= metrics.mesasTotales %></span>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill" id="metricPorcentajeOcupacion">
                                         <%= metrics.mesasTotales > 0 ? Math.round((metrics.mesasOcupadas / metrics.mesasTotales) * 100) : 0 %>% Ocupación
                                     </span>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Pedidos en Cocina / Bar -->
                         <div class="col-12 col-sm-6 col-xl-3">
                             <div class="card card-custom shadow-sm p-3">
                                 <div class="text-muted text-uppercase fs-7 fw-semibold">Pedidos en Cocina</div>
                                 <div class="d-flex align-items-baseline justify-content-between mt-2">
-                                    <span class="fs-2 fw-bold text-dark"><%= metrics.pedidosCocina %></span>
+                                    <span class="fs-2 fw-bold text-dark" id="metricPedidosCocina"><%= metrics.pedidosCocina %></span>
                                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">Pendientes</span>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Ventas del Día -->
                         <div class="col-12 col-sm-6 col-xl-3">
                             <div class="card card-custom shadow-sm p-3">
                                 <div class="text-muted text-uppercase fs-7 fw-semibold">Ventas del Día</div>
                                 <div class="d-flex align-items-baseline justify-content-between mt-2">
-                                    <span class="fs-2 fw-bold text-dark">$<%= metrics.ventasDia %></span>
+                                    <span class="fs-2 fw-bold text-dark" id="metricVentasDia">$<%= parseFloat(metrics.ventasDia || 0).toFixed(2) %></span>
                                     <span class="text-muted small fw-medium">Hoy</span>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Personal de Turno -->
                         <div class="col-12 col-sm-6 col-xl-3">
                             <div class="card card-custom shadow-sm p-3">
                                 <div class="text-muted text-uppercase fs-7 fw-semibold">Personal de Turno</div>
                                 <div class="d-flex align-items-baseline justify-content-between mt-2">
-                                    <span class="fs-2 fw-bold text-dark"><%= metrics.totalPersonal %></span>
+                                    <span class="fs-2 fw-bold text-dark" id="metricPersonalTurno"><%= metrics.totalPersonal %></span>
                                     <span class="text-muted small fw-medium">Registrados</span>
                                 </div>
                             </div>
@@ -108,61 +124,91 @@
                     </div>
 
                     <div class="row g-4">
+                        <!-- Distribución de Salón / Mesas -->
                         <div class="col-12 col-lg-8">
                             <div class="card card-custom shadow-sm p-4">
-                                <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-shop me-2 text-secondary"></i>Distribución de Salón</h5>
-                                <div class="row row-cols-2 row-cols-md-4 g-3">
-                                    <div class="col">
-                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                            <div class="fw-bold text-secondary">Mesa 01</div>
-                                            <span class="badge bg-success-subtle text-success mt-1 rounded-pill">Disponible</span>
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-shop me-2 text-secondary"></i>Distribución de Salón</h5>
+                                    <small class="text-muted" id="ultimaActualizacionMesas">Actualizado recientemente</small>
+                                </div>
+                                <div class="row row-cols-2 row-cols-md-4 g-3" id="contenedorDistribucionMesas">
+                                    <% if (metrics.distribucionMesas && metrics.distribucionMesas.length > 0) { %>
+                                        <% metrics.distribucionMesas.forEach(m => { 
+                                            let badgeClase = 'bg-success-subtle text-success';
+                                            let labelEstado = 'Disponible';
+                                            if (m.estado === 'ocupada') { badgeClase = 'bg-danger-subtle text-danger'; labelEstado = 'Ocupada'; }
+                                            else if (m.estado === 'reservada') { badgeClase = 'bg-primary-subtle text-primary'; labelEstado = 'Reservada'; }
+                                            else if (m.estado === 'desocupandose') { badgeClase = 'bg-warning-subtle text-warning-emphasis'; labelEstado = 'Por Cobrar'; }
+                                        %>
+                                            <div class="col">
+                                                <div class="p-3 border rounded-3 text-center bg-light shadow-sm h-100 d-flex flex-column justify-content-center">
+                                                    <div class="fw-bold text-secondary text-truncate"><%= m.numero %></div>
+                                                    <span class="badge <%= badgeClase %> mt-1 rounded-pill"><%= labelEstado %></span>
+                                                </div>
+                                            </div>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <div class="col">
+                                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
+                                                <div class="fw-bold text-secondary">Mesa 01</div>
+                                                <span class="badge bg-success-subtle text-success mt-1 rounded-pill">Disponible</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col">
-                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                            <div class="fw-bold text-secondary">Mesa 02</div>
-                                            <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
+                                        <div class="col">
+                                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
+                                                <div class="fw-bold text-secondary">Mesa 02</div>
+                                                <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col">
-                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                            <div class="fw-bold text-secondary">Mesa 03</div>
-                                            <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
+                                        <div class="col">
+                                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
+                                                <div class="fw-bold text-secondary">Mesa 03</div>
+                                                <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col">
-                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                            <div class="fw-bold text-secondary">Mesa 04</div>
-                                            <span class="badge bg-warning-subtle text-warning mt-1 rounded-pill">Atendida</span>
+                                        <div class="col">
+                                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
+                                                <div class="fw-bold text-secondary">Mesa 04</div>
+                                                <span class="badge bg-warning-subtle text-warning mt-1 rounded-pill">Atendida</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    <% } %>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- Últimas Acciones y Actividad -->
                         <div class="col-12 col-lg-4">
                             <div class="card card-custom shadow-sm p-4">
                                 <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Últimas Acciones</h5>
-                                <ul class="list-unstyled mb-0 d-flex flex-column gap-3 fs-7">
-                                    <li class="d-flex gap-2 align-items-start">
-                                        <i class="fa-solid fa-circle-dot text-primary mt-1 small" style="font-size: 0.6rem;"></i>
-                                        <div><strong>Mesa 02</strong> solicitó la cuenta.</div>
-                                    </li >
-                                    <li class="d-flex gap-2 align-items-start">
-                                        <i class="fa-solid fa-circle-dot text-warning mt-1 small" style="font-size: 0.6rem;"></i>
-                                        <div>Nuevo pedido enviado a cocina desde <strong>Mesa 03</strong>.</div>
-                                    </li>
-                                    <li class="d-flex gap-2 align-items-start">
-                                        <i class="fa-solid fa-circle-dot text-success mt-1 small" style="font-size: 0.6rem;"></i>
-                                        <div>El dependiente ingresó al turno de la mañana.</div>
-                                    </li>
+                                <ul class="list-unstyled mb-0 d-flex flex-column gap-3 fs-7" id="contenedorUltimasAcciones">
+                                    <% if (metrics.ultimasAcciones && metrics.ultimasAcciones.length > 0) { %>
+                                        <% metrics.ultimasAcciones.forEach(acc => { %>
+                                            <li class="d-flex gap-2 align-items-start">
+                                                <i class="fa-solid fa-circle-dot <%= acc.color || 'text-primary' %> mt-1 small" style="font-size: 0.6rem;"></i>
+                                                <div><%= acc.texto %></div>
+                                            </li>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <li class="d-flex gap-2 align-items-start">
+                                            <i class="fa-solid fa-circle-dot text-primary mt-1 small" style="font-size: 0.6rem;"></i>
+                                            <div><strong>Mesa 02</strong> solicitó la cuenta.</div>
+                                        </li>
+                                        <li class="d-flex gap-2 align-items-start">
+                                            <i class="fa-solid fa-circle-dot text-warning mt-1 small" style="font-size: 0.6rem;"></i>
+                                            <div>Nuevo pedido enviado a cocina desde <strong>Mesa 03</strong>.</div>
+                                        </li>
+                                        <li class="d-flex gap-2 align-items-start">
+                                            <i class="fa-solid fa-circle-dot text-success mt-1 small" style="font-size: 0.6rem;"></i>
+                                            <div>El dependiente ingresó al turno de la mañana.</div>
+                                        </li>
+                                    <% } %>
                                 </ul>
                             </div>
                         </div>
                     </div>
-                </div> <!-- Fin de mb-auto -->
+                </div>
 
-                <!-- El footer queda fuera de mb-auto para ser empujado limpiamente al final -->
                 <%- include('../includes/footer') %>
             </main>
         </div>
@@ -171,5 +217,136 @@
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
+
+    <!-- POLLING EN TIEMPO REAL (10 SEGUNDOS) -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const INTERVALO_POLLING_MS = 10000; // 10 Segundos
+            let pollingTimer = null;
+
+            async function actualizarMetricasDashboard() {
+                try {
+                    const response = await fetch('/admin/api/dashboard/metrics', {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    if (!response.ok) return;
+
+                    const data = await response.json();
+                    if (!data || !data.success) return;
+
+                    const { metrics, turnoActivo, mostrarAlertaTurno } = data;
+
+                    // 1. Actualizar Tarjeta de Mesas
+                    const elMesas = document.getElementById('metricMesasActivas');
+                    const elPorc = document.getElementById('metricPorcentajeOcupacion');
+                    if (elMesas && metrics) {
+                        elMesas.textContent = `${metrics.mesasOcupadas || 0} / ${metrics.mesasTotales || 0}`;
+                        const porcentaje = metrics.mesasTotales > 0 ? Math.round((metrics.mesasOcupadas / metrics.mesasTotales) * 100) : 0;
+                        if (elPorc) elPorc.textContent = `${porcentaje}% Ocupación`;
+                    }
+
+                    // 2. Actualizar Tarjeta de Cocina
+                    const elCocina = document.getElementById('metricPedidosCocina');
+                    if (elCocina && metrics) {
+                        elCocina.textContent = metrics.pedidosCocina || 0;
+                    }
+
+                    // 3. Actualizar Ventas del Día
+                    const elVentas = document.getElementById('metricVentasDia');
+                    if (elVentas && metrics) {
+                        const totalVentas = parseFloat(metrics.ventasDia || 0).toFixed(2);
+                        elVentas.textContent = `$${totalVentas}`;
+                    }
+
+                    // 4. Actualizar Personal de Turno
+                    const elPersonal = document.getElementById('metricPersonalTurno');
+                    if (elPersonal && metrics) {
+                        elPersonal.textContent = metrics.totalPersonal || 0;
+                    }
+
+                    // 5. Actualizar Alerta de Turno si cambió de estado
+                    const contenedorAlerta = document.getElementById('contenedorAlertaTurno');
+                    if (contenedorAlerta) {
+                        if (mostrarAlertaTurno) {
+                            if (!document.querySelector('#contenedorAlertaTurno .alert')) {
+                                contenedorAlerta.innerHTML = `
+                                    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 5px solid #dc3545;">
+                                        <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> ¡Sistema Bloqueado!</h4>
+                                        <p>No se ha detectado ningún <strong>Turno de Servicio Activo</strong> en el restaurante. Todas las operaciones críticas de salón, órdenes y transferencias de almacén están suspendidas temporalmente.</p>
+                                        <hr>
+                                        <p class="mb-0">Por favor, diríjase al módulo de cajas y realice la <strong>Apertura de Turno</strong> para restablecer las operaciones del staff.</p>
+                                    </div>
+                                `;
+                            }
+                        } else {
+                            contenedorAlerta.innerHTML = '';
+                        }
+                    }
+
+                    // 6. Actualizar Mesas / Salón si viene el array
+                    if (metrics && Array.isArray(metrics.distribucionMesas) && metrics.distribucionMesas.length > 0) {
+                        const contMesas = document.getElementById('contenedorDistribucionMesas');
+                        if (contMesas) {
+                            contMesas.innerHTML = metrics.distribucionMesas.map(m => {
+                                let badgeClase = 'bg-success-subtle text-success';
+                                let labelEstado = 'Disponible';
+                                if (m.estado === 'ocupada') { badgeClase = 'bg-danger-subtle text-danger'; labelEstado = 'Ocupada'; }
+                                else if (m.estado === 'reservada') { badgeClase = 'bg-primary-subtle text-primary'; labelEstado = 'Reservada'; }
+                                else if (m.estado === 'desocupandose') { badgeClase = 'bg-warning-subtle text-warning-emphasis'; labelEstado = 'Por Cobrar'; }
+                                return `
+                                    <div class="col">
+                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm h-100 d-flex flex-column justify-content-center">
+                                            <div class="fw-bold text-secondary text-truncate">${m.numero}</div>
+                                            <span class="badge ${badgeClase} mt-1 rounded-pill">${labelEstado}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
+                        }
+                    }
+
+                    // 7. Actualizar Últimas Acciones
+                    if (metrics && Array.isArray(metrics.ultimasAcciones) && metrics.ultimasAcciones.length > 0) {
+                        const contAcciones = document.getElementById('contenedorUltimasAcciones');
+                        if (contAcciones) {
+                            contAcciones.innerHTML = metrics.ultimasAcciones.map(acc => `
+                                <li class="d-flex gap-2 align-items-start">
+                                    <i class="fa-solid fa-circle-dot ${acc.color || 'text-primary'} mt-1 small" style="font-size: 0.6rem;"></i>
+                                    <div>${acc.texto}</div>
+                                </li>
+                            `).join('');
+                        }
+                    }
+
+                    const elUltimaHora = document.getElementById('ultimaActualizacionMesas');
+                    if (elUltimaHora) {
+                        const ahora = new Date();
+                        elUltimaHora.textContent = `Actualizado ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}`;
+                    }
+
+                } catch (err) {
+                    console.warn('Fallo transitorio en polling del dashboard:', err);
+                }
+            }
+
+            // Iniciar ciclo de polling periódico
+            pollingTimer = setInterval(actualizarMetricasDashboard, INTERVALO_POLLING_MS);
+
+            // Pausar polling si la pestaña está oculta para ahorrar recursos
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    clearInterval(pollingTimer);
+                } else {
+                    actualizarMetricasDashboard(); // Refresco inmediato al volver
+                    pollingTimer = setInterval(actualizarMetricasDashboard, INTERVALO_POLLING_MS);
+                }
+            });
+        });
+    </script>
 </body>
 </html>

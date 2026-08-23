@@ -3,84 +3,725 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title><%= typeof pageTitle !== 'undefined' ? pageTitle : 'POS - Restaurante Bahía' %></title>
-    <!-- Tailwind CSS Integrado & Estilos Core -->
-    <link rel="stylesheet" href="/css/tailwind.css">
-    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <title><%= typeof pageTitle !== 'undefined' ? pageTitle : 'Terminal POS • Restaurante Bahía' %></title>
+    
+    <!-- CSS Core -->
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css">
     
     <style>
+        /* Declaraciones de Fuentes Locales / Fallbacks robustos */
+        @font-face {
+            font-family: 'Plus Jakarta Sans';
+            font-style: normal;
+            font-weight: 400 800;
+            font-display: swap;
+            src: url('/fonts/PlusJakartaSans-VariableFont_wght.ttf') format('truetype-variations'),
+                 url('/fonts/PlusJakartaSans-Regular.woff2') format('woff2'),
+                 url('/fonts/PlusJakartaSans-Bold.woff2') format('woff2'),
+                 local('Plus Jakarta Sans');
+        }
+
+        @font-face {
+            font-family: 'DM Sans';
+            font-style: normal;
+            font-weight: 400 800;
+            font-display: swap;
+            src: url('/fonts/DMSans-VariableFont_opsz,wght.ttf') format('truetype-variations'),
+                 url('/fonts/DMSans-Regular.woff2') format('woff2'),
+                 url('/fonts/DMSans-Medium.woff2') format('woff2'),
+                 local('DM Sans');
+        }
+
+        @font-face {
+            font-family: 'JetBrains Mono';
+            font-style: normal;
+            font-weight: 500 800;
+            font-display: swap;
+            src: url('/fonts/JetBrainsMono-VariableFont_wght.ttf') format('truetype-variations'),
+                 url('/fonts/JetBrainsMono-Bold.woff2') format('woff2'),
+                 local('JetBrains Mono');
+        }
+
+        :root {
+            --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-body: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            --color-header: #0f172a;
+            --color-primary: #0284c7;
+            --color-success: #059669;
+            --color-danger: #e11d48;
+            --color-dark-card: #1e293b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         html, body {
             height: 100%;
             overflow: hidden;
             position: relative;
+            background-color: #f1f5f9;
+            font-family: var(--font-body);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+            color: #0f172a;
         }
+
+        h1, h2, h3, h4, h5, h6, .font-heading {
+            font-family: var(--font-display);
+            letter-spacing: -0.01em;
+        }
+
+        .font-digits, .price-tag, .numeric-val {
+            font-family: var(--font-mono);
+            font-feature-settings: "tnum" 1;
+        }
+
+        /* Header Superior Fijo */
+        .pos-header {
+            height: 64px;
+            background-color: var(--color-header) !important;
+            border-bottom: 1px solid #1e293b;
+            color: #ffffff !important;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .btn-back-dashboard {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #e2e8f0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-back-dashboard:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+        }
+
+        .order-badge-header {
+            background-color: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            padding: 5px 14px;
+            border-radius: 12px;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: #ffffff !important;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .header-floating-search.visible ~ .order-badge-header,
+        .pos-header:has(.header-floating-search.visible) .order-badge-header {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
         .pos-container {
-            height: calc(100vh - 73px);
+            height: calc(100vh - 64px);
             overflow: hidden;
         }
+
         .menu-section {
             height: 100%;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            padding: 14px;
         }
+
         .cart-section {
             height: 100%;
-            background: #f8fafc;
-            border-left: 1px solid #e2e8f0;
+            background: #ffffff;
+            border-left: 1px solid #cbd5e1;
+            display: flex;
+            flex-direction: column;
         }
+
+        /* Botones de Categorías */
         .category-btn {
             white-space: nowrap;
-            transition: all 0.2s;
+            transition: all 0.15s ease-in-out;
             font-size: 0.8rem;
+            font-family: var(--font-display);
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 6px 14px;
+            background-color: #ffffff;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
+        .category-btn:hover {
+            background-color: #f8fafc;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }
+        .category-btn.active {
+            background-color: #0284c7 !important;
+            color: #ffffff !important;
+            border-color: #0284c7 !important;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+        }
+        .category-btn-dia {
+            background-color: #fef3c7;
+            color: #92400e;
+            border-color: #fcd34d;
+        }
+        .category-btn-dia:hover {
+            background-color: #fde68a;
+            color: #78350f;
+        }
+
+        /* Input de Búsqueda */
+        .search-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        .search-input {
+            width: 100%;
+            background-color: #ffffff;
+            color: #0f172a;
+            font-size: 0.82rem;
+            font-weight: 600;
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            padding: 9px 38px 9px 36px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .search-input:focus {
+            border-color: #0284c7;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+        }
+
+        /* Tarjetas de Platillos */
         .dish-card {
             cursor: pointer;
-            transition: transform 0.15s, box-shadow 0.15s;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+            border-radius: 14px;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            overflow: hidden;
         }
         .dish-card:hover {
             transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+            border-color: #cbd5e1;
         }
-        .dish-card:active { transform: scale(0.97); }
+        .dish-card:active {
+            transform: scale(0.98);
+        }
+        .dish-card-dia {
+            border: 2px solid #f59e0b !important;
+        }
         .dish-card.out-of-stock {
-            opacity: 0.6;
+            opacity: 0.55;
             cursor: not-allowed;
-            filter: grayscale(0.8);
+            filter: grayscale(0.7);
         }
-        .dish-img-wrapper { height: 110px; position: relative; background: #cbd5e1; }
-        .dish-img-wrapper img { width: 100%; height: 100%; object-fit: cover; }
-        
+
+        .dish-img-wrapper {
+            height: 110px;
+            position: relative;
+            background: #f8fafc;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .dish-img-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        .dish-card:hover .dish-img-wrapper img {
+            transform: scale(1.05);
+        }
+
+        /* Pastillas flotantes sobre las imágenes */
+        .badge-especial-dia {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background-color: #f59e0b;
+            color: #1e293b;
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            letter-spacing: 0.02em;
+        }
+
+        .badge-agotado {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background-color: #e11d48;
+            color: #ffffff;
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        .price-badge-card {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background-color: rgba(15, 23, 42, 0.9) !important;
+            color: #ffffff !important;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+        }
+
+        /* Contenido de la tarjeta de platillo */
+        .dish-card-body {
+            padding: 10px 12px;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 72px;
+            gap: 4px;
+        }
+
+        .dish-title {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.88rem;
+            line-height: 1.35;
+            color: #0f172a;
+            margin: 0;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            word-break: break-word;
+        }
+
+        .dish-category {
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-top: 2px;
+            display: block;
+        }
+
+        .dish-description {
+            font-size: 0.72rem;
+            line-height: 1.3;
+            color: #64748b;
+            margin-top: 3px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* Carrito de Comanda */
+        .cart-header {
+            padding: 12px 16px;
+            background-color: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .mesa-pill {
+            background-color: #0f172a !important;
+            color: #ffffff !important;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.78rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .cart-item-row {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .cart-item-row:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Botón de Notas del Ítem */
+        .btn-cart-note {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background-color: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            color: #94a3b8;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            padding: 0;
+        }
+        .btn-cart-note:hover {
+            background-color: #e0f2fe;
+            border-color: #7dd3fc;
+            color: #0284c7;
+        }
+        .btn-cart-note.has-note {
+            background-color: #eff6ff;
+            border-color: #bfdbfe;
+            color: #2563eb;
+        }
+        .btn-cart-note.has-note:hover {
+            background-color: #dbeafe;
+            border-color: #93c5fd;
+            color: #1d4ed8;
+        }
+
+        /* Bloque de Observación / Nota Profesional */
+        .cart-item-note {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 6px 8px 6px 10px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 3px solid #3b82f6;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .cart-item-note:hover {
+            background-color: #f1f5f9;
+            border-color: #cbd5e1;
+            border-left-color: #2563eb;
+        }
+        .cart-item-note-content {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            flex-grow: 1;
+            min-width: 0;
+        }
+        .cart-item-note-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #2563eb;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            flex-shrink: 0;
+        }
+        .cart-item-note-text {
+            font-family: var(--font-body);
+            font-size: 0.76rem;
+            font-weight: 500;
+            color: #334155;
+            line-height: 1.35;
+            word-break: break-word;
+            margin: 0;
+        }
+        .btn-clear-item-note {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            padding: 0 2px;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 16px;
+            width: 16px;
+            transition: all 0.12s ease;
+            flex-shrink: 0;
+        }
+        .btn-clear-item-note:hover {
+            color: #e11d48;
+            background-color: #ffe4e6;
+        }
+
+        /* Notas en el Historial de Pedidos */
+        .history-item-note {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+            margin-top: 5px;
+            padding: 4px 8px;
+            background-color: #f1f5f9;
+            border-radius: 5px;
+            border-left: 2px solid #64748b;
+            font-size: 0.72rem;
+            color: #475569;
+            font-weight: 500;
+        }
+
+        /* Chips rápidos para el editor de notas */
+        .quick-note-chip {
+            display: inline-block;
+            font-family: var(--font-body);
+            font-size: 0.73rem;
+            font-weight: 600;
+            padding: 4px 9px;
+            border-radius: 9999px;
+            background-color: #f1f5f9;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            cursor: pointer;
+            transition: all 0.12s ease;
+            user-select: none;
+        }
+        .quick-note-chip:hover {
+            background-color: #e0f2fe;
+            border-color: #7dd3fc;
+            color: #0284c7;
+            transform: translateY(-1px);
+        }
+        .quick-note-chip:active {
+            transform: scale(0.96);
+        }
+
+        /* Botones Principales de Acción en el Carrito */
+        .btn-pos-action {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.8rem;
+            border-radius: 10px;
+            padding: 10px 12px;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .btn-enviar-cocina {
+            background-color: #059669 !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+        }
+        .btn-enviar-cocina:hover {
+            background-color: #047857 !important;
+        }
+
+        .btn-cobrar {
+            background-color: #0284c7 !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+        }
+        .btn-cobrar:hover {
+            background-color: #0369a1 !important;
+        }
+
+        .btn-precuenta {
+            background-color: #e2e8f0 !important;
+            color: #1e293b !important;
+            border: 1px solid #cbd5e1 !important;
+        }
+        .btn-precuenta:hover {
+            background-color: #cbd5e1 !important;
+        }
+
+        .btn-vaciar {
+            background-color: #ffe4e6 !important;
+            color: #e11d48 !important;
+            border: 1px solid #fecdd3 !important;
+        }
+        .btn-vaciar:hover {
+            background-color: #fecdd3 !important;
+        }
+
+        /* Botón de Cancelar Ítem en Historial */
+        .btn-cancel-item {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background-color: #fff1f2;
+            border: 1px solid #fecdd3;
+            color: #e11d48;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            margin-right: 8px;
+            padding: 0;
+        }
+        .btn-cancel-item:hover {
+            background-color: #e11d48;
+            border-color: #e11d48;
+            color: #ffffff;
+            transform: scale(1.08);
+            box-shadow: 0 2px 5px rgba(225, 29, 72, 0.25);
+        }
+        .btn-cancel-item:active {
+            transform: scale(0.95);
+        }
+
+        /* Botón Flotante Scroll-to-Top */
+        .btn-scroll-top {
+            position: absolute;
+            bottom: 24px;
+            right: 28px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background-color: #0f172a;
+            color: #ffffff;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(12px) scale(0.85);
+            transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, visibility 0.25s;
+            z-index: 1045;
+        }
+        .btn-scroll-top.visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateY(0) scale(1);
+        }
+        .btn-scroll-top:hover {
+            background-color: #0284c7;
+            color: #ffffff;
+            transform: translateY(-3px) scale(1.06);
+            box-shadow: 0 10px 28px rgba(2, 132, 199, 0.5);
+            border-color: #38bdf8;
+        }
+        .btn-scroll-top:active {
+            transform: scale(0.95);
+        }
+
+        /* Buscador Flotante en el Header Superior */
+        .header-floating-search {
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -10px);
+            width: 100%;
+            max-width: 380px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 1035;
+        }
+        .header-floating-search.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, 0);
+        }
+        .header-search-input {
+            width: 100%;
+            background-color: rgba(30, 41, 59, 0.95);
+            color: #ffffff;
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 9999px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            padding: 7px 34px 7px 34px;
+            outline: none;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(8px);
+            transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+        }
+        .header-search-input::placeholder {
+            color: #94a3b8;
+            font-size: 0.8rem;
+        }
+        .header-search-input:focus {
+            background-color: #0f172a;
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+        }
+
         .mobile-cart-badge {
             position: fixed; 
             bottom: 20px; 
             right: 20px; 
             z-index: 1050;
-            padding: 14px 22px; 
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4); 
+            padding: 12px 20px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3); 
             display: none; 
             font-weight: 800;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar {
-            height: 6px;
-            width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
+            background-color: #0284c7 !important;
+            color: #ffffff !important;
+            border-radius: 9999px;
+            border: none;
         }
 
+        .custom-scrollbar::-webkit-scrollbar { height: 5px; width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
         @media (max-width: 767.98px) {
-            .navbar { height: 68px !important; }
-            .pos-container { height: calc(100vh - 68px); }
+            .pos-container { height: calc(100vh - 64px); }
             .menu-section { padding-bottom: 90px !important; }
-            .mobile-cart-badge { display: flex; align-items: center; gap: 10px; }
+            .mobile-cart-badge { display: flex; align-items: center; gap: 8px; }
+            .btn-scroll-top {
+                bottom: 84px;
+                right: 18px;
+                width: 40px;
+                height: 40px;
+                font-size: 14px;
+            }
+            .header-floating-search {
+                max-width: 210px;
+            }
             .cart-section {
                 display: none;
                 position: absolute;
@@ -95,37 +736,52 @@
         }
     </style>
 </head>
-<body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans antialiased select-none">
+<body>
     <input type="hidden" id="pos_id_pedido" value="<%= id_pedido %>">
 
-    <!-- Header -->
-    <header class="bg-[#111625] border-b border-slate-800/60 px-4 py-3 flex justify-between items-center shadow-md sticky top-0 z-50 style-navbar" style="height: 73px;">
-        <div class="d-flex align-items-center gap-3 w-100 flex-nowrap justify-between">
-            <div class="flex items-center space-x-3">
-                <a href="/admin/dashboard" 
-                   style="border-radius: 9999px !important;"
-                   class="group h-10 w-10 bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 transition-all duration-200 flex items-center justify-center active:scale-95 text-decoration-none">
-                    <i class="fa-solid fa-arrow-left text-xs"></i>
-                </a>
-                <div class="hidden sm:block">
-                    <h1 class="text-sm md:text-base font-black text-white tracking-wider uppercase leading-none">
-                        TERMINAL DE VENTAS
-                    </h1>
-                    <p class="text-[11px] text-slate-400 font-extrabold uppercase mt-0.5 tracking-widest">Restaurante Bahía</p>
-                </div>
+    <!-- Header Principal -->
+    <header class="pos-header position-relative">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/admin/dashboard" class="btn-back-dashboard" title="Regresar al Dashboard">
+                <i class="fa-solid fa-arrow-left text-xs"></i>
+            </a>
+            <div>
+                <h1 class="h6 font-heading font-bold text-white mb-0 leading-tight">Terminal POS</h1>
+                <small class="text-slate-400 font-semibold text-[11px] text-uppercase">Restaurante Bahía</small>
             </div>
+        </div>
 
-            <span class="fw-black text-white uppercase text-center text-truncate px-2 tracking-widest bg-slate-800/60 border border-slate-700/50 py-1.5 px-4 rounded-2xl text-xs md:text-sm">
-                <i class="fa-solid fa-receipt me-1.5 text-cyan-400"></i>Comanda #<%= id_pedido %>
-            </span>
-            
-            <div class="flex items-center">
-                <button class="btn-back-to-menu h-10 bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-black px-4 !rounded-full uppercase tracking-wider shadow-md transition-all d-md-none" id="btn-back-menu" style="display: none;">
-                    <i class="fa-solid fa-utensils me-1"></i> Menú
+        <!-- Buscador Flotante que aparece al hacer scroll -->
+        <div class="header-floating-search" id="header-floating-search">
+            <div class="position-relative w-100">
+                <i class="fa-solid fa-magnifying-glass position-absolute text-slate-400" style="left: 12px; top: 9px; font-size: 12px;"></i>
+                <input type="text" 
+                       id="header-search-input" 
+                       class="header-search-input" 
+                       placeholder="Filtrar platillos o bebidas..." 
+                       autocomplete="off">
+                <button type="button" 
+                        id="btn-clear-header-search" 
+                        class="position-absolute border-0 bg-transparent text-slate-400"
+                        style="right: 10px; top: 6px; cursor: pointer; display: none;">
+                    <i class="fa-solid fa-circle-xmark"></i>
                 </button>
-                <div class="hidden md:flex h-10 min-w-[140px] bg-slate-800/30 border border-slate-800 text-slate-400 px-4 py-2 text-[11px] font-black uppercase tracking-widest items-center justify-center gap-2 rounded-2xl">
-                    <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span> Terminal Online
-                </div>
+            </div>
+        </div>
+
+        <div class="order-badge-header" id="order-badge-header">
+            <i class="fa-solid fa-receipt text-sky-400"></i>
+            <span>ORDEN #<%= id_pedido %></span>
+        </div>
+        
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-primary btn-sm rounded-pill d-md-none btn-back-to-menu" id="btn-back-menu" style="display: none;">
+                <i class="fa-solid fa-utensils me-1"></i> Menú
+            </button>
+            <div class="d-none d-md-flex align-items-center gap-2 text-white small bg-dark bg-opacity-50 px-3 py-1.5 rounded-pill border border-secondary border-opacity-25">
+                <span class="bg-success rounded-circle" style="width: 8px; height: 8px;"></span>
+                <span class="text-secondary">Atiende:</span>
+                <strong><%= user ? user.nombre : 'Personal' %></strong>
             </div>
         </div>
     </header>
@@ -133,202 +789,210 @@
     <div class="container-fluid pos-container">
         <div class="row h-100">
             <!-- Panel Izquierdo: Catálogo de Platillos -->
-            <div class="col-md-7 col-lg-8 py-3 menu-section custom-scrollbar" id="section-menu">
-                <!-- Barra de Categorías -->
-                <div class="d-flex gap-2 overflow-x-auto pb-2 mb-2 custom-scrollbar px-1" id="category-filters">
-                    <button class="btn category-btn active font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm" data-category="todos">
-                        Todos
-                    </button>
-                    <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm bg-warning text-dark border-0" data-category="platillos_dia">
-                        ⭐ Platillos del Día
-                    </button>
+            <div class="col-md-7 col-lg-8 p-0 position-relative h-100" style="overflow: hidden;">
+                <div class="menu-section custom-scrollbar w-100 h-100 p-3" id="section-menu">
                     
-                    <% if (locals.categorias && Array.isArray(categorias) && categorias.length > 0) { %>
-                        <% categorias.forEach(cat => { %>
-                            <button class="btn category-btn font-black px-4 py-2 rounded-2xl uppercase tracking-wide shadow-sm bg-[#1e293b] text-white border border-slate-700/60" 
-                                    data-category="<%= cat.nombre.toLowerCase().trim() %>">
-                                <%= cat.nombre %>
-                            </button>
-                        <% }) %>
-                    <% } %>
-                </div>
-
-                <div class="mb-3 px-1">
-                    <div class="position-relative w-100 flex items-center">
-                        <span class="position-absolute top-50 translate-middle-y text-slate-400" style="left: 14px; z-index: 5; pointer-events: none;">
-                            <i class="fa-solid fa-magnifying-glass text-sm"></i>
-                        </span>
-                        
-                        <input type="text" 
-                            id="dish-search-input" 
-                            class="w-full bg-[#f8fafc] text-[#0f172a] text-xs font-bold rounded-2xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition-all placeholder-slate-400 shadow-sm" 
-                            style="padding-top: 10px; padding-bottom: 10px; padding-left: 40px; padding-right: 40px;"
-                            placeholder="Buscar platillo..." 
-                            autocomplete="off">
-
-                        <button type="button" 
-                                id="btn-clear-search" 
-                                class="position-absolute top-50 translate-middle-y text-slate-400 hover:text-rose-500 transition-colors hidden border-0 bg-transparent"
-                                style="right: 14px; z-index: 5; cursor: pointer;">
-                            <i class="fa-solid fa-circle-xmark text-sm"></i>
+                    <!-- Filtros de Categorías -->
+                    <div class="d-flex gap-2 overflow-x-auto pb-2 mb-3 custom-scrollbar" id="category-filters">
+                        <button class="btn category-btn active" data-category="todos">
+                            Todos
                         </button>
+                        
+                        <button class="btn category-btn category-btn-dia" data-category="platillos_dia">
+                            ⭐ Ofertas del Día
+                        </button>
+                        
+                        <% if (locals.categorias && Array.isArray(categorias) && categorias.length > 0) { %>
+                            <% categorias.forEach(cat => { %>
+                                <button class="btn category-btn" data-category="<%= cat.nombre.toLowerCase().trim() %>">
+                                    <%= cat.nombre %>
+                                </button>
+                            <% }) %>
+                        <% } %>
+                    </div>
+
+                    <!-- Buscador de Platillos -->
+                    <div class="mb-3">
+                        <div class="search-wrapper">
+                            <i class="fa-solid fa-magnifying-glass text-muted position-absolute" style="left: 12px; top: 12px; font-size: 13px;"></i>
+                            <input type="text" 
+                                   id="dish-search-input" 
+                                   class="search-input" 
+                                   placeholder="Buscar por nombre de platillo o bebida..." 
+                                   autocomplete="off">
+                            <button type="button" 
+                                    id="btn-clear-search" 
+                                    class="position-absolute border-0 bg-transparent text-muted"
+                                    style="right: 12px; top: 9px; cursor: pointer; display: none;">
+                                <i class="fa-solid fa-circle-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cuadrícula de Platillos -->
+                    <div class="row g-2 g-md-3" id="dishes-grid">
+                        <% if (locals.platillos && platillos.length > 0) { %>
+                            <% platillos.forEach(platillo => { %>
+                                <% const esDisponible = typeof platillo.disponible === 'undefined' || platillo.disponible === 1 || platillo.disponible === true; %>
+                                <% const esDelDia = platillo.es_platillo_dia === true || platillo.es_platillo_dia === 1; %>
+                                
+                                <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
+                                     data-id="<%= platillo.id %>"
+                                     data-name="<%= (platillo.nombre || '').toLowerCase() %>"
+                                     data-category="<%= String(platillo.nombre_categoria || platillo.categoria || '').toLowerCase().trim() %>"
+                                     data-es-dia="<%= esDelDia ? '1' : '0' %>"
+                                     data-available="<%= esDisponible ? 'true' : 'false' %>">
+                                    
+                                    <div class="dish-card h-100 <%= esDelDia ? 'dish-card-dia' : '' %> <%= !esDisponible ? 'out-of-stock' : '' %>">
+                                        <div class="dish-img-wrapper">
+                                            <% if (platillo.foto && platillo.foto !== 'null') { %>
+                                                <img src="/uploads/<%= platillo.foto %>" alt="<%= platillo.nombre %>" loading="lazy">
+                                            <% } else { %>
+                                                <div class="text-center text-muted">
+                                                    <i class="fa-solid <%= platillo.tipo_categoria === 'BEBIDAS' ? 'fa-wine-glass text-info' : 'fa-bowl-food text-warning' %> fa-2x"></i>
+                                                </div>
+                                            <% } %>
+                                            
+                                            <% if (esDelDia) { %>
+                                                <span class="badge-especial-dia">⭐ Oferta</span>
+                                            <% } else if (!esDisponible) { %>
+                                                <span class="badge-agotado">Agotado</span>
+                                            <% } %>
+
+                                            <span class="price-badge-card price-tag">
+                                                $<%= parseFloat(platillo.precio).toFixed(2) %>
+                                            </span>
+                                        </div>
+                                        <div class="dish-card-body">
+                                            <div>
+                                                <h3 class="dish-title" title="<%= platillo.nombre %>">
+                                                    <%= platillo.nombre %>
+                                                </h3>
+                                                <% if (platillo.descripcion && platillo.descripcion.trim().length > 0) { %>
+                                                    <p class="dish-description" title="<%= platillo.descripcion %>">
+                                                        <%= platillo.descripcion %>
+                                                    </p>
+                                                <% } %>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-between pt-1">
+                                                <span class="dish-category">
+                                                    <i class="fa-solid fa-tag opacity-75 me-1"></i><%= platillo.nombre_categoria || platillo.categoria || 'General' %>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        <% } %>
+                    </div>
+
+                    <div id="no-dishes-msg" class="text-center py-5 text-muted d-none">
+                        <i class="fa-solid fa-utensils fs-2 mb-2 opacity-50"></i>
+                        <p class="small font-bold text-uppercase mb-0">No se encontraron platillos</p>
                     </div>
                 </div>
 
-                <div class="row g-2 g-md-3 px-1" id="dishes-grid">
-                    <% if (locals.platillos && platillos.length > 0) { %>
-                        <% platillos.forEach(platillo => { %>
-                            <% const esDisponible = typeof platillo.disponible === 'undefined' || platillo.disponible === 1 || platillo.disponible === true; %>
-                            <% const esDelDia = platillo.es_platillo_dia === true || platillo.es_platillo_dia === 1; %>
-                            
-                            <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
-                                 data-id="<%= platillo.id %>"
-                                 data-name="<%= (platillo.nombre || '').toLowerCase() %>"
-                                 data-category="<%= String(platillo.nombre_categoria || platillo.categoria || '').toLowerCase().trim() %>"
-                                 data-es-dia="<%= esDelDia ? '1' : '0' %>"
-                                 data-available="<%= esDisponible ? 'true' : 'false' %>">
-                                
-                                <div class="card dish-card h-100 bg-[#f8fafc] rounded-3xl shadow-xl overflow-hidden <%= esDelDia ? 'border-2 border-amber-400' : 'border border-slate-200/60' %> p-0 <%= !esDisponible ? 'out-of-stock' : '' %>">
-                                    <div class="dish-img-wrapper">
-                                        <% if (platillo.foto && platillo.foto !== 'null') { %>
-                                            <img src="/uploads/<%= platillo.foto %>" alt="<%= platillo.nombre %>">
-                                        <% } else { %>
-                                            <div class="w-100 h-100 d-flex align-items-center justify-content-center text-slate-400 bg-slate-200/60">
-                                                <i class="fa-solid <%= platillo.tipo_categoria === 'BEBIDAS' ? 'fa-wine-glass text-info' : 'fa-bowl-food text-amber-500' %> fa-2xl"></i>
-                                            </div>
-                                        <% } %>
-                                        
-                                        <% if (esDelDia) { %>
-                                            <span class="position-absolute top-0 start-0 bg-amber-500 text-dark font-black px-2.5 py-1 m-2 rounded-xl text-[10px] shadow-sm tracking-wide uppercase">
-                                                ⭐ Especial del Día
-                                            </span>
-                                        <% } else if (!esDisponible) { %>
-                                            <span class="position-absolute top-0 start-0 bg-rose-600 text-white font-black px-2.5 py-1 m-2 rounded-xl text-[10px] shadow-sm tracking-wide uppercase">
-                                                Agotado
-                                            </span>
-                                        <% } %>
-
-                                        <span class="position-absolute top-0 end-0 bg-[#1e293b] text-white font-black px-3 py-1 m-2 rounded-xl text-xs shadow-sm tracking-wide price-tag">
-                                            $<%= parseFloat(platillo.precio).toFixed(2) %>
-                                        </span>
-                                    </div>
-                                    <div class="card-body p-3 flex flex-col justify-between">
-                                        <h6 class="card-title font-extrabold text-[#0f172a] text-[13px] uppercase tracking-wide mb-0 leading-snug line-clamp-2">
-                                            <%= platillo.nombre %>
-                                        </h6>
-                                    </div>
-                                </div>
-                            </div>
-                        <% }) %>
-                    <% } %>
-                </div>
-
-                <div id="no-dishes-msg" class="text-center py-5 hidden">
-                    <i class="fa-solid fa-utensils text-slate-600 text-3xl mb-2"></i>
-                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">No se encontraron platillos</p>
-                </div>
+                <!-- Botón Flotante Scroll to Top del Menú -->
+                <button type="button" 
+                        id="btn-scroll-top" 
+                        class="btn-scroll-top" 
+                        title="Ir al inicio del menú" 
+                        aria-label="Volver arriba">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
             </div>
 
-            <!-- Panel Derecho: Carrito Limpio + Panel Colapsable de Histórico (Flexbox Dinámico) -->
-            <div class="col-md-5 col-lg-4 p-0 cart-section h-full flex flex-col min-h-0" id="section-cart">
-                <!-- Header de Mesa -->
-                <div class="p-3 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center shadow-sm shrink-0">
-                    <span class="bg-[#1e293b] text-white text-xs px-3 py-1.5 rounded-xl font-black tracking-widest uppercase flex items-center gap-1.5">
-                        <i class="fa-solid fa-table text-cyan-400"></i> <%= locals.nombre_mesa || 'Mesa Activa' %>
+            <!-- Panel Derecho: Carrito Limpio + Panel de Histórico -->
+            <div class="col-md-5 col-lg-4 p-0 cart-section" id="section-cart">
+                
+                <!-- Encabezado de Mesa -->
+                <% 
+                    let textoMesa = locals.nombre_mesa || 'Mesa Activa';
+                    if (textoMesa.toLowerCase().startsWith('mesa mesa')) {
+                        textoMesa = textoMesa.replace(/mesa\s+mesa/i, 'Mesa');
+                    }
+                %>
+                <div class="cart-header">
+                    <span class="mesa-pill">
+                        <i class="fa-solid fa-table text-info"></i> <%= textoMesa %>
                     </span>
-                    <span class="text-[11px] font-extrabold text-blue-600 uppercase tracking-wide bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
-                        NUEVA RONDA
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1 font-bold" style="font-size: 11px;">
+                        RONDA ACTUAL
                     </span>
-                    <button class="btn btn-light btn-sm fw-bold d-md-none btn-back-to-menu text-dark border-0 p-1">
+                    <button class="btn btn-sm btn-light border-0 d-md-none btn-back-to-menu text-dark p-1">
                         <i class="fa-solid fa-xmark fs-5"></i>
                     </button>
                 </div>
                 
-                <!-- ÁREA DE CAPTURA: Carrito Activo (Se encoge al desplegar el histórico) -->
-                <div id="cart-container" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 bg-white custom-scrollbar transition-all duration-300">
-                    <div id="cart-wrapper" class="space-y-2"></div>
+                <!-- Lista del Carrito Activo -->
+                <div id="cart-container" class="flex-grow-1 overflow-y-auto p-3 custom-scrollbar bg-white" style="min-height: 120px;">
+                    <div id="cart-wrapper"></div>
                 </div>
 
-                <!-- PANEL COLAPSABLE: Histórico de Consumos (Se expande hacia arriba) -->
-                <div id="history-container" class="border-t border-slate-200 bg-slate-100 flex flex-col shrink-0 min-h-0 transition-all duration-300">
-                    <button class="w-full px-3 py-2 text-xs font-black text-slate-700 uppercase flex justify-between items-center hover:bg-slate-200/70 transition-colors shrink-0" 
+                <!-- Panel Plegable del Histórico -->
+                <div id="history-container" class="border-top bg-light flex-shrink-0">
+                    <button class="btn btn-light w-100 py-2 px-3 text-start d-flex justify-content-between align-items-center border-0 rounded-0" 
                             type="button" 
                             id="btn-toggle-history">
-                        <span class="flex items-center gap-1.5">
-                            <i class="fa-solid fa-clock-rotate-left text-slate-500"></i> 
-                            Histórico (<span id="history-count">0</span>)
+                        <span class="small font-heading font-bold text-dark d-flex align-items-center gap-1.5">
+                            <i class="fa-solid fa-clock-rotate-left text-muted"></i> 
+                            Historial (<span id="history-count" class="font-digits">0</span>)
                         </span>
                         
-                        <!-- Desglose de totales por estado -->
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1" title="Servidos / Entregados">
-                                <i class="fa-solid fa-circle-check text-emerald-600"></i> 
-                                <span id="history-servidos-count">0</span> Servidos
+                        <div class="d-flex align-items-center gap-1.5">
+                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-0.5" style="font-size: 10px;">
+                                <i class="fa-solid fa-circle-check me-0.5"></i> <span id="history-servidos-count" class="font-digits">0</span>
                             </span>
-                            <span class="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1" title="Pendientes por entregar">
-                                <i class="fa-solid fa-hourglass-half text-amber-600"></i> 
-                                <span id="history-pendientes-count">0</span> Pendientes
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2 py-0.5" style="font-size: 10px;">
+                                <i class="fa-solid fa-hourglass-half me-0.5"></i> <span id="history-pendientes-count" class="font-digits">0</span>
                             </span>
-                            <i class="fa-solid fa-chevron-up text-slate-500 transition-transform duration-300 ms-1" id="history-chevron"></i>
+                            <i class="fa-solid fa-chevron-up text-muted ms-1 transition-transform" id="history-chevron"></i>
                         </div>
                     </button>
                     
-                    <!-- Contenido Desplegable que toma el alto restante -->
-                    <div id="history-collapse" class="hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2.5 bg-slate-50 border-t border-slate-200 space-y-2">
-                        <div id="history-wrapper" class="space-y-2"></div>
+                    <div id="history-collapse" class="p-2.5 bg-white border-top custom-scrollbar overflow-y-auto" style="display: none; max-height: 220px;">
+                        <div id="history-wrapper"></div>
                     </div>
                 </div>
 
-                <!-- Resumen de Totales y Acciones al Pie de la Orden -->
-                <div class="p-4 bg-[#f1f5f9] border-t border-slate-200/80 shrink-0 shadow-2xl space-y-3.5">
-                    <div class="space-y-1.5 px-1">
-                        <div class="d-flex justify-content-between">
-                            <span class="text-slate-500 text-xs font-extrabold tracking-wider uppercase">Subtotal Acumulado</span>
-                            <span class="text-[#0f172a] text-xs font-black" id="summary-subtotal">$0.00</span>
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center pt-1 border-t border-slate-200/60">
-                            <span class="text-[#0f172a] text-xs font-black tracking-wider uppercase">Total Orden</span>
-                            <span class="text-xl font-black text-[#0f172a]" id="summary-total">$0.00</span>
-                        </div>
+                <!-- Resumen Financiero y Botonera -->
+                <div class="p-3 bg-light border-top shadow-sm">
+                    <div class="d-flex justify-content-between text-muted small mb-1 font-semibold">
+                        <span>Subtotal Acumulado:</span>
+                        <span class="text-dark font-digits font-bold" id="summary-subtotal">$0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center pb-2.5 mb-2.5 border-bottom">
+                        <strong class="text-dark font-heading">TOTAL ORDEN:</strong>
+                        <span class="fs-5 font-digits font-bold text-dark" id="summary-total">$0.00</span>
                     </div>
                     
                     <div class="row g-2">
-                        <!-- Botón Móvil Agregar Platillos -->
                         <div class="col-12 d-md-none">
-                            <button class="w-full bg-[#f8fafc] border border-slate-300 text-[#0f172a] hover:bg-slate-100 text-xs font-black py-2.5 uppercase tracking-wider btn-back-to-menu transition-all"
-                                    style="border-radius: 1rem !important;" id="btn-back-menu-mobile">
+                            <button class="btn btn-outline-secondary w-100 btn-sm py-2 rounded-3 btn-back-to-menu font-bold" id="btn-back-menu-mobile">
                                 <i class="fa-solid fa-utensils me-1"></i> Agregar Platillos
                             </button>
                         </div>
                         
-                        <!-- Botón Vaciar -->
                         <div class="col-4">
-                            <button class="w-full bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 text-xs font-black py-2.5 uppercase tracking-wider transition-all shadow-xs" 
-                                    style="border-radius: 1rem !important;" id="btn-clear-cart">
-                                Vaciar
+                            <button class="btn-pos-action btn-vaciar" id="btn-clear-cart">
+                                <i class="fa-solid fa-trash-can text-xs"></i> Vaciar
                             </button>
                         </div>
 
-                        <!-- Botón Enviar a Cocina -->
                         <div class="col-8">
-                            <button class="w-full bg-[#10b981] hover:bg-[#059669] text-white text-xs font-black py-2.5 uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-1.5" 
-                                    style="border-radius: 1rem !important;" id="btn-save-order">
+                            <button class="btn-pos-action btn-enviar-cocina" id="btn-save-order">
                                 <i class="fa-solid fa-paper-plane text-xs"></i> Enviar a Cocina
                             </button>
                         </div>
 
-                        <!-- Botón Pre-Cuenta -->
                         <div class="col-6 mt-2">
-                            <button class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-black py-2.5 uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-xs" 
-                                    style="border-radius: 1rem !important;" id="btn-print-precuenta">
+                            <button class="btn-pos-action btn-precuenta" id="btn-print-precuenta">
                                 <i class="fa-solid fa-print"></i> Pre-Cuenta
                             </button>
                         </div>
 
-                        <!-- Botón Cobrar -->
                         <div class="col-6 mt-2">
-                            <button class="w-full bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-black py-2.5 uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5" 
-                                    style="border-radius: 1rem !important;" id="btn-checkout-order">
+                            <button class="btn-pos-action btn-cobrar" id="btn-checkout-order">
                                 <i class="fa-solid fa-cash-register"></i> Cobrar
                             </button>
                         </div>
@@ -339,45 +1003,32 @@
     </div>
 
     <!-- Botón Flotante Móvil -->
-    <button class="btn btn-primary mobile-cart-badge !rounded-full bg-[#3b82f6] hover:bg-[#2563eb] text-white transition-all active:scale-95" id="mobile-cart-trigger">
-        <i class="fa-solid fa-receipt fs-5"></i>
-        <span class="uppercase tracking-wider">Ver Comanda</span>
-        <span class="badge bg-rose-500 rounded-full text-xs font-black min-w-[20px] h-5 flex items-center justify-center ms-1" id="mobile-badge-count">0</span>
+    <button class="mobile-cart-badge" id="mobile-cart-trigger">
+        <i class="fa-solid fa-receipt"></i>
+        <span>Ver Comanda</span>
+        <span class="badge bg-danger rounded-pill font-digits" id="mobile-badge-count">0</span>
     </button>
 
-    <!-- Libs JS -->
+    <!-- Scripts Core -->
     <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
 
     <script>
-        // 1. Captura local de la ronda activa (Comienza limpia)
         let carrito = []; 
-        // 2. Registros históricos persistentes en BD para esta mesa
         let historicoDetalles = []; 
         let activeCategory = 'todos';
 
-        // LÓGICA ROBUSTA DE EXTRACCIÓN Y DEPURACIÓN DEL PRE-PEDIDO DESDE LA URL
         function procesarPrePedidoDesdeURL() {
             const urlParams = new URLSearchParams(window.location.search);
             const prePedidoData = urlParams.get('cargarPrePedido');
 
-            if (!prePedidoData) {
-                console.log('[POS Debug] No hay pre-pedido enviado en los parámetros de la URL.');
-                return;
-            }
-
-            console.log('[POS Debug] Parámetro RAW detectado en URL:', prePedidoData);
+            if (!prePedidoData) return;
 
             try {
                 const items = JSON.parse(decodeURIComponent(prePedidoData));
-                console.log('[POS Debug] Ítems parseados del pre-pedido:', items);
-
-                if (!Array.isArray(items) || items.length === 0) {
-                    console.warn('[POS Debug] El pre-pedido está vacío o no tiene formato de arreglo.');
-                    return;
-                }
+                if (!Array.isArray(items) || items.length === 0) return;
 
                 let itemsInyectados = 0;
 
@@ -389,69 +1040,51 @@
                     let nombre = item.nombre || item.nombre_platillo;
                     let precio = parseFloat(item.precio || item.precio_unitario);
 
-                    // BÚSQUEDA Y FALLBACK EN EL CATÁLOGO DOM
                     let dishEl = null;
-
-                    // Si tenemos ID, buscamos por dataset id
                     if (idBuscado !== undefined && idBuscado !== null) {
                         idBuscado = String(idBuscado);
                         dishEl = document.querySelector(`.dish-item[data-id="${idBuscado}"]`);
                     }
 
-                    // Fallback: Si no hay ID o no se encontró el nodo, buscar por el NOMBRE del platillo en la cuadrícula
                     if (!dishEl && nombre) {
                         const nombreBuscado = nombre.toLowerCase().trim();
                         dishEl = Array.from(document.querySelectorAll('.dish-item')).find(el => {
                             return el.dataset.name === nombreBuscado || 
-                                   el.querySelector('.card-title')?.textContent.trim().toLowerCase() === nombreBuscado;
+                                   el.querySelector('h6')?.textContent.trim().toLowerCase() === nombreBuscado;
                         });
 
-                        if (dishEl) {
-                            idBuscado = dishEl.dataset.id;
-                            console.log(`[POS Debug] ID ${idBuscado} resuelto automáticamente en el DOM para "${nombre}".`);
-                        }
+                        if (dishEl) idBuscado = dishEl.dataset.id;
                     }
 
-                    // Recuperar datos faltantes del elemento si no venían en el JSON
                     if (dishEl) {
-                        if (!nombre) {
-                            nombre = dishEl.querySelector('.card-title')?.textContent.trim();
-                        }
+                        if (!nombre) nombre = dishEl.querySelector('h6')?.textContent.trim();
                         if (isNaN(precio)) {
                             const priceText = dishEl.querySelector('.price-tag')?.textContent.replace('$', '').trim();
                             precio = parseFloat(priceText);
                         }
                     }
 
-                    // Inyección al carrito si se determinaron las variables esenciales
                     if (idBuscado && nombre && !isNaN(precio)) {
+                        const esDia = dishEl ? (dishEl.getAttribute('data-es-dia') === '1') : false;
                         for (let i = 0; i < cantidad; i++) {
-                            addToCart(idBuscado, nombre, precio);
+                            addToCart(idBuscado, nombre, precio, esDia);
                         }
 
                         if (notas) {
                             const prodInCart = carrito.find(p => String(p.id) === String(idBuscado));
                             if (prodInCart) prodInCart.notas = notas;
                         }
-
                         itemsInyectados++;
-                        console.log(`[POS Debug] Inyectado exitosamente: ${nombre} (ID: ${idBuscado}, Cantidad: x${cantidad})`);
-                    } else {
-                        console.error(`[POS Debug] ERROR: No se pudieron determinar los datos del producto:`, item);
                     }
                 });
 
                 if (itemsInyectados > 0) {
                     renderCart();
-                    console.log('[POS Debug] Carrito populado. Limpiando parámetros de la URL...');
-
-                    // Limpiar la URL manteniendo la vista limpia sin recargar
                     const newUrl = window.location.pathname;
                     window.history.replaceState({}, document.title, newUrl);
                 }
-
             } catch (e) {
-                console.error('[POS Debug] Excepción al procesar los ítems del pre-pedido en el carrito:', e);
+                console.error('[POS] Error al procesar pre-pedido:', e);
             }
         }
 
@@ -470,54 +1103,33 @@
                         notas: item.notas_especiales || item.notas || ''
                     }));
                 } catch (e) {
-                    console.error("Error al procesar el histórico de la orden:", e);
+                    console.error("Error al procesar histórico:", e);
                 }
             }
             
             renderCart();
             renderHistory();
             setupEventListeners();
-            
-            // Ejecutar procesamiento del pre-pedido pasados por la URL al iniciar
             procesarPrePedidoDesdeURL();
         });
 
         function setupEventListeners() {
-            // Lógica para Expandir / Colapsar el Histórico desplazando al Carrito hacia arriba
             const btnToggleHistory = document.getElementById('btn-toggle-history');
             const historyCollapse = document.getElementById('history-collapse');
             const historyChevron = document.getElementById('history-chevron');
-            const historyContainer = document.getElementById('history-container');
-            const cartContainer = document.getElementById('cart-container');
 
             btnToggleHistory.addEventListener('click', () => {
-                const isHidden = historyCollapse.classList.contains('hidden');
-                
+                const isHidden = historyCollapse.style.display === 'none';
                 if (isHidden) {
-                    // Desplegar el histórico tomando todo el espacio disponible
-                    historyCollapse.classList.remove('hidden');
-                    historyContainer.classList.remove('shrink-0');
-                    historyContainer.classList.add('flex-1');
-                    
-                    // Reducir la sección de captura del carrito
-                    cartContainer.classList.remove('flex-1');
-                    cartContainer.classList.add('shrink-0', 'max-h-28'); 
-                    
-                    historyChevron.classList.add('rotate-180');
+                    historyCollapse.style.display = 'block';
+                    historyChevron.style.transform = 'rotate(180deg)';
                 } else {
-                    // Restaurar estado original (Carrito expandido, histórico plegado)
-                    historyCollapse.classList.add('hidden');
-                    historyContainer.classList.remove('flex-1');
-                    historyContainer.classList.add('shrink-0');
-                    
-                    cartContainer.classList.remove('shrink-0', 'max-h-28');
-                    cartContainer.classList.add('flex-1');
-                    
-                    historyChevron.classList.remove('rotate-180');
+                    historyCollapse.style.display = 'none';
+                    historyChevron.style.transform = 'rotate(0deg)';
                 }
             });
 
-            // Filtros por Categoría
+            // Filtros de Categorías
             document.querySelectorAll('.category-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
@@ -527,27 +1139,119 @@
                 });
             });
 
-            // Buscador
+            // Buscador Principal y Buscador Flotante (Sincronizados)
             const searchInput = document.getElementById('dish-search-input');
             const clearSearchBtn = document.getElementById('btn-clear-search');
+            const headerSearchContainer = document.getElementById('header-floating-search');
+            const headerSearchInput = document.getElementById('header-search-input');
+            const clearHeaderSearchBtn = document.getElementById('btn-clear-header-search');
+            const btnScrollTop = document.getElementById('btn-scroll-top');
+            const menuSection = document.getElementById('section-menu');
 
-            searchInput.addEventListener('input', () => {
-                if (searchInput.value.trim().length > 0) {
-                    clearSearchBtn.classList.remove('hidden');
-                } else {
-                    clearSearchBtn.classList.add('hidden');
+            function syncSearch(value, origin) {
+                if (origin !== 'main') {
+                    searchInput.value = value;
+                    clearSearchBtn.style.display = value.trim().length > 0 ? 'block' : 'none';
+                }
+                if (origin !== 'header' && headerSearchInput) {
+                    headerSearchInput.value = value;
+                    clearHeaderSearchBtn.style.display = value.trim().length > 0 ? 'block' : 'none';
                 }
                 applyFilters();
+
+                // Si se buscó desde el header flotante y la reducción de tarjetas subió el scroll al inicio
+                if (origin === 'header') {
+                    const scrollTop = menuSection ? menuSection.scrollTop : (window.pageYOffset || document.documentElement.scrollTop || 0);
+                    if (scrollTop <= 100) {
+                        handleMenuScroll();
+                        if (searchInput) {
+                            searchInput.focus();
+                            const len = searchInput.value.length;
+                            try {
+                                searchInput.setSelectionRange(len, len);
+                            } catch (e) {}
+                        }
+                    }
+                }
+            }
+
+            searchInput.addEventListener('input', () => {
+                const val = searchInput.value;
+                clearSearchBtn.style.display = val.trim().length > 0 ? 'block' : 'none';
+                syncSearch(val, 'main');
             });
 
             clearSearchBtn.addEventListener('click', () => {
                 searchInput.value = '';
-                clearSearchBtn.classList.add('hidden');
+                clearSearchBtn.style.display = 'none';
+                syncSearch('', 'main');
                 searchInput.focus();
-                applyFilters();
             });
 
-            // Agregar del Menú al Carrito
+            if (headerSearchInput) {
+                headerSearchInput.addEventListener('input', () => {
+                    const val = headerSearchInput.value;
+                    clearHeaderSearchBtn.style.display = val.trim().length > 0 ? 'block' : 'none';
+                    syncSearch(val, 'header');
+                });
+
+                clearHeaderSearchBtn.addEventListener('click', () => {
+                    headerSearchInput.value = '';
+                    clearHeaderSearchBtn.style.display = 'none';
+                    syncSearch('', 'header');
+                    headerSearchInput.focus();
+                });
+            }
+
+            // Detección de Scroll para mostrar Botón Top y Buscador Superior
+            function handleMenuScroll() {
+                const scrollTop = menuSection ? menuSection.scrollTop : (window.pageYOffset || document.documentElement.scrollTop || 0);
+                const threshold = 100;
+
+                if (scrollTop > threshold) {
+                    if (btnScrollTop) btnScrollTop.classList.add('visible');
+                    if (headerSearchContainer) headerSearchContainer.classList.add('visible');
+                } else {
+                    if (btnScrollTop) btnScrollTop.classList.remove('visible');
+                    if (headerSearchContainer) {
+                        const teniaFocoEnHeader = (document.activeElement === headerSearchInput);
+                        headerSearchContainer.classList.remove('visible');
+                        
+                        // Si el usuario estaba escribiendo en el buscador del header, transferir el foco al buscador principal
+                        if (teniaFocoEnHeader && searchInput) {
+                            searchInput.focus();
+                            const len = searchInput.value.length;
+                            try {
+                                searchInput.setSelectionRange(len, len);
+                            } catch (e) {}
+                        }
+                    }
+                }
+            }
+
+            if (menuSection) {
+                menuSection.addEventListener('scroll', handleMenuScroll, { passive: true });
+            }
+            window.addEventListener('scroll', handleMenuScroll, { passive: true });
+
+            // Clic en Scroll-to-Top
+            if (btnScrollTop) {
+                btnScrollTop.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (menuSection) {
+                        menuSection.scrollTo({
+                            top: 0,
+                            behavior: 'smooth'
+                        });
+                    }
+                    window.scrollTo({
+                        top: 0,
+                        behavior: 'smooth'
+                    });
+                });
+            }
+
+            // Clic en Platillo
             document.getElementById('dishes-grid').addEventListener('click', async (e) => {
                 const card = e.target.closest('.dish-card');
                 if (card) {
@@ -555,21 +1259,20 @@
                     if (itemEl.getAttribute('data-available') === 'false' || itemEl.dataset.available === 'false') {
                         Swal.fire({
                             icon: 'warning',
-                            title: 'PLATILLO AGOTADO',
+                            title: 'Platillo Agotado',
                             text: 'Este producto no se encuentra disponible actualmente.',
                             confirmButtonText: 'Entendido',
-                            confirmButtonColor: '#3b82f6',
-                            background: '#ffffff',
-                            color: '#0f172a'
+                            confirmButtonColor: '#0284c7'
                         });
                         return;
                     }
 
                     const id = itemEl.getAttribute('data-id') || itemEl.dataset.id;
-                    const nombre = itemEl.querySelector('.card-title').textContent.trim();
-                    const precioText = itemEl.querySelector('.price-tag').textContent.replace('$', '').trim();
+                    const nombreEl = itemEl.querySelector('.dish-title, h3, h6');
+                    const nombre = nombreEl ? nombreEl.textContent.trim() : (itemEl.getAttribute('data-name') || 'Platillo');
+                    const precioEl = itemEl.querySelector('.price-tag');
+                    const precioText = precioEl ? precioEl.textContent.replace('$', '').trim() : '0.00';
                     
-                    // LECTURA ROBUSTA: Soporta '1', 1, 'true' o true
                     const esDiaAttr = itemEl.getAttribute('data-es-dia');
                     const esPlatilloDia = (esDiaAttr === '1' || esDiaAttr === 'true' || itemEl.dataset.esDia === '1' || itemEl.dataset.esDia === 'true');
                     
@@ -577,39 +1280,28 @@
                 }
             });
 
-            function addToCart(id, nombre, precio, esPlatilloDia = false) {
-                const idString = String(id);
-                const precioFloat = typeof precio === 'number' ? precio : parseFloat(precio);
-                const esDia = Boolean(esPlatilloDia === true || esPlatilloDia === 1 || esPlatilloDia === '1' || esPlatilloDia === 'true');
-
-                const itemExistente = carrito.find(prod => String(prod.id) === idString && prod.es_platillo_dia === esDia);
-                if (itemExistente) {
-                    itemExistente.cantidad += 1;
-                } else {
-                    carrito.push({
-                        id: idString,
-                        nombre,
-                        precio: precioFloat,
-                        cantidad: 1,
-                        notas: '',
-                        es_platillo_dia: esDia
-                    });
-                }
-                renderCart();
-            }
-
-            // Acciones de Ítems dentro del Carrito Activo
+            // Acciones del Carrito
             document.getElementById('cart-wrapper').addEventListener('click', (e) => {
                 const target = e.target;
                 if (target.closest('.update-qty')) {
                     const btn = target.closest('.update-qty');
                     updateQuantity(btn.dataset.id, parseInt(btn.dataset.delta));
+                    return;
                 }
                 if (target.closest('.remove-item')) {
                     removeItem(target.closest('.remove-item').dataset.id);
+                    return;
                 }
-                if (target.closest('.add-notes')) {
-                    editItemNotes(target.closest('.add-notes').dataset.id);
+                if (target.closest('.clear-note-btn')) {
+                    e.stopPropagation();
+                    const btn = target.closest('.clear-note-btn');
+                    clearItemNote(btn.dataset.id);
+                    return;
+                }
+                if (target.closest('.add-notes') || target.closest('.cart-item-note')) {
+                    const el = target.closest('.add-notes') || target.closest('.cart-item-note');
+                    editItemNotes(el.dataset.id);
+                    return;
                 }
             });
 
@@ -657,9 +1349,9 @@
             const noDishesMsg = document.getElementById('no-dishes-msg');
             if (noDishesMsg) {
                 if (visibleCount === 0) {
-                    noDishesMsg.classList.remove('hidden');
+                    noDishesMsg.classList.remove('d-none');
                 } else {
-                    noDishesMsg.classList.add('hidden');
+                    noDishesMsg.classList.add('d-none');
                 }
             }
         }
@@ -672,12 +1364,33 @@
             if (target === 'cart') {
                 cartSection.classList.add('active');
                 cartTrigger.style.display = 'none';
-                backMenuBtn.style.display = 'block';
+                backMenuBtn.style.display = 'inline-block';
             } else {
                 cartSection.classList.remove('active');
                 cartTrigger.style.display = 'flex';
                 backMenuBtn.style.display = 'none';
             }
+        }
+
+        function addToCart(id, nombre, precio, esPlatilloDia = false) {
+            const idString = String(id);
+            const precioFloat = typeof precio === 'number' ? precio : parseFloat(precio);
+            const esDia = Boolean(esPlatilloDia === true || esPlatilloDia === 1 || esPlatilloDia === '1' || esPlatilloDia === 'true');
+
+            const itemExistente = carrito.find(prod => String(prod.id) === idString && prod.es_platillo_dia === esDia);
+            if (itemExistente) {
+                itemExistente.cantidad += 1;
+            } else {
+                carrito.push({
+                    id: idString,
+                    nombre,
+                    precio: precioFloat,
+                    cantidad: 1,
+                    notas: '',
+                    es_platillo_dia: esDia
+                });
+            }
+            renderCart();
         }
 
         function updateQuantity(id, delta) {
@@ -690,26 +1403,120 @@
             }
         }
 
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function clearItemNote(id) {
+            const idString = String(id);
+            const item = carrito.find(prod => String(prod.id) === idString);
+            if (item) {
+                item.notas = '';
+                renderCart();
+            }
+        }
+
         async function editItemNotes(id) {
             const idString = String(id);
             const item = carrito.find(prod => String(prod.id) === idString);
             if (!item) return;
 
-            const { value: text } = await Swal.fire({
-                title: `Notas para: ${item.nombre}`,
-                input: 'text',
-                inputLabel: 'Especificaciones para cocina',
-                inputValue: item.notas,
+            const sugerenciasRapidas = [
+                'Sin hielo',
+                'Bien cargado',
+                'Sin sal',
+                'Término medio',
+                'Poco picante',
+                'Para llevar',
+                'Servir primero',
+                'Sin cebolla',
+                'Extra salsa',
+                'Sin azúcar',
+                'Caliente'
+            ];
+
+            const htmlChips = sugerenciasRapidas.map(sug => `
+                <button type="button" class="quick-note-chip btn-append-chip" data-text="${sug}">${sug}</button>
+            `).join('');
+
+            const { value: resultado } = await Swal.fire({
+                title: `<div class="d-flex align-items-center justify-content-center gap-2" style="font-family: var(--font-display); font-size: 1.1rem; color: #0f172a;">
+                    <i class="fa-solid fa-bell-concierge text-primary"></i> 
+                    <span>Instrucciones: ${escapeHtml(item.nombre)}</span>
+                </div>`,
+                html: `
+                    <div class="text-start mt-2">
+                        <label class="form-label text-muted small fw-bold mb-1.5 d-flex align-items-center justify-content-between" style="font-size: 0.75rem;">
+                            <span>INDICACIONES PARA COCINA / BARRA</span>
+                            <span class="text-secondary opacity-75">Opcional</span>
+                        </label>
+                        
+                        <div class="d-flex flex-wrap gap-1.5 mb-3 p-2 rounded bg-light border" style="max-height: 90px; overflow-y: auto;">
+                            ${htmlChips}
+                        </div>
+
+                        <textarea id="swal-item-notes-input" class="form-control" rows="3" 
+                            style="font-family: var(--font-body); font-size: 0.85rem; border-radius: 8px; border-color: #cbd5e1; resize: none;" 
+                            placeholder="Ej. Bien cargados con Brandy 2 shots, sin sal...">${escapeHtml(item.notas || '')}</textarea>
+                    </div>
+                `,
+                didOpen: () => {
+                    const textarea = document.getElementById('swal-item-notes-input');
+                    if (textarea) {
+                        textarea.focus();
+                        const len = textarea.value.length;
+                        textarea.setSelectionRange(len, len);
+                    }
+
+                    document.querySelectorAll('.btn-append-chip').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            if (!textarea) return;
+                            const textToAdd = btn.dataset.text;
+                            const currentVal = textarea.value.trim();
+                            
+                            if (currentVal.length === 0) {
+                                textarea.value = textToAdd;
+                            } else {
+                                const lowerCurrent = currentVal.toLowerCase();
+                                const lowerAdd = textToAdd.toLowerCase();
+                                if (!lowerCurrent.includes(lowerAdd)) {
+                                    textarea.value = `${currentVal}, ${textToAdd}`;
+                                }
+                            }
+                            textarea.focus();
+                        });
+                    });
+                },
                 showCancelButton: true,
-                confirmButtonText: 'Confirmar',
+                showDenyButton: Boolean(item.notas && item.notas.trim().length > 0),
+                confirmButtonText: '<i class="fa-solid fa-check me-1"></i> Guardar',
+                denyButtonText: '<i class="fa-solid fa-trash-can me-1"></i> Quitar Nota',
                 cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#3b82f6',
-                background: '#ffffff',
-                color: '#0f172a'
+                confirmButtonColor: '#0284c7',
+                denyButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                preConfirm: () => {
+                    const textarea = document.getElementById('swal-item-notes-input');
+                    return { action: 'save', text: textarea ? textarea.value.trim() : '' };
+                }
             });
 
-            if (text !== undefined) {
-                item.notas = text;
+            if (resultado) {
+                if (resultado.action === 'save') {
+                    item.notas = resultado.text;
+                    renderCart();
+                }
+            } else if (Swal.getDenyButton() && Swal.getDenyButton().dataset.clicked) {
+                // Deny action (Quitar nota)
+                item.notas = '';
                 renderCart();
             }
         }
@@ -720,43 +1527,26 @@
             renderCart();
         }
 
-        // Vacía el carrito inmediatamente sin pedir confirmación (para uso automático)
         function vaciarCarritoDirecto() {
             carrito = [];
             renderCart();
         }
 
-        // Vacía el carrito con confirmación (para el botón manual "Vaciar")
         function clearCart() {
             if (carrito.length === 0) return;
 
             Swal.fire({
-                title: '¿VACIAR RONDA ACTUAL?',
-                text: 'Se eliminarán todos los productos agregados en esta captura que aún no han sido enviados a cocina.',
+                title: '¿Vaciar ronda actual?',
+                text: 'Se eliminarán los productos en captura no enviados a cocina.',
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#ef4444',
+                confirmButtonColor: '#e11d48',
                 cancelButtonColor: '#64748b',
-                confirmButtonText: 'SÍ, VACIAR',
-                cancelButtonText: 'CANCELAR',
-                background: '#ffffff',
-                color: '#0f172a'
+                confirmButtonText: 'Sí, vaciar',
+                cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) {
                     vaciarCarritoDirecto();
-
-                    const Toast = Swal.mixin({
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 1500,
-                        timerProgressBar: true
-                    });
-
-                    Toast.fire({
-                        icon: 'info',
-                        title: 'Ronda vaciada'
-                    });
                 }
             });
         }
@@ -768,12 +1558,12 @@
 
             if (carrito.length === 0) {
                 wrapper.innerHTML = `
-                    <div class="text-center my-4 py-4">
-                        <div class="w-12 h-12 rounded-full bg-[#f1f5f9] flex items-center justify-center mb-2 mx-auto border border-slate-200">
-                            <i class="fa-solid fa-basket-shopping text-lg text-slate-400"></i>
+                    <div class="text-center my-4 py-3">
+                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center mb-2 mx-auto" style="width: 44px; height: 44px;">
+                            <i class="fa-solid fa-basket-shopping text-muted"></i>
                         </div>
-                        <p class="text-slate-500 text-xs font-black uppercase tracking-wide">Sin productos en esta ronda</p>
-                        <span class="text-[10px] text-slate-400">Selecciona platillos del menú para agregarlos.</span>
+                        <p class="text-secondary small font-bold mb-0">Ronda limpia</p>
+                        <small class="text-muted">Selecciona platillos del menú para agregar.</small>
                     </div>
                 `;
             } else {
@@ -781,27 +1571,37 @@
                 carrito.forEach(prod => {
                     const itemTotal = prod.precio * prod.cantidad;
                     const row = document.createElement('div');
-                    row.className = 'bg-[#f8fafc] p-3 rounded-2xl border border-slate-200/70 flex flex-col gap-1.5 transition-all shadow-sm';
+                    row.className = 'cart-item-row';
                     row.innerHTML = `
                         <div class="d-flex align-items-center justify-content-between w-100">
-                            <div style="max-width: 45%;">
-                                <span class="font-extrabold text-[#0f172a] d-block text-truncate text-xs uppercase tracking-wide">${prod.nombre}</span>
-                                <span class="text-slate-500 font-bold text-[11px]">$${prod.precio.toFixed(2)}</span>
+                            <div style="max-width: 48%;">
+                                <span class="font-heading font-bold text-dark d-block text-truncate small">${escapeHtml(prod.nombre)}</span>
+                                <small class="text-muted font-digits font-bold">$${prod.precio.toFixed(2)}</small>
                             </div>
                             <div class="d-flex align-items-center gap-1.5">
-                                <button class="btn btn-sm btn-link text-slate-400 p-1 add-notes" data-id="${prod.id}">
-                                    <i class="fa-solid ${prod.notas ? 'fa-comment text-amber-500' : 'fa-comment-dots'} text-sm"></i>
+                                <button type="button" class="btn-cart-note ${prod.notas ? 'has-note' : ''} add-notes" data-id="${prod.id}" title="${prod.notas ? 'Modificar observaciones' : 'Agregar observaciones a cocina/barra'}">
+                                    <i class="fa-solid ${prod.notas ? 'fa-pen-to-square' : 'fa-comment-medical'}"></i>
                                 </button>
-                                <div class="btn-group btn-group-sm border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                    <button class="btn btn-white border-0 px-2 text-slate-500 update-qty" data-id="${prod.id}" data-delta="-1"><i class="fa-solid fa-minus text-[10px]"></i></button>
-                                    <span class="px-2 font-black text-[#0f172a] d-flex align-items-center bg-white text-xs" style="min-width:25px; justify-content:center;">${prod.cantidad}</span>
-                                    <button class="btn btn-white border-0 px-2 text-slate-500 update-qty" data-id="${prod.id}" data-delta="1"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                                <div class="btn-group btn-group-sm border rounded bg-white shadow-xs">
+                                    <button class="btn btn-white border-0 px-2 text-secondary update-qty" data-id="${prod.id}" data-delta="-1"><i class="fa-solid fa-minus" style="font-size: 9px;"></i></button>
+                                    <span class="px-2 font-digits font-bold text-dark d-flex align-items-center bg-white" style="min-width:20px; justify-content:center;">${prod.cantidad}</span>
+                                    <button class="btn btn-white border-0 px-2 text-secondary update-qty" data-id="${prod.id}" data-delta="1"><i class="fa-solid fa-plus" style="font-size: 9px;"></i></button>
                                 </div>
-                                <span class="font-black text-[#0f172a] ms-1 text-xs" style="min-width: 55px; text-align: right;">$${itemTotal.toFixed(2)}</span>
-                                <button class="btn btn-sm text-rose-500 hover:text-rose-700 border-0 p-1 ms-1 remove-item" data-id="${prod.id}"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                                <span class="font-digits font-bold text-dark ms-1 small" style="min-width: 50px; text-align: right;">$${itemTotal.toFixed(2)}</span>
+                                <button class="btn btn-sm text-danger border-0 p-1 ms-0.5 remove-item" data-id="${prod.id}"><i class="fa-solid fa-trash-can"></i></button>
                             </div>
                         </div>
-                        ${prod.notas ? `<div class="bg-amber-50 text-amber-800 text-[11px] font-medium p-2 rounded-xl border-start border-amber-500 border-3"><i class="fa-solid fa-quote-left me-1 text-amber-500"></i>${prod.notas}</div>` : ''}
+                        ${prod.notas ? `
+                            <div class="cart-item-note" data-id="${prod.id}" title="Clic para modificar observaciones">
+                                <div class="cart-item-note-content">
+                                    <span class="cart-item-note-tag"><i class="fa-solid fa-bell-concierge"></i> Obs:</span>
+                                    <p class="cart-item-note-text">${escapeHtml(prod.notas)}</p>
+                                </div>
+                                <button type="button" class="btn-clear-item-note clear-note-btn" data-id="${prod.id}" title="Eliminar observación">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        ` : ''}
                     `;
                     wrapper.appendChild(row);
                 });
@@ -810,15 +1610,10 @@
             recalcularTotales();
         }
 
-        /**
-         * Renderiza el historial de platillos pedidos en el panel colapsable del POS
-         * y calcula el desglose de productos servidos y pendientes.
-         */
         function renderHistory() {
             const wrapper = document.getElementById('history-wrapper');
             document.getElementById('history-count').textContent = historicoDetalles.length;
 
-            // Conteo dinámico de unidades servidas vs pendientes
             const totalServidos = historicoDetalles
                 .filter(item => item.estado === 'entregado')
                 .reduce((sum, item) => sum + item.cantidad, 0);
@@ -832,8 +1627,8 @@
 
             if (historicoDetalles.length === 0) {
                 wrapper.innerHTML = `
-                    <div class="text-center py-2">
-                        <p class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-0">Sin consumos previos registrados</p>
+                    <div class="text-center py-2 text-muted small">
+                        Sin consumos previos registrados
                     </div>
                 `;
                 return;
@@ -846,35 +1641,24 @@
                 const itemTotal = item.precio * item.cantidad;
                 const estadoLimpio = (item.estado || '').toLowerCase().trim();
                 
-                // Uso de !important (!) para sobrescribir el 'color: #fff' de Bootstrap .badge
-                let badgeEstado = 'bg-amber-100 !text-amber-950 border-amber-300 font-black';
-                if (estadoLimpio === 'listo') badgeEstado = 'bg-emerald-100 !text-emerald-900 border-emerald-300 font-black';
-                if (estadoLimpio === 'entregado') badgeEstado = 'bg-slate-200 !text-slate-800 border-slate-300 font-black';
-                if (estadoLimpio === 'cancelado') badgeEstado = 'bg-rose-100 !text-rose-900 border-rose-300 line-through font-black';
+                let badgeClass = 'bg-warning-subtle text-warning-emphasis border-warning-subtle';
+                if (estadoLimpio === 'listo') badgeClass = 'bg-success-subtle text-success border-success-subtle';
+                if (estadoLimpio === 'entregado') badgeClass = 'bg-secondary-subtle text-secondary border-secondary-subtle';
+                if (estadoLimpio === 'cancelado') badgeClass = 'bg-danger-subtle text-danger border-danger-subtle line-through';
 
                 let botonAccion = '';
                 if (estadoLimpio === 'listo') {
                     botonAccion = `
                         <button type="button" 
-                                data-id="${item.id_detalle}"
-                                style="background-color: #059669; color: #ffffff; border: none; border-radius: 0.75rem !important;"
-                                class="btn-deliver-item px-3.5 py-1.5 text-xs font-bold shadow-sm hover:opacity-90 transition-all flex items-center gap-1.5 cursor-pointer">
-                            <i class="fa-solid fa-check text-white"></i> 
-                            <span class="text-white font-bold">Entregar</span>
+                                data-id="${item.id_detalle}" 
+                                class="btn btn-sm btn-success py-0 px-2 fw-bold btn-deliver-item rounded-pill" style="font-size: 11px;">
+                            <i class="fa-solid fa-check me-1"></i> Entregar
                         </button>
                     `;
                 } else if (estadoLimpio === 'entregado') {
-                    botonAccion = `
-                        <span class="text-xs font-bold text-slate-500 flex items-center gap-1">
-                            <i class="fa-solid fa-circle-check text-emerald-600"></i> Servido
-                        </span>
-                    `;
+                    botonAccion = `<small class="text-success fw-bold"><i class="fa-solid fa-circle-check me-1"></i>Servido</small>`;
                 } else if (estadoLimpio === 'cancelado') {
-                    botonAccion = `
-                        <span class="text-xs font-bold text-rose-600 flex items-center gap-1">
-                            <i class="fa-solid fa-ban text-rose-600"></i> Cancelado
-                        </span>
-                    `;
+                    botonAccion = `<small class="text-danger fw-bold"><i class="fa-solid fa-ban me-1"></i>Cancelado</small>`;
                 }
 
                 const esCancelable = estadosCancelables.includes(estadoLimpio);
@@ -882,32 +1666,36 @@
                     <button type="button" 
                             data-id="${item.id_detalle}" 
                             data-estado="${item.estado}" 
-                            data-nombre="${item.nombre}"
-                            class="btn-cancel-item text-rose-500 hover:text-rose-700 text-xs font-black px-1.5 py-0.5 rounded hover:bg-rose-50 transition-colors"
-                            title="Cancelar ítem de comanda">
-                        <i class="fa-solid fa-xmark"></i>
+                            data-nombre="${item.nombre}" 
+                            class="btn-cancel-item" 
+                            title="Cancelar este producto">
+                        <i class="fa-solid fa-trash-can"></i>
                     </button>
                 ` : '';
 
                 const row = document.createElement('div');
-                row.className = `bg-white p-2.5 rounded-xl border border-slate-200 flex flex-col gap-1 shadow-xs ${estadoLimpio === 'cancelado' ? 'opacity-60 bg-slate-50' : ''}`;
+                row.className = `p-2 mb-1.5 border rounded bg-white ${estadoLimpio === 'cancelado' ? 'opacity-50' : ''}`;
                 row.innerHTML = `
                     <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <span class="font-black text-slate-800 text-xs uppercase d-block ${estadoLimpio === 'cancelado' ? 'line-through' : ''}">${item.nombre}</span>
-                            <span class="text-slate-400 text-[10px] font-bold">Cant: ${item.cantidad} x $${item.precio.toFixed(2)}</span>
+                        <div class="pe-2" style="max-width: 62%;">
+                            <span class="font-heading font-bold text-dark small d-block text-truncate ${estadoLimpio === 'cancelado' ? 'text-decoration-line-through' : ''}">${escapeHtml(item.nombre)}</span>
+                            <small class="text-muted font-digits">x${item.cantidad} ($${item.precio.toFixed(2)})</small>
                         </div>
-                        <div class="text-end flex flex-col items-end gap-1">
-                            <div class="flex items-center gap-1.5">
+                        <div class="text-end">
+                            <div class="d-flex align-items-center justify-content-end mb-1">
                                 ${btnCancelar}
-                                <span class="font-black text-slate-800 text-xs d-block ${estadoLimpio === 'cancelado' ? 'line-through' : ''}">$${itemTotal.toFixed(2)}</span>
+                                <span class="font-digits font-bold text-dark small ${estadoLimpio === 'cancelado' ? 'text-decoration-line-through' : ''}">$${itemTotal.toFixed(2)}</span>
                             </div>
-                            <span class="badge ${badgeEstado} border text-[10px] uppercase px-2 py-0.5 rounded">${item.estado}</span>
+                            <span class="badge ${badgeClass} border text-uppercase" style="font-size: 9px;">${item.estado}</span>
                         </div>
                     </div>
-                    ${item.notas ? `<div class="text-[10px] text-slate-500 italic mt-0.5"><i class="fa-solid fa-pencil text-[9px] me-1"></i>${item.notas}</div>` : ''}
-                    
-                    ${botonAccion ? `<div class="d-flex justify-content-end pt-1 border-t border-slate-100">${botonAccion}</div>` : ''}
+                    ${item.notas ? `
+                        <div class="history-item-note">
+                            <i class="fa-solid fa-bell-concierge text-muted" style="font-size: 10px;"></i>
+                            <span>${escapeHtml(item.notas)}</span>
+                        </div>
+                    ` : ''}
+                    ${botonAccion ? `<div class="d-flex justify-content-end pt-1 border-top mt-1">${botonAccion}</div>` : ''}
                 `;
                 wrapper.appendChild(row);
             });
@@ -915,59 +1703,33 @@
             recalcularTotales();
         }
 
-        // Delegación de eventos para las acciones dentro del contenedor de histórico (Entregar y Cancelar)
         document.getElementById('history-wrapper').addEventListener('click', (e) => {
             const btnDeliver = e.target.closest('.btn-deliver-item');
             if (btnDeliver) {
-                const idDetalle = btnDeliver.dataset.id;
-                marcarComoEntregado(idDetalle);
+                marcarComoEntregado(btnDeliver.dataset.id);
                 return;
             }
 
             const btnCancel = e.target.closest('.btn-cancel-item');
             if (btnCancel) {
-                const idDetalle = btnCancel.dataset.id;
-                const estado = btnCancel.dataset.estado;
-                const nombre = btnCancel.dataset.nombre;
-                cancelarItemPedido(idDetalle, estado, nombre);
+                cancelarItemPedido(btnCancel.dataset.id, btnCancel.dataset.estado, btnCancel.dataset.nombre);
             }
         });
 
-        /**
-         * Llama al endpoint de posController.apiCancelarItem para cancelar un ítem del histórico
-         * @param {Number} idDetalle ID del detalle del pedido
-         * @param {String} estadoItem Estado actual del producto
-         * @param {String} nombreProducto Nombre del platillo
-         */
         async function cancelarItemPedido(idDetalle, estadoItem, nombreProducto) {
-            const estadoLimpio = (estadoItem || '').toLowerCase().trim();
-            const estadosPermitidos = ['en_cocina', 'en_bar', 'listo'];
-
-            if (!estadosPermitidos.includes(estadoLimpio)) {
-                return Swal.fire({
-                    icon: 'error',
-                    title: 'NO CANCELABLE',
-                    text: `El ítem "${nombreProducto}" no se puede cancelar en su estado actual ('${estadoItem}').`,
-                    timer: 3500,
-                    showConfirmButton: false
-                });
-            }
-
             const { value: motivo, isConfirmed } = await Swal.fire({
-                title: 'CANCELAR ÍTEM',
-                html: `<p class="text-xs text-slate-600 mb-2">¿Está seguro de cancelar <b>${nombreProducto}</b>?</p>`,
+                title: 'Cancelar Producto',
+                html: `<p class="text-muted small">¿Desea cancelar <b>${nombreProducto}</b>?</p>`,
                 input: 'text',
                 inputLabel: 'Motivo de la cancelación',
-                inputPlaceholder: 'Ej: Cliente cambió de opinión / Error de comanda',
+                inputPlaceholder: 'Ej: Cliente cambió de opinión',
                 showCancelButton: true,
-                confirmButtonText: 'Sí, cancelar ítem',
+                confirmButtonText: 'Sí, cancelar',
                 cancelButtonText: 'Volver',
-                confirmButtonColor: '#ef4444',
+                confirmButtonColor: '#e11d48',
                 cancelButtonColor: '#64748b',
                 inputValidator: (value) => {
-                    if (!value || !value.trim()) {
-                        return '¡Debe ingresar un motivo para autorizar la cancelación!';
-                    }
+                    if (!value || !value.trim()) return 'Debe ingresar un motivo.';
                 }
             });
 
@@ -990,96 +1752,37 @@
                     }
 
                     renderHistory();
-
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'ÍTEM CANCELADO',
-                        text: data.message || 'El producto fue cancelado correctamente.',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
+                    Swal.fire({ icon: 'success', title: 'Producto Cancelado', timer: 1500, showConfirmButton: false });
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'ERROR AL CANCELAR',
-                        text: data.message || 'No se pudo cancelar el producto.',
-                        timer: 3000,
-                        showConfirmButton: false
-                    });
+                    Swal.fire('Error', data.message || 'No se pudo cancelar el producto.', 'error');
                 }
             } catch (error) {
-                console.error('Error al intentar cancelar el ítem:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'ERROR DE RED',
-                    text: 'Ocurrió un problema de conexión al procesar la cancelación.',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
+                Swal.fire('Error de Red', 'Fallo de conexión.', 'error');
             }
         }
 
-        /**
-         * Llama al endpoint de posController.apiActualizarEstadoItem para marcar como 'entregado'
-         * @param {Number} id_detalle ID del renglón en detalles_pedido
-         */
         function marcarComoEntregado(id_detalle) {
             if (!id_detalle) return;
 
             fetch('/api/pos/item-estado', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id_detalle: id_detalle,
-                    nuevo_estado: 'entregado'
-                })
+                body: JSON.stringify({ id_detalle, nuevo_estado: 'entregado' })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    // 1. Actualizar el estado localmente en el arreglo historicoDetalles
                     const item = historicoDetalles.find(d => d.id_detalle == id_detalle);
-                    if (item) {
-                        item.estado = 'entregado';
-                    }
+                    if (item) item.estado = 'entregado';
 
-                    // 2. Registrar en el Set para evitar falsas alertas en el polling
-                    itemsListosAnteriores.add(parseInt(id_detalle));
-
-                    // 3. Volver a renderizar el histórico
                     renderHistory();
-
-                    // Notificación visual rápida
-                    const Toast = Swal.mixin({
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 2000,
-                        timerProgressBar: true
-                    });
-
-                    Toast.fire({
-                        icon: 'success',
-                        title: 'Entregado a la mesa'
-                    });
+                    const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+                    Toast.fire({ icon: 'success', title: 'Entregado a la mesa' });
                 } else {
-                    Swal.fire({
-                        title: 'ERROR',
-                        text: data.message || 'No se pudo actualizar el estado del producto.',
-                        icon: 'error',
-                        confirmButtonColor: '#ef4444'
-                    });
+                    Swal.fire('Error', data.message, 'error');
                 }
             })
-            .catch(err => {
-                console.error('Error al actualizar estado del ítem:', err);
-                Swal.fire({
-                    title: 'ERROR DE RED',
-                    text: 'Ocurrió un problema de comunicación con el servidor.',
-                    icon: 'error',
-                    confirmButtonColor: '#ef4444'
-                });
-            });
+            .catch(err => Swal.fire('Error de Red', 'Fallo de comunicación.', 'error'));
         }
 
         function recalcularTotales() {
@@ -1090,38 +1793,27 @@
             
             const subtotalTotal = subtotalRondaNueva + subtotalHistorico;
 
-            // Actualizamos la UI con el monto neto real
             document.getElementById('summary-subtotal').textContent = `$${subtotalTotal.toFixed(2)}`;
             document.getElementById('summary-total').textContent = `$${subtotalTotal.toFixed(2)}`;
         }
 
-        //saveOrderToServer con asignación de ID de BD
         function saveOrderToServer() {
             const id_pedido = document.getElementById('pos_id_pedido').value;
             if (carrito.length === 0) {
-                Swal.fire({
-                    title: 'RONDA VACÍA', 
-                    text: 'Agrega nuevos productos antes de enviar a cocina.', 
-                    icon: 'warning',
-                    confirmButtonColor: '#3b82f6',
-                    background: '#ffffff',
-                    color: '#0f172a'
-                });
+                Swal.fire('Ronda vacía', 'Agrega productos antes de enviar a cocina.', 'warning');
                 return;
             }
 
             Swal.fire({
-                title: '¿ENVIAR RONDA A COCINA?',
+                title: '¿Enviar ronda a cocina?',
                 text: "Se enviarán únicamente los productos agregados en esta captura.",
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonColor: '#10b981',
-                cancelButtonColor: '#ef4444',
-                confirmButtonText: 'SÍ, ENVIAR',
-                cancelButtonText: 'CANCELAR',
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#e11d48',
+                confirmButtonText: 'Sí, enviar',
+                cancelButtonText: 'Cancelar',
                 showLoaderOnConfirm: true,
-                background: '#ffffff',
-                color: '#0f172a',
                 preConfirm: () => {
                     return fetch('/api/pos/save', {
                         method: 'POST',
@@ -1133,7 +1825,6 @@
                 }
             }).then(result => {
                 if (result.isConfirmed && result.value.success) {
-                    // Mapeo seguro con los ID asignados en MariaDB
                     if (result.value.insertedItems && Array.isArray(result.value.insertedItems)) {
                         result.value.insertedItems.forEach(itemBD => {
                             historicoDetalles.push({
@@ -1151,51 +1842,24 @@
                     vaciarCarritoDirecto();
                     renderHistory();
 
-                    Swal.fire({ 
-                        title: '¡ENVIADO A COCINA!', 
-                        text: result.value.message || 'Ronda enviada a cocina correctamente.', 
-                        icon: 'success', 
-                        confirmButtonColor: '#10b981', 
-                        background: '#ffffff', 
-                        color: '#0f172a'
-                    });
+                    Swal.fire({ icon: 'success', title: '¡Enviado!', text: 'Ronda enviada a cocina.', confirmButtonColor: '#059669' });
                 } else if (result.value && !result.value.success) {
-                    Swal.fire({ 
-                        title: 'ERROR', 
-                        text: result.value.message, 
-                        icon: 'error', 
-                        confirmButtonColor: '#ef4444', 
-                        background: '#ffffff', 
-                        color: '#0f172a'
-                    });
+                    Swal.fire('Error', result.value.message, 'error');
                 }
             });
         }
 
         function printPrecuenta() {
             const id_pedido = document.getElementById('pos_id_pedido').value;
-
-            if (!id_pedido) {
-                return Swal.fire('Error', 'Selecciona un pedido activo.', 'warning');
-            }
-
-            // Abrir el ticket EJS en una pestaña nueva para imprimir
+            if (!id_pedido) return Swal.fire('Error', 'ID de pedido inválido.', 'warning');
             window.open(`/pos/precuenta/${id_pedido}`, '_blank');
         }
 
         async function checkoutOrder() {
-            // 1. Validar que no existan ítems en la ronda activa sin enviar
             if (carrito.length > 0) {
-                return Swal.fire({
-                    icon: 'warning',
-                    title: 'PLATILLOS EN CAPTURA',
-                    text: 'Hay productos en la ronda actual sin enviar a cocina. Envíelos o limpie el carrito antes de cobrar.',
-                    timer: 3500,
-                    showConfirmButton: false
-                });
+                return Swal.fire('Productos en captura', 'Hay productos sin enviar. Envíelos o vacíe la captura antes de cobrar.', 'warning');
             }
 
-            // 2. Validar que todos los ítems hayan sido entregados o cancelados
             if (historicoDetalles && historicoDetalles.length > 0) {
                 const pendientes = historicoDetalles.filter(item => {
                     const estado = (item.estado || '').toLowerCase();
@@ -1203,17 +1867,10 @@
                 });
 
                 if (pendientes.length > 0) {
-                    return Swal.fire({
-                        icon: 'warning',
-                        title: 'PLATILLOS PENDIENTES EN COCINA/BAR',
-                        text: `Existen ${pendientes.length} producto(s) en preparación (cocina/bar) que aún no se han marcado como entregados.`,
-                        timer: 4000,
-                        showConfirmButton: false
-                    });
+                    return Swal.fire('Platillos en preparación', `Existen ${pendientes.length} producto(s) sin marcar como entregados.`, 'warning');
                 }
             }
 
-            // 3. Cálculo de subtotal e impuesto base
             let subtotalHistorico = 0;
             if (historicoDetalles && historicoDetalles.length > 0) {
                 subtotalHistorico = historicoDetalles.reduce((acc, item) => {
@@ -1222,16 +1879,10 @@
             }
 
             if (subtotalHistorico <= 0) {
-                return Swal.fire({
-                    icon: 'warning',
-                    title: 'SIN CONSUMOS REGISTRADOS',
-                    text: 'No hay productos guardados en el histórico para efectuar el cobro.',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
+                return Swal.fire('Sin consumos', 'No hay productos guardados para efectuar el cobro.', 'warning');
             }
 
-            const impuestoBase = subtotalHistorico * 0.10; // 10% Tax
+            const impuestoBase = subtotalHistorico * 0.10;
             const totalBaseCalculado = subtotalHistorico + impuestoBase;
             const idPedido = document.getElementById('pos_id_pedido').value;
 
@@ -1239,172 +1890,122 @@
             try {
                 const resMonedas = await fetch('/api/pos/monedas-turno-activo');
                 const dataMonedas = await resMonedas.json();
-                if (dataMonedas.success) {
-                    monedasTurno = dataMonedas.monedas || [];
-                }
+                if (dataMonedas.success) monedasTurno = dataMonedas.monedas || [];
             } catch (e) {
-                console.error("Error al consultar monedas del turno:", e);
+                console.error("Error al consultar monedas:", e);
             }
 
-            // Modal SweetAlert2 con hoisting y funciones bien ordenadas
             const { value: formValues } = await Swal.fire({
-                title: 'PROCESAR COBRO Y CIERRE DE CUENTA',
-                width: '720px',
+                title: 'Cobro y Cierre de Mesa',
+                width: '640px',
                 html: `
-                    <div class="text-left space-y-3 p-1">
-                        <!-- Cabecera de Indicadores Financieros -->
-                        <div class="bg-slate-100 p-3 rounded-2xl border border-slate-200 grid grid-cols-4 gap-2 text-center">
+                    <div class="text-start small p-1">
+                        <div class="bg-light p-2.5 rounded border d-flex justify-content-between text-center mb-3">
                             <div>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Subtotal + Tax</span>
-                                <span class="text-sm font-black text-slate-700">$${totalBaseCalculado.toFixed(2)}</span>
+                                <small class="text-muted d-block font-semibold">Subtotal+Tax</small>
+                                <strong class="font-digits fs-6">$${totalBaseCalculado.toFixed(2)}</strong>
                             </div>
                             <div>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total a Pagar</span>
-                                <span class="text-lg font-black text-blue-700" id="lbl-total-pagar">$${totalBaseCalculado.toFixed(2)}</span>
+                                <small class="text-muted d-block font-semibold">Total a Pagar</small>
+                                <strong class="font-digits fs-6 text-primary" id="lbl-total-pagar">$${totalBaseCalculado.toFixed(2)}</strong>
                             </div>
                             <div>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Restante</span>
-                                <span class="text-lg font-black text-rose-600" id="lbl-restante">$${totalBaseCalculado.toFixed(2)}</span>
+                                <small class="text-muted d-block font-semibold">Restante</small>
+                                <strong class="font-digits fs-6 text-danger" id="lbl-restante">$${totalBaseCalculado.toFixed(2)}</strong>
                             </div>
                             <div>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Excedente (Propina)</span>
-                                <span class="text-lg font-black text-emerald-600" id="lbl-excedente">$0.00</span>
+                                <small class="text-muted d-block font-semibold">Excedente</small>
+                                <strong class="font-digits fs-6 text-success" id="lbl-excedente">$0.00</strong>
                             </div>
                         </div>
 
-                        <!-- Panel de Ajustes: Descuentos y Aumentos (Recargos) -->
-                        <div class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-200/80">
-                            <div class="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label class="text-[10px] font-black text-slate-700 uppercase block">
-                                        <i class="fa-solid fa-tag text-rose-500 me-1"></i> Descuento ($)
-                                    </label>
-                                    <input type="number" id="swal-descuento" min="0" step="0.01" value="0.00" 
-                                           class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-1.5 focus:ring-2 focus:ring-blue-500" placeholder="0.00">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] font-black text-slate-700 uppercase block">
-                                        <i class="fa-solid fa-plus text-emerald-600 me-1"></i> Aumento / Recargo ($)
-                                    </label>
-                                    <input type="number" id="swal-recargo" min="0" step="0.01" value="0.00" 
-                                           class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-1.5 focus:ring-2 focus:ring-blue-500" placeholder="0.00">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] font-black text-slate-700 uppercase block">Motivo Ajuste</label>
-                                    <input type="text" id="swal-motivo-ajuste" 
-                                           class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-1.5" placeholder="Ej: Cliente VIP / Servicio">
-                                </div>
+                        <div class="row g-2 mb-3 bg-light p-2 rounded border">
+                            <div class="col-4">
+                                <label class="small fw-bold">Descuento ($)</label>
+                                <input type="number" id="swal-descuento" min="0" step="0.01" value="0.00" class="form-control form-control-sm font-digits">
+                            </div>
+                            <div class="col-4">
+                                <label class="small fw-bold">Recargo ($)</label>
+                                <input type="number" id="swal-recargo" min="0" step="0.01" value="0.00" class="form-control form-control-sm font-digits">
+                            </div>
+                            <div class="col-4">
+                                <label class="small fw-bold">Motivo</label>
+                                <input type="text" id="swal-motivo-ajuste" class="form-control form-control-sm" placeholder="VIP / Servicio">
                             </div>
                         </div>
 
-                        <!-- Formulario de Entrada de Pago Multimoneda -->
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Método de Pago</label>
-                                    <select id="swal-metodo" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2">
+                        <div class="border rounded p-2.5 mb-3 bg-white">
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="small fw-bold">Método de Pago</label>
+                                    <select id="swal-metodo" class="form-select form-select-sm">
                                         <option value="efectivo">Efectivo</option>
                                         <option value="tarjeta">Tarjeta</option>
                                         <option value="transferencia">Transferencia</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Moneda de Pago</label>
-                                    <select id="swal-moneda" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2">
+                                <div class="col-6">
+                                    <label class="small fw-bold">Moneda</label>
+                                    <select id="swal-moneda" class="form-select form-select-sm">
                                         ${monedasTurno.map(m => `
-                                            <option value="${m.moneda_id}" 
-                                                    data-codigo="${m.codigo}" 
-                                                    data-factor="${m.factor_cambio}" 
-                                                    data-simbolo="${m.simbolo}">
+                                            <option value="${m.moneda_id}" data-codigo="${m.codigo}" data-factor="${m.factor_cambio}" data-simbolo="${m.simbolo}">
                                                 ${m.codigo} (${m.simbolo}) - Tasa: ${parseFloat(m.factor_cambio).toFixed(2)}
                                             </option>
                                         `).join('')}
                                     </select>
                                 </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Monto en Moneda Origen</label>
-                                    <input type="number" id="swal-monto-origen" step="0.01" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2" placeholder="0.00">
+                                <div class="col-6">
+                                    <label class="small fw-bold">Monto Origen</label>
+                                    <input type="number" id="swal-monto-origen" step="0.01" class="form-control form-control-sm font-digits" placeholder="0.00">
                                 </div>
-                                <div>
-                                    <label class="text-[11px] font-black text-slate-700 uppercase block">Ref. Transacción (Opcional)</label>
-                                    <input type="text" id="swal-referencia" class="w-full bg-white border border-slate-300 font-bold text-xs rounded-lg p-2" placeholder="Váucher / Transferencia">
+                                <div class="col-6">
+                                    <label class="small fw-bold">Referencia (Opcional)</label>
+                                    <input type="text" id="swal-referencia" class="form-control form-control-sm" placeholder="Váucher...">
                                 </div>
                             </div>
-
-                            <button type="button" id="btn-add-pago" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black py-2 rounded-lg uppercase tracking-wider transition-all">
-                                + Agregar Abono de Pago
+                            <button type="button" id="btn-add-pago" class="btn btn-primary btn-sm w-100 fw-bold">
+                                + Agregar Abono
                             </button>
                         </div>
 
-                        <!-- Contenedor de Alerta Temporal dentro del Modal -->
-                        <div id="modal-alert-container" class="hidden p-2 rounded-lg text-xs font-bold text-center"></div>
-
-                        <!-- Tabla de Abonos -->
-                        <div class="border border-slate-200 rounded-xl overflow-hidden max-h-32 overflow-y-auto">
-                            <table class="w-full text-xs text-left">
-                                <thead class="bg-slate-100 text-slate-600 font-black uppercase border-b border-slate-200">
+                        <div class="border rounded overflow-hidden mb-2">
+                            <table class="table table-sm table-striped mb-0 small">
+                                <thead class="table-light">
                                     <tr>
-                                        <th class="p-2">Método</th>
-                                        <th class="p-2">Moneda</th>
-                                        <th class="p-2">Monto Origen</th>
-                                        <th class="p-2">Eq. Local</th>
-                                        <th class="p-2 text-center">Acción</th>
+                                        <th>Método</th>
+                                        <th>Moneda</th>
+                                        <th>Monto</th>
+                                        <th>Eq. Local</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody id="tbl-pagos-body">
-                                    <tr>
-                                        <td colspan="5" class="p-3 text-center text-slate-400 font-bold italic">No se han registrado abonos</td>
-                                    </tr>
+                                    <tr><td colspan="5" class="text-center text-muted py-2">Sin abonos agregados</td></tr>
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- Desglose Consolidado de Monedas Recibidas -->
-                        <div id="desglose-monedas-container" class="p-2 bg-slate-100 rounded-xl border border-slate-200 text-xs">
-                            <span class="font-black text-slate-600 uppercase text-[10px] block mb-1">
-                                <i class="fa-solid fa-coins text-amber-500 me-1"></i> Desglose de Monedas Recibidas:
-                            </span>
-                            <div id="desglose-monedas-list" class="flex flex-wrap gap-2 text-slate-700 font-bold">
-                                <span class="text-slate-400 italic text-[11px]">Esperando abonos...</span>
+                        <div class="d-flex gap-3 pt-2 border-top">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="swal-es-pendiente-pago">
+                                <label class="form-check-label small" for="swal-es-pendiente-pago">Pendiente Pago</label>
                             </div>
-                        </div>
-
-                        <!-- Opciones Especiales de Cierre -->
-                        <div class="pt-2 border-t border-slate-200 grid grid-cols-3 gap-2">
-                            <!-- Opción Pendiente de Pago -->
-                            <div class="flex items-center gap-1.5">
-                                <input type="checkbox" id="swal-es-pendiente-pago" class="h-4 w-4 text-amber-600 rounded">
-                                <label for="swal-es-pendiente-pago" class="text-[11px] font-bold text-slate-700 uppercase cursor-pointer">
-                                    Pendiente Pago
-                                </label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="swal-es-cortesia">
+                                <label class="form-check-label small" for="swal-es-cortesia">Cortesía (100%)</label>
                             </div>
-
-                            <!-- Opción Cortesía -->
-                            <div class="flex items-center gap-1.5">
-                                <input type="checkbox" id="swal-es-cortesia" class="h-4 w-4 text-blue-600 rounded">
-                                <label for="swal-es-cortesia" class="text-[11px] font-bold text-slate-700 uppercase cursor-pointer">
-                                    Cortesía (100%)
-                                </label>
-                            </div>
-
-                            <!-- Opción Facturación / Crédito -->
-                            <div class="flex items-center gap-1.5">
-                                <input type="checkbox" id="swal-es-factura" class="h-4 w-4 text-emerald-600 rounded">
-                                <label for="swal-es-factura" class="text-[11px] font-bold text-slate-700 uppercase cursor-pointer">
-                                    Factura (Crédito)
-                                </label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="swal-es-factura">
+                                <label class="form-check-label small" for="swal-es-factura">Factura (Crédito)</label>
                             </div>
                         </div>
                     </div>
                 `,
                 focusConfirm: false,
                 showCancelButton: true,
-                confirmButtonText: '<i class="fa-solid fa-check me-1"></i> FINALIZAR Y LIBERAR MESA',
-                cancelButtonText: 'CANCELAR',
-                confirmButtonColor: '#10b981',
+                confirmButtonText: 'Finalizar y Liberar Mesa',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#059669',
                 cancelButtonColor: '#64748b',
                 didOpen: () => {
                     const chkCortesia = document.getElementById('swal-es-cortesia');
@@ -1420,7 +2021,6 @@
 
                     const listaPagos = [];
 
-                    // 1. Definición previa de funciones para evitar ReferenceError
                     function calcularTotalNeto() {
                         if (chkCortesia && chkCortesia.checked) return 0;
                         const desc = Math.max(0, parseFloat(inputDescuento ? inputDescuento.value : 0) || 0);
@@ -1428,22 +2028,8 @@
                         return Math.max(0, (totalBaseCalculado - desc + rec));
                     }
 
-                    function mostrarAlertaTemporal(mensaje, esError = true) {
-                        const alertBox = document.getElementById('modal-alert-container');
-                        if (!alertBox) return;
-                        alertBox.className = `p-2 rounded-lg text-xs font-bold text-center ${esError ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-100 text-emerald-700'}`;
-                        alertBox.textContent = mensaje;
-                        alertBox.classList.remove('hidden');
-
-                        setTimeout(() => {
-                            alertBox.classList.add('hidden');
-                        }, 3000);
-                    }
-
                     function updateTabla() {
                         const tbody = document.getElementById('tbl-pagos-body');
-                        const desgloseList = document.getElementById('desglose-monedas-list');
-                        
                         const totalRequerido = calcularTotalNeto();
                         if (lblTotalPagar) lblTotalPagar.textContent = `$${totalRequerido.toFixed(2)}`;
 
@@ -1458,43 +2044,21 @@
                             if (lblExcedente) lblExcedente.textContent = `$0.00`;
                         }
 
-                        // Actualizar Desglose Consolidado de Monedas
-                        const desgloseMap = {};
-                        listaPagos.forEach(p => {
-                            if (!desgloseMap[p.codigo_moneda]) {
-                                desgloseMap[p.codigo_moneda] = { simbolo: p.simbolo, total: 0 };
-                            }
-                            desgloseMap[p.codigo_moneda].total += p.monto_moneda_origen;
-                        });
-
-                        const monedasKeys = Object.keys(desgloseMap);
-                        if (desgloseList) {
-                            if (monedasKeys.length === 0) {
-                                desgloseList.innerHTML = `<span class="text-slate-400 italic text-[11px]">Esperando abonos...</span>`;
-                            } else {
-                                desgloseList.innerHTML = monedasKeys.map(k => `
-                                    <span class="bg-white border border-slate-300 px-2 py-0.5 rounded-lg shadow-xs">
-                                        ${k}: <b>${desgloseMap[k].simbolo}${desgloseMap[k].total.toFixed(2)}</b>
-                                    </span>
-                                `).join('');
-                            }
-                        }
-
                         if (!tbody) return;
 
                         if (listaPagos.length === 0) {
-                            tbody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-400 font-bold italic">No se han registrado abonos</td></tr>`;
+                            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Sin abonos agregados</td></tr>`;
                             return;
                         }
 
                         tbody.innerHTML = listaPagos.map((p, idx) => `
-                            <tr class="border-b border-slate-100">
-                                <td class="p-2 font-bold uppercase">${p.metodo_pago}</td>
-                                <td class="p-2 font-bold">${p.codigo_moneda}</td>
-                                <td class="p-2 font-bold">${p.simbolo}${p.monto_moneda_origen.toFixed(2)}</td>
-                                <td class="p-2 font-black text-emerald-700">$${p.monto_equivalente_local.toFixed(2)}</td>
-                                <td class="p-2 text-center">
-                                    <button type="button" class="btn-remove-pago text-rose-500 font-bold px-1" data-idx="${idx}">✕</button>
+                            <tr>
+                                <td class="text-uppercase fw-bold">${p.metodo_pago}</td>
+                                <td class="font-digits">${p.codigo_moneda}</td>
+                                <td class="font-digits">${p.simbolo}${p.monto_moneda_origen.toFixed(2)}</td>
+                                <td class="font-digits fw-bold text-success">$${p.monto_equivalente_local.toFixed(2)}</td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 btn-remove-pago" data-idx="${idx}">✕</button>
                                 </td>
                             </tr>
                         `).join('');
@@ -1508,7 +2072,6 @@
                         });
                     }
 
-                    // 2. Asignación de Listeners seguros
                     if (chkPendiente) {
                         chkPendiente.addEventListener('change', (e) => {
                             if (e.target.checked) {
@@ -1556,22 +2119,19 @@
                             const monto_origen = parseFloat(document.getElementById('swal-monto-origen').value);
                             const referencia = document.getElementById('swal-referencia').value;
 
-                            if (isNaN(monto_origen) || monto_origen <= 0) {
-                                mostrarAlertaTemporal('Ingrese un monto válido mayor a cero.');
-                                return;
-                            }
+                            if (isNaN(monto_origen) || monto_origen <= 0) return;
 
                             const monto_equivalente_local = monto_origen * factor_cambio;
 
                             listaPagos.push({
                                 metodo_pago: metodo,
-                                moneda_id: moneda_id,
-                                codigo_moneda: codigo_moneda,
+                                moneda_id,
+                                codigo_moneda,
                                 factor_cambio_aplicado: factor_cambio,
                                 monto_moneda_origen: monto_origen,
-                                monto_equivalente_local: monto_equivalente_local,
+                                monto_equivalente_local,
                                 referencia_transaccion: referencia,
-                                simbolo: simbolo
+                                simbolo
                             });
 
                             document.getElementById('swal-monto-origen').value = '';
@@ -1581,7 +2141,7 @@
                     }
 
                     window._tempPagosModal = listaPagos;
-                    updateTabla(); // Inicialización inicial
+                    updateTabla();
                 },
                 preConfirm: () => {
                     const esCortesia = document.getElementById('swal-es-cortesia')?.checked || false;
@@ -1593,24 +2153,17 @@
                     const pagos = window._tempPagosModal || [];
 
                     if (!esCortesia && !esFactura && !esPendientePago && pagos.length === 0) {
-                        const alertBox = document.getElementById('modal-alert-container');
-                        if (alertBox) {
-                            alertBox.className = 'p-2 rounded-lg text-xs font-bold text-center bg-rose-100 text-rose-700 border border-rose-200';
-                            alertBox.textContent = 'Debe agregar al menos un abono o seleccionar Pendiente de Pago, Factura o Cortesía.';
-                            alertBox.classList.remove('hidden');
-                            setTimeout(() => alertBox.classList.add('hidden'), 3000);
-                        }
                         return false;
                     }
 
                     return {
-                        pagos: pagos,
+                        pagos,
                         es_cortesia: esCortesia,
                         es_factura_credito: esFactura,
                         es_pendiente_pago: esPendientePago,
-                        descuento: descuento,
-                        recargo: recargo,
-                        motivo_ajuste: motivo_ajuste
+                        descuento,
+                        recargo,
+                        motivo_ajuste
                     };
                 }
             });
@@ -1629,54 +2182,23 @@
                 if (data.success) {
                     Swal.fire({
                         icon: 'success',
-                        title: 'CUENTA CERRADA',
-                        html: `
-                            <p class="text-sm text-slate-700 font-bold">${data.message}</p>
-                            <p class="text-xs text-slate-500 mt-1">Total Cobrado: <b>$${data.total_cobrado.toFixed(2)}</b> | Mesa Liberada</p>
-                        `,
-                        timer: 2500,
+                        title: 'Mesa Cobrada y Liberada',
+                        timer: 2000,
                         showConfirmButton: false
                     }).then(() => {
                         window.location.href = '/admin/dashboard';
                     });
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'ERROR EN EL COBRO',
-                        text: data.message || 'No se pudo procesar la transacción.',
-                        timer: 3500,
-                        showConfirmButton: false
-                    });
+                    Swal.fire('Error en el cobro', data.message, 'error');
                 }
             } catch (err) {
-                console.error(err);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'ERROR DE RED',
-                    text: 'Ocurrió un error al procesar el pago.',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            }
-        }
-
-        // Reproductor de sonido para notificaciones
-        function playNotificationSound() {
-            const audio = document.getElementById('audio-notification');
-            if (audio) {
-                audio.currentTime = 0; // Reiniciar al inicio si ya estaba reproduciéndose
-                audio.play().catch(err => {
-                    // Manejar bloqueo de reproducción automática del navegador
-                    console.warn("El navegador bloqueó la reproducción automática hasta interacción previa:", err);
-                });
+                Swal.fire('Error de Red', 'Fallo al procesar el pago.', 'error');
             }
         }
 
         let itemsListosAnteriores = new Set();
-
         function verificarItemsListos() {
             const idPedido = document.getElementById('pos_id_pedido').value;
-            
             fetch(`/api/pos/items-listos/${idPedido}`)
                 .then(res => res.json())
                 .then(data => {
@@ -1684,29 +2206,24 @@
                         let hayNuevosListos = false;
 
                         data.itemsListos.forEach(item => {
-                            // Si encontramos un ID que no estaba marcado anteriormente como listo
                             if (!itemsListosAnteriores.has(item.id_detalle)) {
                                 itemsListosAnteriores.add(item.id_detalle);
                                 hayNuevosListos = true;
 
-                                // Actualizar el estado en el histórico local
                                 const hItem = historicoDetalles.find(d => d.id_detalle == item.id_detalle);
                                 if (hItem) hItem.estado = 'listo';
                             }
                         });
 
                         if (hayNuevosListos) {
-                            playNotificationSound();
                             renderHistory();
-                            
                             Swal.fire({
                                 toast: true,
                                 position: 'top-end',
                                 icon: 'success',
                                 title: '¡Nuevos platillos listos!',
-                                text: 'Revisa el histórico para entregar al cliente.',
                                 showConfirmButton: false,
-                                timer: 3500
+                                timer: 3000
                             });
                         }
                     }
@@ -1714,14 +2231,10 @@
                 .catch(err => console.error("Error al consultar ítems listos:", err));
         }
 
-        //Consultar cada 8 segundos. Control de Polling Limpio
         let pollTimer = null;
-
         function iniciarPollingItemsListos() {
             verificarItemsListos();
-            if (!pollTimer) {
-                pollTimer = setInterval(verificarItemsListos, 8000);
-            }
+            if (!pollTimer) pollTimer = setInterval(verificarItemsListos, 8000);
         }
 
         function detenerPollingItemsListos() {
@@ -1731,248 +2244,8 @@
             }
         }
 
-        // Iniciar al cargar
         iniciarPollingItemsListos();
-
-        // Detener al salir de la página
         window.addEventListener('beforeunload', detenerPollingItemsListos);
-
-        /**
-         * Procesa la confirmación de incorporación del pre-pedido al carrito
-         * @param {number} idMesa - ID de la mesa asociada
-         * @param {string} numeroMesa - Número o nombre visual de la mesa
-         */
-        async function cargarPrePedidoAlCarrito(idMesa, numeroMesa) {
-            try {
-                // 1. Verificar si la mesa activa en el POS coincide con la alerta
-                if (typeof mesaSeleccionada !== 'undefined' && mesaSeleccionada.id !== idMesa) {
-                    const cambiar = confirm(`La alerta pertenece a la Mesa ${numeroMesa}. ¿Deseas cambiar a esta mesa para cargar la ronda?`);
-                    if (!cambiar) return;
-                    // Función existente en tu POS para cambiar de mesa activa
-                    seleccionarMesa(idMesa); 
-                }
-
-                // 2. Consultar los ítems del pre-pedido
-                const response = await fetch(`/pos/mesas/${idMesa}/pre-pedidos`);
-                const data = await response.json();
-
-                if (!data.success || data.items.length === 0) {
-                    alert('No se encontraron ítems pendientes para esta mesa.');
-                    return;
-                }
-
-                // 3. Agregar cada ítem a la ronda actual del carrito en el cliente
-                data.items.forEach(item => {
-                    const idPlatillo = item.id_platillo || item.id_producto || item.id;
-                    const cantidad = parseInt(item.cantidad, 10) || 1;
-                    
-                    for (let i = 0; i < cantidad; i++) {
-                        addToCart(idPlatillo, item.nombre, item.precio);
-                    }
-
-                    if (item.notas_especiales || item.notas) {
-                        const inCart = carrito.find(p => String(p.id) === String(idPlatillo));
-                        if (inCart) inCart.notas = item.notas_especiales || item.notas;
-                    }
-                });
-
-                // 4. Limpiar los pre-pedidos de la base de datos para no repetirlos
-                await fetch(`/pos/mesas/${idMesa}/pre-pedidos`, { method: 'DELETE' });
-
-                // 5. Notificar al usuario y actualizar vista
-                renderCart();
-                
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Pre-pedido cargado',
-                    text: `Se agregaron los ítems al carrito de la Mesa ${numeroMesa} como una nueva ronda.`,
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-
-            } catch (error) {
-                console.error('Error al importar pre-pedido al carrito:', error);
-                alert('Ocurrió un error al cargar el pre-pedido.');
-            }
-        }
-
-        /**
-         * Muestra el modal o dialogo de confirmación cuando llega la alerta
-         */
-        function mostrarAlertaPrePedido(idMesa, numeroMesa, resumenDetalle) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: `🍽️ Pre-pedido de Mesa ${numeroMesa}`,
-                    html: `<p>El cliente ha enviado la siguiente selección:</p><strong>${resumenDetalle}</strong>`,
-                    icon: 'question',
-                    showCancelButton: true,
-                    showDenyButton: true,
-                    confirmButtonText: '📥 Cargar al Carrito',
-                    denyButtonText: '🗑️ Descartar',
-                    cancelButtonText: '⏳ Decidir Luego',
-                    confirmButtonColor: '#28a745',
-                    denyButtonColor: '#dc3545'
-                }).then(async (result) => {
-                    if (result.isConfirmed) {
-                        await cargarPrePedidoAlCarrito(idMesa, numeroMesa);
-                    } else if (result.isDenied) {
-                        // Descartar pre-pedido sin agregar
-                        await fetch(`/pos/mesas/${idMesa}/pre-pedidos`, { method: 'DELETE' });
-                    }
-                });
-            } else {
-                if (confirm(`Mesa ${numeroMesa} envió pre-pedido:\n${resumenDetalle}\n\n¿Deseas cargarlo al carrito?`)) {
-                    cargarPrePedidoAlCarrito(idMesa, numeroMesa);
-                }
-            }
-        }
-    </script>
-    <!-- Sonido de Notificación de Platillo Listo -->
-    <audio id="audio-notification" src="/sounds/notificacion-dependiente.mp3" preload="auto"></audio>
-    <!-- Audio para alertas -->
-    <audio id="audioAlertaCliente" src="/sounds/alert-notification.mp3" preload="auto"></audio>
-
-    <script>
-        // Script de detección de alertas y pre-pedidos en tiempo real para pos.ejs
-        (() => {
-            let alertasProcesadas = new Set();
-            const POLLING_INTERVAL = 5000; // 5 segundos
-
-            async function verificarAlertasCliente() {
-                try {
-                    const response = await fetch('/pos/alertas-pendientes');
-                    if (!response.ok) return;
-
-                    const data = await response.json();
-                    if (!data.success) return;
-
-                    const { notificaciones, prePedidos } = data.alertas;
-                    let hayNuevasAlertas = false;
-
-                    // 1. Procesar Notificaciones Nativas (Llamadas de dependiente y Solicitud de Cuenta)
-                    notificaciones.forEach(notif => {
-                        const key = `notif_${notif.id}`;
-                        if (!alertasProcesadas.has(key)) {
-                            alertasProcesadas.add(key);
-                            hayNuevasAlertas = true;
-                            
-                            const esCierre = notif.tipo === 'SOLICITUD_CIERRE';
-                            const titulo = esCierre ? '💳 Solicitud de Cuenta' : '🔔 Llamada de Cliente';
-                            
-                            Swal.fire({
-                                title: titulo,
-                                html: `<p class="text-sm text-slate-700">Mesa <b>#${notif.numero_mesa}</b>: ${notif.mensaje}</p>`,
-                                icon: esCierre ? 'warning' : 'info',
-                                toast: true,
-                                position: 'top-end',
-                                showConfirmButton: true,
-                                confirmButtonText: 'Entendido',
-                                confirmButtonColor: '#3b82f6',
-                                timer: 10000
-                            }).then(async () => {
-                                await fetch(`/pos/notificaciones/${notif.id}/leer`, { method: 'POST' });
-                            });
-                        }
-                    });
-
-                    // 2. Procesar Pre-pedidos con el formato idéntico al Dashboard
-                    if (prePedidos && prePedidos.length > 0) {
-                        // Agrupar pre-pedidos por id_mesa mapeando la propiedad 'numero'
-                        const agrupadosPorMesa = prePedidos.reduce((acc, item) => {
-                            if (!acc[item.id_mesa]) {
-                                // Usa directamente item.numero enviada desde la DB/API
-                                const numMesa = item.numero || item.numero_mesa || item.id_mesa;
-                                
-                                acc[item.id_mesa] = {
-                                    id_mesa: item.id_mesa,
-                                    numero_mesa: numMesa,
-                                    items: []
-                                };
-                            }
-                            acc[item.id_mesa].items.push(item);
-                            return acc;
-                        }, {});
-
-                        // Recorrer cada grupo de pre-pedido por mesa
-                        Object.values(agrupadosPorMesa).forEach(grupo => {
-                            const key = `pre_mesa_${grupo.id_mesa}_${grupo.items.map(i => i.id).join('_')}`;
-                            
-                            if (!alertasProcesadas.has(key)) {
-                                alertasProcesadas.add(key);
-                                hayNuevasAlertas = true;
-
-                                // Formatear el resumen de la comanda recibida
-                                const resumenHTML = grupo.items.map(i => 
-                                    `<div class="flex justify-between items-center text-xs border-b border-slate-100 py-1">
-                                        <span class="font-bold text-slate-800">${i.cantidad}x ${i.platillo || i.nombre}</span>
-                                        ${i.notas_especiales ? `<span class="text-amber-600 italic">(${i.notas_especiales})</span>` : ''}
-                                    </div>`
-                                ).join('');
-
-                                // Mostrar SweetAlert2 con el formato visual exacto del Dashboard
-                                Swal.fire({
-                                    title: `🍽️ Pre-pedido Recibido (Mesa #${grupo.numero_mesa})`,
-                                    html: `
-                                        <p class="text-xs text-slate-500 mb-2">El cliente ha enviado la siguiente selección desde su móvil:</p>
-                                        <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 text-left max-h-40 overflow-y-auto mb-2 space-y-1">
-                                            ${resumenHTML}
-                                        </div>
-                                        <p class="text-[11px] text-slate-400">¿Deseas agregar estos productos a la captura actual como nueva ronda?</p>
-                                    `,
-                                    icon: 'question',
-                                    showCancelButton: true,
-                                    showDenyButton: true,
-                                    confirmButtonText: '📥 Cargar al Carrito',
-                                    denyButtonText: '🗑️ Descartar',
-                                    cancelButtonText: '⏳ Decidir Luego',
-                                    confirmButtonColor: '#10b981',
-                                    denyButtonColor: '#ef4444',
-                                    cancelButtonColor: '#64748b',
-                                    background: '#ffffff',
-                                    color: '#0f172a'
-                                }).then(async (result) => {
-                                    if (result.isConfirmed) {
-                                        // Cargar los productos al carrito activo en el POS
-                                        await cargarPrePedidoAlCarrito(grupo.id_mesa, grupo.numero_mesa);
-                                    } else if (result.isDenied) {
-                                        // Descartar y limpiar de la base de datos
-                                        await fetch(`/pos/mesas/${grupo.id_mesa}/pre-pedidos`, { method: 'DELETE' });
-                                        const Toast = Swal.mixin({
-                                            toast: true,
-                                            position: 'top-end',
-                                            showConfirmButton: false,
-                                            timer: 2000
-                                        });
-                                        Toast.fire({ icon: 'info', title: 'Pre-pedido descartado' });
-                                    }
-                                });
-                            }
-                        });
-                    }
-
-                    if (hayNuevasAlertas) {
-                        reproducirSonidoAlerta();
-                    }
-
-                } catch (err) {
-                    console.error('Error en el sondeo de alertas cliente:', err);
-                }
-            }
-
-            function reproducirSonidoAlerta() {
-                const audio = document.getElementById('audioAlertaCliente');
-                if (audio) {
-                    audio.currentTime = 0;
-                    audio.play().catch(() => {
-                        console.warn('Reproducción de sonido bloqueada por interacción del usuario.');
-                    });
-                }
-            }
-
-            // Iniciar el sondeo en segundo plano
-            setInterval(verificarAlertasCliente, POLLING_INTERVAL);
-            document.addEventListener('DOMContentLoaded', verificarAlertasCliente);
-        })();
     </script>
 </body>
 </html>

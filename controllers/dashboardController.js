@@ -1,19 +1,16 @@
+// controllers/dashboardController.js
 const dashboardService = require('../services/dashboardService');
 const turnoService = require('../services/turnoService');
 
 class DashboardController {
 
     /**
-     * Dashboard principal del sistema
+     * Dashboard principal del sistema (Renderizado HTML)
      */
     async index(req, res) {
-
         try {
-
             const turnoActivo = await turnoService.obtenerTurnoActivo();        
-            // Si es admin/superadmin y no hay turno activo, mandamos una bandera a la vista de Front-end
             const mostrarAlertaTurno = (!turnoActivo && ['superadministrador', 'administrador'].includes(req.user.rol));
-
             const metrics = await dashboardService.getMetrics();
 
             res.render(
@@ -26,20 +23,33 @@ class DashboardController {
                     turno: turnoActivo
                 }
             );
-
         } catch (error) {
-
-            console.error(
-                'Error al cargar dashboard:',
-                error
-            );
-
-            req.flash(
-                'error_msg',
-                'No fue posible cargar las métricas del sistema.'
-            );
-
+            console.error('Error al cargar dashboard:', error);
+            req.flash('error_msg', 'No fue posible cargar las métricas del sistema.');
             res.redirect('/login');
+        }
+    }
+
+    /**
+     * Endpoint API para Polling del Dashboard (JSON cada 10 segundos)
+     * GET /admin/api/dashboard/metrics
+     */
+    async apiMetrics(req, res) {
+        try {
+            const turnoActivo = await turnoService.obtenerTurnoActivo();
+            const mostrarAlertaTurno = (!turnoActivo && ['superadministrador', 'administrador'].includes(req.user.rol));
+            const metrics = await dashboardService.getMetrics();
+
+            return res.json({
+                success: true,
+                metrics,
+                turnoActivo,
+                mostrarAlertaTurno,
+                timestamp: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('Error en apiMetrics:', error);
+            return res.status(500).json({ success: false, message: 'Error al consultar métricas' });
         }
     }
 

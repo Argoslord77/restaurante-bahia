@@ -588,7 +588,7 @@
                 Swal.fire({ title: 'Guardando oferta del día...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
                 try {
-                    const res = await fetch('/admin/menu/platillos-dia/crear', { method: 'POST', body: formData });
+                    const res = await fetch('/admin/menu/platillo-dia/crear', { method: 'POST', body: formData });
                     const data = await res.json();
                     if (data.success) {
                         Swal.fire({ icon: 'success', title: '¡Guardado!', text: data.message, timer: 1800, showConfirmButton: false })
@@ -629,7 +629,7 @@
                 Swal.fire({ title: 'Actualizando oferta...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
                 try {
-                    const res = await fetch(`/admin/menu/platillos-dia/editar/${id}`, { method: 'POST', body: formData });
+                    const res = await fetch(`/admin/menu/platillo-dia/editar/${id}`, { method: 'POST', body: formData });
                     const data = await res.json();
                     if (data.success) {
                         modalEditarPD.hide();
@@ -661,7 +661,7 @@
                 }).then(async (choice) => {
                     if (choice.isConfirmed) {
                         try {
-                            const res = await fetch(`/admin/menu/platillos-dia/reutilizar/${id}`, { method: 'POST' });
+                            const res = await fetch(`/admin/menu/platillo-dia/reutilizar/${id}`, { method: 'POST' });
                             const data = await res.json();
                             if (data.success) {
                                 Swal.fire({ icon: 'success', title: '¡Incorporado!', text: data.message, timer: 1500, showConfirmButton: false })
@@ -693,7 +693,7 @@
                 }).then(async (choice) => {
                     if (choice.isConfirmed) {
                         try {
-                            const res = await fetch(`/admin/menu/platillos-dia/eliminar/${id}`, { method: 'DELETE' });
+                            const res = await fetch(`/admin/menu/platillo-dia/eliminar/${id}`, { method: 'DELETE' });
                             const data = await res.json();
                             if (data.success) {
                                 Swal.fire({ icon: 'success', title: 'Removido', text: data.message, timer: 1400, showConfirmButton: false })
