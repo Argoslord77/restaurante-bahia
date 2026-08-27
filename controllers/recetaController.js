@@ -1,5 +1,6 @@
 // controllers/recetaController.js - Controlador para gestión de recetas / fichas técnicas
 const RecetaService = require('../services/recetaService');
+const UnidadMedidaService = require('../services/unidadMedidaService');
 const ProductoModel = require('../models/productoModel');
 const logger = require('../config/logger');
 
@@ -198,6 +199,7 @@ const RecetaController = {
             
             const recetaCompleta = await RecetaService.obtenerRecetaCompleta(platilloId);
             const { unidades } = await RecetaService.obtenerCatalogosAdministracion();
+            
 
             let materiasPrimas = [];
             let productosVenta = [];

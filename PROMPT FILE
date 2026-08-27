@@ -13,3 +13,4 @@ En la vista de recetas tecnicas de platillo del menu, cuando se selecciona elimi
 Cuando se selecciona pago por ZELLE en la mesa, al momento de cobrar debe de comprobarse que la moneda seleccionada para el pago sea la que coincida con 'ZELLE' en BD porque puede pasar por otra de no chequearse. 
 
 
+

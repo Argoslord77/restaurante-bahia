@@ -1,7 +1,7 @@
 // controllers/dashboardController.js
 const dashboardService = require('../services/dashboardService');
 const turnoService = require('../services/turnoService');
-
+const ip = require("ip");
 class DashboardController {
 
     /**
@@ -12,6 +12,7 @@ class DashboardController {
             const turnoActivo = await turnoService.obtenerTurnoActivo();        
             const mostrarAlertaTurno = (!turnoActivo && ['superadministrador', 'administrador'].includes(req.user.rol));
             const metrics = await dashboardService.getMetrics(turnoActivo ? turnoActivo.id : null);
+            const server_ip = ip.address();
 
             res.render(
                 'admin/dashboard',
@@ -20,7 +21,8 @@ class DashboardController {
                     user: req.user,
                     view: 'admin_dashboard',
                     mostrarAlertaTurno: mostrarAlertaTurno,
-                    turno: turnoActivo
+                    turno: turnoActivo,
+                    server_ip: server_ip
                 }
             );
         } catch (error) {

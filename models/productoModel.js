@@ -32,18 +32,18 @@ const ProductoModel = {
     create: async (data) => {
         const { 
             codigo, nombre, descripcion, categoria_id, tipo, 
-            unidad_compra_id, unidad_inventario_id, stock_minimo, costo_promedio,
+            unidad_compra_id, unidad_inventario_id, unidad_consumo_id, stock_minimo, costo_promedio,
             requiere_lote, controla_vencimiento, permitida_venta, foto_url 
         } = data;
 
         const query = `
             INSERT INTO productos 
-            (codigo, nombre, descripcion, categoria_id, tipo, unidad_compra_id, unidad_inventario_id, stock_minimo, costo_promedio, requiere_lote, controla_vencimiento, permitida_venta, foto_url) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            (codigo, nombre, descripcion, categoria_id, tipo, unidad_compra_id, unidad_inventario_id, unidad_consumo_id, stock_minimo, costo_promedio, requiere_lote, controla_vencimiento, permitida_venta, foto_url) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         
         const [result] = await db.query(query, [
             codigo, nombre, descripcion || null, categoria_id, tipo, 
-            unidad_compra_id, unidad_inventario_id, stock_minimo || 0,
+            unidad_compra_id, unidad_inventario_id, unidad_consumo_id, stock_minimo || 0,
             parseFloat(costo_promedio) || 0,
             requiere_lote ? 1 : 0, controla_vencimiento ? 1 : 0,
             permitida_venta ? 1 : 0,
@@ -58,14 +58,14 @@ const ProductoModel = {
     update: async (id, data) => {
         const { 
             codigo, nombre, descripcion, categoria_id, tipo, 
-            unidad_compra_id, unidad_inventario_id, stock_minimo, costo_promedio,
+            unidad_compra_id, unidad_inventario_id, unidad_consumo_id, stock_minimo, costo_promedio,
             requiere_lote, controla_vencimiento, activo, permitida_venta, foto_url 
         } = data;
 
         const query = `
             UPDATE productos SET 
                 codigo = ?, nombre = ?, descripcion = ?, categoria_id = ?, tipo = ?, 
-                unidad_compra_id = ?, unidad_inventario_id = ?, stock_minimo = ?, 
+                unidad_compra_id = ?, unidad_inventario_id = ?, unidad_consumo_id = ?, stock_minimo = ?, 
                 costo_promedio = ?,
                 requiere_lote = ?, controla_vencimiento = ?, activo = ?,
                 permitida_venta = ?, foto_url = ?
@@ -73,7 +73,7 @@ const ProductoModel = {
 
         const [result] = await db.query(query, [
             codigo, nombre, descripcion || null, categoria_id, tipo, 
-            unidad_compra_id, unidad_inventario_id, stock_minimo || 0,
+            unidad_compra_id, unidad_inventario_id, unidad_consumo_id, stock_minimo || 0,
             parseFloat(costo_promedio) || 0,
             requiere_lote ? 1 : 0, controla_vencimiento ? 1 : 0, 
             activo, permitida_venta ? 1 : 0, foto_url || null,

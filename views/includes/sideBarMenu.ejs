@@ -25,6 +25,13 @@
                 <i class="fa-solid fa-user-group me-2 text-dark"></i> Personal / Usuarios
             </a>
         </li>
+        <% if(typeof locals.server_ip !== 'undefined' && locals.server_ip){ %>
+            <li class="nav-item">
+                <a class="nav-link p-2" href="#://javascript" id="enlacePuntoEntrada" server-ip="<%= server_ip %>">
+                    <i class="fa-solid fa-door-open me-2 text-dark"></i> Punto de Entrada
+                </a>
+            </li>
+        <% } %>
         <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'turnos'){ %> active<% } %>" href="/admin/turnos-servicio">
                 <i class="fa-solid fa-calendar-check me-2 text-dark"></i> Turnos de Servicio
@@ -121,3 +128,70 @@
         </a>
     </div>
 </nav>
+
+<!-- Modal con el codigo QR del enlace de acceso a la app con direccion IP del server actualizada -->
+<% if(typeof locals.server_ip !== 'undefined' && locals.server_ip){ %>
+    <div class="modal fade" id="modalPuntoEntrada" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered px-3">
+            <div class="modal-content border-0 shadow">
+                <form id="formPuntoEntrada">
+                    <input type="hidden" id="editId">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title fw-bold"><i class="fa-solid fa-qrcode text-warning me-2"></i>Punto de entrada</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        
+                            <div class="col-12 text-center mt-3 pt-3 border-top" id="qrContainerWrapper">
+                                <label class="form-label fw-bold text-dark d-block mb-2 small">
+                                    <i class="fa-solid fa-qrcode text-primary me-1"></i> Enlace de acceso a la App
+                                </label>
+                                <div class="d-flex justify-content-center align-items-center bg-light p-3 border rounded-3 mx-auto" style="width: 160px; height: 160px;">
+                                    <div id="qrcode"></div>
+                                </div>
+                                <span class="d-block text-muted mt-2 text-break" id="qrTextLink" style="font-size: 11px; font-family: monospace;"></span>
+                            </div>
+
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<script>
+    function puntoEntrada() {
+        const modalEnlacePuntoEntrada = new bootstrap.Modal(document.getElementById('modalPuntoEntrada'));
+        modalEnlacePuntoEntrada.show();
+    }
+        document.addEventListener("DOMContentLoaded", function() {
+            //Establacer el event listener para el enlace de "punto de entrada".
+            const enlacePuntoEntrada = document.getElementById('enlacePuntoEntrada');
+            if (enlacePuntoEntrada) {
+                enlacePuntoEntrada.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const qrcodeDiv = document.getElementById('qrcode');
+                    qrcodeDiv.innerHTML = "";   
+                    //Obtener el IP del server del anchor 
+                    let server_ip = $(enlacePuntoEntrada).attr('server-ip'); 
+                    if(server_ip.length <= 0){
+                        return false;
+                    }
+                    const epeUrl = 'https://' + server_ip + ':3000/';
+                    new QRCode(qrcodeDiv, {
+                        text: epeUrl,
+                        width: 130,
+                        height: 130,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.Q
+                    });
+
+                    const modalEnlacePuntoEntrada = new bootstrap.Modal(document.getElementById('modalPuntoEntrada'));
+                    modalEnlacePuntoEntrada.show();
+                    return;
+                });
+            }
+        });
+</script>   
