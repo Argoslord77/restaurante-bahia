@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const PrecioService = require('../services/precioService');
 
 class Pedido {
 
@@ -45,9 +46,11 @@ class Pedido {
 
         // 2. Obtener los platillos (detalles) del pedido
         const queryDetalles = `
-            SELECT dp.*, pm.nombre AS nombre_platillo, pm.precio AS precio_unitario
+            SELECT dp.*, COALESCE(pd.nombre, pm.nombre) AS nombre_platillo,
+                   COALESCE(pm.precio, pd.precio) AS precio_catalogo
             FROM detalles_pedido dp
-            INNER JOIN platillos_menu pm ON dp.id_platillo = pm.id
+            LEFT JOIN platillos_menu pm ON dp.id_platillo = pm.id AND dp.es_platillo_dia = 0
+            LEFT JOIN platillos_dia pd ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
             WHERE dp.id_pedido = ?
         `;
         const [detalles] = await db.query(queryDetalles, [id]);
@@ -143,29 +146,45 @@ class Pedido {
      * @param {Array} modificadores - Array de objetos: [{ id: 1, precio: 5.00 }, { id: 2, precio: 0.00 }]
      */
     static async addDetailWithModifiers(id_pedido, id_platillo, cantidad, modificadores = [], connection = db) {
-        // 1. Insertamos el ítem padre en detalles_pedido
-        const [resDetalle] = await connection.query(
-            `INSERT INTO detalles_pedido (id_pedido, id_platillo, cantidad) VALUES (?, ?, ?)`,
-            [id_pedido, id_platillo, cantidad]
+        // Esta ruta legacy también debe respetar la carta de la mesa. El valor
+        // recibido desde el navegador no se usa para determinar el precio.
+        const [pedidoRows] = await connection.query(
+            'SELECT id_mesa, turno_servicio_id FROM pedidos WHERE id = ? LIMIT 1',
+            [id_pedido]
         );
-        
+        if (!pedidoRows.length) throw new Error('Pedido no encontrado.');
+
+        const [platillos] = await connection.query(`
+            SELECT id, nombre, precio, precio_alt, precio_usd
+            FROM platillos_menu
+            WHERE id = ? AND activo = 1
+            LIMIT 1
+        `, [id_platillo]);
+        if (!platillos.length) throw new Error('El platillo no existe o está inactivo.');
+
+        const contexto = await PrecioService.obtenerContextoCobro({
+            idMesa: pedidoRows[0].id_mesa,
+            turnoId: pedidoRows[0].turno_servicio_id,
+            connection
+        });
+        const precio = PrecioService.validarPrecioConfigurado(platillos[0], contexto.carta);
+
+        const [resDetalle] = await connection.query(
+            `INSERT INTO detalles_pedido
+             (id_pedido, id_platillo, es_platillo_dia, cantidad, precio_unitario, estado_item, afecta_inventario)
+             VALUES (?, ?, 0, ?, ?, 'en_cocina', 1)`,
+            [id_pedido, id_platillo, cantidad, precio]
+        );
         const detalleId = resDetalle.insertId;
 
-        // 2. Si el cliente pidió extras o exclusiones, los insertamos en bloque
         if (modificadores && modificadores.length > 0) {
-            const values = modificadores.map(mod => [
-                detalleId, 
-                mod.id, 
-                mod.precio || 0.00
-            ]);
-
+            const values = modificadores.map(mod => [detalleId, mod.id, mod.precio || 0.00]);
             await connection.query(
-                `INSERT INTO detalles_pedido_modificadores (detalle_pedido_id, modificador_id, precio_cobrado) 
-                 VALUES ?`,
+                `INSERT INTO detalles_pedido_modificadores
+                 (detalle_pedido_id, modificador_id, precio_cobrado) VALUES ?`,
                 [values]
             );
         }
-
         return detalleId;
     }
 

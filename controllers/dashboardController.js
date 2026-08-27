@@ -11,7 +11,7 @@ class DashboardController {
         try {
             const turnoActivo = await turnoService.obtenerTurnoActivo();        
             const mostrarAlertaTurno = (!turnoActivo && ['superadministrador', 'administrador'].includes(req.user.rol));
-            const metrics = await dashboardService.getMetrics();
+            const metrics = await dashboardService.getMetrics(turnoActivo ? turnoActivo.id : null);
 
             res.render(
                 'admin/dashboard',
@@ -38,7 +38,7 @@ class DashboardController {
         try {
             const turnoActivo = await turnoService.obtenerTurnoActivo();
             const mostrarAlertaTurno = (!turnoActivo && ['superadministrador', 'administrador'].includes(req.user.rol));
-            const metrics = await dashboardService.getMetrics();
+            const metrics = await dashboardService.getMetrics(turnoActivo ? turnoActivo.id : null);
 
             return res.json({
                 success: true,

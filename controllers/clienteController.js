@@ -1,8 +1,8 @@
 // controllers/clienteController.js
-const MenuModel = require('../models/menuModel');
-const settingModel = require('../models/settingModel');
+const SettingService = require('../services/settingService');
 const platilloDiaModel = require('../models/platilloDiaModel');
 const turnoService = require('../services/turnoService');
+const PrecioService = require('../services/precioService');
 const db = require('../config/db');
 
 const ClienteController = {
@@ -12,68 +12,87 @@ const ClienteController = {
   async viewDashboard(req, res) {
     try {
       const { id_mesa } = req.params;
-
-      // 1. Obtener la configuración de pre-pedidos desde la BD
-      const configPrepedido = await settingModel.getByKey('cliente_permite_prepedido');
-      const permitePrepedido = configPrepedido && (configPrepedido.valor === '1' || configPrepedido.valor === true || configPrepedido.valor === 'true');
-
-      // 2. Obtener los platillos regulares de 'platillos_menu'
-      const [menu] = await db.query(
-        `SELECT 
-            pm.id, 
-            pm.nombre, 
-            pm.descripcion, 
-            pm.precio, 
-            pm.precio_alt, 
-            pm.foto, 
-            c.nombre AS categoria,
-            0 AS es_platillo_dia
-         FROM platillos_menu pm
-         LEFT JOIN categorias_platillos c ON pm.categoria = c.id
-         WHERE c.activo = 1 OR c.id IS NULL
-         ORDER BY c.nombre ASC, pm.nombre ASC`
-      );
-
-      // 3. Obtener Platillos del Día del turno activo
-      const turnoActivo = await turnoService.obtenerTurnoActivo();
-      const platillosDelDia = turnoActivo ? await platilloDiaModel.getByTurno(turnoActivo.id) : [];
-
-      // 4. Consultar si existe la mesa
-      const [mesa] = await db.query(
-        `SELECT id, numero FROM mesas WHERE id = ? LIMIT 1`,
-        [id_mesa]
-      );
-
-      if (!mesa || mesa.length === 0) {
-        throw new Error("La mesa solicitada no existe.");
+      if (!/^\d+$/.test(String(id_mesa || ''))) {
+        return res.status(400).send('El identificador de mesa no es válido.');
       }
 
-      // 5. Consultar si existe un pedido activo asociado a la mesa
-      const [pedidos] = await db.query(
-        `SELECT id, subtotal, total, estado_pedido 
-         FROM pedidos 
-         WHERE id_mesa = ? AND fecha_cierre IS NULL 
-         LIMIT 1`,
+      const permitePrepedido = await SettingService.get('cliente_permite_prepedido', true);
+
+      // La mesa determina la carta del menú público y el turno determina la
+      // moneda base/tasa que debe mostrarse y registrarse.
+      const [mesaRows] = await db.query(
+        'SELECT id, numero, carta FROM mesas WHERE id = ? LIMIT 1',
         [id_mesa]
       );
+      if (!mesaRows.length) return res.status(404).send('La mesa solicitada no existe.');
 
-      let pedidoActivo = pedidos[0] || null;
+      const turnoActivo = await turnoService.obtenerTurnoActivo();
+      const pricingContext = await PrecioService.obtenerContextoCobro({
+        idMesa: mesaRows[0].id,
+        turnoId: turnoActivo ? turnoActivo.id : null
+      });
+
+      const [menuCatalogo] = await db.query(`
+        SELECT
+            pm.id,
+            pm.nombre,
+            pm.descripcion,
+            pm.precio,
+            pm.precio_alt,
+            pm.precio_usd,
+            pm.foto,
+            c.nombre AS categoria,
+            0 AS es_platillo_dia
+        FROM platillos_menu pm
+        LEFT JOIN categorias_platillos c ON pm.categoria = c.id
+        WHERE pm.activo = 1 AND (c.activo = 1 OR c.id IS NULL)
+        ORDER BY c.nombre ASC, pm.nombre ASC
+      `);
+      const menu = PrecioService.aplicarPrecios(menuCatalogo, pricingContext);
+
+      const platillosDiaRaw = turnoActivo
+        ? await platilloDiaModel.getByTurno(turnoActivo.id)
+        : [];
+      const platillosDelDia = PrecioService.aplicarPrecios(platillosDiaRaw, pricingContext);
+
+      let pedidos = [];
+      if (turnoActivo) {
+        [pedidos] = await db.query(`
+          SELECT id, subtotal, total, estado_pedido
+          FROM pedidos
+          WHERE id_mesa = ? AND fecha_cierre IS NULL AND turno_servicio_id = ?
+          ORDER BY id DESC
+          LIMIT 1
+        `, [id_mesa, turnoActivo.id]);
+      }
+
+      const pedidoActivo = pedidos[0] || null;
       let consumos = [];
-
       if (pedidoActivo) {
-        const [detalles] = await db.query(
-          `SELECT dp.id, dp.cantidad, dp.precio_unitario, dp.estado_item, pm.nombre AS nombre_platillo
-           FROM detalles_pedido dp
-           LEFT JOIN platillos_menu pm ON dp.id_platillo = pm.id
-           WHERE dp.id_pedido = ? AND dp.estado_item != 'cancelado'`,
-          [pedidoActivo.id]
-        );
+        const [detalles] = await db.query(`
+          SELECT dp.id,
+                 dp.id_platillo,
+                 dp.es_platillo_dia,
+                 dp.cantidad,
+                 dp.precio_unitario,
+                 dp.estado_item,
+                 COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre_platillo
+          FROM detalles_pedido dp
+          LEFT JOIN platillos_menu pm
+            ON dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL)
+          LEFT JOIN platillos_dia pd
+            ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
+          WHERE dp.id_pedido = ? AND dp.estado_item != 'cancelado'
+          ORDER BY dp.id ASC
+        `, [pedidoActivo.id]);
         consumos = detalles;
       }
 
-      // 6. Renderizar vista
       return res.render('cliente/dashboard', {
-        id_mesa,
+        id_mesa: mesaRows[0].id,
+        numero_mesa: mesaRows[0].numero,
+        carta: pricingContext.carta,
+        pricingContext,
         menu,
         platillosDelDia,
         pedidoActivo,
@@ -92,21 +111,56 @@ const ClienteController = {
   async agregarAPreorden(req, res) {
     try {
       const { id_mesa } = req.params;
-      const { items } = req.body;
-
-      if (!items || !Array.isArray(items) || items.length === 0) {
+      const { items } = req.body || {};
+      if (!/^\d+$/.test(String(id_mesa || ''))) {
+        return res.status(400).json({ success: false, message: 'La mesa indicada no es válida.' });
+      }
+      if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ success: false, message: 'No se enviaron ítems para procesar.' });
       }
 
-      const placeholders = items.map(() => '(?, ?, ?, ?)').join(', ');
+      const turnoActivo = await turnoService.obtenerTurnoActivo();
+      const pricingContext = await PrecioService.obtenerContextoCobro({
+        idMesa: id_mesa,
+        turnoId: turnoActivo ? turnoActivo.id : null
+      });
       const values = [];
 
-      items.forEach(item => {
-        values.push(id_mesa, item.id_platillo, item.cantidad || 1, item.notas_especiales || null);
-      });
+      for (const item of items) {
+        const idPlatillo = item.id_platillo || item.id;
+        const cantidad = parseInt(item.cantidad || 1, 10);
+        const esDia = item.es_platillo_dia === true || item.es_platillo_dia === 1 || item.es_platillo_dia === '1' ? 1 : 0;
+        if (!idPlatillo || !Number.isInteger(cantidad) || cantidad <= 0) {
+          return res.status(400).json({ success: false, message: 'Cada ítem debe tener un platillo y cantidad válidos.' });
+        }
 
+        let platillo;
+        if (esDia) {
+          if (!turnoActivo) return res.status(400).json({ success: false, message: 'No hay un turno activo para ese platillo del día.' });
+          const [rows] = await db.query(`
+            SELECT id, nombre, precio, precio_alt, precio_usd
+            FROM platillos_dia
+            WHERE id = ? AND turno_servicio_id = ? AND activo = 1
+            LIMIT 1
+          `, [idPlatillo, turnoActivo.id]);
+          platillo = rows[0];
+        } else {
+          const [rows] = await db.query(`
+            SELECT id, nombre, precio, precio_alt, precio_usd
+            FROM platillos_menu
+            WHERE id = ? AND activo = 1
+            LIMIT 1
+          `, [idPlatillo]);
+          platillo = rows[0];
+        }
+        if (!platillo) return res.status(400).json({ success: false, message: `El platillo ${idPlatillo} no está disponible.` });
+        PrecioService.validarPrecioConfigurado(platillo, pricingContext.carta);
+        values.push(id_mesa, idPlatillo, esDia, cantidad, item.notas_especiales || item.notas || null);
+      }
+
+      const placeholders = items.map(() => '(?, ?, ?, ?, ?)').join(', ');
       await db.query(
-        `INSERT INTO pre_pedidos (id_mesa, id_platillo, cantidad, notas_especiales) VALUES ${placeholders}`,
+        `INSERT INTO pre_pedidos (id_mesa, id_platillo, es_platillo_dia, cantidad, notas_especiales) VALUES ${placeholders}`,
         values
       );
 
@@ -116,7 +170,7 @@ const ClienteController = {
       });
     } catch (error) {
       console.error('Error al registrar pre-pedido:', error);
-      return res.status(500).json({ success: false, message: 'Error al procesar el pre-pedido.' });
+      return res.status(400).json({ success: false, message: error.message || 'Error al procesar el pre-pedido.' });
     }
   },
 

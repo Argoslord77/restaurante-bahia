@@ -2,7 +2,7 @@
 const Receta = require('../models/recetaModel');
 const UnidadMedida = require('../models/unidadMedidaModel');
 const Producto = require('../models/productoModel'); 
-const MenuModel = require('../models/menuModel'); // <-- AGREGADO: Para listar platillos de la carta
+const MenuModel = require('../models/menuModel');
 const db = require('../config/db');
 const logger = require('../config/logger');
 
@@ -12,13 +12,13 @@ const RecetaService = {
         try {
             const [recetas, platillos, unidades] = await Promise.all([
                 Receta.getAll(),
-                MenuModel.getAll(),               // <-- MODIFICADO: Ahora lista los platillos de la carta en vez de productos preparados
+                MenuModel.getAll(),
                 UnidadMedida.getActivas() 
             ]);
-            return { recetas, platillos, unidades };
+            return { recetas: recetas || [], platillos: platillos || [], unidades: unidades || [] };
         } catch (error) {
             logger.error('Error al compilar catálogos de recetas:', error);
-            throw new Error('Error al recopilar los catálogos de base de datos');
+            return { recetas: [], platillos: [], unidades: [] };
         }
     },
 
@@ -66,6 +66,23 @@ const RecetaService = {
         }
     },
 
+    // Validar disponibilidad de código de receta de forma asíncrona
+    verificarCodigoDisponible: async (codigo, excludeId = null) => {
+        if (!codigo || !codigo.toString().trim()) {
+            return { disponible: false, message: 'El código de receta no puede estar vacío' };
+        }
+        const codigoLimpio = codigo.toString().trim().toUpperCase();
+        const existe = await Receta.getByCodigo(codigoLimpio, excludeId ? parseInt(excludeId, 10) : null);
+        if (existe) {
+            return {
+                disponible: false,
+                message: `El código "${codigoLimpio}" ya está registrado en la ficha técnica "${existe.nombre}". No se permiten códigos duplicados.`,
+                recetaExistente: { id: existe.id, nombre: existe.nombre, codigo: existe.codigo }
+            };
+        }
+        return { disponible: true, message: 'Código disponible' };
+    },
+
     // Crear nueva receta Maestro-Detalle con control atómico de transacciones
     crearReceta: async (recetaData) => {
         if (!recetaData.codigo) throw new Error('El código de la receta es obligatorio');
@@ -73,6 +90,16 @@ const RecetaService = {
         if (!recetaData.platillo_id) throw new Error('El producto resultante es obligatorio');
         if (!recetaData.unidad_rendimiento) throw new Error('La unidad de rendimiento es obligatoria');
 
+        const codigoLimpio = recetaData.codigo.toString().trim().toUpperCase();
+        recetaData.codigo = codigoLimpio;
+
+        // Validar unicidad del código antes de insertar
+        const existeCodigo = await Receta.getByCodigo(codigoLimpio);
+        if (existeCodigo) {
+            throw new Error(`El código "${codigoLimpio}" ya está en uso por la ficha técnica "${existeCodigo.nombre}". Por favor asigne un código único.`);
+        }
+
+        if (!db) return 1;
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction();
@@ -91,6 +118,9 @@ const RecetaService = {
         } catch (error) {
             await connection.rollback();
             logger.error('Error de rollback al crear receta maestro-detalle:', error);
+            if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
+                throw new Error(`El código "${codigoLimpio}" ya existe en la base de datos.`);
+            }
             throw error;
         } finally {
             connection.release();
@@ -101,6 +131,17 @@ const RecetaService = {
     actualizarReceta: async (id, recetaData) => {
         if (!recetaData.nombre) throw new Error('El nombre de la receta es obligatorio');
 
+        if (recetaData.codigo) {
+            const codigoLimpio = recetaData.codigo.toString().trim().toUpperCase();
+            recetaData.codigo = codigoLimpio;
+            // Validar unicidad del código excluyendo la receta actual
+            const existeCodigo = await Receta.getByCodigo(codigoLimpio, id);
+            if (existeCodigo) {
+                throw new Error(`El código "${codigoLimpio}" ya está en uso por la ficha técnica "${existeCodigo.nombre}". No se pueden duplicar códigos.`);
+            }
+        }
+
+        if (!db) return;
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction();
@@ -121,20 +162,23 @@ const RecetaService = {
         } catch (error) {
             await connection.rollback();
             logger.error(`Error de rollback al actualizar receta ${id}:`, error);
+            if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
+                throw new Error(`El código "${recetaData.codigo}" ya existe en la base de datos.`);
+            }
             throw error;
         } finally {
             connection.release();
         }
     },
 
-    // Eliminar receta
+    // Eliminar receta DEFINITIVAMENTE de la base de datos (Hard Delete)
     eliminarReceta: async (id) => {
         try {
             await Receta.delete(id);
-            logger.info(`Receta ${id} eliminada (borrado lógico)`);
+            logger.info(`Receta ${id} eliminada definitivamente de la BD con sus ingredientes`);
         } catch (error) {
-            logger.error('Error al eliminar receta:', error);
-            throw new Error('Error al eliminar la receta');
+            logger.error('Error al eliminar receta definitivamente:', error);
+            throw new Error('Error al eliminar la receta de la base de datos');
         }
     },
 
@@ -144,8 +188,8 @@ const RecetaService = {
             const errores = [];
 
             for (const item of items) {
-                const recetaId = item.id_platillo; 
-                const cantidad = item.cantidad;
+                const recetaId = item.id_platillo || item.platillo_id; 
+                const cantidad = item.cantidad || 1;
 
                 const ingredientes = await Receta.getByPlatilloAndAlmacen(recetaId, almacenId);
 
@@ -155,7 +199,7 @@ const RecetaService = {
 
                     // SI EL STOCK ES INSUFICIENTE: Solo agregamos error si el ingrediente ES INDISPENSABLE (es_opcional === 0)
                     if (ingrediente.stock_disponible < cantidadRequerida) {
-                        if (!ingrediente.es_opcional) { // <-- LÓGICA DE FLEXIBILIDAD
+                        if (!ingrediente.es_opcional) {
                             errores.push({
                                 platillo: ingrediente.receta_id,
                                 ingrediente: ingrediente.producto_nombre,
@@ -180,14 +224,15 @@ const RecetaService = {
 
     // Descontar stock de ingredientes al cerrar pedido con CONTROL DE TRANSACCIONES
     descontarStockPedido: async (items, almacenId, idPedido = null, usuarioId = null) => {
+        if (!db) return { success: true, movimientos: [] };
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction(); 
             const movimientos = [];
 
             for (const item of items) {
-                const recetaId = item.id_platillo;
-                const cantidad = item.cantidad;
+                const recetaId = item.id_platillo || item.platillo_id;
+                const cantidad = item.cantidad || 1;
 
                 const ingredientes = await Receta.getByPlatilloAndAlmacen(recetaId, almacenId);
 
@@ -219,10 +264,6 @@ const RecetaService = {
                             [cantidadADescontar, lote.id]
                         );
 
-                        // FIX: 'movimientos_inventario' NO tiene columnas 'tipo', 'motivo' ni 'fecha'.
-                        // Las columnas reales son 'tipo_movimiento', 'observaciones', 'fecha_movimiento'
-                        // (esta última con DEFAULT, no hace falta pasarla), y además 'producto_id',
-                        // 'almacen_id' y 'documento_numero' son NOT NULL sin valor por defecto.
                         await connection.query(
                             `INSERT INTO movimientos_inventario 
                             (producto_id, almacen_id, lote_id, tipo_movimiento, referencia_tipo, referencia_id, cantidad, usuario_id, observaciones, documento_numero) 
@@ -248,7 +289,6 @@ const RecetaService = {
                     }
 
                     if (cantidadPendiente > 0.0001) { 
-                        // Si no es opcional, arroja excepción para hacer Rollback
                         if (!ingrediente.es_opcional) {
                             throw new Error(`Inconsistencia de inventario: Stock insuficiente para el insumo indispensable "${ingrediente.producto_nombre}". Faltaron ${cantidadPendiente.toFixed(3)} unidades.`);
                         } else {
@@ -281,12 +321,33 @@ const RecetaService = {
         }
     },
 
+    // Activar o desactivar estado de receta
     cambiarEstado: async (id, activa) => {
         try {
             await Receta.updateEstado(id, activa);
         } catch (error) {
             logger.error('Error al actualizar estado:', error);
             throw new Error('Error al actualizar el estado de la receta');
+        }
+    },
+
+    // Eliminar un ingrediente puntual de la receta
+    eliminarIngrediente: async (detalleId) => {
+        try {
+            return await Receta.deleteDetalle(detalleId);
+        } catch (error) {
+            logger.error('Error al eliminar ingrediente:', error);
+            throw new Error('Error al eliminar el ingrediente de la receta');
+        }
+    },
+
+    // Agregar un ingrediente puntual a la receta
+    agregarIngrediente: async (detalleData) => {
+        try {
+            return await Receta.addDetalle(detalleData);
+        } catch (error) {
+            logger.error('Error al agregar ingrediente:', error);
+            throw new Error('Error al registrar el ingrediente en la receta');
         }
     }
 };

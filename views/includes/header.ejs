@@ -61,7 +61,7 @@
                 <h5 class="modal-title fw-bold text-dark fs-5" id="modalCambiarPasswordLabel">
                     <i class="fa-solid fa-key text-secondary me-2"></i>Cambiar Contraseña
                 </h5>
-                <button type="button" class="btn-close" data-bs-close="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form action="/admin/usuario/cambiar-password" method="POST" id="formCambiarPassword" class="needs-validation" novalidate>
                 <div class="modal-body p-4">
@@ -126,7 +126,7 @@
 
                 </div>
                 <div class="modal-footer border-top bg-light p-3">
-                    <button type="button" class="btn btn-white border shadow-sm fw-semibold btn-sm px-3" data-bs-close="modal">Cancelar</button>
+                    <button type="button" class="btn btn-white border shadow-sm fw-semibold btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary shadow-sm fw-semibold btn-sm px-3">Actualizar Contraseña</button>
                 </div>
             </form>
@@ -138,6 +138,16 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('formCambiarPassword');
+    const modalElement = document.getElementById('modalCambiarPassword');
+
+    // Al cancelar o cerrar el modal se limpian los campos y los mensajes de validación.
+    // Bootstrap se encarga del cierre mediante data-bs-dismiss="modal".
+    if (modalElement && form) {
+        modalElement.addEventListener('hidden.bs.modal', () => {
+            form.reset();
+            form.classList.remove('was-validated');
+        });
+    }
     
     form.addEventListener('submit', async function(e) {
         e.preventDefault();

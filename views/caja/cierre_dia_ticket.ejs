@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket de Cierre del Día</title>
+    <style>
+        /* Configuración de página para papel térmico continuo de 48mm */
+        @page {
+            size: 48mm auto;
+            margin: 0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            width: 48mm;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            line-height: 1.2;
+            color: #000;
+            background: #fff;
+            padding: 4px 2px;
+            cursor: pointer;
+            user-select: none;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .text-left { text-align: left; }
+        .bold { font-weight: bold; }
+        .uppercase { text-transform: uppercase; }
+
+        .title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .subtitle {
+            font-size: 10px;
+            margin-bottom: 4px;
+        }
+
+        .divider {
+            border-top: 1px dashed #000;
+            margin: 4px 0;
+            width: 100%;
+        }
+
+        .double-divider {
+            border-top: 2px double #000;
+            margin: 4px 0;
+            width: 100%;
+        }
+
+        .meta-info {
+            font-size: 10px;
+            margin-bottom: 4px;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .ticket-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 4px 0;
+            font-size: 10.5px;
+        }
+
+        .ticket-table th {
+            border-bottom: 1px solid #000;
+            padding-bottom: 2px;
+            font-size: 9.5px;
+        }
+
+        .ticket-table td {
+            padding: 2px 0;
+            vertical-align: top;
+        }
+
+        .col-cant { width: 15%; text-align: left; }
+        .col-desc { width: 45%; text-align: left; word-break: break-word; }
+        .col-estado { width: 20%; text-align: center; }
+        .col-total { width: 20%; text-align: right; }
+
+        .totals-container {
+            margin-top: 4px;
+            font-size: 11px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 1px 0;
+        }
+
+        .grand-total {
+            font-size: 13px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        /* Botón Flotante para Regresar (Oculto por defecto) */
+        #btn-nav-volver {
+            position: fixed;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #0f172a;
+            color: #ffffff;
+            border: 2px solid #3b82f6;
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            display: none;
+            z-index: 9999;
+            cursor: pointer;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        @media print {
+            #btn-nav-volver {
+                display: none !important;
+            }
+            body {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <button id="btn-nav-volver">&#8592; Volver al Cierre</button>
+
+    <div class="ticket-container">
+        <!-- Encabezado -->
+        <div class="text-center">
+            <div class="title uppercase">Restaurante Bahía</div>
+            <div class="subtitle">*** CIERRE DE CAJA ***</div>
+            <div class="subtitle">TURNO #<%= turnoActivo.id %></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Metadatos del turno -->
+        <div class="meta-info">
+            <div class="meta-row">
+                <span>Apertura:</span>
+                <span><%= new Date(turnoActivo.fecha_apertura).toLocaleDateString('es-ES') %> <%= new Date(turnoActivo.fecha_apertura).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) %></span>
+            </div>
+            <div class="meta-row">
+                <span>Impresión:</span>
+                <span><%= new Date().toLocaleDateString('es-ES') %> <%= new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) %></span>
+            </div>
+            <div class="meta-row">
+                <span>Pedidos:</span>
+                <span><%= resumen.total_pedidos %></span>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Resumen financiero -->
+        <div class="totals-container">
+            <div class="total-row">
+                <span>FONDO APERTURA:</span>
+                <span>$<%= parseFloat(resumen.fondo_apertura || 0).toFixed(2) %></span>
+            </div>
+            <div class="total-row">
+                <span>VENTAS COBRADAS:</span>
+                <span>$<%= parseFloat(resumen.total_cobrado_caja || 0).toFixed(2) %></span>
+            </div>
+            <div class="total-row">
+                <span>PROPINAS:</span>
+                <span>$<%= parseFloat(resumen.total_propinas || 0).toFixed(2) %></span>
+            </div>
+            <div class="total-row bold">
+                <span>EFECTIVO EN CAJA:</span>
+                <span>$<%= parseFloat(resumen.total_efectivo_total_caja || 0).toFixed(2) %></span>
+            </div>
+            <div class="divider"></div>
+            <div class="total-row">
+                <span>CxC FACTURAS:</span>
+                <span>$<%= parseFloat(resumen.total_cxc_facturas || 0).toFixed(2) %></span>
+            </div>
+            <div class="total-row">
+                <span>PTDO. DE PAGO:</span>
+                <span>$<%= parseFloat(resumen.total_pendiente_pago || 0).toFixed(2) %></span>
+            </div>
+            <div class="total-row">
+                <span>CORTESÍAS:</span>
+                <span>$<%= parseFloat(resumen.total_cortesias || 0).toFixed(2) %></span>
+            </div>
+            <div class="divider"></div>
+            <div class="total-row grand-total">
+                <span>ESPERADO CAJA:</span>
+                <span>$<%= parseFloat(resumen.total_en_caja_esperado || 0).toFixed(2) %></span>
+            </div>
+        </div>
+
+        <div class="double-divider"></div>
+
+        <!-- Desglose de pagos por método y moneda -->
+        <% if (typeof desgloseMonedas !== 'undefined' && desgloseMonedas && desgloseMonedas.length > 0) { %>
+        <div class="subtitle bold text-center">DESGLOSE DE PAGOS</div>
+        <table class="ticket-table">
+            <thead>
+                <tr>
+                    <th class="col-cant">MÉTODO</th>
+                    <th class="col-desc">MONEDA</th>
+                    <th class="col-total">LOCAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% desgloseMonedas.forEach(d => { %>
+                <tr>
+                    <td class="col-cant uppercase"><%= d.metodo_pago %></td>
+                    <td class="col-desc"><%= d.codigo_moneda %></td>
+                    <td class="col-total bold">$<%= parseFloat(d.total_local || 0).toFixed(2) %></td>
+                </tr>
+                <% }) %>
+            </tbody>
+        </table>
+        <div class="divider"></div>
+        <% } %>
+
+        <!-- Comandas del turno -->
+        <% if (pedidosCuentas && pedidosCuentas.length > 0) { %>
+        <div class="subtitle bold text-center">COMANDAS DEL TURNO</div>
+        <table class="ticket-table">
+            <thead>
+                <tr>
+                    <th class="col-cant">#</th>
+                    <th class="col-desc">MESA</th>
+                    <th class="col-estado">PAGO</th>
+                    <th class="col-total">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% pedidosCuentas.forEach(p => { %>
+                <tr>
+                    <td class="col-cant"><%= p.id %></td>
+                    <td class="col-desc uppercase"><%= p.numero_mesa || '-' %></td>
+                    <td class="col-estado"><%= ({ pagado: 'PAG', facturado: 'FAC', pendiente_pago: 'PPG', pendiente: 'CTA', cortesia: 'CRT' })[p.estado_pago] || '---' %></td>
+                    <td class="col-total bold">$<%= parseFloat(p.total || 0).toFixed(2) %></td>
+                </tr>
+                <% }) %>
+            </tbody>
+        </table>
+        <% } else { %>
+        <div class="text-center subtitle">Sin comandas registradas</div>
+        <% } %>
+
+        <div class="double-divider"></div>
+
+        <!-- Pie del Ticket -->
+        <div class="text-center" style="margin-top: 6px;">
+            <p style="font-size: 9px; margin-top: 8px; border-top: 1px dashed #000; padding-top: 6px;">Firma del Cajero: ____________________</p>
+            <p style="font-size: 9px; margin-top: 2px;">Documento interno de auditoría</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnNav = document.getElementById('btn-nav-volver');
+
+            btnNav.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.close();
+                if (!window.closed) window.history.back();
+            });
+
+            // Tocar la pantalla muestra el botón de volver; tocar de nuevo imprime
+            document.body.addEventListener('click', () => {
+                const isVisible = btnNav.style.display === 'block';
+                if (isVisible) {
+                    btnNav.style.display = 'none';
+                    window.print();
+                } else {
+                    btnNav.style.display = 'block';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

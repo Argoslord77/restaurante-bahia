@@ -45,6 +45,15 @@ router.post('/api/monitor/cambiar-estado', ensureAuthenticated, asegurarTurnoAct
 // Endpoint API para la actualización de estados desde la interfaz POS (dependiente)
 router.post('/api/pos/item-estado', ensureAuthenticated, asegurarTurnoActivo, checkRole(['dependiente', 'capitan', 'administrador', 'superadministrador']), posController.apiActualizarEstadoItem);
 
+// Endpoint API para entregar todos los ítems de un pedido (Modo Servicio Directo)
+router.post(
+    '/api/pos/entregar-todos/:id_pedido', 
+    ensureAuthenticated, 
+    asegurarTurnoActivo, 
+    checkRole(['dependiente', 'capitan', 'administrador', 'superadministrador']), 
+    posController.apiEntregarTodos
+);
+
 // Endpoint API para cancelar un ítem desde el POS (dependiente)
 router.put('/pos/cancelar-item/:id_detalle', ensureAuthenticated, asegurarTurnoActivo, checkRole(['dependiente', 'capitan', 'administrador', 'superadministrador']), posController.apiCancelarItem);
 

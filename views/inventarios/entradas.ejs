@@ -61,7 +61,8 @@
                             <th class="py-3">Producto</th>
                             <th class="py-3">Almacén Destino</th>
                             <th class="py-3">Nº Lote</th>
-                            <th class="text-end py-3">Cant. Inicial</th>
+                            <th class="text-end py-3">Cant. Inicial (U. inventario)</th>
+                            <th class="py-3">U. Entrada</th>
                             <th class="text-end py-3">Cant. Actual (Stock)</th>
                             <th class="text-end py-3">Costo Unit.</th>
                             <th class="text-center py-3">Estado</th>
@@ -87,8 +88,13 @@
                                     </td>
                                     <td><span class="badge bg-light text-dark border"><i class="fa-solid fa-warehouse me-1 text-secondary"></i><%= e.almacen_nombre %></span></td>
                                     <td><span class="font-monospace fw-bold text-secondary"><%= e.numero_lote %></span></td>
-                                    <td class="text-end font-monospace"><%= parseFloat(e.cantidad_inicial).toFixed(2) %></td>
-                                    <td class="text-end font-monospace fw-bold text-success"><%= parseFloat(e.cantidad_actual).toFixed(2) %></td>
+                                    <td class="text-end font-monospace"><%= parseFloat(e.cantidad_inicial || 0).toFixed(2) %> <%= e.unidad_inventario_abreviatura || '' %></td>
+                                    <td><span class="badge bg-info-subtle text-info-emphasis border"><%= e.unidad_medida_abreviatura || e.unidad_inventario_abreviatura || '—' %></span>
+                                        <% if (e.cantidad_ingresada !== null && e.cantidad_ingresada !== undefined) { %>
+                                            <small class="d-block text-muted"><%= parseFloat(e.cantidad_ingresada).toFixed(2) %> recibidos</small>
+                                        <% } %>
+                                    </td>
+                                    <td class="text-end font-monospace fw-bold text-success"><%= parseFloat(e.cantidad_actual || 0).toFixed(2) %> <%= e.unidad_inventario_abreviatura || '' %></td>
                                     <td class="text-end font-monospace text-dark">$<%= parseFloat(e.costo_unitario).toFixed(2) %></td>
                                     <td class="text-center">
                                         <% if (parseFloat(e.cantidad_actual) <= 0) { %>
@@ -101,7 +107,7 @@
                             <% }) %>
                         <% } else { %>
                             <tr>
-                                <td colspan="8" class="text-center py-4 text-muted">
+                                <td colspan="9" class="text-center py-4 text-muted">
                                     <i class="fa-solid fa-box-open d-block fs-3 mb-2 text-secondary"></i>
                                     No se registran lotes o entradas en este momento.
                                 </td>
@@ -143,10 +149,24 @@
                                 <option value="">Escriba para buscar un insumo...</option>
                                 <% if (typeof productos !== 'undefined') { %>
                                     <% productos.forEach(p => { %>
-                                        <option value="<%= p.id %>">[<%= p.codigo %>] <%= p.nombre %></option>
+                                        <option value="<%= p.id %>"
+                                                data-unidad-inventario-id="<%= p.unidad_inventario_id || '' %>"
+                                                data-unidad-inventario="<%= p.unidad_inventario_abreviatura || p.unidad_inventario_nombre || '' %>">[<%= p.codigo %>] <%= p.nombre %></option>
                                     <% }) %>
                                 <% } %>
                             </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="unidad_medida_id" class="form-label fw-semibold text-secondary small">Unidad de la entrada</label>
+                            <select class="form-select shadow-sm" id="unidad_medida_id" required disabled>
+                                <option value="">Seleccione el producto primero...</option>
+                                <% if (typeof unidades !== 'undefined') { %>
+                                    <% unidades.forEach(u => { %>
+                                        <option value="<%= u.id %>" data-tipo="<%= u.tipo %>"><%= u.nombre %> (<%= u.abreviatura %>)</option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
+                            <div class="form-text">Use una unidad del catálogo. Si es distinta de la unidad de inventario, debe existir un factor de conversión activo.</div>
                         </div>
                         <div class="col-md-4">
                             <label for="numero_lote" class="form-label fw-semibold text-secondary small">Número de Lote / Consecutivo</label>
@@ -224,6 +244,7 @@
         // CONTROL DE FLUJO SÍNCRONO ENTRE SELECTS
         const $almacenSelect = $('#almacen_id');
         const $productoSelect = $('.select2-busqueda');
+        const $unidadSelect = $('#unidad_medida_id');
 
         $almacenSelect.on('change', function() {
             const almacenSeleccionado = $(this).val();
@@ -232,7 +253,17 @@
             } else {
                 $productoSelect.val('').trigger('change.select2');
                 $productoSelect.prop('disabled', true);
+                $unidadSelect.val('').prop('disabled', true);
             }
+        });
+
+        // El producto propone su unidad canónica de inventario, pero la
+        // entrada permite cualquier unidad activa con factor configurado.
+        $productoSelect.on('change', function() {
+            const option = this.options[this.selectedIndex];
+            const unidadInventarioId = option ? option.getAttribute('data-unidad-inventario-id') : '';
+            $unidadSelect.prop('disabled', !this.value);
+            $unidadSelect.val(unidadInventarioId || '');
         });
 
         // Manejo dinámico para abrir el modal desde el Header
@@ -249,6 +280,7 @@
             document.getElementById('formEntrada').reset();
             $productoSelect.val('').trigger('change.select2');
             $productoSelect.prop('disabled', true);
+            $unidadSelect.val('').prop('disabled', true);
             fechaIngresoInput.value = new Date().toISOString().split('T')[0];
             actualizarMinimoVencimiento();
         });
@@ -276,11 +308,21 @@
             const payload = {
                 almacen_id: document.getElementById('almacen_id').value,
                 producto_id: document.getElementById('producto_id').value,
+                unidad_medida_id: document.getElementById('unidad_medida_id').value,
                 fecha_ingreso: fIngreso,
                 fecha_vencimiento: fVencimiento || '', 
                 cantidad: document.getElementById('cantidad').value,
                 costo_unitario: document.getElementById('costo_unitario').value
             };
+
+            Swal.fire({
+                title: 'Registrando entrada...',
+                text: 'Actualizando el inventario',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
 
             try {
                 const response = await fetch('/admin/almacenes/entradas/api', {

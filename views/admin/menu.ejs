@@ -9,6 +9,62 @@
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        /* Contenedor del buscador sticky superior y centrado al hacer scroll */
+        .sticky-search-container {
+            position: sticky;
+            top: 12px;
+            z-index: 1020;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .sticky-search-container.is-scrolled {
+            max-width: 680px;
+            margin-left: auto;
+            margin-right: auto;
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-color: rgba(13, 110, 253, 0.3) !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+        }
+
+        /* Botón flotante para scroll hacia arriba */
+        .btn-scroll-top {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #212529;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+            cursor: pointer;
+            z-index: 1050;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(20px) scale(0.9);
+            transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
+        }
+
+        .btn-scroll-top.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
+        }
+
+        .btn-scroll-top:hover {
+            background-color: #0d6efd;
+            color: #ffffff;
+            box-shadow: 0 6px 20px rgba(13, 110, 253, 0.4);
+            transform: translateY(-3px) scale(1.05);
+        }
+    </style>
 </head>
 <body>
 
@@ -125,9 +181,9 @@
                     </div>
                 </div>
 
-                <!-- BUSCADOR DEL MENÚ REGULAR -->
-                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-3 bg-white p-3 rounded shadow-sm border">
-                    <div class="col-12 col-sm-5 col-md-4 m-0">
+                <!-- BUSCADOR DEL MENÚ REGULAR CON COMPORTAMIENTO STICKY CENTRADO -->
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-3 bg-white p-3 rounded shadow-sm border sticky-search-container" id="contenedorBuscadorMenu">
+                    <div class="col-12 col-sm-5 col-md-5 m-0">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text bg-light border-end-0 text-muted">
                                 <i class="fas fa-search"></i>
@@ -229,6 +285,11 @@
             </main>
         </div>
     </div>
+
+    <!-- BOTÓN FLOTANTE PARA SCROLL SUAVE AL INICIO (PARTE INFERIOR DERECHA) -->
+    <button type="button" class="btn-scroll-top" id="btnScrollTop" title="Volver al inicio" aria-label="Volver arriba">
+        <i class="fa-solid fa-arrow-up fs-6"></i>
+    </button>
 
     <!-- MODAL: AGREGAR PLATILLO DEL DÍA (TURNO ACTIVO) -->
     <div class="modal fade" id="modalCrearPlatilloDia" tabindex="-1" aria-hidden="true">
@@ -547,6 +608,42 @@
         // Buscador catálogo regular
         const inputBuscar = document.getElementById('buscarPlatilloCatalogo');
         const contadorPlatillos = document.getElementById('contadorPlatillos');
+        const contenedorSticky = document.getElementById('contenedorBuscadorMenu');
+        const btnScrollTop = document.getElementById('btnScrollTop');
+
+        // Control de Scroll: Sticky Search Centrado y Botón Scroll-To-Top
+        window.addEventListener('scroll', () => {
+            const scrollPos = window.scrollY || document.documentElement.scrollTop;
+
+            if (contenedorSticky) {
+                if (scrollPos > 60) {
+                    contenedorSticky.classList.add('is-scrolled');
+                } else {
+                    contenedorSticky.classList.remove('is-scrolled');
+                }
+            }
+
+            if (btnScrollTop) {
+                if (scrollPos > 220) {
+                    btnScrollTop.classList.add('visible');
+                } else {
+                    btnScrollTop.classList.remove('visible');
+                }
+            }
+        }, { passive: true });
+
+        // Smooth Scrolling al hacer click en el botón inferior derecho
+        if (btnScrollTop) {
+            btnScrollTop.addEventListener('click', () => {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+                if (inputBuscar) {
+                    inputBuscar.focus();
+                }
+            });
+        }
 
         if (inputBuscar) {
             inputBuscar.addEventListener('input', function(e) {

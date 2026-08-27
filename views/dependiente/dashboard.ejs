@@ -163,6 +163,9 @@
         }
         .btn-monitor-pendiente i { color: #ffffff !important; }
         .btn-monitor-pendiente:hover { background-color: #d97706 !important; }
+
+        .btn-monitor-qr { background-color: #7c3aed; color: #ffffff; }
+        .btn-monitor-qr:hover { background-color: #6d28d9; color: #ffffff; }
     </style>
 </head>
 <body>
@@ -244,6 +247,7 @@
                                                     <div class="monitor-footer-info">
                                                         <span class="d-block"><i class="fa-solid fa-users me-1"></i> Capacidad: <strong><%= mesa.capacidad %> personas</strong></span>
                                                         <span class="d-block mt-1 text-truncate"><i class="fa-solid fa-layer-group me-1"></i> <%= mesa.ubicacion || 'Salón Principal' %></span>
+                                                        <span class="d-block mt-1"><i class="fa-solid fa-tags me-1"></i> Carta: <strong><%= mesa.carta || 'CUP' %></strong></span>
                                                     </div>
                                                 </div>
 
@@ -261,6 +265,13 @@
                                                             <i class="fa-solid fa-file-invoice-dollar"></i> Ver Orden
                                                         </a>
                                                     <% } %>
+                                                    <button type="button"
+                                                            class="btn-monitor btn-monitor-qr mt-2 mostrar-qr-btn"
+                                                            data-mesa-id="<%= mesa.id %>"
+                                                            data-mesa-nombre="<%= mesa.nombre %>"
+                                                            data-qr-url="<%= ((typeof clientDashboardBaseUrl !== 'undefined' && clientDashboardBaseUrl) ? clientDashboardBaseUrl : '/cliente/dashboard/') + mesa.id %>">
+                                                        <i class="fa-solid fa-qrcode"></i> Mostrar QR del cliente
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -279,38 +290,125 @@
         </div>
     </div>
 
+    <!-- Modal del QR público de la mesa -->
+    <div class="modal fade" id="modalQrMesa" tabindex="-1" aria-labelledby="modalQrMesaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-dark text-white border-0">
+                    <h5 class="modal-title fw-bold" id="modalQrMesaLabel"><i class="fa-solid fa-qrcode text-warning me-2"></i>QR del menú del cliente</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body text-center p-4">
+                    <p class="text-secondary small mb-3" id="qrMesaDescripcion">Escanea este código para abrir el menú.</p>
+                    <div id="qrMesaCanvas" class="d-inline-flex align-items-center justify-content-center bg-white p-3 rounded-3 border" style="min-width: 280px; min-height: 280px;"></div>
+                    <div class="mt-3 text-start">
+                        <label class="form-label text-secondary small fw-semibold mb-1">URL codificada</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="qrMesaUrl" class="form-control font-monospace bg-light" readonly>
+                            <button type="button" id="btnCopiarQrUrl" class="btn btn-outline-secondary" title="Copiar URL"><i class="fa-solid fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 justify-content-center">
+                    <button type="button" id="btnDescargarQr" class="btn btn-primary btn-sm rounded-pill px-4"><i class="fa-solid fa-download me-1"></i> Descargar QR</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Libs JS -->
     <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
+    <script src="/js/libs/qrcode.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            document.addEventListener('click', async function(e) {
-                if (e.target.classList.contains('abrir-mesa-btn')) {
-                    const btn = e.target;
-                    const idMesa = btn.getAttribute('data-mesa-id');
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Abriendo...';
+            const modalQrEl = document.getElementById('modalQrMesa');
+            const modalQr = modalQrEl ? new bootstrap.Modal(modalQrEl) : null;
+            const qrCanvas = document.getElementById('qrMesaCanvas');
+            const qrUrlInput = document.getElementById('qrMesaUrl');
+            const qrDescripcion = document.getElementById('qrMesaDescripcion');
+            let qrUrlActual = '';
+            let qrMesaActual = '';
 
+            document.addEventListener('click', async function(e) {
+                const qrButton = e.target.closest('.mostrar-qr-btn');
+                if (qrButton) {
+                    e.preventDefault();
+                    qrUrlActual = qrButton.getAttribute('data-qr-url') || '';
+                    qrMesaActual = qrButton.getAttribute('data-mesa-nombre') || qrButton.getAttribute('data-mesa-id') || '';
+                    if (!qrUrlActual || !qrCanvas || !modalQr) return;
+                    qrCanvas.innerHTML = '';
+                    qrUrlInput.value = qrUrlActual;
+                    qrDescripcion.textContent = `Mesa ${qrMesaActual}: escanea este código para abrir el menú del cliente.`;
                     try {
-                        const response = await fetch('/pos/init-manual', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id_mesa: parseInt(idMesa) })
+                        new QRCode(qrCanvas, {
+                            text: qrUrlActual,
+                            width: 250,
+                            height: 250,
+                            colorDark: '#111827',
+                            colorLight: '#ffffff',
+                            correctLevel: QRCode.CorrectLevel.M
                         });
-                        const data = await response.json();
-                        if (data.success && data.pedidoId) {
-                            window.location.href = `/pos/${data.pedidoId}`;
-                        } else {
-                            alert(data.message || 'Error al abrir mesa');
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
-                        }
+                        modalQr.show();
                     } catch (error) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
+                        console.error('No se pudo generar el QR:', error);
+                        alert('No se pudo generar el código QR.');
                     }
+                    return;
+                }
+
+                const copiar = e.target.closest('#btnCopiarQrUrl');
+                if (copiar && qrUrlActual) {
+                    try {
+                        await navigator.clipboard.writeText(qrUrlActual);
+                        copiar.innerHTML = '<i class="fa-solid fa-check text-success"></i>';
+                        setTimeout(() => { copiar.innerHTML = '<i class="fa-solid fa-copy"></i>'; }, 1500);
+                    } catch (_) {
+                        qrUrlInput.select();
+                        document.execCommand('copy');
+                    }
+                    return;
+                }
+
+                const descargar = e.target.closest('#btnDescargarQr');
+                if (descargar && qrCanvas) {
+                    const imagen = qrCanvas.querySelector('img');
+                    const lienzo = qrCanvas.querySelector('canvas');
+                    const href = imagen ? imagen.src : (lienzo ? lienzo.toDataURL('image/png') : '');
+                    if (!href) return;
+                    const enlace = document.createElement('a');
+                    enlace.href = href;
+                    enlace.download = `qr-mesa-${String(qrMesaActual).replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()}.png`;
+                    enlace.click();
+                    return;
+                }
+
+                const abrirButton = e.target.closest('.abrir-mesa-btn');
+                if (!abrirButton) return;
+                const idMesa = abrirButton.getAttribute('data-mesa-id');
+                abrirButton.disabled = true;
+                abrirButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Abriendo...';
+                try {
+                    const response = await fetch('/pos/init-manual', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id_mesa: parseInt(idMesa, 10) })
+                    });
+                    const data = await response.json();
+                    if (data.success && data.pedidoId) {
+                        window.location.href = `/pos/${data.pedidoId}`;
+                    } else {
+                        alert(data.message || 'Error al abrir mesa');
+                        abrirButton.disabled = false;
+                        abrirButton.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
+                    }
+                } catch (error) {
+                    console.error(error);
+                    abrirButton.disabled = false;
+                    abrirButton.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
                 }
             });
         });
@@ -416,6 +514,7 @@
                                         nombre: item.platillo,
                                         precio: parseFloat(item.precio),
                                         cantidad: parseInt(item.cantidad),
+                                        es_platillo_dia: item.es_platillo_dia === true || item.es_platillo_dia === 1 || item.es_platillo_dia === '1',
                                         notas: item.notas_especiales || ''
                                     }));
 

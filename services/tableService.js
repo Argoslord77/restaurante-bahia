@@ -1,6 +1,5 @@
 // services/tableService.js
 const TableModel = require('../models/tableModel');
-const DistributionModel = require('../models/distributionModel');
 const db = require('../config/db');
 
 class TableService {
@@ -79,6 +78,10 @@ class TableService {
             INNER JOIN detalle_asignacion_mesa dam ON ad.id = dam.asignacion_diaria_id
             INNER JOIN usuarios u ON dam.dependiente_id = u.id
             WHERE ad.turno_id = ? AND ad.ubicacion = ?
+              AND ad.id = (
+                  SELECT MAX(a2.id) FROM asignaciones_diarias a2
+                  WHERE a2.turno_id = ad.turno_id AND a2.ubicacion = ad.ubicacion
+              )
         `, [turnoId, ubicacion]);
 
         if (distRows.length === 0) return null;
@@ -89,28 +92,51 @@ class TableService {
         }, {});
     }
 
-    // Guardar o actualizar la distribución diaria vinculada al turno
+    // Guardar o actualizar la distribución vinculada al turno
     async saveDistribution(ubicacion, asignaciones, turnoId = null) {
         const hoy = new Date().toISOString().split('T')[0];
         let asignacionId;
 
-        // 1. Buscar o crear la asignación diaria para la fecha y ubicación vinculada al turno_id
-        const [existentes] = await db.query(
-            'SELECT id FROM asignaciones_diarias WHERE fecha = ? AND ubicacion = ? LIMIT 1',
-            [hoy, ubicacion]
-        );
-
-        if (existentes.length > 0) {
-            asignacionId = existentes[0].id;
-            if (turnoId) {
-                await db.query('UPDATE asignaciones_diarias SET turno_id = ? WHERE id = ?', [turnoId, asignacionId]);
-            }
-        } else {
+        // 1. La asignación pertenece al TURNO: INSERT atómico tipo "upsert".
+        //    ON DUPLICATE KEY + LAST_INSERT_ID(id) devuelve el id de la fila
+        //    existente cuando ya hay asignación para este turno+ubicación (o si
+        //    otro guardado concurrente la creó un instante antes, p. ej. doble
+        //    clic en "Guardar"), eliminando el error de "entrada duplicada".
+        if (turnoId) {
             const [resultado] = await db.query(
-                'INSERT INTO asignaciones_diarias (fecha, ubicacion, turno_id) VALUES (?, ?, ?)',
+                `INSERT INTO asignaciones_diarias (fecha, ubicacion, turno_id)
+                 VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
                 [hoy, ubicacion, turnoId]
             );
             asignacionId = resultado.insertId;
+
+            // Protección: si la BD aún tiene el índice viejo (fecha, ubicacion)
+            // sin migrar, el upsert pudo resolver sobre una fila de OTRO turno.
+            const [fila] = await db.query(
+                'SELECT id, turno_id FROM asignaciones_diarias WHERE id = ? LIMIT 1',
+                [asignacionId]
+            );
+            if (!fila.length || Number(fila[0].turno_id) !== Number(turnoId)) {
+                throw new Error('Esquema desactualizado: asignaciones_diarias sigue usando el índice por fecha. Ejecuta scripts/migracion_asignaciones_por_turno.sql');
+            }
+        } else {
+            // Compatibilidad sin turno: se busca una fila libre (sin turno) del día.
+            // Nunca se reasigna el turno_id de una fila que pertenece a otro turno.
+            const [existentes] = await db.query(
+                'SELECT id FROM asignaciones_diarias WHERE fecha = ? AND ubicacion = ? AND turno_id IS NULL LIMIT 1',
+                [hoy, ubicacion]
+            );
+
+            if (existentes.length > 0) {
+                asignacionId = existentes[0].id;
+            } else {
+                const [resultado] = await db.query(
+                    'INSERT INTO asignaciones_diarias (fecha, ubicacion, turno_id) VALUES (?, ?, ?)',
+                    [hoy, ubicacion, null]
+                );
+                asignacionId = resultado.insertId;
+            }
         }
 
         // 2. Insertar o actualizar cada detalle de mesa

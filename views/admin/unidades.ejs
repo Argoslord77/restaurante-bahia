@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unidades de Medida - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-light">
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/topBarMobile') %>
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Unidades de Medida y Conversiones', desc_pagina: 'Catálogo de unidades, factores de conversión automáticos (POS, recetas y transferencias) y equivalencias por producto.', add_btn: false}) %>
+
+                <!-- Tarjetas resumen -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-4">
+                        <div class="card border-0 shadow-sm rounded p-3 bg-white border-start border-primary border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Unidades Activas</h6>
+                                    <h3 class="fw-bold mb-0 text-primary" id="cardUnidades">–</h3>
+                                </div>
+                                <i class="fa-solid fa-ruler-combined fs-4 text-primary"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <div class="card border-0 shadow-sm rounded p-3 bg-white border-start border-success border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Factores Globales</h6>
+                                    <h3 class="fw-bold mb-0 text-success" id="cardGlobales">–</h3>
+                                </div>
+                                <i class="fa-solid fa-globe fs-4 text-success"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <div class="card border-0 shadow-sm rounded p-3 bg-white border-start border-warning border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted fw-semibold mb-1 fs-7">Por Producto</h6>
+                                    <h3 class="fw-bold mb-0 text-warning" id="cardProducto">–</h3>
+                                </div>
+                                <i class="fa-solid fa-box fs-4 text-warning"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- UNIDADES -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-bottom pt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span class="fw-bold"><i class="fa-solid fa-ruler-combined me-2 text-secondary"></i>Catálogo de Unidades</span>
+                        <button class="btn btn-sm btn-dark fw-semibold" id="btnNuevaUnidad"><i class="fa-solid fa-plus me-1"></i> Nueva Unidad</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light fs-7 text-uppercase text-secondary">
+                                <tr>
+                                    <th>Código</th><th>Nombre</th><th>Abrev.</th><th class="text-center">Tipo</th>
+                                    <th class="text-center">Decimales</th><th class="text-center">Estado</th><th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyUnidades" class="fs-7">
+                                <tr><td colspan="7" class="text-center text-muted py-4">Cargando…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- CONVERSIONES -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-auto">
+                    <div class="card-header bg-white border-bottom pt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span class="fw-bold"><i class="fa-solid fa-right-left me-2 text-secondary"></i>Factores de Conversión</span>
+                        <button class="btn btn-sm btn-dark fw-semibold" id="btnNuevaConversion"><i class="fa-solid fa-plus me-1"></i> Nueva Conversión</button>
+                    </div>
+                    <div class="card-body py-2 fs-7 text-muted">
+                        <i class="fa-solid fa-circle-info me-1"></i>El factor indica cuántas <b>unidades destino</b> equivale <b>1 unidad origen</b> (ej.: 1 kg = 1000 g).
+                        Las conversiones <b>globales</b> aplican a todos los productos; las <b>por producto</b> tienen prioridad (ej.: una caja de 24 para un producto, de 12 para otro).
+                        Si no existe un factor directo, el sistema convierte en dos pasos vía la unidad base del tipo (kg / l / und).
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light fs-7 text-uppercase text-secondary">
+                                <tr>
+                                    <th>Ámbito</th><th>Equivalencia</th><th class="text-end">Factor</th>
+                                    <th class="text-center">Base</th><th class="text-center">Estado</th><th>Obs.</th><th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyConversiones" class="fs-7">
+                                <tr><td colspan="7" class="text-center text-muted py-4">Cargando…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal Unidad -->
+    <div class="modal fade" id="modalUnidad" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content" id="formUnidad">
+                <input type="hidden" id="um_id">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="um_titulo">Nueva Unidad</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-6"><label class="form-label fw-semibold small">Código *</label><input id="um_codigo" class="form-control" maxlength="20" required placeholder="KG"></div>
+                        <div class="col-6"><label class="form-label fw-semibold small">Abreviatura *</label><input id="um_abrev" class="form-control" maxlength="20" required placeholder="kg"></div>
+                        <div class="col-12"><label class="form-label fw-semibold small">Nombre *</label><input id="um_nombre" class="form-control" maxlength="100" required placeholder="Kilogramo"></div>
+                        <div class="col-7">
+                            <label class="form-label fw-semibold small">Tipo *</label>
+                            <select id="um_tipo" class="form-select" required>
+                                <option value="PESO">Peso (kg, g, lb)</option>
+                                <option value="VOLUMEN">Volumen (l, ml, oz)</option>
+                                <option value="LONGITUD">Longitud (m, cm)</option>
+                                <option value="UNIDAD">Unidad (und, porciones)</option>
+                                <option value="EMPAQUE">Empaque (caja, paquete)</option>
+                            </select>
+                        </div>
+                        <div class="col-5 d-flex flex-column justify-content-center gap-2 pt-4">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="um_decimales" checked><label class="form-check-label small" for="um_decimales">Permite decimales</label></div>
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="um_activa" checked><label class="form-check-label small" for="um_activa">Activa</label></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-dark fw-semibold px-4">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Conversión -->
+    <div class="modal fade" id="modalConversion" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content" id="formConversion">
+                <input type="hidden" id="cv_id">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="cv_titulo">Nueva Conversión</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Producto (vacío = conversión global)</label>
+                        <select id="cv_producto" class="form-select"></select>
+                        <div class="form-text">Las conversiones por producto tienen prioridad. Sólo aparecen productos con al menos una entrada de almacén que ya tiene unidad registrada.</div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-5">
+                            <label class="form-label fw-semibold small">1 unidad origen *</label>
+                            <select id="cv_origen" class="form-select" required></select>
+                        </div>
+                        <div class="col-7">
+                            <label class="form-label fw-semibold small">equivale a (factor) *</label>
+                            <input id="cv_factor" type="number" step="any" min="0.00000001" class="form-control" required placeholder="1000">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">unidades destino *</label>
+                            <select id="cv_destino" class="form-select" required></select>
+                        </div>
+                        <div class="col-12"><label class="form-label fw-semibold small">Observaciones</label><input id="cv_obs" class="form-control" maxlength="255"></div>
+                        <div class="col-12 d-flex gap-4">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="cv_base"><label class="form-check-label small" for="cv_base">Es conversión hacia la unidad base</label></div>
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="cv_activa" checked><label class="form-check-label small" for="cv_activa">Activa</label></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-dark fw-semibold px-4">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const TIPOS = { PESO: ['bg-primary-subtle', 'text-primary'], VOLUMEN: ['bg-info-subtle', 'text-info'], LONGITUD: ['bg-secondary-subtle', 'text-secondary'], UNIDAD: ['bg-success-subtle', 'text-success'], EMPAQUE: ['bg-warning-subtle', 'text-warning'] };
+        let UNIDADES = [], CONVERSIONES = [];
+        const modalUnidad = () => bootstrap.Modal.getOrCreateInstance(document.getElementById('modalUnidad'));
+        const modalConv = () => bootstrap.Modal.getOrCreateInstance(document.getElementById('modalConversion'));
+
+        const cargarUnidadesOpts = () => {
+            const opts = UNIDADES.map(u => `<option value="${u.id}">${u.nombre} (${u.abreviatura})</option>`).join('');
+            document.getElementById('cv_origen').innerHTML = opts;
+            document.getElementById('cv_destino').innerHTML = opts;
+            const prods = <%- JSON.stringify(productos || []) %>;
+            document.getElementById('cv_producto').innerHTML =
+                '<option value="">🌐 Global (todos los productos)</option>' +
+                prods.map(p => `<option value="${p.id}">${p.nombre} (${p.codigo})</option>`).join('');
+        };
+
+        async function cargarTodo() {
+            Swal.fire({ title: 'Cargando unidades…', allowOutsideClick: false, didOpen: () => Swal.showLoading(), showConfirmButton: false });
+            try {
+                const [rU, rC] = await Promise.all([
+                    fetch('/admin/api/unidades-medida').then(r => r.json()),
+                    fetch('/admin/api/conversiones-unidades').then(r => r.json())
+                ]);
+                UNIDADES = rU.unidades || [];
+                CONVERSIONES = rC.conversiones || [];
+                pintarUnidades(); pintarConversiones(); cargarUnidadesOpts();
+                document.getElementById('cardUnidades').textContent = UNIDADES.filter(u => u.activa == 1).length;
+                document.getElementById('cardGlobales').textContent = CONVERSIONES.filter(c => !c.producto_id && c.activa == 1).length;
+                document.getElementById('cardProducto').textContent = CONVERSIONES.filter(c => c.producto_id && c.activa == 1).length;
+            } catch (e) {
+                Swal.fire('Error', 'No se pudo cargar la configuración de unidades.', 'error');
+            } finally { Swal.close(); }
+        }
+
+        function pintarUnidades() {
+            const tb = document.getElementById('tbodyUnidades');
+            if (!UNIDADES.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin unidades.</td></tr>'; return; }
+            tb.innerHTML = UNIDADES.map(u => {
+                const [bg, tx] = TIPOS[u.tipo] || ['bg-light', 'text-dark'];
+                return `<tr>
+                    <td class="fw-bold font-monospace">${u.codigo}</td>
+                    <td>${u.nombre}</td>
+                    <td>${u.abreviatura}</td>
+                    <td class="text-center"><span class="badge ${bg} ${tx}">${u.tipo}</span></td>
+                    <td class="text-center">${u.permite_decimales == 1 ? '<i class="fa-solid fa-check text-success"></i>' : '<i class="fa-solid fa-xmark text-muted"></i>'}</td>
+                    <td class="text-center">${u.activa == 1 ? '<span class="badge text-bg-success">Activa</span>' : '<span class="badge text-bg-secondary">Inactiva</span>'}</td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-light border btn-unidad-action" data-action="editar-unidad" data-id="${u.id}" title="Editar"><i class="fa-solid fa-pen text-secondary"></i></button>
+                        <button type="button" class="btn btn-sm btn-light border btn-unidad-action" data-action="toggle-unidad" data-id="${u.id}" data-activa="${u.activa == 1 ? 0 : 1}" title="${u.activa == 1 ? 'Desactivar' : 'Activar'}"><i class="fa-solid fa-power-off ${u.activa == 1 ? 'text-warning' : 'text-success'}"></i></button>
+                        <button type="button" class="btn btn-sm btn-light border btn-unidad-action" data-action="borrar-unidad" data-id="${u.id}" title="Eliminar"><i class="fa-solid fa-trash text-danger"></i></button>
+                    </td></tr>`;
+            }).join('');
+        }
+
+        function pintarConversiones() {
+            const tb = document.getElementById('tbodyConversiones');
+            if (!CONVERSIONES.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin factores definidos.</td></tr>'; return; }
+            tb.innerHTML = CONVERSIONES.map(c => `<tr>
+                <td>${c.producto_id ? `<span class="badge text-bg-warning text-dark">Producto</span> <small class="text-muted">${c.producto_nombre || ''}</small>` : '<span class="badge text-bg-success">Global</span>'}</td>
+                <td class="fw-semibold">1 ${c.origen_abrev} = <span class="text-primary">${parseFloat(c.factor).toLocaleString('es-ES')} ${c.destino_abrev}</span></td>
+                <td class="text-end font-monospace">${parseFloat(c.factor)}</td>
+                <td class="text-center">${c.es_conversion_base == 1 ? '<i class="fa-solid fa-anchor text-secondary" title="Hacia unidad base"></i>' : ''}</td>
+                <td class="text-center">${c.activa == 1 ? '<span class="badge text-bg-success">Activa</span>' : '<span class="badge text-bg-secondary">Inactiva</span>'}</td>
+                <td class="text-muted small">${c.observaciones || ''}</td>
+                <td class="text-end">
+                    <button type="button" class="btn btn-sm btn-light border btn-conversion-action" data-action="editar-conversion" data-id="${c.id}" title="Editar"><i class="fa-solid fa-pen text-secondary"></i></button>
+                    <button type="button" class="btn btn-sm btn-light border btn-conversion-action" data-action="borrar-conversion" data-id="${c.id}" title="Eliminar"><i class="fa-solid fa-trash text-danger"></i></button>
+                </td></tr>`).join('');
+        }
+
+        function editarUnidad(id) {
+            const u = UNIDADES.find(x => Number(x.id) === Number(id)); if (!u) return;
+            document.getElementById('um_titulo').textContent = 'Editar Unidad';
+            document.getElementById('um_id').value = u.id;
+            document.getElementById('um_codigo').value = u.codigo;
+            document.getElementById('um_abrev').value = u.abreviatura;
+            document.getElementById('um_nombre').value = u.nombre;
+            document.getElementById('um_tipo').value = u.tipo;
+            document.getElementById('um_decimales').checked = u.permite_decimales == 1;
+            document.getElementById('um_activa').checked = u.activa == 1;
+            modalUnidad().show();
+        }
+
+        function editarConversion(id) {
+            const c = CONVERSIONES.find(x => Number(x.id) === Number(id)); if (!c) return;
+            document.getElementById('cv_titulo').textContent = 'Editar Conversión';
+            document.getElementById('cv_id').value = c.id;
+            document.getElementById('cv_producto').value = c.producto_id || '';
+            document.getElementById('cv_origen').value = c.unidad_origen_id;
+            document.getElementById('cv_destino').value = c.unidad_destino_id;
+            document.getElementById('cv_factor').value = parseFloat(c.factor);
+            document.getElementById('cv_base').checked = c.es_conversion_base == 1;
+            document.getElementById('cv_activa').checked = c.activa == 1;
+            document.getElementById('cv_obs').value = c.observaciones || '';
+            modalConv().show();
+        }
+
+        async function toggleUnidad(id, activa) {
+            await api(`/admin/api/unidades-medida/${id}`, 'PUT', { activa });
+        }
+        async function borrarUnidad(id) {
+            const c = await Swal.fire({ icon: 'warning', title: '¿Eliminar unidad?', text: 'Si está en uso se desactivará en lugar de borrarse.', showCancelButton: true, confirmButtonText: 'Eliminar', confirmButtonColor: '#d33' });
+            if (!c.isConfirmed) return;
+            await api(`/admin/api/unidades-medida/${id}`, 'DELETE');
+        }
+        async function borrarConversion(id) {
+            const c = await Swal.fire({ icon: 'warning', title: '¿Eliminar factor de conversión?', showCancelButton: true, confirmButtonText: 'Eliminar', confirmButtonColor: '#d33' });
+            if (!c.isConfirmed) return;
+            await api(`/admin/api/conversiones-unidades/${id}`, 'DELETE');
+        }
+
+        async function api(url, method, body) {
+            Swal.fire({ title: 'Guardando…', allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+            try {
+                const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+                const d = await r.json();
+                if (!d.success) return Swal.fire('Error', d.message, 'error');
+                await cargarTodo();
+                Swal.fire({ icon: 'success', title: '¡Listo!', text: d.message, timer: 1600, showConfirmButton: false });
+            } catch (e) {
+                Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
+            }
+        }
+
+        document.getElementById('btnNuevaUnidad').addEventListener('click', () => {
+            document.getElementById('formUnidad').reset();
+            document.getElementById('um_id').value = '';
+            document.getElementById('um_titulo').textContent = 'Nueva Unidad';
+            document.getElementById('um_decimales').checked = true;
+            document.getElementById('um_activa').checked = true;
+            modalUnidad().show();
+        });
+        document.getElementById('btnNuevaConversion').addEventListener('click', () => {
+            document.getElementById('formConversion').reset();
+            document.getElementById('cv_id').value = '';
+            document.getElementById('cv_titulo').textContent = 'Nueva Conversión';
+            document.getElementById('cv_activa').checked = true;
+            cargarUnidadesOpts();
+            modalConv().show();
+        });
+
+        document.getElementById('formUnidad').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('um_id').value;
+            const body = {
+                codigo: document.getElementById('um_codigo').value,
+                abreviatura: document.getElementById('um_abrev').value,
+                nombre: document.getElementById('um_nombre').value,
+                tipo: document.getElementById('um_tipo').value,
+                permite_decimales: document.getElementById('um_decimales').checked ? 1 : 0,
+                activa: document.getElementById('um_activa').checked ? 1 : 0
+            };
+            modalUnidad().hide();
+            await api(id ? `/admin/api/unidades-medida/${id}` : '/admin/api/unidades-medida', id ? 'PUT' : 'POST', body);
+        });
+
+        document.getElementById('formConversion').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('cv_id').value;
+            const o = document.getElementById('cv_origen').value, d = document.getElementById('cv_destino').value;
+            if (o === d) return Swal.fire('Atención', 'Origen y destino no pueden ser la misma unidad.', 'warning');
+            const body = {
+                producto_id: document.getElementById('cv_producto').value || null,
+                unidad_origen_id: o,
+                unidad_destino_id: d,
+                factor: document.getElementById('cv_factor').value,
+                es_conversion_base: document.getElementById('cv_base').checked ? 1 : 0,
+                activa: document.getElementById('cv_activa').checked ? 1 : 0,
+                observaciones: document.getElementById('cv_obs').value
+            };
+            modalConv().hide();
+            await api(id ? `/admin/api/conversiones-unidades/${id}` : '/admin/api/conversiones-unidades', id ? 'PUT' : 'POST', body);
+        });
+
+        // La política CSP del servidor bloquea los handlers inline
+        // (onclick/onchange). Los botones dinámicos se atienden aquí mediante
+        // delegación de eventos, por lo que funcionan tanto tras la carga
+        // inicial como después de refrescar el listado.
+        document.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-action]');
+            if (!button) return;
+            const id = Number(button.dataset.id);
+            if (!Number.isInteger(id) || id <= 0) return;
+
+            switch (button.dataset.action) {
+                case 'editar-unidad':
+                    editarUnidad(id);
+                    break;
+                case 'toggle-unidad':
+                    toggleUnidad(id, Number(button.dataset.activa) === 1);
+                    break;
+                case 'borrar-unidad':
+                    borrarUnidad(id);
+                    break;
+                case 'editar-conversion':
+                    editarConversion(id);
+                    break;
+                case 'borrar-conversion':
+                    borrarConversion(id);
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        cargarTodo();
+    </script>
+</body>
+</html>

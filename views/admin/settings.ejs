@@ -50,6 +50,9 @@
                                     <li class="nav-item">
                                         <button class="nav-link fw-semibold" id="opciones-sistema-tab" data-bs-toggle="tab" data-bs-target="#opciones-sistema" type="button" role="tab"><i class="fa-solid fa-cogs me-1"></i> Opciones Generales</button>
                                     </li>
+                                    <li class="nav-item">
+                                        <button class="nav-link fw-semibold" id="respaldo-tab" data-bs-toggle="tab" data-bs-target="#respaldo" type="button" role="tab"><i class="fa-solid fa-database me-1"></i> Respaldos y Auditoría</button>
+                                    </li>
                                 </ul>
                             </div>
                             
@@ -98,7 +101,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody id="tbodyCategorias">
-                                                <% if (categorias && categorias.length > 0) { %>
+                                                <% if (typeof categorias !== 'undefined' && categorias && categorias.length > 0) { %>
                                                     <% categorias.forEach(cat => { %>
                                                         <tr id="cat-row-<%= cat.id %>">
                                                             <td class="ps-3 fw-bold">
@@ -114,10 +117,10 @@
                                                             </td>
                                                             <td>
                                                                 <span class="badge bg-secondary-subtle text-dark border">
-                                                                    <i class="fa-solid fa-warehouse me-1"></i><%= cat.almacen_nombre %>
+                                                                    <i class="fa-solid fa-warehouse me-1"></i><%= cat.almacen_nombre || 'Sin almacén asignado' %>
                                                                 </span>
                                                             </td>
-                                                            <td class="text-center"><%= cat.total_platillos %></td>
+                                                            <td class="text-center"><%= cat.total_platillos || 0 %></td>
                                                             <td class="text-center">
                                                                 <% if (cat.activo) { %>
                                                                     <span class="badge bg-success-subtle text-success border border-success">Activa</span>
@@ -195,37 +198,133 @@
                                 <div class="tab-pane fade" id="inventario" role="tabpanel">
                                     <div class="row">
                                         <div class="col-12">
-                                            <label class="form-label fw-bold small text-secondary">
-                                                <%= settings.inventario_unidades ? settings.inventario_unidades.nombre : 'Unidades de Medida Permitidas (Stock)' %>
-                                            </label>
-                                            <textarea id="cfg_inventario_unidades" class="form-control" rows="3" placeholder="Ej: Uds, Kg, Lts, Oz, Porciones"><%= settings.inventario_unidades ? settings.inventario_unidades.valor : 'Uds, Kg, Lts, Oz' %></textarea>
-                                            <div class="form-text text-muted fs-7">Separa las siglas o nombres con comas ( , ).</div>
+                                            <label class="form-label fw-bold small text-secondary">Unidades de Medida y Factores de Conversión</label>
+                                            <div class="border rounded p-3 bg-light d-flex align-items-center justify-content-between gap-2">
+                                                <div>
+                                                    <div class="fw-semibold small text-dark">Gestión completa de unidades (código, tipo, decimales, estado)</div>
+                                                    <div class="form-text text-muted fs-7 mb-0">y factores de conversión automáticos para POS, recetas y transferencias.</div>
+                                                </div>
+                                                <a href="/admin/unidades-medida" class="btn btn-sm btn-dark fw-semibold text-nowrap">
+                                                    <i class="fa-solid fa-scale-balanced me-1"></i> Gestionar
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- PESTAÑA 6: OPCIONES GENERALES -->
                                 <div class="tab-pane fade" id="opciones-sistema" role="tabpanel">
-                                    <div class="row">
-                                        <div class="col-12 col-md-8">
+                                    <div class="row g-3">
+                                        
+                                        <!-- Opción 1: Habilitar Monitores de Elaboración en el Servicio -->
+                                        <% 
+                                            const monElabActivo = settings.habilitar_monitores_elaboracion && (settings.habilitar_monitores_elaboracion.valor === '1' || settings.habilitar_monitores_elaboracion.valor === true || settings.habilitar_monitores_elaboracion === true || settings.habilitar_monitores_elaboracion === '1');
+                                        %>
+                                        <div class="col-12 col-md-10">
+                                            <div class="p-3 border rounded shadow-sm bg-light d-flex align-items-center justify-content-between mb-2">
+                                                <div>
+                                                    <h6 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                                                        <i class="fa-solid fa-tv text-primary"></i>
+                                                        <%= settings.habilitar_monitores_elaboracion ? settings.habilitar_monitores_elaboracion.nombre : 'Habilitar monitores de elaboración en el Servicio' %>
+                                                    </h6>
+                                                    <small class="text-muted d-block">
+                                                        Al habilitar esta opción, los pedidos ingresan a las pantallas de Cocina y Bar para su control de tiempos y preparación digital. Al deshabilitarla (Modo Servicio Directo), el dependiente puede marcar los ítems como entregados directamente desde el TPV sin pasar por monitores de cocina.
+                                                    </small>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-3 ms-3">
+                                                    <span id="lbl_status_monitores" class="badge <%= monElabActivo ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning-emphasis border border-warning' %> px-2.5 py-1.5 font-bold">
+                                                        <%= monElabActivo ? 'Habilitado (Digital)' : 'Deshabilitado (Servicio Directo)' %>
+                                                    </span>
+                                                    <div class="form-check form-switch m-0 fs-4">
+                                                        <input class="form-check-input role-switch" type="checkbox" id="cfg_habilitar_monitores_elaboracion" role="switch"
+                                                               <%= monElabActivo ? 'checked' : '' %>>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Opción 2: Permitir Pre-pedidos a Clientes -->
+                                        <% 
+                                            const prepedidoActivo = settings.cliente_permite_prepedido && (settings.cliente_permite_prepedido.valor === '1' || settings.cliente_permite_prepedido.valor === true || settings.cliente_permite_prepedido === true || settings.cliente_permite_prepedido === '1');
+                                        %>
+                                        <div class="col-12 col-md-10">
                                             <div class="p-3 border rounded shadow-sm bg-light d-flex align-items-center justify-content-between">
                                                 <div>
-                                                    <h6 class="fw-bold mb-1 text-dark">
+                                                    <h6 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                                                        <i class="fa-solid fa-mobile-screen-button text-info"></i>
                                                         <%= settings.cliente_permite_prepedido ? settings.cliente_permite_prepedido.nombre : 'Permitir Pre-pedidos a Clientes' %>
                                                     </h6>
                                                     <small class="text-muted d-block">
-                                                        El cliente puede agregar prepedido a su orden en el menú de platillos.
+                                                        El cliente puede agregar pre-pedidos a su orden desde el menú público de platillos mediante código QR.
                                                     </small>
                                                 </div>
-                                                <div class="d-flex align-items-center gap-3">
-                                                    <span id="lbl_status_prepedido" class="badge <%= (settings.cliente_permite_prepedido && settings.cliente_permite_prepedido.valor === '1') ? 'bg-success-subtle text-success border border-success' : 'bg-danger-subtle text-danger border border-danger' %> px-2 py-1">
-                                                        <%= (settings.cliente_permite_prepedido && settings.cliente_permite_prepedido.valor === '1') ? 'Habilitado' : 'Deshabilitado' %>
+                                                <div class="d-flex align-items-center gap-3 ms-3">
+                                                    <span id="lbl_status_prepedido" class="badge <%= prepedidoActivo ? 'bg-success-subtle text-success border border-success' : 'bg-danger-subtle text-danger border border-danger' %> px-2.5 py-1.5 font-bold">
+                                                        <%= prepedidoActivo ? 'Habilitado' : 'Deshabilitado' %>
                                                     </span>
                                                     <div class="form-check form-switch m-0 fs-4">
                                                         <input class="form-check-input role-switch" type="checkbox" id="cfg_cliente_permite_prepedido" role="switch"
-                                                               <%= (settings.cliente_permite_prepedido && settings.cliente_permite_prepedido.valor === '1') ? 'checked' : '' %>>
+                                                               <%= prepedidoActivo ? 'checked' : '' %>>
                                                     </div>
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+
+                                <!-- PESTAÑA 7: RESPALDO, RESTAURACIÓN Y AUDITORÍA -->
+                                <div class="tab-pane fade" id="respaldo" role="tabpanel">
+                                    <div class="row g-4">
+                                        <div class="col-12 col-xl-6">
+                                            <div class="card h-100 border-0 bg-light shadow-sm">
+                                                <div class="card-body p-4">
+                                                    <div class="d-flex align-items-start gap-3">
+                                                        <div class="rounded-circle bg-primary-subtle text-primary p-3 flex-shrink-0">
+                                                            <i class="fa-solid fa-download fs-4"></i>
+                                                        </div>
+                                                        <div>
+                                                            <h5 class="fw-bold text-dark mb-1">Salvar la base de datos</h5>
+                                                            <p class="text-secondary small mb-3">Genera y descarga un archivo SQL con la información de <strong>restaurante_db</strong>. La operación queda registrada en auditoría.</p>
+                                                            <a href="/admin/configuracion/backup" class="btn btn-primary fw-semibold" id="btnDescargarBackup">
+                                                                <i class="fa-solid fa-database me-2"></i>Descargar salva SQL
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-xl-6">
+                                            <div class="card h-100 border-0 bg-warning-subtle shadow-sm">
+                                                <div class="card-body p-4">
+                                                    <div class="d-flex align-items-start gap-3">
+                                                        <div class="rounded-circle bg-warning text-dark p-3 flex-shrink-0">
+                                                            <i class="fa-solid fa-upload fs-4"></i>
+                                                        </div>
+                                                        <div class="w-100">
+                                                            <h5 class="fw-bold text-dark mb-1">Restaurar datos</h5>
+                                                            <p class="text-secondary small">La restauración reemplaza la información actual por la del archivo seleccionado. Realice una salva antes de continuar.</p>
+                                                            <form id="formRestaurarBD" enctype="multipart/form-data">
+                                                                <label for="archivoBackup" class="form-label small fw-bold text-secondary">Archivo de salva (.sql o .txt)</label>
+                                                                <input type="file" id="archivoBackup" name="backup" class="form-control form-control-sm mb-3" accept=".sql,.txt,text/plain,application/sql" required>
+                                                                <button type="submit" class="btn btn-warning text-dark fw-bold" id="btnRestaurarBD">
+                                                                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Restaurar base de datos
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 p-3 border rounded bg-white">
+                                                <div>
+                                                    <h6 class="fw-bold mb-1"><i class="fa-solid fa-shield-halved text-success me-2"></i>Registro de auditoría</h6>
+                                                    <small class="text-muted">Consulta quién realizó cada operación, cuándo, desde qué IP y el resultado obtenido.</small>
+                                                </div>
+                                                <a href="/admin/auditoria" class="btn btn-outline-dark btn-sm fw-semibold" id="btnVerAuditoria">
+                                                    <i class="fa-solid fa-list-check me-1"></i>Ver operaciones registradas
+                                                </a>
                                             </div>
                                         </div>
                                     </div>
@@ -234,7 +333,7 @@
                             </div>
                             
                             <div class="card-footer bg-light p-3 d-flex justify-content-end border-top">
-                                <button type="button" id="btnGuardarConfig" class="btn btn-primary px-5 shadow-sm">
+                                <button type="button" id="btnGuardarConfig" class="btn btn-primary px-5 shadow-sm font-bold">
                                     <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Ajustes del Sistema
                                 </button>
                             </div>
@@ -278,7 +377,7 @@
                             <label class="form-label fw-semibold">Almacén de Despacho (Insumos/Receta)</label>
                             <select class="form-select" id="cat_almacen_id" name="almacen_id">
                                 <option value="">-- Sin almacén asignado --</option>
-                                <% if (almacenes && almacenes.length > 0) { %>
+                                <% if (typeof almacenes !== 'undefined' && almacenes && almacenes.length > 0) { %>
                                     <% almacenes.forEach(alm => { %>
                                         <option value="<%= alm.id %>"><%= alm.nombre %></option>
                                     <% }) %>
@@ -324,10 +423,10 @@
                 if (data.success) {
                     if (isChecked) {
                         badgeLabel.textContent = 'Habilitado';
-                        badgeLabel.className = 'badge bg-success-subtle text-success border border-success px-2 py-1';
+                        badgeLabel.className = 'badge bg-success-subtle text-success border border-success px-2.5 py-1.5 font-bold';
                     } else {
                         badgeLabel.textContent = 'Deshabilitado';
-                        badgeLabel.className = 'badge bg-danger-subtle text-danger border border-danger px-2 py-1';
+                        badgeLabel.className = 'badge bg-danger-subtle text-danger border border-danger px-2.5 py-1.5 font-bold';
                     }
                     Swal.fire({
                         icon: 'success',
@@ -347,6 +446,50 @@
             });
         });
 
+        // Manejo asíncrono e inmediato de la opción de monitores de elaboración
+        document.getElementById('cfg_habilitar_monitores_elaboracion').addEventListener('change', function() {
+            const isChecked = this.checked;
+            const nuevoValor = isChecked ? '1' : '0';
+            const badgeLabel = document.getElementById('lbl_status_monitores');
+
+            fetch('/admin/configuracion/opcion-rapida', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clave: 'habilitar_monitores_elaboracion',
+                    valor: nuevoValor
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (isChecked) {
+                        badgeLabel.textContent = 'Habilitado (Digital)';
+                        badgeLabel.className = 'badge bg-success-subtle text-success border border-success px-2.5 py-1.5 font-bold';
+                    } else {
+                        badgeLabel.textContent = 'Deshabilitado (Servicio Directo)';
+                        badgeLabel.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning px-2.5 py-1.5 font-bold';
+                    }
+                    Swal.fire({
+                        icon: 'success',
+                        title: isChecked ? '¡Monitores Digitales Activados!' : '¡Modo Servicio Directo Activado!',
+                        text: isChecked 
+                            ? 'Los pedidos se enviarán a las pantallas de Cocina y Bar para su elaboración.' 
+                            : 'El flujo operará directamente en POS sin pasar por monitores de cocina.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    this.checked = !isChecked; // Revertir en caso de error
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(() => {
+                this.checked = !isChecked;
+                Swal.fire('Error', 'No se pudo conectar con el servidor para actualizar la opción.', 'error');
+            });
+        });
+
         const modalCategoriaBs = new bootstrap.Modal(document.getElementById('modalCategoria'));
 
         // Guardar ajustes generales del sistema
@@ -356,9 +499,16 @@
                 app_moneda: document.getElementById('cfg_app_moneda').value,
                 salon_areas: document.getElementById('cfg_salon_areas').value,
                 factura_impuesto: document.getElementById('cfg_factura_impuesto').value,
-                factura_propina: document.getElementById('cfg_factura_propina').value,
-                inventario_unidades: document.getElementById('cfg_inventario_unidades').value
+                factura_propina: document.getElementById('cfg_factura_propina').value
             };
+
+            Swal.fire({
+                title: 'Guardando configuración...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
 
             fetch('/admin/configuracion/guardar', {
                 method: 'POST',
@@ -375,6 +525,52 @@
             })
             .catch(() => Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error'));
         });
+
+        // Salvar es una descarga directa; restaurar requiere confirmación
+        // explícita porque reemplaza el contenido actual de la base de datos.
+        const formRestaurarBD = document.getElementById('formRestaurarBD');
+        const btnRestaurarBD = document.getElementById('btnRestaurarBD');
+        if (formRestaurarBD) {
+            formRestaurarBD.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const archivo = document.getElementById('archivoBackup')?.files?.[0];
+                if (!archivo) return;
+
+                const confirmacion = await Swal.fire({
+                    icon: 'warning',
+                    title: '¿Restaurar la base de datos?',
+                    html: '<p class="mb-2">Esta acción reemplazará los datos actuales por los del archivo seleccionado.</p><strong>Se recomienda descargar una salva antes de continuar.</strong>',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, restaurar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#dc2626',
+                    cancelButtonColor: '#64748b'
+                });
+                if (!confirmacion.isConfirmed) return;
+
+                const originalText = btnRestaurarBD.innerHTML;
+                btnRestaurarBD.disabled = true;
+                btnRestaurarBD.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Restaurando...';
+                Swal.fire({ title: 'Restaurando datos...', text: 'No cierre esta ventana.', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+
+                try {
+                    const response = await fetch('/admin/configuracion/restore', {
+                        method: 'POST',
+                        body: new FormData(formRestaurarBD)
+                    });
+                    const data = await response.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor.' }));
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'No se pudo restaurar el archivo.');
+                    }
+                    await Swal.fire({ icon: 'success', title: 'Restauración completada', text: data.message, confirmButtonText: 'Aceptar' });
+                    window.location.reload();
+                } catch (error) {
+                    Swal.fire('Error de restauración', error.message, 'error');
+                    btnRestaurarBD.disabled = false;
+                    btnRestaurarBD.innerHTML = originalText;
+                }
+            });
+        }
 
         // --- MANEJO DE EVENTOS RESPETANDO CSP ---
 
@@ -410,16 +606,17 @@
             fetch('/admin/api/categorias-platillos')
                 .then(r => r.json())
                 .then(res => {
-                    if(!res.success) return;
+                    if(!res.success && !Array.isArray(res.data) && !Array.isArray(res)) return;
+                    const items = res.data || (Array.isArray(res) ? res : []);
                     const tbody = document.getElementById('tbodyCategorias');
                     tbody.innerHTML = '';
 
-                    if(res.data.length === 0) {
+                    if(items.length === 0) {
                         tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">No hay categorías de menú registradas.</td></tr>`;
                         return;
                     }
 
-                    res.data.forEach(cat => {
+                    items.forEach(cat => {
                         const tr = document.createElement('tr');
                         tr.id = `cat-row-${cat.id}`;
                         tr.innerHTML = `
@@ -437,7 +634,7 @@
                                     <i class="fa-solid fa-warehouse me-1"></i>${cat.almacen_nombre || 'Sin almacén'}
                                 </span>
                             </td>
-                            <td class="text-center">${cat.total_platillos}</td>
+                            <td class="text-center">${cat.total_platillos || 0}</td>
                             <td class="text-center">
                                 ${cat.activo 
                                     ? '<span class="badge bg-success-subtle text-success border border-success">Activa</span>' 
@@ -487,6 +684,14 @@
                 descripcion: document.getElementById('cat_descripcion').value,
                 almacen_id: document.getElementById('cat_almacen_id').value
             };
+
+            Swal.fire({
+                title: 'Guardando categoría...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
 
             fetch('/admin/api/categorias-platillos/guardar', {
                 method: 'POST',

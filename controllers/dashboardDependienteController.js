@@ -2,6 +2,21 @@
 const db = require('../config/db');
 const turnoService = require('../services/turnoService');
 
+function obtenerBasePublica(req) {
+    const protocolo = process.env.PUBLIC_PROTOCOL || (process.env.SERVER_HTTP === '1' ? 'http' : 'https');
+    const puerto = process.env.PUBLIC_PORT || process.env.PORT || '3000';
+    const configurado = String(process.env.SERVER_IP || '').trim();
+
+    if (/^https?:\/\//i.test(configurado)) {
+        return configurado.replace(/\/$/, '');
+    }
+
+    const hostHeader = typeof req.get === 'function' ? req.get('host') : null;
+    const host = configurado || hostHeader || req.hostname || 'localhost';
+    const hostTienePuerto = /^\[[^\]]+\]:\d+$/.test(host) || /:\d+$/.test(host);
+    return `${protocolo}://${host}${hostTienePuerto ? '' : `:${puerto}`}`;
+}
+
 const DashboardDependienteController = {
 
     viewDependienteDashboard: async (req, res) => {
@@ -22,15 +37,17 @@ const DashboardDependienteController = {
             let paramsMesas = [];
 
             if (usuarioRol === 'dependiente') {
-                // Filtramos ÚNICAMENTE por las asignaciones de hoy (CURDATE()) en asignaciones_diarias
+                // La asignación persiste durante TODO el turno activo (aunque cruce la medianoche),
+                // no durante el día natural. Se toma la fila vigente (máxima) por ubicación del turno.
                 queryMesas = `
                     SELECT 
                         m.id,
                         m.numero,
-                        CONCAT('Mesa ', m.numero) AS nombre,
+                        m.numero AS nombre,
                         m.capacidad,
-                        m.estado AS estado_mesa,
+                        m.estado,
                         m.ubicacion,
+                        m.carta,
                         p.id AS id_pedido_activo,
                         p.estado_pedido,
                         p.estado_pago,
@@ -45,24 +62,30 @@ const DashboardDependienteController = {
                         ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ?
                         AND p.estado_pago = 'pendiente'
-                        AND p.estado_pedido NOT IN ('cancelado', 'entregado_pagado')
+                        AND p.estado_pedido NOT IN ('cancelado', 'entregado')
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                     WHERE dam.dependiente_id = ?
-                      AND ad.fecha = CURDATE()
+                      AND ad.turno_id = ?
+                      AND ad.id IN (
+                          SELECT MAX(a2.id) FROM asignaciones_diarias a2
+                          WHERE a2.turno_id = ?
+                          GROUP BY a2.ubicacion
+                      )
                     GROUP BY m.id
                     ORDER BY CAST(m.numero AS UNSIGNED) ASC
                 `;
-                paramsMesas = [turnoId, usuarioId];
+                paramsMesas = [turnoId, usuarioId, turnoId, turnoId];
             } else {
                 // Admin, Capitán o Supervisor (Muestra todas las mesas del salón sin duplicados)
                 queryMesas = `
                     SELECT 
                         m.id,
                         m.numero,
-                        CONCAT('Mesa ', m.numero) AS nombre,
+                        m.numero AS nombre,
                         m.capacidad,
-                        m.estado AS estado_mesa,
+                        m.estado,
                         m.ubicacion,
+                        m.carta,
                         p.id AS id_pedido_activo,
                         p.estado_pedido,
                         p.estado_pago,
@@ -75,7 +98,7 @@ const DashboardDependienteController = {
                         ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ?
                         AND p.estado_pago = 'pendiente'
-                        AND p.estado_pedido NOT IN ('cancelado', 'entregado_pagado')
+                        AND p.estado_pedido NOT IN ('cancelado', 'entregado')
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                     GROUP BY m.id
                     ORDER BY CAST(m.numero AS UNSIGNED) ASC
@@ -94,6 +117,7 @@ const DashboardDependienteController = {
                 turnoActivo,
                 user: req.user || { nombre: 'Dependiente', rol: 'dependiente' },
                 pageTitle: 'Dashboard - Dependiente | Restaurante Bahía',
+                clientDashboardBaseUrl: `${obtenerBasePublica(req)}/cliente/dashboard/`,
                 view: 'dashboard',
                 success_msg: req.flash('success_msg'),
                 error_msg: req.flash('error_msg')
@@ -134,9 +158,14 @@ const DashboardDependienteController = {
                         AND p.turno_servicio_id = ? 
                         AND p.estado_pago = 'pendiente'
                     WHERE dam.dependiente_id = ?
-                      AND ad.fecha = CURDATE()
+                      AND ad.turno_id = ?
+                      AND ad.id IN (
+                          SELECT MAX(a2.id) FROM asignaciones_diarias a2
+                          WHERE a2.turno_id = ?
+                          GROUP BY a2.ubicacion
+                      )
                 `;
-                paramsStats = [turnoId, usuarioId, turnoId, usuarioId];
+                paramsStats = [turnoId, usuarioId, turnoId, usuarioId, turnoId, turnoId];
             } else {
                 // Stats globales para administración
                 queryStats = `
@@ -149,7 +178,7 @@ const DashboardDependienteController = {
                             SELECT COALESCE(ROUND(SUM(p2.total), 2), 0) 
                             FROM pedidos p2 
                             WHERE p2.turno_servicio_id = ? 
-                              AND p2.estado_pago = 'pendiente'
+                              AND p2.estado_pago IN ('pagado', 'cortesia', 'facturado')
                         ) AS ventas_del_turno
                     FROM mesas m
                     LEFT JOIN pedidos p ON m.id = p.id_mesa 

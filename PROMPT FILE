@@ -2,3 +2,14 @@ Hay unos detalles con el comportamiento de la vista de cobro que haz de modifica
 1. Los mensajes de error en el modal deben de desaparecer pasados unos segundos.
 2. Necesitamos recoger los enxcedentes en el pago como propinas y llevar un registro de las propinas por mesas y por turno para el cuadre al final del dia (esta informacion por supuesto se analizara en caja no en el cobro de la cuenta de una orden). En el vale o ventana de cobro pone "Total a pagar" y "Restante" pero en esa misma cabecera debe de mostrase "Excedente" que es la propina. Opinion al respecto e ideas que puedas tener. 
 3. Revisa el funcionamiento del modulo de inventario, lotes y almacenes para determinar si esta operacional. El el modulo de POS cuando se hace una venta en el restaurante, se debe de verificar el producto en cuanto a si posee ficha tecnica o receta para hacer el respectivo movimiento de inventario, ten en cuenta que los productos marcados como opcionales no impediran que salga un platillo en caso de que no tengan stock. De hecho necesito un script para marcar todos los ingredientes actuales de una receta como opcional. 
+4. En la vista de pletillos de menu (menu.ejs) y de catalogo de productos del almacen (productos.ejs) hay doas modificaciones que son pertinentes para una mejor navegacion del usuario. 
+1. Cuando el usuario haga scroll hacia abajo, el buscador debe de permanecer visible arriba y al centro para hacer una busqueda rapida quizas a mitad del scrolling. 
+2. Cuando se haga scroll hacia abajo debe de aparecer un boton en la parte inferior derecha del listado de platillos/productos para hacer un smooth scrolling hasta el inicio de la pagina cuando se clickee.
+
+Veo que estableciste en ambas vistas enlaces a los cdn de bootstrap y fontawesome te comparto mi carpeta public para que establezcas localmente el enlace a los recursos como estaba en mis archivos originales
+
+En la vista de recetas tecnicas de platillo del menu, cuando se selecciona eliminar definitivamente no la esta borrando de la BD. Solamente la esta desactivando. Vas a utilizar estos archivos para depurar, ya que son los archivos reales del proyecto.
+
+Cuando se selecciona pago por ZELLE en la mesa, al momento de cobrar debe de comprobarse que la moneda seleccionada para el pago sea la que coincida con 'ZELLE' en BD porque puede pasar por otra de no chequearse. 
+
+

@@ -189,7 +189,7 @@
             <tbody>
                 <% if (locals.detalles && detalles.length > 0) { %>
                     <% detalles.forEach(item => { %>
-                        <% const subtotalItem = item.precio * item.cantidad; %>
+                        <% const subtotalItem = item.precio_unitario * item.cantidad; %>
                         <tr>
                             <td class="col-cant bold"><%= item.cantidad %></td>
                             <td class="col-desc uppercase"><%= item.nombre %></td>
@@ -208,8 +208,9 @@
 
         <!-- Desglose de Totales -->
         <% 
-            const subtotal = locals.detalles ? detalles.reduce((acc, i) => acc + (i.precio * i.cantidad), 0) : 0;
-            const impuesto = subtotal * 0.10;
+            const subtotal = locals.detalles ? detalles.reduce((acc, i) => acc + (i.precio_unitario * i.cantidad), 0) : 0;
+            const tasaImpuesto = parseFloat(typeof facturaImpuesto !== 'undefined' ? facturaImpuesto : 0) || 0;
+            const impuesto = subtotal * (tasaImpuesto / 100);
             const total = subtotal + impuesto;
         %>
         <div class="totals-container">
@@ -217,10 +218,12 @@
                 <span>SUBTOTAL:</span>
                 <span>$<%= subtotal.toFixed(2) %></span>
             </div>
+            <% if (tasaImpuesto > 0) { %>
             <div class="total-row">
-                <span>PROPINA/TAX (10%):</span>
+                <span>IMPUESTO (<%= tasaImpuesto %>%):</span>
                 <span>$<%= impuesto.toFixed(2) %></span>
             </div>
+            <% } %>
             <div class="divider"></div>
             <div class="total-row grand-total">
                 <span>TOTAL:</span>

@@ -2,7 +2,133 @@
 const db = require('../config/db');
 const turnoService = require('../services/turnoService');
 
+/**
+ * Obtiene los datos financieros del cierre (comandas, desglose de pagos y resumen).
+ * Compartido por la vista de Cierre del Día y su vista de impresión (ticket).
+ */
+async function obtenerDatosCierre(turnoActivo) {
+    const turnoId = turnoActivo.id;
+        // 1. Obtener comandas del turno activo
+        const [pedidos] = await db.query(`
+            SELECT 
+                p.id,
+                p.id_mesa,
+                m.numero AS numero_mesa,
+                CONCAT('Mesa ', m.numero) AS nombre_mesa,
+                p.subtotal,
+                p.descuento,
+                p.impuesto,
+                p.total,
+                p.propina,
+                p.estado_pedido,
+                p.estado_pago,
+                p.creado_en AS fecha_apertura,
+                p.fecha_cierre,
+                CONCAT(u.nombre, ' ', u.apellidos) AS mesero,
+                u_caj.nombre AS cajero
+            FROM pedidos p
+            LEFT JOIN mesas m ON p.id_mesa = m.id
+            LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+            LEFT JOIN usuarios u_caj ON p.id_usuario_cajero = u_caj.id
+            WHERE p.turno_servicio_id = ?
+            ORDER BY p.id DESC
+        `, [turnoId]);
+
+        // 2. Desglose detallado de pagos por Método (Efectivo / Transferencia / Tarjeta) y Moneda
+        const [desglosePagos] = await db.query(`
+            SELECT 
+                LOWER(pp.metodo_pago) AS metodo_pago,
+                COALESCE(m.codigo, 'CUP') AS codigo_moneda,
+                COALESCE(m.nombre, 'Moneda Local') AS nombre_moneda,
+                COALESCE(m.simbolo, '$') AS simbolo,
+                SUM(pp.monto_moneda_origen) AS total_origen,
+                SUM(pp.monto_equivalente_local) AS total_local,
+                COUNT(pp.id) AS total_transacciones
+            FROM pagos_pedido pp
+            INNER JOIN pedidos p ON pp.pedido_id = p.id
+            LEFT JOIN monedas m ON pp.moneda_id = m.id
+            WHERE p.turno_servicio_id = ?
+              AND pp.metodo_pago NOT IN ('factura', 'pendiente')
+            GROUP BY LOWER(pp.metodo_pago), m.codigo, m.nombre, m.simbolo
+            ORDER BY 
+                CASE 
+                    WHEN LOWER(pp.metodo_pago) = 'efectivo' THEN 1
+                    WHEN LOWER(pp.metodo_pago) = 'transferencia' THEN 2
+                    ELSE 3
+                END ASC,
+                total_local DESC
+        `, [turnoId]);
+
+        // 3. Clasificación financiera
+        let total_cobrado_caja = 0;   // Importe neto de las órdenes
+        let total_cxc_facturas = 0;
+        let total_pendiente_pago = 0;
+        let total_cortesias = 0;
+        let total_propinas = 0;        // Excedente / Propinas
+
+        pedidos.forEach(p => {
+            const total = parseFloat(p.total || 0);
+            const propina = parseFloat(p.propina || 0);
+
+            if (p.estado_pago === 'pagado') {
+                total_cobrado_caja += total;
+                total_propinas += propina;
+            } else if (p.estado_pago === 'facturado') {
+                total_cxc_facturas += total;
+            } else if (p.estado_pago === 'pendiente_pago') {
+                total_pendiente_pago += total;
+            } else if (p.estado_pago === 'cortesia') {
+                total_cortesias += parseFloat(p.subtotal || 0);
+            }
+        });
+
+        // Suma total del dinero cobrado en caja (Órdenes + Propinas/Excedente)
+        const total_efectivo_total_caja = total_cobrado_caja + total_propinas;
+        const fondoApertura = parseFloat(turnoActivo.monto_apertura || 0);
+
+        const resumen = {
+            total_cobrado_caja,
+            total_propinas,
+            total_efectivo_total_caja, // <--- TOTAL GENERAL DE CAJA
+            total_cxc_facturas,
+            total_pendiente_pago,
+            total_cortesias,
+            total_pedidos: pedidos.length,
+            fondo_apertura: fondoApertura,
+            total_en_caja_esperado: fondoApertura + total_efectivo_total_caja
+        };
+    return { pedidos, desglosePagos, resumen };
+}
+
+
 const CierreDiaController = {
+    /**
+     * Vista de impresión del Cierre del Día (ticket térmico 48mm,
+     * mismo estilo que la precuenta). GET /admin/cierre-dia/ticket
+     */
+    renderCierreTicket: async (req, res) => {
+        try {
+            const turnoActivo = await turnoService.obtenerTurnoActivo();
+            if (!turnoActivo) {
+                return res.status(404).send('No hay un turno de servicio abierto actualmente.');
+            }
+
+            const { pedidos, desglosePagos, resumen } = await obtenerDatosCierre(turnoActivo);
+
+            res.render('caja/cierre_dia_ticket', {
+                pageTitle: 'Ticket de Cierre del Día',
+                turnoActivo,
+                user: req.user,
+                resumen,
+                pedidosCuentas: pedidos,
+                desgloseMonedas: desglosePagos
+            });
+        } catch (error) {
+            console.error('Error al generar ticket de cierre:', error);
+            res.status(500).send('Error al generar el ticket de cierre');
+        }
+    },
+
     /**
      * Renderiza la vista del Cierre del Día con totales, métricas y comandas del turno
      * GET /admin/cierre-dia
@@ -34,95 +160,7 @@ const CierreDiaController = {
                 });
             }
 
-            // 1. Obtener comandas del turno activo
-            const [pedidos] = await db.query(`
-                SELECT 
-                    p.id,
-                    p.id_mesa,
-                    m.numero AS numero_mesa,
-                    CONCAT('Mesa ', m.numero) AS nombre_mesa,
-                    p.subtotal,
-                    p.descuento,
-                    p.impuesto,
-                    p.total,
-                    p.propina,
-                    p.estado_pedido,
-                    p.estado_pago,
-                    p.creado_en AS fecha_apertura,
-                    p.fecha_cierre,
-                    CONCAT(u.nombre, ' ', u.apellidos) AS mesero,
-                    u_caj.nombre AS cajero
-                FROM pedidos p
-                LEFT JOIN mesas m ON p.id_mesa = m.id
-                LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
-                LEFT JOIN usuarios u_caj ON p.id_usuario_cajero = u_caj.id
-                WHERE p.turno_servicio_id = ?
-                ORDER BY p.id DESC
-            `, [turnoId]);
-
-            // 2. Desglose detallado de pagos por Método (Efectivo / Transferencia / Tarjeta) y Moneda
-            const [desglosePagos] = await db.query(`
-                SELECT 
-                    LOWER(pp.metodo_pago) AS metodo_pago,
-                    COALESCE(m.codigo, 'CUP') AS codigo_moneda,
-                    COALESCE(m.nombre, 'Moneda Local') AS nombre_moneda,
-                    COALESCE(m.simbolo, '$') AS simbolo,
-                    SUM(pp.monto_moneda_origen) AS total_origen,
-                    SUM(pp.monto_equivalente_local) AS total_local,
-                    COUNT(pp.id) AS total_transacciones
-                FROM pagos_pedido pp
-                INNER JOIN pedidos p ON pp.pedido_id = p.id
-                LEFT JOIN monedas m ON pp.moneda_id = m.id
-                WHERE p.turno_servicio_id = ?
-                  AND pp.metodo_pago NOT IN ('factura', 'pendiente')
-                GROUP BY LOWER(pp.metodo_pago), m.codigo, m.nombre, m.simbolo
-                ORDER BY 
-                    CASE 
-                        WHEN LOWER(pp.metodo_pago) = 'efectivo' THEN 1
-                        WHEN LOWER(pp.metodo_pago) = 'transferencia' THEN 2
-                        ELSE 3
-                    END ASC,
-                    total_local DESC
-            `, [turnoId]);
-
-            // 3. Clasificación financiera
-            let total_cobrado_caja = 0;   // Importe neto de las órdenes
-            let total_cxc_facturas = 0;
-            let total_pendiente_pago = 0;
-            let total_cortesias = 0;
-            let total_propinas = 0;        // Excedente / Propinas
-
-            pedidos.forEach(p => {
-                const total = parseFloat(p.total || 0);
-                const propina = parseFloat(p.propina || 0);
-
-                if (p.estado_pago === 'pagado') {
-                    total_cobrado_caja += total;
-                    total_propinas += propina;
-                } else if (p.estado_pago === 'facturado') {
-                    total_cxc_facturas += total;
-                } else if (p.estado_pago === 'pendiente_pago') {
-                    total_pendiente_pago += total;
-                } else if (p.estado_pago === 'cortesia') {
-                    total_cortesias += parseFloat(p.subtotal || 0);
-                }
-            });
-
-            // Suma total del dinero cobrado en caja (Órdenes + Propinas/Excedente)
-            const total_efectivo_total_caja = total_cobrado_caja + total_propinas;
-            const fondoApertura = parseFloat(turnoActivo.monto_apertura || 0);
-
-            const resumen = {
-                total_cobrado_caja,
-                total_propinas,
-                total_efectivo_total_caja, // <--- TOTAL GENERAL DE CAJA
-                total_cxc_facturas,
-                total_pendiente_pago,
-                total_cortesias,
-                total_pedidos: pedidos.length,
-                fondo_apertura: fondoApertura,
-                total_en_caja_esperado: fondoApertura + total_efectivo_total_caja
-            };
+            const { pedidos, desglosePagos, resumen } = await obtenerDatosCierre(turnoActivo);
 
             res.render('caja/cierre_dia', {
                 pageTitle: 'Cierre del Día y Auditoría de Cuentas',

@@ -94,7 +94,8 @@ const pedidoController = {
                     item.id_platillo, 
                     parseFloat(item.cantidad), 
                     almacenDefaultId, 
-                    conn
+                    conn,
+                    { referencia_tipo: 'pedido', referencia_id: id, documento_numero: `PED-${String(id).padStart(6, '0')}`, usuario_id: req.user?.id || null }
                 );
             }
 

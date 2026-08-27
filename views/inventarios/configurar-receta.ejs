@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurar Receta - <%= platillo.nombre %></title>
-    <link class="js-bootstrap-css" rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Configurar Receta - <%= (platillo && platillo.nombre) ? platillo.nombre : 'Ficha Técnica' %></title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css"> 
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
 
@@ -24,7 +24,7 @@
         <% } %>
         
         <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
-            <div class="toast show text-white bg-success border-0 shadow" role="alert" id="liveToast">
+            <div class="toast show text-white bg-success border-0 shadow" role="alert" id="liveToastSuccess">
                 <div class="d-flex">
                     <div class="toast-body fw-semibold fs-7">
                         <i class="fa-solid fa-circle-check me-2"></i><%= success_msg %>
@@ -35,15 +35,7 @@
         <% } %>
     </div>
 
-    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
-        <div class="d-flex align-items-center gap-2">
-            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
-            <span class="fw-bold text-dark">Restaurante Bahía</span>
-        </div>
-        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
-            <i class="fa-solid fa-bars"></i>
-        </button>
-    </div>
+    <%- include('../includes/topBarMobile') %>
 
     <div class="container-fluid">
         <div class="row">
@@ -51,7 +43,7 @@
             <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
                 <%- include('../includes/header', {
                     encabezado_pagina: '🍽️ Configurar Receta', 
-                    desc_pagina: `Ingredientes para: <strong>${platillo.nombre}</strong>`, 
+                    desc_pagina: `Ingredientes para: <strong>${(platillo && platillo.nombre) ? platillo.nombre : (platillo && platillo.receta_nombre ? platillo.receta_nombre : 'Ficha')}</strong>`, 
                     add_btn: true, 
                     btn_label: "Agregar Ingrediente", 
                     modal: "ingredienteModal",
@@ -63,46 +55,68 @@
                     <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
-                                <thead class="table-custom-thead text-uppercase fs-7">
+                                <thead class="table-custom-thead text-uppercase fs-7 bg-light">
                                     <tr>
-                                        <th class="ps-4 py-3">Ingrediente</th>
-                                        <th class="py-3">Cantidad</th>
+                                        <th class="ps-4 py-3">Ingrediente / Insumo</th>
+                                        <th class="py-3 text-end">Cantidad Req.</th>
                                         <th class="py-3">Unidad</th>
+                                        <th class="py-3 text-center">% Merma</th>
+                                        <th class="py-3 text-center">Tipo</th>
                                         <th class="py-3 text-center">Stock Disponible</th>
-                                        <th class="text-center py-3" style="width: 150px;">Acciones</th>
+                                        <th class="text-center py-3" style="width: 120px;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <% if (ingredientes.length === 0) { %>
+                                    <% if (!ingredientes || ingredientes.length === 0) { %>
                                         <tr>
-                                            <td colspan="5" class="text-center py-5 text-muted">
+                                            <td colspan="7" class="text-center py-5 text-muted">
                                                 <i class="fa-solid fa-carrot d-block fs-2 mb-2 text-secondary"></i> 
-                                                No hay ingredientes configurados para este platillo.
+                                                No hay ingredientes configurados para esta ficha técnica.
                                             </td>
                                         </tr>
                                     <% } else { %>
                                         <% ingredientes.forEach(ingrediente => { %>
-                                            <tr class="<%= !ingrediente.activo ? 'opacity-50 table-light' : '' %>">
+                                            <% 
+                                                const stock = parseFloat(ingrediente.stock_disponible || 0);
+                                                const cant = parseFloat(ingrediente.cantidad_requerida || 0);
+                                                const factorMerma = parseFloat(ingrediente.porcentaje_merma || 0) > 0 ? (1 + (parseFloat(ingrediente.porcentaje_merma) / 100)) : 1;
+                                                const cantTotal = cant * factorMerma;
+                                                const tieneStock = stock >= cantTotal;
+                                            %>
+                                            <tr>
                                                 <td class="ps-4 fw-semibold text-dark">
                                                     <i class="fa-solid fa-box me-2 text-primary"></i>
                                                     <%= ingrediente.producto_nombre %>
-                                                    <div class="text-muted small"><%= ingrediente.producto_codigo || '' %></div>
+                                                    <div class="text-muted small font-monospace"><%= ingrediente.producto_codigo || 'S/C' %></div>
                                                 </td>
-                                                <td class="fw-bold text-dark"><%= ingrediente.cantidad_requerida %></td>
-                                                <td><%= ingrediente.unidad_medida || '—' %></td>
+                                                <td class="fw-bold text-dark text-end font-monospace">
+                                                    <%= cant.toFixed(4).replace(/\.?0+$/, '') || '0' %>
+                                                </td>
+                                                <td><span class="badge bg-light text-dark border"><%= ingrediente.unidad_medida || '—' %></span></td>
+                                                <td class="text-center font-monospace text-muted fs-7">
+                                                    <%= parseFloat(ingrediente.porcentaje_merma || 0).toFixed(1) %>%
+                                                </td>
                                                 <td class="text-center">
-                                                    <span class="badge <%= ingrediente.stock_disponible < ingrediente.cantidad_requerida ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-success-subtle text-success border border-success-subtle' %> px-3 py-1 rounded-pill fs-7">
-                                                        <%= ingrediente.stock_disponible.toFixed(2) %>
+                                                    <% if (ingrediente.es_opcional) { %>
+                                                        <span class="badge bg-info-subtle text-info-emphasis rounded-pill fs-8">Opcional</span>
+                                                    <% } else { %>
+                                                        <span class="badge bg-secondary-subtle text-secondary rounded-pill fs-8">Indispensable</span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge <%= tieneStock ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle' %> px-3 py-1 rounded-pill fs-7">
+                                                        <i class="fa-solid <%= tieneStock ? 'fa-check' : 'fa-triangle-exclamation' %> me-1"></i>
+                                                        <%= stock.toFixed(2) %> <%= ingrediente.unidad_medida || '' %>
                                                     </span>
                                                 </td>
                                                 <td class="text-center pe-3">
                                                     <div class="btn-group gap-1">
-                                                        <button class="btn btn-sm btn-outline-secondary border-0" onclick="openEditModal('<%= ingrediente.id %>')" title="Editar">
-                                                            <i class="fa-solid fa-pen-to-square"></i>
-                                                        </button>
-                                                        <% if (user && ['superadministrador', 'administrador'].includes(user.rol)) { %>
-                                                            <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteIngrediente('<%= ingrediente.id %>')" title="Eliminar">
-                                                                <i class="fa-solid fa-trash"></i>
+                                                        <% if (user && ['superadministrador', 'administrador', 'jefe-cocina'].includes(user.rol)) { %>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger border-0 btn-eliminar-ingrediente" 
+                                                                    data-id="<%= ingrediente.id %>" 
+                                                                    data-nombre="<%= ingrediente.producto_nombre || 'Ingrediente' %>" 
+                                                                    title="Eliminar Ingrediente">
+                                                                <i class="fa-solid fa-trash pointer-events-none"></i>
                                                             </button>
                                                         <% } %>
                                                     </div>
@@ -126,14 +140,14 @@
                             <div class="col-md-4">
                                 <div class="p-3 bg-light rounded">
                                     <div class="text-muted small">Total Ingredientes</div>
-                                    <div class="fs-4 fw-bold text-dark"><%= ingredientes.length %></div>
+                                    <div class="fs-4 fw-bold text-dark"><%= ingredientes ? ingredientes.length : 0 %></div>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="p-3 bg-light rounded">
                                     <div class="text-muted small">Ingredientes con Stock</div>
                                     <div class="fs-4 fw-bold text-success">
-                                        <%= ingredientes.filter(i => i.stock_disponible >= i.cantidad_requerida).length %>
+                                        <%= ingredientes ? ingredientes.filter(i => parseFloat(i.stock_disponible || 0) >= parseFloat(i.cantidad_requerida || 0)).length : 0 %>
                                     </div>
                                 </div>
                             </div>
@@ -141,7 +155,7 @@
                                 <div class="p-3 bg-light rounded">
                                     <div class="text-muted small">Ingredientes sin Stock</div>
                                     <div class="fs-4 fw-bold text-danger">
-                                        <%= ingredientes.filter(i => i.stock_disponible < i.cantidad_requerida).length %>
+                                        <%= ingredientes ? ingredientes.filter(i => parseFloat(i.stock_disponible || 0) < parseFloat(i.cantidad_requerida || 0)).length : 0 %>
                                     </div>
                                 </div>
                             </div>
@@ -152,70 +166,64 @@
         </div>
     </div>
 
-    <!-- Modal Agregar/Editar Ingrediente -->
+    <!-- Modal Agregar Ingrediente -->
     <div class="modal fade" id="ingredienteModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
            <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header bg-dark text-white">
                     <h5 class="modal-title fw-bold">
-                        <i class="fa-solid fa-plus-circle me-2 text-primary"></i>
+                        <i class="fa-solid fa-plus-circle me-2 text-warning"></i>
                         <span id="modalTitle">Agregar Ingrediente</span>
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form id="ingredienteForm">
                     <div class="modal-body">
-                        <input type="hidden" id="recetaId" name="id">
-                        <input type="hidden" id="platilloId" value="<%= platillo.id %>">
+                        <input type="hidden" id="recetaId" name="receta_id" value="<%= platillo ? platillo.id : '' %>">
                         
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Ingrediente <span class="text-danger">*</span></label>
                             <select class="form-select" id="productoId" name="producto_id" required>
                                 <option value="">Seleccione un ingrediente</option>
-                                <% productos.forEach(producto => { %>
-                                    <option value="<%= producto.id %>"><%= producto.nombre %> (<%= producto.codigo || 'N/A' %>)</option>
-                                <% }) %>
+                                <% if (typeof productos !== 'undefined') { %>
+                                    <% productos.forEach(producto => { %>
+                                        <option value="<%= producto.id %>"><%= producto.nombre %> (<%= producto.codigo || 'S/C' %>)</option>
+                                    <% }) %>
+                                <% } %>
                             </select>
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Cantidad <span class="text-danger">*</span></label>
-                            <input type="number" class="form-control" id="cantidadRequerida" name="cantidad_requerida" step="0.001" min="0.001" required>
+                            <input type="number" class="form-control font-monospace" id="cantidadRequerida" name="cantidad_requerida" step="0.0001" min="0.0001" required placeholder="0.0000">
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Unidad de Medida</label>
                             <select class="form-select" id="unidadMedida" name="unidad_medida">
                                 <option value="">Seleccione unidad</option>
-                                <option value="kg">Kilogramos (kg)</option>
-                                <option value="g">Gramos (g)</option>
-                                <option value="l">Litros (l)</option>
-                                <option value="ml">Mililitros (ml)</option>
-                                <option value="unidad">Unidad</option>
-                                <option value="pieza">Pieza</option>
-                                <option value="caja">Caja</option>
-                                <option value="botella">Botella</option>
+                                <% if (typeof unidades !== 'undefined') { %>
+                                    <% unidades.forEach(u => { %>
+                                        <option value="<%= u.nombre %>"><%= u.nombre %> (<%= u.abreviatura %>)</option>
+                                    <% }) %>
+                                <% } %>
                             </select>
                         </div>
-                        
+
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Tipo de Platillo</label>
-                            <select class="form-select" id="tipoPlatillo" name="tipo_platillo">
-                                <option value="comida">Comida</option>
-                                <option value="trago">Trago</option>
-                                <option value="coctel">Coctel</option>
-                            </select>
+                            <label class="form-label fw-semibold">% Merma Estimada</label>
+                            <input type="number" class="form-control font-monospace" id="porcentajeMerma" name="porcentaje_merma" step="0.01" min="0" max="99" value="0.00">
                         </div>
                         
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="activo" name="activo" checked>
-                            <label class="form-check-label" for="activo">Ingrediente Activo</label>
+                            <input class="form-check-input" type="checkbox" id="esOpcional" name="es_opcional">
+                            <label class="form-check-label" for="esOpcional">Ingrediente Opcional (No bloquea comanda si no hay stock)</label>
                         </div>
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer bg-light">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fa-solid fa-save me-2"></i>Guardar
+                            <i class="fa-solid fa-save me-2"></i>Guardar Ingrediente
                         </button>
                     </div>
                 </form>
@@ -224,101 +232,102 @@
     </div>
 
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
     <script>
-        const ingredienteModal = new bootstrap.Modal(document.getElementById('ingredienteModal'));
-        const ingredienteForm = document.getElementById('ingredienteForm');
-        const platilloId = <%- JSON.stringify(platillo.id) %>;
+        document.addEventListener('DOMContentLoaded', function() {
+            const ingredienteModalEl = document.getElementById('ingredienteModal');
+            const ingredienteModal = ingredienteModalEl ? new bootstrap.Modal(ingredienteModalEl) : null;
+            const ingredienteForm = document.getElementById('ingredienteForm');
 
-        function openEditModal(id) {
-            fetch(`/admin/api/recetas/${id}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('recetaId').value = id;
-                        document.getElementById('productoId').value = data.data.producto_id;
-                        document.getElementById('cantidadRequerida').value = data.data.cantidad_requerida;
-                        document.getElementById('unidadMedida').value = data.data.unidad_medida || '';
-                        document.getElementById('tipoPlatillo').value = data.data.tipo_platillo || 'comida';
-                        document.getElementById('activo').checked = data.data.activo;
-                        document.getElementById('modalTitle').textContent = 'Editar Ingrediente';
-                        ingredienteModal.show();
-                    } else {
-                        Swal.fire('Error', data.message, 'error');
+            // Event delegation para eliminar ingrediente cumpliendo con Content-Security-Policy
+            document.addEventListener('click', function(e) {
+                const btn = e.target.closest('.btn-eliminar-ingrediente');
+                if (!btn) return;
+
+                const detalleId = btn.dataset.id;
+                const nombre = btn.dataset.nombre || 'el ingrediente';
+
+                Swal.fire({
+                    title: '¿Eliminar ingrediente?',
+                    text: `¿Desea remover "${nombre}" de esta ficha técnica?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: '<i class="fa-solid fa-trash me-1"></i> Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Notificación interactiva del proceso de eliminación
+                        Swal.fire({
+                            title: 'Eliminando ingrediente...',
+                            html: `Removiendo <b>${nombre}</b> de la ficha técnica.<br><small class="text-muted">Actualizando disponibilidad y stock...</small>`,
+                            allowOutsideClick: false,
+                            allowEscapeKey: false,
+                            showConfirmButton: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
+
+                        fetch(`/admin/api/recetas/detalles/${detalleId}`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' }
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                Swal.fire({
+                                    title: '¡Eliminado!',
+                                    text: data.message,
+                                    icon: 'success',
+                                    timer: 1500,
+                                    showConfirmButton: false
+                                }).then(() => window.location.reload());
+                            } else {
+                                Swal.fire('Error', data.message || 'No se pudo eliminar el ingrediente', 'error');
+                            }
+                        })
+                        .catch(() => {
+                            Swal.fire('Error', 'Error de conexión con el servidor al eliminar', 'error');
+                        });
                     }
-                })
-                .catch(error => Swal.fire('Error', 'No se pudo cargar el ingrediente', 'error'));
-        }
+                });
+            });
 
-        function deleteIngrediente(id) {
-            Swal.fire({
-                title: '¿Eliminar ingrediente?',
-                text: 'Esta acción no se puede deshacer',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, eliminar',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    fetch(`/admin/api/recetas/${id}`, {
-                        method: 'DELETE'
+            // Guardar nuevo ingrediente mediante AJAX
+            if (ingredienteForm) {
+                ingredienteForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(ingredienteForm);
+                    const payload = {
+                        receta_id: formData.get('receta_id'),
+                        producto_id: formData.get('producto_id'),
+                        cantidad_requerida: parseFloat(formData.get('cantidad_requerida')),
+                        unidad_medida: formData.get('unidad_medida'),
+                        porcentaje_merma: parseFloat(formData.get('porcentaje_merma') || 0),
+                        es_opcional: formData.get('es_opcional') === 'on'
+                    };
+
+                    fetch('/admin/api/recetas/detalles', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
                     })
-                    .then(response => response.json())
+                    .then(r => r.json())
                     .then(data => {
                         if (data.success) {
-                            Swal.fire('Eliminado', data.message, 'success').then(() => {
-                                window.location.reload();
-                            });
+                            if (ingredienteModal) ingredienteModal.hide();
+                            Swal.fire('¡Guardado!', data.message, 'success').then(() => window.location.reload());
                         } else {
-                            Swal.fire('Error', data.message, 'error');
+                            Swal.fire('Error', data.message || 'No se pudo registrar el ingrediente', 'error');
                         }
                     })
-                    .catch(error => Swal.fire('Error', 'No se pudo eliminar el ingrediente', 'error'));
-                }
-            });
-        }
-
-        ingredienteForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            const recetaId = document.getElementById('recetaId').value;
-            const url = recetaId ? `/admin/api/recetas/${recetaId}` : '/admin/api/recetas';
-            const method = recetaId ? 'PUT' : 'POST';
-
-            const data = {
-                platillo_id: platilloId,
-                producto_id: formData.get('producto_id'),
-                cantidad_requerida: formData.get('cantidad_requerida'),
-                unidad_medida: formData.get('unidad_medida'),
-                tipo_platillo: formData.get('tipo_platillo'),
-                activo: document.getElementById('activo').checked
-            };
-
-            fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire('Éxito', data.message, 'success').then(() => {
-                        window.location.reload();
+                    .catch(() => {
+                        Swal.fire('Error', 'Error de comunicación con el servidor', 'error');
                     });
-                } else {
-                    Swal.fire('Error', data.message, 'error');
-                }
-            })
-            .catch(error => Swal.fire('Error', 'No se pudo guardar el ingrediente', 'error'));
-        });
-
-        document.getElementById('ingredienteModal').addEventListener('hidden.bs.modal', function() {
-            ingredienteForm.reset();
-            document.getElementById('recetaId').value = '';
-            document.getElementById('modalTitle').textContent = 'Agregar Ingrediente';
+                });
+            }
         });
     </script>
 </body>

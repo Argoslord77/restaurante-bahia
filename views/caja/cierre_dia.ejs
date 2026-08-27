@@ -29,12 +29,18 @@
                 
                 <div class="flex-grow-1">
                     <%- include('../includes/header', {
-                        encabezado_pagina: 'Caja / Cierre del Día', 
-                        desc_pagina: 'Auditoría integral de cobros, cuentas por cobrar (facturas) y balance del turno', 
-                        add_btn: false, 
-                        btn_label: "", 
+                        encabezado_pagina: 'Caja / Cierre del Día',
+                        desc_pagina: 'Auditoría integral de cobros, cuentas por cobrar (facturas) y balance del turno',
+                        add_btn: false,
+                        btn_label: "",
                         modal: ""
                     }) %>
+
+                    <div class="d-flex justify-content-end mb-3">
+                        <a href="/admin/cierre-dia/ticket" target="_blank" class="btn btn-dark btn-sm fw-semibold shadow-sm" title="Vista de impresión del cierre (ticket)">
+                            <i class="fa-solid fa-print me-1"></i> Imprimir Cierre
+                        </a>
+                    </div>
 
                     <% if (turnoActivo) { %>
                         <!-- TARJETAS DE INDICADORES / MÉTRICAS DEL TURNO -->

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= typeof title !== 'undefined' ? title : 'Fichas Técnicas - Restaurante Bahía' %></title>
+    <title><%= typeof title !== 'undefined' ? title : (typeof pageTitle !== 'undefined' ? pageTitle : 'Fichas Técnicas / Recetas - Restaurante Bahía') %></title>
     <link rel="stylesheet" href="/css/jquery-ui.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
@@ -36,6 +36,34 @@
             padding: 0.25rem 0.5rem;
             font-size: 0.875rem;
         }
+
+        /* Estilos para el Modal Profesional de Opciones */
+        .opt-action-card {
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            text-align: left;
+        }
+        .opt-action-card:hover {
+            border-color: #3b82f6;
+            background-color: #f8fafc !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        }
+        .opt-action-card.danger-card:hover {
+            border-color: #ef4444;
+            background-color: #fff5f5 !important;
+        }
+        .action-icon-box {
+            width: 44px;
+            height: 44px;
+        }
+        .fs-8 {
+            font-size: 0.8125rem;
+        }
+        .fs-7 {
+            font-size: 0.875rem;
+        }
     </style>
 </head>
 <body>
@@ -54,108 +82,130 @@
                 </div>
             </div>
         <% } %>
+        <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
+            <div class="toast show text-white bg-success border-0 shadow" role="alert" id="liveToastSuccess">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-check me-2"></i><%= success_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
     </div>
 
     <%- include('../includes/topBarMobile') %>
     
-    <%- include('../includes/sideBarMenu') %>
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
 
-    <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
-        
-        <%- include('../includes/header', {
-            encabezado_pagina: 'Estructuración de Fichas Técnicas (Recetas)', 
-            desc_pagina: 'Mapea la composición maestro-detalle de tus platos y bebidas de venta para automatizar el descuento FIFO de inventario.', 
-            add_btn: true, 
-            btn_label: "Nueva Receta Base", 
-            modal: "recetaModal"
-        }) %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+                
+                <%- include('../includes/header', {
+                    encabezado_pagina: 'Estructuración de Fichas Técnicas (Recetas)', 
+                    desc_pagina: 'Mapea la composición maestro-detalle de tus platos y bebidas de venta para automatizar el descuento FIFO de inventario.', 
+                    add_btn: true, 
+                    btn_label: "Nueva Receta Base", 
+                    modal: "recetaModal"
+                }) %>
 
-        <div class="card card-custom shadow-sm border-0 overflow-hidden mt-4">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-custom-thead text-uppercase fs-7 bg-light">
-                        <tr>
-                            <th class="ps-4 py-3">Código / Receta</th>
-                            <th class="py-3">Producto Terminado (Menú)</th>
-                            <th class="py-3">Tipo Receta</th>
-                            <th class="text-end py-3">Rendimiento Base</th>
-                            <th class="text-end py-3">Costo Estimado</th>
-                            <th class="text-end py-3">Precio Menú</th>
-                            <th class="text-center py-3">Estado</th>
-                            <th class="text-center py-3" style="width: 120px;">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% if (typeof recetas !== 'undefined' && recetas.length > 0) { %>
-                            <% recetas.forEach(r => { %>
+                <div class="card card-custom shadow-sm border-0 overflow-hidden mt-4">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-custom-thead text-uppercase fs-7 bg-light">
                                 <tr>
-                                    <td class="ps-4">
-                                        <div class="font-monospace fw-bold text-primary">#<%= r.codigo %></div>
-                                        <small class="text-muted fs-7">v1.0 (Activa)</small>
-                                    </td>
-                                    <td>
-                                        <div class="fw-bold text-dark"><%= r.receta_nombre %></div>
-                                        <span class="badge bg-light text-secondary border fs-8"><%= r.unidad_rendimiento %></span>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-primary-subtle text-primary fw-semibold"><%= r.tipo %></span>
-                                    </td>
-                                    <td class="text-end font-monospace fw-semibold"><%= parseFloat(r.rendimiento).toFixed(2) %></td>
-                                    <td class="text-end font-monospace text-danger fw-bold">$<%= parseFloat(r.costo_estimado).toFixed(2) %></td>
-                                    <td class="text-end font-monospace text-success fw-bold">$<%= r.precio_sugerido ? parseFloat(r.precio_sugerido).toFixed(2) : '0.00' %></td>
-                                    <td class="text-center">
-                                        <% if(r.activa) { %>
-                                            <span class="badge bg-success-subtle text-success px-3 rounded-pill">VIGENTE</span>
-                                        <% } else { %>
-                                            <span class="badge bg-secondary-subtle text-secondary px-3 rounded-pill">INACTIVA</span>
-                                        <% } %>
-                                    </td>
-                                    <td class="text-center">
-                                        <div class="btn-group">
-                                            <button class="btn btn-sm btn-outline-secondary edit-btn" 
-                                                    data-id="<%= r.id %>" 
-                                                    data-codigo="<%= r.codigo %>"
-                                                    data-nombre="<%= r.receta_nombre %>"
-                                                    data-descripcion="<%= r.descripcion %>"
-                                                    data-tipo="<%= r.tipo %>"
-                                                    data-producto="<%= r.platillo_id %>"
-                                                    data-rendimiento="<%= r.rendimiento %>"
-                                                    data-unidad="<%= r.unidad_rendimiento %>"
-                                                    data-tiempo="<%= r.tiempo_preparacion_minutos %>"
-                                                    data-costo="<%= r.costo_estimado %>"
-                                                    data-precio="<%= r.precio_sugerido %>"
-                                                    data-observaciones="<%= r.observaciones %>">
-                                                <i class="fa-solid fa-pen-to-square"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-primary opciones-btn" 
-                                                    data-id="<%= r.id %>" 
-                                                    data-nombre="<%= r.receta_nombre %>" 
-                                                    data-activa="<%= r.activa %>"
-                                                    title="Opciones de Ficha Técnica">
-                                                <i class="fa-solid fa-gears"></i>
-                                            </button>
-                                        </div>
-                                    </td>
+                                    <th class="ps-4 py-3">Código / Receta</th>
+                                    <th class="py-3">Producto Terminado (Menú)</th>
+                                    <th class="py-3">Tipo Receta</th>
+                                    <th class="text-end py-3">Rendimiento Base</th>
+                                    <th class="text-end py-3">Costo Estimado</th>
+                                    <th class="text-end py-3">Precio Menú</th>
+                                    <th class="text-center py-3">Estado</th>
+                                    <th class="text-center py-3" style="width: 120px;">Acciones</th>
                                 </tr>
-                            <% }) %>
-                        <% } else { %>
-                            <tr>
-                                <td colspan="8" class="text-center py-4 text-muted">
-                                    <i class="fa-solid fa-kitchen-set d-block fs-2 mb-2 text-secondary"></i>
-                                    No se registran fichas técnicas maestras en el sistema.
-                                </td>
-                            </tr>
-                        <% } %>
-                    </tbody>
-                </table>
-            </div>
+                            </thead>
+                            <tbody>
+                                <% if (typeof recetas !== 'undefined' && recetas.length > 0) { %>
+                                    <% recetas.forEach(r => { %>
+                                        <tr class="<%= !r.activa ? 'opacity-50 table-light' : '' %>">
+                                            <td class="ps-4">
+                                                <div class="font-monospace fw-bold text-primary">#<%= r.codigo %></div>
+                                                <small class="text-muted fs-7"><%= r.activa ? 'v1.0 (Vigente)' : 'v1.0 (Inactiva)' %></small>
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold text-dark"><%= r.receta_nombre || r.nombre %></div>
+                                                <span class="badge bg-light text-secondary border fs-8"><%= r.unidad_rendimiento || 'Porción' %></span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-primary-subtle text-primary fw-semibold"><%= r.tipo || 'VENTA' %></span>
+                                            </td>
+                                            <td class="text-end font-monospace fw-semibold"><%= parseFloat(r.rendimiento || 1).toFixed(2) %></td>
+                                            <td class="text-end font-monospace text-danger fw-bold">$<%= parseFloat(r.costo_estimado || 0).toFixed(2) %></td>
+                                            <td class="text-end font-monospace text-success fw-bold">$<%= r.precio_sugerido ? parseFloat(r.precio_sugerido).toFixed(2) : '0.00' %></td>
+                                            <td class="text-center">
+                                                <% if(r.activa) { %>
+                                                    <span class="badge bg-success-subtle text-success px-3 rounded-pill">VIGENTE</span>
+                                                <% } else { %>
+                                                    <span class="badge bg-secondary-subtle text-secondary px-3 rounded-pill">INACTIVA</span>
+                                                <% } %>
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="btn-group">
+                                                    <button class="btn btn-sm btn-outline-secondary edit-btn" 
+                                                            data-id="<%= r.id %>" 
+                                                            data-codigo="<%= r.codigo %>"
+                                                            data-nombre="<%= r.receta_nombre || r.nombre %>"
+                                                            data-descripcion="<%= r.descripcion || '' %>"
+                                                            data-tipo="<%= r.tipo || 'VENTA' %>"
+                                                            data-producto="<%= r.platillo_id %>"
+                                                            data-rendimiento="<%= r.rendimiento || 1 %>"
+                                                            data-unidad="<%= r.unidad_rendimiento || 'Porción' %>"
+                                                            data-tiempo="<%= r.tiempo_preparacion_minutos || '' %>"
+                                                            data-costo="<%= r.costo_estimado || 0 %>"
+                                                            data-precio="<%= r.precio_sugerido || '' %>"
+                                                            data-observaciones="<%= r.observaciones || '' %>"
+                                                            title="Editar Ficha Técnica">
+                                                        <i class="fa-solid fa-pen-to-square"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-primary opciones-btn" 
+                                                            data-id="<%= r.id %>" 
+                                                            data-codigo="<%= r.codigo %>"
+                                                            data-nombre="<%= r.receta_nombre || r.nombre %>" 
+                                                            data-tipo="<%= r.tipo || 'VENTA' %>"
+                                                            data-rendimiento="<%= r.rendimiento || 1 %>"
+                                                            data-unidad="<%= r.unidad_rendimiento || 'Porción' %>"
+                                                            data-costo="<%= parseFloat(r.costo_estimado || 0).toFixed(2) %>"
+                                                            data-precio="<%= r.precio_sugerido ? parseFloat(r.precio_sugerido).toFixed(2) : '0.00' %>"
+                                                            data-activa="<%= r.activa ? 1 : 0 %>"
+                                                            title="Opciones de Ficha Técnica">
+                                                        <i class="fa-solid fa-gears"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="8" class="text-center py-5 text-muted">
+                                            <i class="fa-solid fa-kitchen-set d-block fs-2 mb-2 text-secondary"></i>
+                                            No se registran fichas técnicas maestras en el sistema.
+                                        </td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <footer class="mt-auto">
+                    <%- include('../includes/footer') %>
+                </footer>
+            </main>
         </div>
+    </div>
 
-        <footer class="mt-auto">
-            <%- include('../includes/footer') %>
-        </footer>
-    </main>
-
+    <!-- Modal Nueva / Editar Receta -->
     <div class="modal fade" id="recetaModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <form id="recetaForm" class="modal-content border-0 shadow">
@@ -169,8 +219,17 @@
                         <h6 class="text-primary fw-bold mb-3"><i class="fa-solid fa-paste me-2"></i>Datos Generales (Maestro)</h6>
                         <div class="row g-3">
                             <div class="col-md-3">
-                                <label for="codigo" class="form-label fw-semibold text-secondary small">Código Ficha</label>
-                                <input type="text" class="form-control shadow-sm font-monospace text-uppercase" id="codigo" name="codigo" required placeholder="REC-XYZ">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label for="codigo" class="form-label fw-semibold text-secondary small mb-0">Código Ficha</label>
+                                    <span id="codigoStatusBadge" class="badge d-none small"></span>
+                                </div>
+                                <div class="input-group">
+                                    <input type="text" class="form-control shadow-sm font-monospace text-uppercase" id="codigo" name="codigo" required placeholder="REC-XYZ" autocomplete="off">
+                                    <span class="input-group-text bg-white d-none" id="codigoCheckingSpinner">
+                                        <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+                                    </span>
+                                </div>
+                                <div class="text-danger small mt-1 d-none font-monospace" id="codigoErrorFeedback"></div>
                             </div>
                             <div class="col-md-5">
                                 <label for="nombre" class="form-label fw-semibold text-secondary small">Nombre Comercial de la Receta</label>
@@ -191,7 +250,7 @@
                                     <option value="">Escriba el nombre o código del platillo...</option>
                                     <% if (typeof platillos !== 'undefined') { %>
                                         <% platillos.forEach(p => { %>
-                                            <option value="<%= p.id %>">[<%= p.codigo %>] <%= p.nombre %></option>
+                                            <option value="<%= p.id %>">[<%= p.codigo || 'S/C' %>] <%= p.nombre %></option>
                                         <% }) %>
                                     <% } %>
                                 </select>
@@ -236,7 +295,6 @@
                         </div>
                         <div class="table-responsive" style="max-height: 280px;">
                             <table class="table table-sm table-hover align-middle mb-0" id="tablaIngredientes">
-                                <!-- En la tabla #tablaIngredientes del modal -->
                                 <thead class="bg-light fs-7 text-uppercase border-bottom">
                                     <tr>
                                         <th class="ps-3 py-2" style="width: 34%;">Materia Prima / Insumo</th>
@@ -253,10 +311,109 @@
                     </div>
                 </div>
                 <div class="modal-footer bg-light border-top-0">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar Operación</button>
-                    <button type="submit" class="btn btn-success px-4 shadow-sm fw-bold">Guardar Ficha Técnica</button>
+                    <button type="button" class="btn btn-outline-secondary" id="btnCancelarModalReceta" data-bs-dismiss="modal">Cancelar Operación</button>
+                    <button type="submit" id="btnGuardarReceta" class="btn btn-success px-4 shadow-sm fw-bold">
+                        <i class="fa-solid fa-floppy-disk me-1" id="btnGuardarIcon"></i>
+                        <span id="btnGuardarTexto">Guardar Ficha Técnica</span>
+                    </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal Profesional de Opciones de Ficha Técnica -->
+    <div class="modal fade" id="modalOpcionesReceta" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-3 overflow-hidden">
+                <div class="modal-header bg-dark text-white py-3 px-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="bg-warning text-dark rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                            <i class="fa-solid fa-sliders"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0">Gestión de Ficha Técnica</h5>
+                            <small class="text-white-50 fs-8">Opciones y configuración del platillo</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <div class="modal-body p-4 bg-light">
+                    <!-- Resumen del Platillo -->
+                    <div class="card border-0 shadow-sm rounded-3 mb-3 overflow-hidden">
+                        <div class="card-body p-3 bg-white border-start border-4 border-primary">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <span id="optBadgeCodigo" class="badge bg-primary-subtle text-primary font-monospace fw-bold mb-1">#REC-001</span>
+                                    <span id="optBadgeTipo" class="badge bg-light text-secondary border fs-8">VENTA</span>
+                                    <h5 id="optNombre" class="fw-bold text-dark mb-0 mt-1">Nombre de la Receta</h5>
+                                </div>
+                                <span id="optBadgeEstado" class="badge bg-success-subtle text-success px-3 py-1 rounded-pill fw-semibold">VIGENTE</span>
+                            </div>
+                            <div class="d-flex flex-wrap gap-3 pt-2 mt-2 border-top fs-7 text-secondary">
+                                <div><i class="fa-solid fa-scale-balanced me-1 text-primary"></i>Rendimiento: <strong id="optRendimiento" class="text-dark">1.00 Porción</strong></div>
+                                <div><i class="fa-solid fa-coins me-1 text-danger"></i>Costo Est.: <strong id="optCosto" class="text-danger">$0.00</strong></div>
+                                <div><i class="fa-solid fa-tag me-1 text-success"></i>Precio Menú: <strong id="optPrecio" class="text-success">$0.00</strong></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Acciones Disponibles -->
+                    <div class="d-flex flex-column gap-2">
+                        <!-- Opción 1: Editar Composición -->
+                        <div class="opt-action-card p-3 rounded-3 bg-white d-flex align-items-center gap-3" id="btnAccionEditar">
+                            <div class="action-icon-box bg-primary-subtle text-primary rounded-3 d-flex align-items-center justify-content-center flex-shrink-0">
+                                <i class="fa-solid fa-pen-to-square fs-5"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold text-dark fs-6">Editar Composición y Ficha</div>
+                                <div class="text-muted fs-8">Modificar ingredientes, cantidades, mermas o rendimiento.</div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-muted fs-7"></i>
+                        </div>
+
+                        <!-- Opción 2: Configurar / Auditar Ingredientes -->
+                        <a href="#" class="opt-action-card p-3 rounded-3 bg-white d-flex align-items-center gap-3 text-decoration-none" id="btnAccionAuditar">
+                            <div class="action-icon-box bg-info-subtle text-info-emphasis rounded-3 d-flex align-items-center justify-content-center flex-shrink-0">
+                                <i class="fa-solid fa-cubes-stacked fs-5"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold text-dark fs-6">Ver Insumos y Disponibilidad</div>
+                                <div class="text-muted fs-8">Revisar stock en tiempo real y almacén de origen.</div>
+                            </div>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-muted fs-7"></i>
+                        </a>
+
+                        <!-- Opción 3: Activar / Desactivar (Toggle) -->
+                        <div class="opt-action-card p-3 rounded-3 bg-white d-flex align-items-center gap-3" id="btnAccionEstado">
+                            <div id="optEstadoIconBox" class="action-icon-box bg-warning-subtle text-warning-emphasis rounded-3 d-flex align-items-center justify-content-center flex-shrink-0">
+                                <i id="optEstadoIcon" class="fa-solid fa-ban fs-5"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold text-dark fs-6" id="optEstadoTitulo">Desactivar Receta</div>
+                                <div class="text-muted fs-8" id="optEstadoDesc">Pausar temporalmente el descuento de insumos en el POS.</div>
+                            </div>
+                            <i class="fa-solid fa-toggle-on text-success fs-4" id="optEstadoToggleIcon"></i>
+                        </div>
+
+                        <!-- Opción 4: Eliminar Definitivamente -->
+                        <div class="opt-action-card danger-card p-3 rounded-3 bg-white d-flex align-items-center gap-3" id="btnAccionEliminar">
+                            <div class="action-icon-box bg-danger-subtle text-danger rounded-3 d-flex align-items-center justify-content-center flex-shrink-0">
+                                <i class="fa-solid fa-trash-can fs-5"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold text-danger fs-6">Eliminar Definitivamente</div>
+                                <div class="text-muted fs-8">Borrar de la base de datos esta receta y todos sus ingredientes.</div>
+                            </div>
+                            <i class="fa-solid fa-triangle-exclamation text-danger fs-7"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer bg-white border-top py-2 px-4 d-flex justify-content-end">
+                    <button type="button" class="btn btn-light border px-4 fw-semibold fs-7" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -268,14 +425,20 @@
 
     <script>
         // PARSEO INTEGRAL Y SEGURO DESDE ELEMENTOS DOM
-        const productosDisponibles = JSON.parse(document.getElementById('data-productos-json').getAttribute('data-json'));
-        const unidadesDisponibles = JSON.parse(document.getElementById('data-unidades-json').getAttribute('data-json'));
+        const productosElem = document.getElementById('data-productos-json');
+        const unidadesElem = document.getElementById('data-unidades-json');
+        const productosDisponibles = productosElem ? JSON.parse(productosElem.getAttribute('data-json') || '[]') : [];
+        const unidadesDisponibles = unidadesElem ? JSON.parse(unidadesElem.getAttribute('data-json') || '[]') : [];
         
         const tbodyIngredientes = document.getElementById('tbodyIngredientes');
         const btnAgregarFila = document.getElementById('btnAgregarFila');
         const recetaForm = document.getElementById('recetaForm');
         const modalElement = document.getElementById('recetaModal');
         const bsModal = new bootstrap.Modal(modalElement);
+
+        const modalOpcionesElement = document.getElementById('modalOpcionesReceta');
+        const bsModalOpciones = new bootstrap.Modal(modalOpcionesElement);
+        let selectedRecetaData = null;
 
         // Inicializar Select2 acoplado al modal de Bootstrap para los campos Maestro
         $(modalElement).on('shown.bs.modal', function () {
@@ -313,13 +476,13 @@
             
             let opcionesProductos = `<option value="">Buscar insumo...</option>`;
             productosDisponibles.forEach(p => {
-                const selected = datos.producto_id == p.id ? 'selected' : '';
-                opcionesProductos += `<option value="${p.id}" ${selected}>[${p.codigo}] ${p.nombre}</option>`;
+                const selected = (datos.producto_id == p.id) ? 'selected' : '';
+                opcionesProductos += `<option value="${p.id}" ${selected}>[${p.codigo || 'S/C'}] ${p.nombre}</option>`;
             });
 
             let opcionesUnidades = `<option value="">Medida...</option>`;
             unidadesDisponibles.forEach(u => {
-                const selected = datos.unidad_medida == u.nombre ? 'selected' : '';
+                const selected = (datos.unidad_medida == u.nombre || datos.unidad_medida == u.abreviatura) ? 'selected' : '';
                 opcionesUnidades += `<option value="${u.nombre}" ${selected}>${u.nombre} (${u.abreviatura})</option>`;
             });
 
@@ -351,7 +514,11 @@
                     <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-fila"><i class="fa-solid fa-trash-can"></i></button>
                 </td>
             `;
-            // ... resto de event listeners igual
+
+            tr.querySelector('.btn-eliminar-fila').addEventListener('click', function() {
+                tr.remove();
+            });
+
             return tr;
         }
 
@@ -377,6 +544,8 @@
                 document.getElementById('recetaId').value = '';
                 document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus me-2"></i>Nueva Receta Base';
                 recetaForm.reset();
+                limpiarValidacionCodigo();
+                restaurarBotonGuardar(false);
                 $('.select2-producto-maestro').val('').trigger('change'); 
                 $('.select2-unidad-maestro').val('').trigger('change'); 
                 
@@ -396,27 +565,29 @@
             }
         });
 
-        // Escuchador para la Edición de Fichas Existentes
-        document.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.getElementById('recetaId').value = this.dataset.id;
+        // Escuchador para la Edición de Fichas Existentes con Delegación de Eventos
+        document.addEventListener('click', function(e) {
+            const editBtn = e.target.closest('.edit-btn');
+            if (editBtn) {
+                document.getElementById('recetaId').value = editBtn.dataset.id;
                 document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square me-2"></i>Editar Ficha Técnica';
+                limpiarValidacionCodigo();
+                restaurarBotonGuardar(true);
                 
-                document.getElementById('codigo').value = this.dataset.codigo;
-                document.getElementById('nombre').value = this.dataset.nombre;
-                document.getElementById('descripcion').value = this.dataset.descripcion || '';
-                document.getElementById('tipo').value = this.dataset.tipo;
-                document.getElementById('rendimiento').value = this.dataset.rendimiento;
-                document.getElementById('tiempo_preparacion_minutos').value = this.dataset.tiempo || '';
-                document.getElementById('precio_sugerido').value = this.dataset.precio || '';
+                document.getElementById('codigo').value = editBtn.dataset.codigo;
+                document.getElementById('nombre').value = editBtn.dataset.nombre;
+                document.getElementById('descripcion').value = editBtn.dataset.descripcion || '';
+                document.getElementById('tipo').value = editBtn.dataset.tipo || 'VENTA';
+                document.getElementById('rendimiento').value = editBtn.dataset.rendimiento || 1;
+                document.getElementById('tiempo_preparacion_minutos').value = editBtn.dataset.tiempo || '';
+                document.getElementById('precio_sugerido').value = editBtn.dataset.precio || '';
 
-                $('.select2-producto-maestro').val(this.dataset.producto).trigger('change');
-                $('.select2-unidad-maestro').val(this.dataset.unidad).trigger('change');
+                $('.select2-producto-maestro').val(editBtn.dataset.producto).trigger('change');
+                $('.select2-unidad-maestro').val(editBtn.dataset.unidad).trigger('change');
 
                 tbodyIngredientes.innerHTML = '';
 
-                // Sincronización estricta con endpoint de la API sin fragmentos '/admin'
-                fetch(`/admin/api/recetas/platillo/${this.dataset.id}`)
+                fetch(`/admin/api/recetas/platillo/${editBtn.dataset.id}`)
                     .then(r => {
                         if (!r.ok) throw new Error('Error al obtener ingredientes');
                         return r.json();
@@ -428,7 +599,8 @@
                                     producto_id: ing.producto_id,
                                     cantidad_requerida: ing.cantidad_requerida,
                                     unidad_medida: ing.unidad_medida,
-                                    porcentaje_merma: ing.porcentaje_merma
+                                    porcentaje_merma: ing.porcentaje_merma,
+                                    es_opcional: ing.es_opcional
                                 });
                                 tbodyIngredientes.appendChild(fila);
                             });
@@ -445,8 +617,252 @@
                         inicializarSelect2Detalles();
                         bsModal.show();
                     });
+                return;
+            }
+
+            // Manejador del botón "Opciones de Ficha Técnica"
+            const opcionesBtn = e.target.closest('.opciones-btn');
+            if (opcionesBtn) {
+                selectedRecetaData = {
+                    id: opcionesBtn.dataset.id,
+                    codigo: opcionesBtn.dataset.codigo || 'S/C',
+                    nombre: opcionesBtn.dataset.nombre || 'Sin nombre',
+                    tipo: opcionesBtn.dataset.tipo || 'VENTA',
+                    rendimiento: opcionesBtn.dataset.rendimiento || '1.00',
+                    unidad: opcionesBtn.dataset.unidad || 'Porción',
+                    costo: opcionesBtn.dataset.costo || '0.00',
+                    precio: opcionesBtn.dataset.precio || '0.00',
+                    activa: parseInt(opcionesBtn.dataset.activa) === 1
+                };
+
+                // Llenar campos informativos del modal
+                document.getElementById('optBadgeCodigo').textContent = '#' + selectedRecetaData.codigo;
+                document.getElementById('optBadgeTipo').textContent = selectedRecetaData.tipo;
+                document.getElementById('optNombre').textContent = selectedRecetaData.nombre;
+                document.getElementById('optRendimiento').textContent = `${parseFloat(selectedRecetaData.rendimiento).toFixed(2)} ${selectedRecetaData.unidad}`;
+                document.getElementById('optCosto').textContent = `$${parseFloat(selectedRecetaData.costo).toFixed(2)}`;
+                document.getElementById('optPrecio').textContent = `$${parseFloat(selectedRecetaData.precio).toFixed(2)}`;
+
+                const badgeEstado = document.getElementById('optBadgeEstado');
+                const estadoIconBox = document.getElementById('optEstadoIconBox');
+                const estadoIcon = document.getElementById('optEstadoIcon');
+                const estadoTitulo = document.getElementById('optEstadoTitulo');
+                const estadoDesc = document.getElementById('optEstadoDesc');
+                const estadoToggleIcon = document.getElementById('optEstadoToggleIcon');
+
+                if (selectedRecetaData.activa) {
+                    badgeEstado.className = 'badge bg-success-subtle text-success px-3 py-1 rounded-pill fw-semibold';
+                    badgeEstado.textContent = 'VIGENTE';
+                    estadoIconBox.className = 'action-icon-box bg-warning-subtle text-warning-emphasis rounded-3 d-flex align-items-center justify-content-center flex-shrink-0';
+                    estadoIcon.className = 'fa-solid fa-ban fs-5';
+                    estadoTitulo.textContent = 'Desactivar Receta';
+                    estadoDesc.textContent = 'Pausar temporalmente el descuento de insumos en el POS.';
+                    estadoToggleIcon.className = 'fa-solid fa-toggle-on text-success fs-4';
+                } else {
+                    badgeEstado.className = 'badge bg-secondary-subtle text-secondary px-3 py-1 rounded-pill fw-semibold';
+                    badgeEstado.textContent = 'INACTIVA';
+                    estadoIconBox.className = 'action-icon-box bg-success-subtle text-success rounded-3 d-flex align-items-center justify-content-center flex-shrink-0';
+                    estadoIcon.className = 'fa-solid fa-circle-check fs-5';
+                    estadoTitulo.textContent = 'Activar Receta';
+                    estadoDesc.textContent = 'Habilitar nuevamente esta ficha técnica para el POS y producción.';
+                    estadoToggleIcon.className = 'fa-solid fa-toggle-off text-secondary fs-4';
+                }
+
+                document.getElementById('btnAccionAuditar').href = `/admin/recetas/configurar/${selectedRecetaData.id}`;
+
+                bsModalOpciones.show();
+                return;
+            }
+        });
+
+        // ACCIÓN 1: Editar Composición desde el Modal de Opciones
+        document.getElementById('btnAccionEditar').addEventListener('click', function() {
+            if (!selectedRecetaData) return;
+            bsModalOpciones.hide();
+            const editBtn = document.querySelector(`.edit-btn[data-id="${selectedRecetaData.id}"]`);
+            if (editBtn) {
+                editBtn.click();
+            }
+        });
+
+        // ACCIÓN 2: Cambiar Estado (Activar / Desactivar)
+        document.getElementById('btnAccionEstado').addEventListener('click', function() {
+            if (!selectedRecetaData) return;
+            const nuevoEstado = selectedRecetaData.activa ? 0 : 1;
+            const accionTexto = selectedRecetaData.activa ? 'desactivar' : 'activar';
+
+            bsModalOpciones.hide();
+            
+            Swal.fire({
+                title: `¿Desea ${accionTexto} la receta?`,
+                text: `Ficha técnica: "${selectedRecetaData.nombre}"`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: selectedRecetaData.activa ? '#ffc107' : '#198754',
+                confirmButtonText: selectedRecetaData.activa ? '<i class="fa-solid fa-ban me-1 text-dark"></i> Sí, desactivar' : '<i class="fa-solid fa-check me-1"></i> Sí, activar',
+                cancelButtonText: 'Cancelar',
+                customClass: {
+                    confirmButton: selectedRecetaData.activa ? 'text-dark fw-bold' : 'fw-bold'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/admin/api/recetas/${selectedRecetaData.id}/estado`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ activa: nuevoEstado })
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('¡Actualizado!', data.message, 'success').then(() => window.location.reload());
+                        } else {
+                            Swal.fire('Error', data.message || 'No se pudo cambiar el estado', 'error');
+                        }
+                    })
+                    .catch(() => Swal.fire('Error', 'Error de conexión con el servidor', 'error'));
+                }
             });
         });
+
+        // ACCIÓN 3: Eliminar Definitivamente (Hard Delete con confirmación)
+        document.getElementById('btnAccionEliminar').addEventListener('click', function() {
+            if (!selectedRecetaData) return;
+            bsModalOpciones.hide();
+
+            Swal.fire({
+                title: '¿Eliminar definitivamente?',
+                text: `Esta acción borrará permanentemente la ficha técnica "${selectedRecetaData.nombre}" y todos sus ingredientes de la base de datos MySQL. ¡No se puede deshacer!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                confirmButtonText: '<i class="fa-solid fa-trash me-1"></i> Sí, eliminar definitivamente',
+                cancelButtonText: 'Cancelar'
+            }).then((delResult) => {
+                if (delResult.isConfirmed) {
+                    fetch(`/admin/api/recetas/${selectedRecetaData.id}`, {
+                        method: 'DELETE'
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('¡Eliminada!', data.message, 'success').then(() => window.location.reload());
+                        } else {
+                            Swal.fire('Error', data.message || 'No se pudo eliminar la receta', 'error');
+                        }
+                    })
+                    .catch(() => Swal.fire('Error', 'Error al procesar la solicitud', 'error'));
+                }
+            });
+        });
+
+        const btnGuardarReceta = document.getElementById('btnGuardarReceta');
+        const btnGuardarTexto = document.getElementById('btnGuardarTexto');
+        const btnGuardarIcon = document.getElementById('btnGuardarIcon');
+        const btnCancelarModalReceta = document.getElementById('btnCancelarModalReceta');
+
+        const codigoInput = document.getElementById('codigo');
+        const codigoStatusBadge = document.getElementById('codigoStatusBadge');
+        const codigoCheckingSpinner = document.getElementById('codigoCheckingSpinner');
+        const codigoErrorFeedback = document.getElementById('codigoErrorFeedback');
+        let checkCodigoTimeout = null;
+
+        function limpiarValidacionCodigo() {
+            if (codigoInput) {
+                codigoInput.classList.remove('is-valid', 'is-invalid');
+            }
+            if (codigoStatusBadge) {
+                codigoStatusBadge.className = 'badge d-none small';
+                codigoStatusBadge.textContent = '';
+            }
+            if (codigoCheckingSpinner) {
+                codigoCheckingSpinner.classList.add('d-none');
+            }
+            if (codigoErrorFeedback) {
+                codigoErrorFeedback.classList.add('d-none');
+                codigoErrorFeedback.textContent = '';
+            }
+        }
+
+        async function consultarDisponibilidadCodigo(codigoVal, excludeId = '') {
+            if (!codigoVal || !codigoVal.trim()) {
+                limpiarValidacionCodigo();
+                return { disponible: false, message: 'El código no puede estar vacío' };
+            }
+
+            try {
+                if (codigoCheckingSpinner) codigoCheckingSpinner.classList.remove('d-none');
+                const resp = await fetch(`/admin/api/recetas/check-codigo?codigo=${encodeURIComponent(codigoVal.trim())}&excludeId=${encodeURIComponent(excludeId || '')}`);
+                const data = await resp.json();
+                if (codigoCheckingSpinner) codigoCheckingSpinner.classList.add('d-none');
+
+                if (data.disponible) {
+                    if (codigoInput) {
+                        codigoInput.classList.remove('is-invalid');
+                        codigoInput.classList.add('is-valid');
+                    }
+                    if (codigoStatusBadge) {
+                        codigoStatusBadge.className = 'badge bg-success-subtle text-success border border-success-subtle small';
+                        codigoStatusBadge.innerHTML = '<i class="fa-solid fa-check me-1"></i>Disponible';
+                    }
+                    if (codigoErrorFeedback) {
+                        codigoErrorFeedback.classList.add('d-none');
+                        codigoErrorFeedback.textContent = '';
+                    }
+                } else {
+                    if (codigoInput) {
+                        codigoInput.classList.remove('is-valid');
+                        codigoInput.classList.add('is-invalid');
+                    }
+                    if (codigoStatusBadge) {
+                        codigoStatusBadge.className = 'badge bg-danger-subtle text-danger border border-danger-subtle small';
+                        codigoStatusBadge.innerHTML = '<i class="fa-solid fa-xmark me-1"></i>Duplicado';
+                    }
+                    if (codigoErrorFeedback) {
+                        codigoErrorFeedback.classList.remove('d-none');
+                        codigoErrorFeedback.textContent = data.message || 'Código ya registrado en otra ficha.';
+                    }
+                }
+                return data;
+            } catch (err) {
+                if (codigoCheckingSpinner) codigoCheckingSpinner.classList.add('d-none');
+                console.warn('Error al verificar código:', err);
+                return { disponible: true, message: 'No se pudo verificar disponibilidad' };
+            }
+        }
+
+        if (codigoInput) {
+            codigoInput.addEventListener('input', function() {
+                const val = this.value.trim().toUpperCase();
+                this.value = val;
+                clearTimeout(checkCodigoTimeout);
+                if (!val) {
+                    limpiarValidacionCodigo();
+                    return;
+                }
+                checkCodigoTimeout = setTimeout(() => {
+                    const recetaId = document.getElementById('recetaId').value;
+                    consultarDisponibilidadCodigo(val, recetaId);
+                }, 350);
+            });
+        }
+
+        function restaurarBotonGuardar(esEdicion = false) {
+            if (!btnGuardarReceta) return;
+            btnGuardarReceta.disabled = false;
+            if (btnCancelarModalReceta) btnCancelarModalReceta.disabled = false;
+            btnGuardarReceta.classList.remove('opacity-75');
+            btnGuardarIcon.className = 'fa-solid fa-floppy-disk me-1';
+            btnGuardarTexto.textContent = esEdicion ? 'Actualizar Ficha Técnica' : 'Guardar Ficha Técnica';
+        }
+
+        function activarBotonCargando(esEdicion = false) {
+            if (!btnGuardarReceta) return;
+            btnGuardarReceta.disabled = true;
+            if (btnCancelarModalReceta) btnCancelarModalReceta.disabled = true;
+            btnGuardarReceta.classList.add('opacity-75');
+            btnGuardarIcon.className = 'spinner-border spinner-border-sm me-2';
+            btnGuardarTexto.textContent = esEdicion ? 'Actualizando Ficha Técnica...' : 'Guardando Ficha Técnica...';
+        }
 
         // Limpieza al cerrar el modal
         modalElement.addEventListener('hidden.bs.modal', function() {
@@ -456,36 +872,69 @@
                 }
             });
             recetaForm.reset();
+            limpiarValidacionCodigo();
             $('.select2-producto-maestro').val('').trigger('change');
             $('.select2-unidad-maestro').val('').trigger('change');
             document.getElementById('recetaId').value = '';
+            restaurarBotonGuardar(false);
         });
 
         // Envío Estructurado Maestro-Detalle Embebido via AJAX
-        recetaForm.addEventListener('submit', function(e) {
+        recetaForm.addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const recetaId = document.getElementById('recetaId').value;
             const esEdicion = recetaId && recetaId !== "";
+            const codigo = document.getElementById('codigo').value.trim().toUpperCase();
+
+            // 1. CHEQUEO ASÍNCRONO PREVENTIVO DE CÓDIGO DUPLICADO
+            activarBotonCargando(esEdicion);
+            btnGuardarTexto.textContent = 'Verificando código...';
+
+            const checkCodigoResultado = await consultarDisponibilidadCodigo(codigo, recetaId);
+            if (!checkCodigoResultado.disponible) {
+                restaurarBotonGuardar(esEdicion);
+                Swal.fire({
+                    title: 'Código de Ficha Duplicado',
+                    html: `
+                        <div class="text-start py-2">
+                            <p class="mb-2 text-dark">El código <b>"${codigo}"</b> ya está asignado a otra ficha técnica en la base de datos.</p>
+                            <div class="alert alert-danger py-2 small mb-0">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i> ${checkCodigoResultado.message}
+                            </div>
+                        </div>
+                    `,
+                    icon: 'warning',
+                    confirmButtonColor: '#0d6efd',
+                    confirmButtonText: '<i class="fa-solid fa-pen me-1"></i> Cambiar Código'
+                }).then(() => {
+                    codigoInput.focus();
+                    codigoInput.select();
+                });
+                return; // Detener envío por completo
+            }
+
             const url = esEdicion ? `/admin/api/recetas/${recetaId}` : '/admin/api/recetas';
             const method = esEdicion ? 'PUT' : 'POST';
 
             const filas = tbodyIngredientes.querySelectorAll('tr');
             const detalles = [];
-            // Dentro del event listener submit de recetaForm:
             filas.forEach((fila, index) => {
-                detalles.push({
-                    producto_id: fila.querySelector('.combo-producto').value,
-                    cantidad_requerida: fila.querySelector('.input-cantidad').value,
-                    unidad_medida: fila.querySelector('.combo-unidad').value,
-                    porcentaje_merma: fila.querySelector('.input-merma').value || 0,
-                    es_opcional: fila.querySelector('.check-opcional').checked ? 1 : 0, // <-- NUEVO
-                    orden_preparacion: index + 1
-                });
+                const prodId = fila.querySelector('.combo-producto').value;
+                if (prodId) {
+                    detalles.push({
+                        producto_id: prodId,
+                        cantidad_requerida: fila.querySelector('.input-cantidad').value,
+                        unidad_medida: fila.querySelector('.combo-unidad').value,
+                        porcentaje_merma: fila.querySelector('.input-merma').value || 0,
+                        es_opcional: fila.querySelector('.check-opcional').checked ? 1 : 0,
+                        orden_preparacion: index + 1
+                    });
+                }
             });
 
             const payload = {
-                codigo: document.getElementById('codigo').value,
+                codigo: codigo,
                 nombre: document.getElementById('nombre').value,
                 descripcion: document.getElementById('descripcion').value,
                 tipo: document.getElementById('tipo').value,
@@ -497,6 +946,20 @@
                 detalles: detalles
             };
 
+            // Activar indicador visual en el botón y alerta de procesamiento
+            activarBotonCargando(esEdicion);
+
+            Swal.fire({
+                title: esEdicion ? 'Actualizando Ficha Técnica' : 'Guardando Ficha Técnica',
+                text: 'Procesando insumos, costos y rendimientos. Por favor espere...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
             fetch(url, {
                 method: method,
                 headers: {
@@ -507,10 +970,17 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    Swal.fire('¡Éxito!', data.message, 'success').then(() => {
+                    Swal.fire({
+                        title: '¡Operación Exitosa!',
+                        text: data.message,
+                        icon: 'success',
+                        timer: 1800,
+                        showConfirmButton: false
+                    }).then(() => {
                         window.location.reload();
                     });
                 } else {
+                    restaurarBotonGuardar(esEdicion);
                     if (data.errors && Array.isArray(data.errors)) {
                         let msg = data.errors.map(err => `${err.param || err.field || 'Campo'}: ${err.msg || err.message}`).join('<br>');
                         Swal.fire({ title: 'Error de Validación', html: msg, icon: 'error' });
@@ -519,77 +989,9 @@
                     }
                 }
             })
-            .catch(error => Swal.fire('Error', 'No se pudo guardar la receta maestro-detalle', 'error'));
-        });
-
-        // Manejador del botón "Opciones de Ficha Técnica"
-        document.querySelectorAll('.opciones-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const id = this.dataset.id;
-                const nombre = this.dataset.nombre;
-                const estaActiva = parseInt(this.dataset.activa) === 1;
-
-                Swal.fire({
-                    title: `⚙️ Opciones: ${nombre}`,
-                    text: 'Selecciona la acción que deseas realizar sobre esta ficha técnica:',
-                    icon: 'question',
-                    showCancelButton: true,
-                    showDenyButton: true,
-                    confirmButtonText: estaActiva ? '<i class="fa-solid fa-ban me-1"></i> Desactivar Receta' : '<i class="fa-solid fa-check me-1"></i> Activar Receta',
-                    denyButtonText: '<i class="fa-solid fa-trash-can me-1"></i> Eliminar Definitivamente',
-                    cancelButtonText: 'Cancelar',
-                    confirmButtonColor: estaActiva ? '#ffc107' : '#198754',
-                    denyButtonColor: '#dc3545',
-                    customClass: {
-                        confirmButton: 'text-dark fw-bold'
-                    }
-                }).then((result) => {
-                    // OPCIÓN 1: CAMBIAR ESTADO (Desactivar / Activar lógicamente)
-                    if (result.isConfirmed) {
-                        const nuevoEstado = estaActiva ? 0 : 1;
-                        fetch(`/admin/api/recetas/${id}/estado`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ activa: nuevoEstado })
-                        })
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.success) {
-                                Swal.fire('¡Actualizado!', data.message, 'success').then(() => window.location.reload());
-                            } else {
-                                Swal.fire('Error', data.message || 'No se pudo cambiar el estado', 'error');
-                            }
-                        })
-                        .catch(() => Swal.fire('Error', 'Error de conexión con el servidor', 'error'));
-                    } 
-                    // OPCIÓN 2: ELIMINAR REGISTRO FISICAMENTE O BAJA LÓGICA
-                    else if (result.isDenied) {
-                        Swal.fire({
-                            title: '¿Estás seguro?',
-                            text: `Esta acción eliminará la ficha técnica "${nombre}". ¿Deseas continuar?`,
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#dc3545',
-                            confirmButtonText: 'Sí, eliminar',
-                            cancelButtonText: 'Cancelar'
-                        }).then((delResult) => {
-                            if (delResult.isConfirmed) {
-                                fetch(`/admin/api/recetas/${id}`, {
-                                    method: 'DELETE'
-                                })
-                                .then(r => r.json())
-                                .then(data => {
-                                    if (data.success) {
-                                        Swal.fire('¡Eliminada!', data.message, 'success').then(() => window.location.reload());
-                                    } else {
-                                        Swal.fire('Error', data.message || 'No se pudo eliminar la receta', 'error');
-                                    }
-                                })
-                                .catch(() => Swal.fire('Error', 'Error al procesar la solicitud', 'error'));
-                            }
-                        });
-                    }
-                });
+            .catch(error => {
+                restaurarBotonGuardar(esEdicion);
+                Swal.fire('Error', 'No se pudo guardar la receta maestro-detalle. Verifique la conexión.', 'error');
             });
         });
     </script>

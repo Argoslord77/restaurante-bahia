@@ -23,6 +23,41 @@
                 
                 <%- include('../includes/header', {encabezado_pagina: 'Control de Stock Actual', desc_pagina: 'Monitoreo de existencias en tiempo real y gestión preventiva de mermas.', add_btn: false}) %>
 
+                <!-- Alerta de lotes próximos a vencer (servidor) -->
+                <% if (typeof alertasVencimiento !== 'undefined' && alertasVencimiento.length > 0) { %>
+                <div class="alert alert-warning d-flex align-items-start gap-2 shadow-sm border-0 rounded py-2 px-3 mb-4" role="alert">
+                    <i class="fa-solid fa-hourglass-half mt-1"></i>
+                    <div class="w-100">
+                        <strong><%= alertasVencimiento.length %> lote(s) vencen en los próximos 7 días:</strong>
+                        <div class="table-responsive mt-2">
+                            <table class="table table-sm table-bordered mb-0 fs-7 bg-white">
+                                <thead class="table-light">
+                                    <tr><th>Producto</th><th>Almacén</th><th>Lote</th><th class="text-end">Cantidad</th><th class="text-center">Vence</th></tr>
+                                </thead>
+                                <tbody>
+                                    <% alertasVencimiento.slice(0, 10).forEach(l => { %>
+                                    <tr class="<%= Number(l.dias_restantes) <= 0 ? 'table-danger' : '' %>">
+                                        <td><%= l.producto_nombre %></td>
+                                        <td><%= l.almacen_nombre %></td>
+                                        <td class="font-monospace"><%= l.numero_lote %></td>
+                                        <td class="text-end"><%= parseFloat(l.cantidad_actual).toLocaleString('es-ES') %></td>
+                                        <td class="text-center fw-semibold"><%= new Date(l.fecha_vencimiento).toLocaleDateString('es-ES') %> (<%= l.dias_restantes %>d)</td>
+                                    </tr>
+                                    <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                        <% if (alertasVencimiento.length > 10) { %><small class="text-muted">… y <%= alertasVencimiento.length - 10 %> más.</small><% } %>
+                    </div>
+                </div>
+                <% } %>
+
+                <div class="d-flex justify-content-end mb-3">
+                    <a href="/admin/inventario/valorizacion" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                        <i class="fa-solid fa-sack-dollar text-secondary me-1"></i> Valorización de Inventario
+                    </a>
+                </div>
+
                 <div class="row g-3 mb-4">
                     <div class="col-12 col-sm-6 col-md-4">
                         <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">

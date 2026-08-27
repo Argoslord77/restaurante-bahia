@@ -17,6 +17,7 @@
         let currentArea = typeof area !== 'undefined' ? area : 'COCINA';
         let currentAreaKey = typeof areaKey !== 'undefined' ? areaKey : 'cocina';
         let listaComandasInicial = (typeof comandas !== 'undefined' && Array.isArray(comandas)) ? comandas : [];
+        let monitoresHabilitados = (typeof habilitarMonitores !== 'undefined') ? Boolean(habilitarMonitores) : true;
     %>
 
     <!-- Header Principal -->
@@ -30,32 +31,36 @@
                 <h1 class="text-xl md:text-2xl font-black text-white tracking-wider uppercase leading-none">
                     MONITOR DE <%= currentArea %>
                 </h1>
-                <p class="text-[11px] text-slate-400 font-extrabold uppercase mt-1.5 tracking-widest">Restaurante Bahía • Producción</p>
+                <p class="text-[11px] text-slate-400 font-extrabold uppercase mt-1.5 tracking-widest">
+                    Restaurante Bahía • <%= monitoresHabilitados ? 'Producción Digital' : 'Modo Servicio Directo' %>
+                </p>
             </div>
         </div>
         
         <!-- Botonera -->
         <div class="flex flex-wrap items-center justify-center md:justify-end gap-3 w-full md:w-auto">
             
-            <!-- Indicador / Botón Auto-refresh -->
-            <button id="btn-sync" 
-                    type="button"
-                    style="border-radius: 9999px !important;"
-                    class="group h-11 min-w-[190px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] !rounded-full px-5 py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 active:scale-95">
-                <span id="sync-dot" class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span id="sync-text">Sincronizado</span>
-                <span id="sync-counter" class="text-xs text-amber-400 font-mono font-bold ml-1"></span>
-            </button>
+            <% if (monitoresHabilitados) { %>
+                <!-- Indicador / Botón Auto-refresh -->
+                <button id="btn-sync" 
+                        type="button"
+                        style="border-radius: 9999px !important;"
+                        class="group h-11 min-w-[190px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] !rounded-full px-5 py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 active:scale-95">
+                    <span id="sync-dot" class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="sync-text">Sincronizado</span>
+                    <span id="sync-counter" class="text-xs text-amber-400 font-mono font-bold ml-1"></span>
+                </button>
+                
+                <!-- Botón Refrescar -->
+                <button id="btn-reload" 
+                        type="button"
+                        style="border-radius: 9999px !important;"
+                        class="group h-11 min-w-[170px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95">
+                    <i class="fa-solid fa-arrows-rotate text-[#936932] group-hover:text-white transition-colors duration-200"></i> Refrescar
+                </button>
+            <% } %>
             
-            <!-- Botón Refrescar -->
-            <button id="btn-reload" 
-                    type="button"
-                    style="border-radius: 9999px !important;"
-                    class="group h-11 min-w-[170px] bg-slate-800/40 border-2 border-[#936932] text-slate-300 hover:text-white hover:bg-[#936932]/20 hover:shadow-[0_0_15px_rgba(147,105,50,0.3)] px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95">
-                <i class="fa-solid fa-arrows-rotate text-[#936932] group-hover:text-white transition-colors duration-200"></i> Refrescar
-            </button>
-            
-            <!-- Botón Salir -->
+            <!-- Botón Salir / Panel Central -->
             <a id="btn-exit" 
                href="<%= typeof exitUrl !== 'undefined' ? exitUrl : '/logout' %>" 
                style="border-radius: 9999px !important; color: #cbd5e1 !important;"
@@ -66,26 +71,43 @@
         </div>
     </header>
 
-    <!-- Barra Superior de Consolidado -->
-    <section class="bg-[#0b101d] border-b border-slate-900 px-6 py-4 shadow-inner">
-        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
-            <div class="flex items-center gap-2 flex-shrink-0">
-                <span class="flex h-2 w-2 relative">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-                </span>
-                <span class="text-[11px] font-black tracking-widest text-cyan-400 uppercase">PRODUCCIÓN ACTIVA:</span>
+    <% if (monitoresHabilitados) { %>
+        <!-- Barra Superior de Consolidado -->
+        <section class="bg-[#0b101d] border-b border-slate-900 px-6 py-4 shadow-inner">
+            <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="flex h-2 w-2 relative">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                    </span>
+                    <span class="text-[11px] font-black tracking-widest text-cyan-400 uppercase">PRODUCCIÓN ACTIVA:</span>
+                </div>
+                
+                <div id="consolidado-container" class="flex flex-wrap gap-3 items-center overflow-x-auto py-1 custom-scrollbar">
+                    <!-- Se renderiza dinámicamente -->
+                </div>
             </div>
-            
-            <div id="consolidado-container" class="flex flex-wrap gap-3 items-center overflow-x-auto py-1 custom-scrollbar">
-                <!-- Se renderiza dinámicamente -->
-            </div>
-        </div>
-    </section>
+        </section>
+    <% } %>
 
     <!-- Contenido Principal -->
     <main id="main-comandas-container" class="flex-1 p-4 md:p-6 bg-[#080c16] overflow-x-hidden md:overflow-x-auto">
-        <!-- Se renderiza dinámicamente -->
+        <% if (!monitoresHabilitados) { %>
+            <div class="h-full min-h-[55vh] flex flex-col items-center justify-center text-center p-6">
+                <div class="w-20 h-20 rounded-full bg-[#111625] flex items-center justify-center mb-4 border border-amber-500/40 shadow-lg">
+                    <i class="fa-solid fa-power-off text-3xl text-amber-400"></i>
+                </div>
+                <h2 class="text-xl font-extrabold text-white">Monitores en Modo Inactivo</h2>
+                <p class="text-slate-400 text-sm mt-2 max-w-md">
+                    El sistema está operando actualmente en <strong>Modo Servicio Directo</strong>. Las comandas y despachos se gestionan directamente desde el TPV.
+                </p>
+                <% if (typeof isAdministrative !== 'undefined' && isAdministrative) { %>
+                    <a href="/admin/settings" class="mt-4 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm transition-all shadow-md inline-flex items-center gap-2 text-decoration-none">
+                        <i class="fa-solid fa-gear"></i> Ir a Configuración del Sistema
+                    </a>
+                <% } %>
+            </div>
+        <% } %>
     </main>
 
     <!-- Elemento de Audio según el Área Activa -->
@@ -100,6 +122,7 @@
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
     <script>
+        const MONITORES_HABILITADOS = <%= monitoresHabilitados ? 'true' : 'false' %>;
         const CURRENT_AREA_KEY = '<%= currentAreaKey %>';
         const CURRENT_AREA_NAME = '<%= currentArea %>';
         const INTERVALO_SEGUNDOS = 15;
@@ -130,6 +153,7 @@
          * Realiza la petición Fetch asíncrona para traer las comandas activas
          */
         async function fetchComandasAsincronas() {
+            if (!MONITORES_HABILITADOS) return;
             try {
                 const response = await fetch(`/api/monitor/comandas?area=${CURRENT_AREA_KEY}`);
                 const data = await response.json();
@@ -146,6 +170,7 @@
          * Procesa los datos recibidos, detecta ítems nuevos para disparar el sonido y actualiza el DOM
          */
         function procesarYRenderizar(comandas) {
+            if (!MONITORES_HABILITADOS) return;
             comandasActuales = comandas;
 
             // Extraer lista completa de detalle_id activos
@@ -228,7 +253,7 @@
          */
         function renderizarComandas(comandas) {
             const main = document.getElementById('main-comandas-container');
-            if (!main) return;
+            if (!main || !MONITORES_HABILITADOS) return;
 
             if (comandas.length === 0) {
                 main.innerHTML = `
@@ -315,6 +340,7 @@
 
         // --- MANEJO DEL REFRESH TEMPORIZADO ---
         function iniciarAutoRefresh() {
+            if (!MONITORES_HABILITADOS) return;
             detenerAutoRefresh();
             timeLeft = INTERVALO_SEGUNDOS;
             actualizarContadorUI();
@@ -324,7 +350,7 @@
                 if (timeLeft <= 0) {
                     timeLeft = INTERVALO_SEGUNDOS;
                     actualizarContadorUI();
-                    fetchComandasAsincronas(); // Refresco asíncrono
+                    fetchComandasAsincronas();
                 } else {
                     actualizarContadorUI();
                 }
@@ -346,6 +372,7 @@
         }
 
         function actualizarUI() {
+            if (!MONITORES_HABILITADOS) return;
             const dot = document.getElementById('sync-dot');
             const text = document.getElementById('sync-text');
             const counterSpan = document.getElementById('sync-counter');
@@ -373,7 +400,7 @@
         function marcarListo(detalle_id) {
             Swal.fire({
                 title: '¿MARCAR PRODUCTO LISTO?',
-                text: 'El ítem pasará al estado listo para su entrega.',
+                text: 'El ítem pasará al estado listo para su entrega al cliente.',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#10b981',
@@ -428,21 +455,22 @@
         }
 
         document.addEventListener("DOMContentLoaded", () => {
-            const btnSync = document.getElementById('btn-sync');
-            if (btnSync) {
-                btnSync.addEventListener('click', toggleSincronizacion);
-            }
+            if (MONITORES_HABILITADOS) {
+                const btnSync = document.getElementById('btn-sync');
+                if (btnSync) {
+                    btnSync.addEventListener('click', toggleSincronizacion);
+                }
 
-            const btnReload = document.getElementById('btn-reload');
-            if (btnReload) {
-                btnReload.addEventListener('click', () => {
-                    fetchComandasAsincronas();
-                });
-            }
+                const btnReload = document.getElementById('btn-reload');
+                if (btnReload) {
+                    btnReload.addEventListener('click', () => {
+                        fetchComandasAsincronas();
+                    });
+                }
 
-            // Procesar y renderizar datos iniciales
-            procesarYRenderizar(comandasActuales);
-            actualizarUI();
+                procesarYRenderizar(comandasActuales);
+                actualizarUI();
+            }
         });
     </script>
 

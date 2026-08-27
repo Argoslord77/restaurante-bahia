@@ -124,52 +124,44 @@
                     </div>
 
                     <div class="row g-4">
-                        <!-- Distribución de Salón / Mesas -->
+                        <!-- Estados reales de las mesas -->
                         <div class="col-12 col-lg-8">
                             <div class="card card-custom shadow-sm p-4">
                                 <div class="d-flex align-items-center justify-content-between mb-3">
-                                    <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-shop me-2 text-secondary"></i>Distribución de Salón</h5>
-                                    <small class="text-muted" id="ultimaActualizacionMesas">Actualizado recientemente</small>
+                                    <div>
+                                        <h5 class="fw-bold text-dark mb-1"><i class="fa-solid fa-shop me-2 text-secondary"></i>Estado de mesas</h5>
+                                        <small class="text-muted">Estado operativo actual de cada mesa</small>
+                                    </div>
+                                    <small class="text-muted text-nowrap" id="ultimaActualizacionMesas">Actualizado recientemente</small>
                                 </div>
                                 <div class="row row-cols-2 row-cols-md-4 g-3" id="contenedorDistribucionMesas">
                                     <% if (metrics.distribucionMesas && metrics.distribucionMesas.length > 0) { %>
-                                        <% metrics.distribucionMesas.forEach(m => { 
+                                        <% metrics.distribucionMesas.forEach(m => {
+                                            const estado = String(m.estado || m.estado_mesa_db || 'libre').toLowerCase();
                                             let badgeClase = 'bg-success-subtle text-success';
-                                            let labelEstado = 'Disponible';
-                                            if (m.estado === 'ocupada') { badgeClase = 'bg-danger-subtle text-danger'; labelEstado = 'Ocupada'; }
-                                            else if (m.estado === 'reservada') { badgeClase = 'bg-primary-subtle text-primary'; labelEstado = 'Reservada'; }
-                                            else if (m.estado === 'desocupandose') { badgeClase = 'bg-warning-subtle text-warning-emphasis'; labelEstado = 'Por Cobrar'; }
+                                            let labelEstado = 'Libre';
+                                            if (estado === 'ocupada') { badgeClase = 'bg-danger-subtle text-danger'; labelEstado = 'Ocupada'; }
+                                            else if (estado === 'reservada') { badgeClase = 'bg-primary-subtle text-primary'; labelEstado = 'Reservada'; }
+                                            else if (estado === 'desocupandose') { badgeClase = 'bg-warning-subtle text-warning-emphasis'; labelEstado = 'Por cobrar'; }
+                                            else if (estado === 'mantenimiento') { badgeClase = 'bg-secondary-subtle text-secondary'; labelEstado = 'Mantenimiento'; }
                                         %>
                                             <div class="col">
-                                                <div class="p-3 border rounded-3 text-center bg-light shadow-sm h-100 d-flex flex-column justify-content-center">
-                                                    <div class="fw-bold text-secondary text-truncate"><%= m.numero %></div>
+                                                <div class="p-3 border rounded-3 text-center bg-light shadow-sm h-100 d-flex flex-column justify-content-center" title="<%= m.ubicacion || '' %>">
+                                                    <div class="fw-bold text-secondary text-truncate"><%= m.numero || `Mesa ${m.id}` %></div>
                                                     <span class="badge <%= badgeClase %> mt-1 rounded-pill"><%= labelEstado %></span>
+                                                    <% if (m.pedido_activo_id) { %>
+                                                        <small class="text-muted mt-2 text-truncate">Pedido #<%= m.pedido_activo_id %><%= m.mesero ? ` · ${m.mesero}` : '' %></small>
+                                                    <% } else if (m.ubicacion) { %>
+                                                        <small class="text-muted mt-2 text-truncate"><%= m.ubicacion %></small>
+                                                    <% } %>
                                                 </div>
                                             </div>
                                         <% }) %>
                                     <% } else { %>
-                                        <div class="col">
-                                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                                <div class="fw-bold text-secondary">Mesa 01</div>
-                                                <span class="badge bg-success-subtle text-success mt-1 rounded-pill">Disponible</span>
-                                            </div>
-                                        </div>
-                                        <div class="col">
-                                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                                <div class="fw-bold text-secondary">Mesa 02</div>
-                                                <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
-                                            </div>
-                                        </div>
-                                        <div class="col">
-                                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                                <div class="fw-bold text-secondary">Mesa 03</div>
-                                                <span class="badge bg-danger-subtle text-danger mt-1 rounded-pill">Ocupada</span>
-                                            </div>
-                                        </div>
-                                        <div class="col">
-                                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm">
-                                                <div class="fw-bold text-secondary">Mesa 04</div>
-                                                <span class="badge bg-warning-subtle text-warning mt-1 rounded-pill">Atendida</span>
+                                        <div class="col-12">
+                                            <div class="text-center text-muted border rounded-3 py-4">
+                                                <i class="fa-solid fa-shop-slash fs-4 d-block mb-2"></i>
+                                                No hay mesas configuradas.
                                             </div>
                                         </div>
                                     <% } %>
@@ -177,33 +169,36 @@
                             </div>
                         </div>
 
-                        <!-- Últimas Acciones y Actividad -->
+                        <!-- Últimas acciones del registro de auditoría -->
                         <div class="col-12 col-lg-4">
-                            <div class="card card-custom shadow-sm p-4">
-                                <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Últimas Acciones</h5>
+                            <div class="card card-custom shadow-sm p-4 h-100">
+                                <div class="d-flex align-items-start justify-content-between gap-2 mb-3">
+                                    <div>
+                                        <h5 class="fw-bold text-dark mb-1"><i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Últimas acciones</h5>
+                                        <small class="text-muted">Registro de auditoría del sistema</small>
+                                    </div>
+                                    <a href="/admin/auditoria" class="small text-decoration-none text-nowrap" title="Abrir auditoría">Ver todo</a>
+                                </div>
                                 <ul class="list-unstyled mb-0 d-flex flex-column gap-3 fs-7" id="contenedorUltimasAcciones">
                                     <% if (metrics.ultimasAcciones && metrics.ultimasAcciones.length > 0) { %>
                                         <% metrics.ultimasAcciones.forEach(acc => { %>
                                             <li class="d-flex gap-2 align-items-start">
                                                 <i class="fa-solid fa-circle-dot <%= acc.color || 'text-primary' %> mt-1 small" style="font-size: 0.6rem;"></i>
-                                                <div><%= acc.texto %></div>
+                                                <div class="min-w-0">
+                                                    <div class="fw-semibold text-dark"><%= acc.texto %></div>
+                                                    <small class="text-muted d-block text-truncate"><%= acc.detalle || '' %></small>
+                                                    <small class="text-muted"><%= acc.creado_en ? new Date(acc.creado_en).toLocaleString('es-ES') : 'Fecha no disponible' %></small>
+                                                </div>
                                             </li>
                                         <% }) %>
                                     <% } else { %>
-                                        <li class="d-flex gap-2 align-items-start">
-                                            <i class="fa-solid fa-circle-dot text-primary mt-1 small" style="font-size: 0.6rem;"></i>
-                                            <div><strong>Mesa 02</strong> solicitó la cuenta.</div>
-                                        </li>
-                                        <li class="d-flex gap-2 align-items-start">
-                                            <i class="fa-solid fa-circle-dot text-warning mt-1 small" style="font-size: 0.6rem;"></i>
-                                            <div>Nuevo pedido enviado a cocina desde <strong>Mesa 03</strong>.</div>
-                                        </li>
-                                        <li class="d-flex gap-2 align-items-start">
-                                            <i class="fa-solid fa-circle-dot text-success mt-1 small" style="font-size: 0.6rem;"></i>
-                                            <div>El dependiente ingresó al turno de la mañana.</div>
+                                        <li class="text-center text-muted py-3">
+                                            <i class="fa-solid fa-clipboard-check fs-4 d-block mb-2"></i>
+                                            No hay acciones registradas todavía.
                                         </li>
                                     <% } %>
                                 </ul>
+                                <small class="text-muted mt-3" id="ultimaActualizacionAcciones">Actualizado recientemente</small>
                             </div>
                         </div>
                     </div>
@@ -220,130 +215,204 @@
 
     <!-- POLLING EN TIEMPO REAL (10 SEGUNDOS) -->
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const INTERVALO_POLLING_MS = 10000; // 10 Segundos
+        document.addEventListener('DOMContentLoaded', () => {
+            const INTERVALO_POLLING_MS = 10000;
             let pollingTimer = null;
+            let solicitudEnCurso = false;
+
+            const ESTADOS_MESA = {
+                libre: { clase: 'bg-success-subtle text-success', etiqueta: 'Libre' },
+                ocupada: { clase: 'bg-danger-subtle text-danger', etiqueta: 'Ocupada' },
+                reservada: { clase: 'bg-primary-subtle text-primary', etiqueta: 'Reservada' },
+                desocupandose: { clase: 'bg-warning-subtle text-warning-emphasis', etiqueta: 'Por cobrar' },
+                mantenimiento: { clase: 'bg-secondary-subtle text-secondary', etiqueta: 'Mantenimiento' }
+            };
+
+            function escaparHtml(valor) {
+                return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                })[caracter]);
+            }
+
+            function formatearFecha(valor) {
+                if (!valor) return 'Fecha no disponible';
+                const fecha = new Date(valor);
+                return Number.isNaN(fecha.getTime()) ? 'Fecha no disponible' : fecha.toLocaleString('es-ES');
+            }
+
+            function actualizarIndicadorPolling(enLinea) {
+                const indicador = document.getElementById('indicadorPolling');
+                const texto = document.getElementById('textoPolling');
+                if (indicador) {
+                    indicador.classList.toggle('text-success', enLinea);
+                    indicador.classList.toggle('text-danger', !enLinea);
+                }
+                if (texto) texto.textContent = enLinea ? 'En vivo (10s)' : 'Sin conexión';
+            }
+
+            function renderizarMesas(mesas) {
+                const contenedor = document.getElementById('contenedorDistribucionMesas');
+                if (!contenedor) return;
+
+                if (!Array.isArray(mesas) || mesas.length === 0) {
+                    contenedor.innerHTML = `
+                        <div class="col-12">
+                            <div class="text-center text-muted border rounded-3 py-4">
+                                <i class="fa-solid fa-shop-slash fs-4 d-block mb-2"></i>
+                                No hay mesas configuradas.
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                contenedor.innerHTML = mesas.map(mesa => {
+                    const estado = String(mesa.estado || mesa.estado_mesa_db || 'libre').toLowerCase();
+                    const configuracion = ESTADOS_MESA[estado] || ESTADOS_MESA.libre;
+                    const numero = mesa.numero || `Mesa ${mesa.id ?? ''}`;
+                    const tienePedido = mesa.pedido_activo_id !== null && mesa.pedido_activo_id !== undefined;
+                    const detalle = tienePedido
+                        ? `Pedido #${mesa.pedido_activo_id}${mesa.mesero ? ` · ${mesa.mesero}` : ''}`
+                        : (mesa.ubicacion || '');
+
+                    return `
+                        <div class="col">
+                            <div class="p-3 border rounded-3 text-center bg-light shadow-sm h-100 d-flex flex-column justify-content-center" title="${escaparHtml(mesa.ubicacion || '')}">
+                                <div class="fw-bold text-secondary text-truncate">${escaparHtml(numero)}</div>
+                                <span class="badge ${configuracion.clase} mt-1 rounded-pill">${configuracion.etiqueta}</span>
+                                ${detalle ? `<small class="text-muted mt-2 text-truncate">${escaparHtml(detalle)}</small>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            function renderizarAcciones(acciones) {
+                const contenedor = document.getElementById('contenedorUltimasAcciones');
+                if (!contenedor) return;
+
+                if (!Array.isArray(acciones) || acciones.length === 0) {
+                    contenedor.innerHTML = `
+                        <li class="text-center text-muted py-3">
+                            <i class="fa-solid fa-clipboard-check fs-4 d-block mb-2"></i>
+                            No hay acciones registradas todavía.
+                        </li>
+                    `;
+                    return;
+                }
+
+                const coloresPermitidos = new Set(['text-success', 'text-danger', 'text-warning', 'text-primary']);
+                contenedor.innerHTML = acciones.map(accion => {
+                    const color = coloresPermitidos.has(accion.color) ? accion.color : 'text-primary';
+                    const texto = accion.texto || `${accion.usuario_nombre || 'Usuario'}: ${accion.accion || 'Operación'}`;
+                    const detalle = accion.detalle || `${accion.metodo_http || 'GET'} ${accion.ruta || '/'}`;
+                    return `
+                        <li class="d-flex gap-2 align-items-start">
+                            <i class="fa-solid fa-circle-dot ${color} mt-1 small" style="font-size: 0.6rem;"></i>
+                            <div class="min-w-0">
+                                <div class="fw-semibold text-dark">${escaparHtml(texto)}</div>
+                                <small class="text-muted d-block text-truncate">${escaparHtml(detalle)}</small>
+                                <small class="text-muted">${escaparHtml(formatearFecha(accion.creado_en))}</small>
+                            </div>
+                        </li>
+                    `;
+                }).join('');
+            }
+
+            function actualizarAlertaTurno(mostrarAlertaTurno) {
+                const contenedor = document.getElementById('contenedorAlertaTurno');
+                if (!contenedor) return;
+                if (!mostrarAlertaTurno) {
+                    contenedor.innerHTML = '';
+                    return;
+                }
+                if (contenedor.querySelector('.alert')) return;
+                contenedor.innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 5px solid #dc3545;">
+                        <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> ¡Sistema Bloqueado!</h4>
+                        <p>No se ha detectado ningún <strong>Turno de Servicio Activo</strong> en el restaurante. Todas las operaciones críticas de salón, órdenes y transferencias de almacén están suspendidas temporalmente.</p>
+                        <hr>
+                        <p class="mb-0">Por favor, diríjase al módulo de cajas y realice la <strong>Apertura de Turno</strong> para restablecer las operaciones del staff.</p>
+                    </div>
+                `;
+            }
 
             async function actualizarMetricasDashboard() {
+                if (solicitudEnCurso) return;
+                solicitudEnCurso = true;
                 try {
                     const response = await fetch('/admin/api/dashboard/metrics', {
                         method: 'GET',
+                        cache: 'no-store',
+                        credentials: 'same-origin',
                         headers: {
                             'Accept': 'application/json',
                             'X-Requested-With': 'XMLHttpRequest'
                         }
                     });
 
-                    if (!response.ok) return;
-
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     const data = await response.json();
-                    if (!data || !data.success) return;
+                    if (!data || !data.success) throw new Error(data?.message || 'Respuesta inválida');
 
-                    const { metrics, turnoActivo, mostrarAlertaTurno } = data;
+                    const metrics = data.metrics || {};
+                    const mesasTotales = Number(metrics.mesasTotales) || 0;
+                    const mesasOcupadas = Number(metrics.mesasOcupadas) || 0;
 
-                    // 1. Actualizar Tarjeta de Mesas
                     const elMesas = document.getElementById('metricMesasActivas');
                     const elPorc = document.getElementById('metricPorcentajeOcupacion');
-                    if (elMesas && metrics) {
-                        elMesas.textContent = `${metrics.mesasOcupadas || 0} / ${metrics.mesasTotales || 0}`;
-                        const porcentaje = metrics.mesasTotales > 0 ? Math.round((metrics.mesasOcupadas / metrics.mesasTotales) * 100) : 0;
-                        if (elPorc) elPorc.textContent = `${porcentaje}% Ocupación`;
-                    }
+                    if (elMesas) elMesas.textContent = `${mesasOcupadas} / ${mesasTotales}`;
+                    if (elPorc) elPorc.textContent = `${mesasTotales > 0 ? Math.round((mesasOcupadas / mesasTotales) * 100) : 0}% Ocupación`;
 
-                    // 2. Actualizar Tarjeta de Cocina
                     const elCocina = document.getElementById('metricPedidosCocina');
-                    if (elCocina && metrics) {
-                        elCocina.textContent = metrics.pedidosCocina || 0;
-                    }
+                    if (elCocina) elCocina.textContent = Number(metrics.pedidosCocina) || 0;
 
-                    // 3. Actualizar Ventas del Día
                     const elVentas = document.getElementById('metricVentasDia');
-                    if (elVentas && metrics) {
-                        const totalVentas = parseFloat(metrics.ventasDia || 0).toFixed(2);
-                        elVentas.textContent = `$${totalVentas}`;
-                    }
+                    if (elVentas) elVentas.textContent = `$${(Number(metrics.ventasDia) || 0).toFixed(2)}`;
 
-                    // 4. Actualizar Personal de Turno
                     const elPersonal = document.getElementById('metricPersonalTurno');
-                    if (elPersonal && metrics) {
-                        elPersonal.textContent = metrics.totalPersonal || 0;
-                    }
+                    if (elPersonal) elPersonal.textContent = Number(metrics.totalPersonal) || 0;
 
-                    // 5. Actualizar Alerta de Turno si cambió de estado
-                    const contenedorAlerta = document.getElementById('contenedorAlertaTurno');
-                    if (contenedorAlerta) {
-                        if (mostrarAlertaTurno) {
-                            if (!document.querySelector('#contenedorAlertaTurno .alert')) {
-                                contenedorAlerta.innerHTML = `
-                                    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 5px solid #dc3545;">
-                                        <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> ¡Sistema Bloqueado!</h4>
-                                        <p>No se ha detectado ningún <strong>Turno de Servicio Activo</strong> en el restaurante. Todas las operaciones críticas de salón, órdenes y transferencias de almacén están suspendidas temporalmente.</p>
-                                        <hr>
-                                        <p class="mb-0">Por favor, diríjase al módulo de cajas y realice la <strong>Apertura de Turno</strong> para restablecer las operaciones del staff.</p>
-                                    </div>
-                                `;
-                            }
-                        } else {
-                            contenedorAlerta.innerHTML = '';
-                        }
-                    }
+                    actualizarAlertaTurno(Boolean(data.mostrarAlertaTurno));
 
-                    // 6. Actualizar Mesas / Salón si viene el array
-                    if (metrics && Array.isArray(metrics.distribucionMesas) && metrics.distribucionMesas.length > 0) {
-                        const contMesas = document.getElementById('contenedorDistribucionMesas');
-                        if (contMesas) {
-                            contMesas.innerHTML = metrics.distribucionMesas.map(m => {
-                                let badgeClase = 'bg-success-subtle text-success';
-                                let labelEstado = 'Disponible';
-                                if (m.estado === 'ocupada') { badgeClase = 'bg-danger-subtle text-danger'; labelEstado = 'Ocupada'; }
-                                else if (m.estado === 'reservada') { badgeClase = 'bg-primary-subtle text-primary'; labelEstado = 'Reservada'; }
-                                else if (m.estado === 'desocupandose') { badgeClase = 'bg-warning-subtle text-warning-emphasis'; labelEstado = 'Por Cobrar'; }
-                                return `
-                                    <div class="col">
-                                        <div class="p-3 border rounded-3 text-center bg-light shadow-sm h-100 d-flex flex-column justify-content-center">
-                                            <div class="fw-bold text-secondary text-truncate">${m.numero}</div>
-                                            <span class="badge ${badgeClase} mt-1 rounded-pill">${labelEstado}</span>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('');
-                        }
-                    }
+                    // Se renderizan también los arrays vacíos para quitar datos
+                    // antiguos cuando una mesa queda libre o no hay logs.
+                    renderizarMesas(metrics.distribucionMesas || []);
+                    renderizarAcciones(metrics.ultimasAcciones || []);
 
-                    // 7. Actualizar Últimas Acciones
-                    if (metrics && Array.isArray(metrics.ultimasAcciones) && metrics.ultimasAcciones.length > 0) {
-                        const contAcciones = document.getElementById('contenedorUltimasAcciones');
-                        if (contAcciones) {
-                            contAcciones.innerHTML = metrics.ultimasAcciones.map(acc => `
-                                <li class="d-flex gap-2 align-items-start">
-                                    <i class="fa-solid fa-circle-dot ${acc.color || 'text-primary'} mt-1 small" style="font-size: 0.6rem;"></i>
-                                    <div>${acc.texto}</div>
-                                </li>
-                            `).join('');
-                        }
-                    }
-
+                    const fechaActualizacion = formatearFecha(data.timestamp || new Date());
                     const elUltimaHora = document.getElementById('ultimaActualizacionMesas');
-                    if (elUltimaHora) {
-                        const ahora = new Date();
-                        elUltimaHora.textContent = `Actualizado ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}`;
-                    }
-
-                } catch (err) {
-                    console.warn('Fallo transitorio en polling del dashboard:', err);
+                    const elUltimaHoraAcciones = document.getElementById('ultimaActualizacionAcciones');
+                    if (elUltimaHora) elUltimaHora.textContent = `Actualizado ${fechaActualizacion}`;
+                    if (elUltimaHoraAcciones) elUltimaHoraAcciones.textContent = `Actualizado ${fechaActualizacion}`;
+                    actualizarIndicadorPolling(true);
+                } catch (error) {
+                    actualizarIndicadorPolling(false);
+                    console.warn('Fallo transitorio en polling del dashboard:', error);
+                } finally {
+                    solicitudEnCurso = false;
                 }
             }
 
-            // Iniciar ciclo de polling periódico
-            pollingTimer = setInterval(actualizarMetricasDashboard, INTERVALO_POLLING_MS);
+            function iniciarPolling() {
+                if (pollingTimer) clearInterval(pollingTimer);
+                actualizarMetricasDashboard();
+                pollingTimer = setInterval(actualizarMetricasDashboard, INTERVALO_POLLING_MS);
+            }
 
-            // Pausar polling si la pestaña está oculta para ahorrar recursos
+            iniciarPolling();
+
+            // Pausar el polling si la pestaña está oculta y refrescar al volver.
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
-                    clearInterval(pollingTimer);
+                    if (pollingTimer) clearInterval(pollingTimer);
+                    pollingTimer = null;
                 } else {
-                    actualizarMetricasDashboard(); // Refresco inmediato al volver
-                    pollingTimer = setInterval(actualizarMetricasDashboard, INTERVALO_POLLING_MS);
+                    iniciarPolling();
                 }
             });
         });

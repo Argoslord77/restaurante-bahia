@@ -11,6 +11,14 @@ router.get('/inventario/stock',
     inventarioController.viewStockGeneral
 );
 
+// Reporte de valorización de inventario (Σ cantidad × costo por almacén/lote)
+router.get(
+    '/inventario/valorizacion',
+    ensureAuthenticated,
+    checkRole(['superadministrador', 'administrador', 'almacenero', 'economico']),
+    inventarioController.renderValorizacion
+);
+
 // Endpoint API que el Frontend consultará asíncronamente vía fetch()
 router.get('/inventario/api/stock/:almacenId', 
     ensureAuthenticated, 

@@ -376,6 +376,15 @@
                 return;
             }
 
+            Swal.fire({
+                title: 'Creando transferencia...',
+                text: 'Moviendo stock entre almacenes',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
+
             try {
                 const response = await fetch('/admin/api/transferencias', {
                     method: 'POST',

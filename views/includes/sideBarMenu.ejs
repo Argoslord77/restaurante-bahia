@@ -84,6 +84,11 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'valorizacion'){ %> active<% } %>" href="/admin/inventario/valorizacion">
+                <i class="fa-solid fa-sack-dollar me-2 text-dark"></i> Valorización
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'transferencias'){ %> active<% } %>" href="/admin/transferencias">
                 <i class="fa-solid fa-truck me-2 text-dark"></i> Transferencias
             </a>
@@ -101,6 +106,11 @@
         <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'settings'){ %> active<% } %>" href="/admin/configuracion">
                 <i class="fa-solid fa-cogs me-2 text-dark"></i> Configuración
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'unidades'){ %> active<% } %>" href="/admin/unidades-medida">
+                <i class="fa-solid fa-scale-balanced me-2 text-dark"></i> Unidades y Conversiones
             </a>
         </li>
     </ul>

@@ -3,6 +3,7 @@ const orderModel = require('../models/orderModel');
 const MenuModel = require('../models/menuModel');
 const platilloDiaModel = require('../models/platilloDiaModel');
 const STATUS = require('../config/orderStatus');
+const PrecioService = require('./precioService');
 
 class OrderService {
     async getOrCreateOrderForMesa(id_mesa, userId, turno_servicio_id) {
@@ -33,6 +34,7 @@ class OrderService {
         if (!id_pedido) throw new Error('Identificador de pedido faltante.');
 
         const verifiedItems = [];
+        const contextoCobro = await PrecioService.obtenerContextoPedido(id_pedido);
 
         if (items && items.length > 0) {
             for (const item of items) {
@@ -55,7 +57,7 @@ class OrderService {
                         esPlatilloDia = true;
                         esBebida = (platilloDia.tipo === 'BEBIDAS');
                         nombreProducto = platilloDia.nombre;
-                        precioReal = parseFloat(platilloDia.precio);
+                        precioReal = PrecioService.validarPrecioConfigurado(platilloDia, contextoCobro.carta);
                     } else {
                         throw new Error(`El platillo del día con ID ${item.id} no existe.`);
                     }
@@ -66,7 +68,7 @@ class OrderService {
                         const tipoCat = String(platilloMenu.tipo_categoria || platilloMenu.tipo || '').toUpperCase();
                         esBebida = (tipoCat === 'BEBIDAS');
                         nombreProducto = platilloMenu.nombre;
-                        precioReal = parseFloat(platilloMenu.precio);
+                        precioReal = PrecioService.validarPrecioConfigurado(platilloMenu, contextoCobro.carta);
                     } else {
                         // Fallback de seguridad: si no está en platillos_menu, buscar en platillos_dia
                         const platilloDia = await platilloDiaModel.getById(item.id);
@@ -74,7 +76,7 @@ class OrderService {
                             esPlatilloDia = true;
                             esBebida = (platilloDia.tipo === 'BEBIDAS');
                             nombreProducto = platilloDia.nombre;
-                            precioReal = parseFloat(platilloDia.precio);
+                            precioReal = PrecioService.validarPrecioConfigurado(platilloDia, contextoCobro.carta);
                         } else {
                             throw new Error(`El producto seleccionado (ID ${item.id}) no existe en el catálogo.`);
                         }

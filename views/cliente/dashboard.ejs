@@ -585,6 +585,7 @@
     text-align: center;
   }
 </style>
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
 </head>
 <body>
 
@@ -950,12 +951,24 @@
         }));
 
         try {
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({
+              title: 'Enviando pre-pedido...',
+              allowOutsideClick: false,
+              allowEscapeKey: false,
+              showConfirmButton: false,
+              didOpen: () => Swal.showLoading()
+            });
+          }
+
           const response = await fetch(`/cliente/agregar-a-preorden/${ID_MESA}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items })
           });
           const resData = await response.json();
+
+          if (typeof Swal !== 'undefined') Swal.close();
 
           if (resData.success) {
             showToast(resData.message || 'Pre-pedido enviado correctamente');
@@ -1206,5 +1219,6 @@
     });
   });
 </script>
+    <script src="/js/sweetalert2.all.min.js"></script>
 </body>
 </html>

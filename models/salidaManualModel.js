@@ -115,7 +115,7 @@ const SalidaManual = {
     // Obtener lotes disponibles en almacén (ordenados por vencimiento)
     obtenerLotes: async (almacenId, productoId) => {
         const query = `
-            SELECT id, cantidad_actual, fecha_vencimiento
+            SELECT id, cantidad_actual, costo_unitario, fecha_vencimiento
             FROM lotes
             WHERE producto_id = ? 
             AND almacen_id = ? 

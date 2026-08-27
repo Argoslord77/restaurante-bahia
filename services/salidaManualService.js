@@ -94,24 +94,22 @@ const SalidaManualService = {
                     if (cantidadPendiente <= 0) break;
 
                     const cantidadADescontar = Math.min(lote.cantidad_actual, cantidadPendiente);
+                    const stockAnterior = parseFloat(lote.cantidad_actual);
+                    const stockNuevo = stockAnterior - cantidadADescontar;
+                    const costoUnitario = parseFloat(lote.costo_unitario || 0);
 
                     await connection.query(
                         'UPDATE lotes SET cantidad_actual = cantidad_actual - ? WHERE id = ?',
                         [cantidadADescontar, lote.id]
                     );
 
-                    // Registrar movimiento de inventario
-                    await connection.query(
-                        `INSERT INTO movimientos_inventario 
-                        (lote_id, tipo, cantidad, motivo, usuario_id, fecha) 
-                        VALUES (?, 'salida', ?, ?, ?, NOW())`,
-                        [lote.id, cantidadADescontar, `Salida manual: ${salidaData.tipo}`, salidaData.usuario_id]
-                    );
-
                     movimientos.push({
                         lote_id: lote.id,
                         cantidad: cantidadADescontar,
-                        vencimiento: lote.fecha_vencimiento
+                        vencimiento: lote.fecha_vencimiento,
+                        stock_anterior: stockAnterior,
+                        stock_nuevo: stockNuevo,
+                        costo_unitario: costoUnitario
                     });
 
                     cantidadPendiente -= cantidadADescontar;
@@ -119,6 +117,36 @@ const SalidaManualService = {
 
                 // Registrar salida manual
                 const salidaId = await SalidaManual.create(salidaData);
+
+                // Registrar los movimientos de inventario (kardex) con el esquema real
+                // de `movimientos_inventario` (tipo_movimiento enum + documento_numero).
+                const tipoMovimientoMap = { merma: 'MERMA', rotura: 'MERMA', perdida: 'AJUSTE_NEGATIVO' };
+                const tipoMovimiento = tipoMovimientoMap[String(salidaData.tipo).toLowerCase()] || 'AJUSTE_NEGATIVO';
+
+                for (const mov of movimientos) {
+                    await connection.query(
+                        `INSERT INTO movimientos_inventario
+                        (producto_id, almacen_id, lote_id, tipo_movimiento, referencia_tipo, referencia_id,
+                         cantidad, costo_unitario, costo_total, stock_anterior, stock_nuevo,
+                         usuario_id, documento_numero, observaciones)
+                        VALUES (?, ?, ?, ?, 'salida_manual', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            salidaData.producto_id,
+                            salidaData.almacen_id,
+                            mov.lote_id,
+                            tipoMovimiento,
+                            salidaId,
+                            mov.cantidad,
+                            mov.costo_unitario,
+                            mov.costo_unitario * mov.cantidad,
+                            mov.stock_anterior,
+                            mov.stock_nuevo,
+                            salidaData.usuario_id,
+                            `SM-${String(salidaId).padStart(6, '0')}`,
+                            `Salida manual (${salidaData.tipo})${salidaData.motivo ? ': ' + salidaData.motivo : ''}`
+                        ]
+                    );
+                }
 
                 await connection.commit();
                 logger.info(`Salida manual ${salidaId} registrada. Movimientos: ${movimientos.length}`);

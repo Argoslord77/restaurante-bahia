@@ -12,6 +12,5 @@ router.put('/almacen/edit/:id', ensureAuthenticated, checkRole(['superadministra
 router.delete('/almacen/delete/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), almacenController.deleteAlmacen);
 
 // Adiciones de sub-módulos (Sincronizados sin romper las llamadas anteriores)
-router.get('/entradas', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'almacenero']), almacenController.getEntradasView);
 
 module.exports = router;

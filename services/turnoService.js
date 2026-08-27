@@ -1,6 +1,7 @@
 // services/turnoService.js
 const TurnoModel = require('../models/turnoModel');
 const db = require('../config/db');
+const CajaService = require('./cajaService');
 
 class TurnoService {
     static async obtenerTurnoActivo() {
@@ -52,55 +53,30 @@ class TurnoService {
                 WHERE turno_servicio_id = ?
             `, [turnoId]);
 
-            // 2. Desglose real de dinero recaudado por método y moneda
-            const [desglosePagos] = await connection.query(`
-                SELECT 
-                    pp.metodo_pago,
-                    COALESCE(m.codigo, 'LOCAL') AS codigo_moneda,
-                    COALESCE(m.simbolo, '$') AS simbolo,
-                    SUM(pp.monto_moneda_origen) AS total_origen,
-                    SUM(pp.monto_equivalente_local) AS total_local
-                FROM pagos_pedido pp
-                INNER JOIN pedidos p ON pp.pedido_id = p.id
-                LEFT JOIN monedas m ON pp.moneda_id = m.id
-                WHERE p.turno_servicio_id = ?
-                  AND pp.metodo_pago NOT IN ('factura', 'pendiente')
-                GROUP BY pp.metodo_pago, m.codigo, m.simbolo
-            `, [turnoId]);
+            // 2. Desglose real por método y moneda. ZELLE se excluye del
+            //    efectivo físico mediante CajaService.
+            const desglosePagos = await CajaService.obtenerDesglosePagos(turnoId, connection);
+            const resumenFinanciero = CajaService.calcularResumenFinanciero(
+                pedidos,
+                desglosePagos,
+                turnoActivo.monto_apertura
+            );
 
-            // 3. Totales consolidados
-            let total_cobrado_caja = 0;
-            let total_propinas = 0;
-            let total_cxc_facturas = 0;
-            let total_pendiente_pago = 0;
-            let total_cortesias = 0;
-            let pedidos_pagados = 0;
-            let pedidos_facturados = 0;
-            let pedidos_pendientes = 0;
-
-            pedidos.forEach(p => {
-                const tot = parseFloat(p.total || 0);
-                const prop = parseFloat(p.propina || 0);
-
-                if (p.estado_pago === 'pagado') {
-                    total_cobrado_caja += tot;
-                    total_propinas += prop;
-                    pedidos_pagados++;
-                } else if (p.estado_pago === 'facturado') {
-                    total_cxc_facturas += tot;
-                    pedidos_facturados++;
-                } else if (p.estado_pago === 'pendiente_pago') {
-                    total_pendiente_pago += tot;
-                    pedidos_pendientes++;
-                } else if (p.estado_pago === 'cortesia') {
-                    total_cortesias += parseFloat(p.subtotal || 0);
-                }
-            });
+            const total_cobrado_caja = resumenFinanciero.total_cobrado_caja;
+            const total_propinas = resumenFinanciero.total_propinas;
+            const total_cxc_facturas = resumenFinanciero.total_cxc_facturas;
+            const total_pendiente_pago = resumenFinanciero.total_pendiente_pago;
+            const total_cortesias = resumenFinanciero.total_cortesias;
+            const pedidos_pagados = pedidos.filter(p => p.estado_pago === 'pagado').length;
+            const pedidos_facturados = pedidos.filter(p => p.estado_pago === 'facturado').length;
+            const pedidos_pendientes = pedidos.filter(p => p.estado_pago === 'pendiente_pago').length;
 
             const fondoApertura = parseFloat(turnoActivo.monto_apertura || 0);
-            const montoEsperado = fondoApertura + total_cobrado_caja + total_propinas;
+            const montoEsperado = resumenFinanciero.total_en_caja_esperado;
             const diferencia = parseFloat(montoCierreReal) - montoEsperado;
-            const balanceEstado = Math.abs(diferencia) < 0.01 ? 'cuadrado' : (diferencia > 0 ? 'sobrante' : 'faltante');
+            const balanceEstado = Math.abs(diferencia) < 0.01
+                ? 'cuadrado'
+                : (diferencia > 0 ? 'sobrante' : 'faltante');
 
             // 4. Persistir la instantánea en cierres_servicio
             try {
@@ -204,6 +180,7 @@ class TurnoService {
                 fondoApertura,
                 totalCobrado: total_cobrado_caja,
                 totalPropinas: total_propinas,
+                totalZelle: resumenFinanciero.total_zelle,
                 montoEsperado,
                 montoReal: montoCierreReal,
                 diferencia,
@@ -233,13 +210,21 @@ class TurnoService {
                 m.simbolo,
                 m.es_moneda_base,
                 COALESCE(mt.factor_cambio_turno, m.factor_cambio) AS factor_cambio
-            FROM monedas_turno mt
-            INNER JOIN monedas m ON mt.moneda_id = m.id
-            WHERE mt.turno_servicio_id = ? AND m.activo = 1
+            FROM monedas m
+            LEFT JOIN monedas_turno mt
+              ON mt.moneda_id = m.id AND mt.turno_servicio_id = ?
+            WHERE m.activo = 1
+              AND (mt.turno_servicio_id IS NOT NULL OR UPPER(m.codigo) = 'ZELLE')
         `;
         const [rows] = await db.query(query, [turnoActivo.id]);
+        const [[snapshot]] = await db.query(
+            'SELECT COUNT(*) AS total FROM monedas_turno WHERE turno_servicio_id = ?',
+            [turnoActivo.id]
+        );
 
-        if (rows.length === 0) {
+        // Compatibilidad con turnos antiguos sin snapshot: se muestran todas
+        // las monedas activas. ZELLE se incluye además en los turnos nuevos.
+        if (Number(snapshot?.total || 0) === 0) {
             const [monedasGlobales] = await db.query(
                 "SELECT id AS moneda_id, codigo, nombre, simbolo, es_moneda_base, factor_cambio FROM monedas WHERE activo = 1"
             );

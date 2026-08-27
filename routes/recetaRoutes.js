@@ -5,33 +5,42 @@ const recetaController = require('../controllers/recetaController');
 const { ensureAuthenticated, checkRole } = require('../middlewares/auth');
 const { recetaValidationRules, handleValidationErrors } = require('../middlewares/validator');
 
+const checkAccess = checkRole(['superadministrador', 'administrador', 'jefe-cocina', 'almacenero', 'dependiente', 'cocinero']);
+const checkAdmin = checkRole(['superadministrador', 'administrador', 'jefe-cocina']);
+
 // Vista principal de recetas
 router.get('/recetas', 
     ensureAuthenticated, 
-    checkRole(['superadministrador', 'administrador']), 
+    checkAdmin, 
     recetaController.viewRecetas
 );
 
 // Vista para configurar receta (ingredientes/detalles) de una ficha maestro específica
-// NOTA: platilloId mapea internamente al ID del Maestro de Recetas
 router.get('/recetas/configurar/:platilloId',
     ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador']),
+    checkAdmin,
     recetaController.viewConfigurarReceta
 );
 
 // API: Obtener ingredientes de una receta por su receta_id (platilloId)
 router.get('/api/recetas/platillo/:platilloId',
     ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador', 'almacenero']),
+    checkAccess,
     recetaController.getIngredientesByPlatillo
+);
+
+// API: Verificar disponibilidad de código de receta de forma asíncrona
+router.get('/api/recetas/check-codigo',
+    ensureAuthenticated,
+    checkAccess,
+    recetaController.checkCodigo
 );
 
 // API: Crear nueva cabecera de receta (Ficha Técnica Maestro)
 router.post('/api/recetas',
     ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador']),
-    recetaValidationRules.create, // <-- ¡Atención! Asegúrate de actualizar este validador
+    checkAdmin,
+    (recetaValidationRules && recetaValidationRules.create) ? recetaValidationRules.create : (req, res, next) => next(),
     handleValidationErrors,
     recetaController.createReceta
 );
@@ -39,24 +48,31 @@ router.post('/api/recetas',
 // API: Actualizar cabecera de receta
 router.put('/api/recetas/:id',
     ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador']),
-    recetaValidationRules.update, // <-- ¡Atención! Asegúrate de actualizar este validador
+    checkAdmin,
+    (recetaValidationRules && recetaValidationRules.update) ? recetaValidationRules.update : (req, res, next) => next(),
     handleValidationErrors,
     recetaController.updateReceta
 );
 
-// API: Eliminar receta (Baja lógica del sistema)
+// API: Eliminar receta DEFINITIVAMENTE de la base de datos (Hard Delete)
 router.delete('/api/recetas/:id',
     ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador']),
+    checkAdmin,
+    recetaController.deleteReceta
+);
+
+// Ruta POST alternativa para compatibilidad
+router.post('/api/recetas/:id/eliminar',
+    ensureAuthenticated,
+    checkAdmin,
     recetaController.deleteReceta
 );
 
 // API: Verificar stock crítico en un almacén antes de confirmar la comanda/pedido
 router.post('/api/recetas/verificar-stock',
     ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador', 'dependiente']),
-    recetaValidationRules.verificarStock,
+    checkAccess,
+    (recetaValidationRules && recetaValidationRules.verificarStock) ? recetaValidationRules.verificarStock : (req, res, next) => next(),
     handleValidationErrors,
     recetaController.verificarStock
 );
@@ -64,14 +80,35 @@ router.post('/api/recetas/verificar-stock',
 // API: Obtener recetas afectadas que consumen un producto/insumo específico
 router.get('/api/recetas/producto/:productoId',
     ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador', 'almacenero']),
+    checkAccess,
     recetaController.getPlatillosByProducto
 );
 
-// API: Cambiar estado activo/inactivo
+// API: Cambiar estado activo/inactivo (Desactivación / Activación lógica)
 router.patch('/api/recetas/:id/estado',
     ensureAuthenticated,
-    checkRole(['superadministrador', 'administrador']),
+    checkAdmin,
     recetaController.toggleEstadoReceta
 );
+
+router.post('/api/recetas/:id/estado',
+    ensureAuthenticated,
+    checkAdmin,
+    recetaController.toggleEstadoReceta
+);
+
+// API: Eliminar ingrediente individual de una receta
+router.delete('/api/recetas/detalles/:detalleId',
+    ensureAuthenticated,
+    checkAdmin,
+    recetaController.deleteIngrediente
+);
+
+// API: Agregar ingrediente individual a una receta
+router.post('/api/recetas/detalles',
+    ensureAuthenticated,
+    checkAdmin,
+    recetaController.addIngrediente
+);
+
 module.exports = router;

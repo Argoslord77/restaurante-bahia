@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= pageTitle || 'Auditoría' %> - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .audit-table { font-size: .78rem; }
+        .audit-table td { vertical-align: top; }
+        .audit-details { max-width: 360px; white-space: pre-wrap; word-break: break-word; }
+        .audit-success { color: #047857; }
+        .audit-failure { color: #be123c; }
+        .audit-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; }
+    </style>
+</head>
+<body>
+    <%- include('../includes/topBarMobile') %>
+    <%- include('../includes/sideBarMenu') %>
+
+    <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+        <%- include('../includes/header', {
+            encabezado_pagina: 'Auditoría de Operaciones',
+            desc_pagina: 'Registro histórico de las acciones realizadas por los usuarios en la aplicación.',
+            add_btn: false
+        }) %>
+
+        <div class="card border-0 shadow-sm mt-4 mb-4">
+            <div class="card-header bg-white border-0">
+                <form method="get" action="/admin/auditoria" class="row g-2 align-items-end">
+                    <div class="col-sm-6 col-md-2">
+                        <label for="usuarioId" class="form-label small fw-semibold text-secondary">ID usuario</label>
+                        <input type="number" min="1" class="form-control form-control-sm" id="usuarioId" name="usuarioId" value="<%= filtros.usuarioId %>" placeholder="Todos">
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <label for="accion" class="form-label small fw-semibold text-secondary">Acción</label>
+                        <input type="text" maxlength="150" class="form-control form-control-sm" id="accion" name="accion" value="<%= filtros.accion %>" placeholder="POST /...">
+                    </div>
+                    <div class="col-sm-6 col-md-2">
+                        <label for="desde" class="form-label small fw-semibold text-secondary">Desde</label>
+                        <input type="date" class="form-control form-control-sm" id="desde" name="desde" value="<%= filtros.desde %>">
+                    </div>
+                    <div class="col-sm-6 col-md-2">
+                        <label for="hasta" class="form-label small fw-semibold text-secondary">Hasta</label>
+                        <input type="date" class="form-control form-control-sm" id="hasta" name="hasta" value="<%= filtros.hasta %>">
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-dark flex-grow-1"><i class="fa-solid fa-filter me-1"></i>Filtrar</button>
+                        <a href="/admin/auditoria" class="btn btn-sm btn-outline-secondary" title="Limpiar filtros"><i class="fa-solid fa-rotate-left"></i></a>
+                    </div>
+                </form>
+            </div>
+            <div class="card-body border-top p-0">
+                <div class="px-3 py-2 bg-light d-flex justify-content-between align-items-center">
+                    <span class="small text-secondary"><i class="fa-solid fa-shield-halved me-1"></i><strong><%= paginacion.total %></strong> operación(es) registrada(s)</span>
+                    <span class="small text-muted">Página <%= paginacion.pagina %> de <%= paginacion.totalPaginas %></span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 audit-table">
+                        <thead class="table-light text-uppercase text-secondary">
+                            <tr>
+                                <th class="ps-3">Fecha</th>
+                                <th>Usuario</th>
+                                <th>Acción</th>
+                                <th>Ruta</th>
+                                <th>Resultado</th>
+                                <th>IP</th>
+                                <th>Datos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (logs && logs.length > 0) { %>
+                                <% logs.forEach(log => { %>
+                                    <tr>
+                                        <td class="ps-3 text-nowrap">
+                                            <%= log.creado_en ? new Date(log.creado_en).toLocaleString('es-ES') : '—' %>
+                                            <small class="d-block text-muted"><%= log.duracion_ms || 0 %> ms</small>
+                                        </td>
+                                        <td class="text-nowrap">
+                                            <strong><%= log.usuario_nombre || 'Anónimo' %></strong>
+                                            <small class="d-block text-muted"><%= log.usuario_rol || 'publico' %><%= log.usuario_id ? ` · #${log.usuario_id}` : '' %></small>
+                                        </td>
+                                        <td class="audit-code"><%= log.accion %></td>
+                                        <td class="audit-code"><%= log.metodo_http %> <%= log.ruta %></td>
+                                        <td class="text-nowrap">
+                                            <span class="fw-bold <%= log.operacion_exitosa ? 'audit-success' : 'audit-failure' %>">
+                                                <i class="fa-solid <%= log.operacion_exitosa ? 'fa-circle-check' : 'fa-circle-xmark' %> me-1"></i><%= log.estado_http || '—' %>
+                                            </span>
+                                        </td>
+                                        <td class="audit-code"><%= log.ip_origen || '—' %></td>
+                                        <td class="audit-details">
+                                            <% if (log.datos_operacion) { %>
+                                                <details>
+                                                    <summary class="text-primary" style="cursor:pointer;">Ver datos</summary>
+                                                    <pre class="audit-code bg-light border rounded p-2 mt-2 mb-0"><%= log.datos_operacion %></pre>
+                                                </details>
+                                            <% } else { %>—<% } %>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            <% } else { %>
+                                <tr><td colspan="7" class="text-center text-muted py-5"><i class="fa-solid fa-clipboard-check fs-3 d-block mb-2"></i>No hay operaciones para los filtros seleccionados.</td></tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <% if (paginacion.totalPaginas > 1) { %>
+                <div class="card-footer bg-white border-0 d-flex justify-content-center">
+                    <nav aria-label="Paginación de auditoría">
+                        <ul class="pagination pagination-sm mb-0">
+                            <% for (let pagina = 1; pagina <= paginacion.totalPaginas; pagina++) { %>
+                                <li class="page-item <%= pagina === paginacion.pagina ? 'active' : '' %>">
+                                    <a class="page-link" href="/admin/auditoria?pagina=<%= pagina %>&usuarioId=<%= filtros.usuarioId %>&accion=<%= encodeURIComponent(filtros.accion) %>&desde=<%= filtros.desde %>&hasta=<%= filtros.hasta %>"><%= pagina %></a>
+                                </li>
+                            <% } %>
+                        </ul>
+                    </nav>
+                </div>
+            <% } %>
+        </div>
+
+        <footer class="mt-auto"><%- include('../includes/footer') %></footer>
+    </main>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

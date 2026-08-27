@@ -1,11 +1,22 @@
 // controllers/inventarioController.js
 const db = require('../config/db');
+const InventarioService = require('../services/inventarioService');
 
 /**
  * Renderiza la interfaz de monitoreo de stock por almacén con filtrado dinámico
  */
 exports.viewStockGeneral = async (req, res, next) => {
     try {
+        // 0. Higiene de vencimientos: marcar lotes vencidos y cargar alertas
+        //    tempranas (próximos 7 días) para el banner superior.
+        let alertasVencimiento = [];
+        try {
+            await InventarioService.marcarLotesVencidos();
+            alertasVencimiento = await InventarioService.lotesProximosAVencer(7);
+        } catch (vErr) {
+            console.warn('No se pudieron calcular alertas de vencimiento:', vErr.message);
+        }
+
         // 1. Obtener todos los almacenes activos para el selector superior
         const [almacenes] = await db.query(
             "SELECT id, codigo, nombre FROM almacenes WHERE activo = 1 ORDER BY nombre ASC"
@@ -53,6 +64,7 @@ exports.viewStockGeneral = async (req, res, next) => {
             almacenes: almacenes || [],
             productos: productos,
             almacenSeleccionado: almacenSeleccionado,
+            alertasVencimiento: alertasVencimiento || [],
             user: req.user || req.session?.user || null,
             view: 'stock'
         });
@@ -106,5 +118,66 @@ exports.getStockByAlmacenApi = async (req, res, next) => {
     } catch (error) {
         console.error("Error en getStockByAlmacenApi:", error);
         return res.status(500).json({ success: false, message: "Error interno del servidor." });
+    }
+};
+/**
+ * Vista de Valorización de Inventario: valor total del stock (Σ cantidad × costo)
+ * por almacén y por lote, incluido el valor inmovilizado en lotes vencidos.
+ * GET /admin/inventario/valorizacion
+ */
+exports.renderValorizacion = async (req, res, next) => {
+    try {
+        // Higiene previa para que el reporte refleje los vencidos de hoy
+        try { await InventarioService.marcarLotesVencidos(); } catch (e) { /* best-effort */ }
+
+        // 1. Resumen por almacén (solo lotes con stock)
+        const [porAlmacen] = await db.query(`
+            SELECT a.id, a.nombre,
+                   COUNT(l.id) AS lotes_con_stock,
+                   COALESCE(SUM(l.cantidad_actual), 0) AS unidades,
+                   COALESCE(SUM(l.cantidad_actual * l.costo_unitario), 0) AS valor
+            FROM almacenes a
+            LEFT JOIN lotes l ON l.almacen_id = a.id AND l.cantidad_actual > 0 AND l.estado = 'ACTIVO'
+            WHERE a.activo = 1
+            GROUP BY a.id, a.nombre
+            ORDER BY valor DESC
+        `);
+
+        // 2. Detalle por lote (top 200 por valor)
+        const [lotes] = await db.query(`
+            SELECT l.id, l.numero_lote, l.estado, l.cantidad_actual, l.costo_unitario,
+                   l.fecha_vencimiento,
+                   (l.cantidad_actual * l.costo_unitario) AS valor_lote,
+                   p.nombre AS producto_nombre, p.codigo AS producto_codigo,
+                   a.nombre AS almacen_nombre
+            FROM lotes l
+            INNER JOIN productos p ON l.producto_id = p.id
+            INNER JOIN almacenes a ON l.almacen_id = a.id
+            WHERE l.cantidad_actual > 0
+            ORDER BY valor_lote DESC
+            LIMIT 200
+        `);
+
+        // 3. Valor inmovilizado en lotes vencidos (riesgo)
+        const [vencidos] = await db.query(`
+            SELECT COUNT(*) AS lotes, COALESCE(SUM(l.cantidad_actual * l.costo_unitario), 0) AS valor
+            FROM lotes l
+            WHERE l.estado = 'VENCIDO' AND l.cantidad_actual > 0
+        `);
+
+        const totalGeneral = porAlmacen.reduce((acc, a) => acc + parseFloat(a.valor || 0), 0);
+
+        return res.render('inventarios/valorizacion', {
+            title: 'Valorización de Inventario - Restaurante Bahía',
+            porAlmacen,
+            lotes,
+            vencidos: vencidos[0] || { lotes: 0, valor: 0 },
+            totalGeneral,
+            user: req.user || req.session?.user || null,
+            view: 'valorizacion'
+        });
+    } catch (error) {
+        console.error('Error en renderValorizacion:', error);
+        return next(error);
     }
 };

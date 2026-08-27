@@ -1,214 +1,210 @@
-// controllers/monitorController.js
-const db = require('../config/db');
-const STATUS = require('../config/orderStatus');
+const pool = require('../config/db');
+const SettingService = require('../services/settingService');
 
-/**
- * Renderiza la vista del monitor según el área (cocina o bar)
- */
-exports.viewMonitor = async (req, res) => {
-    const { area } = req.params; // 'cocina' o 'bar'
-    
-    if (!['cocina', 'bar'].includes(area)) {
-        return res.status(400).send('Área de monitor no válida.');
-    }
+module.exports = {
+    // Vista del Monitor Digital de Cocina / Bar
+    viewMonitor: async (req, res) => {
+        try {
+            const rawArea = req.params.area || 'cocina';
+            const areaKey = rawArea.toLowerCase() === 'bar' ? 'bar' : 'cocina';
+            const area = areaKey.toUpperCase();
+            const habilitarMonitores = await SettingService.get('habilitar_monitores_elaboracion', true);
 
-    const userRole = (req.user && req.user.rol) ? req.user.rol.toLowerCase() : '';
+            const isAdministrative = req.user && ['superadministrador', 'administrador', 'capitan'].includes(req.user.rol);
+            const exitUrl = isAdministrative ? '/admin/dashboard' : '/logout';
 
-    // Solo usuarios permitidos
-    const rolesPermitidos = [
-        'superadministrador', 'administrador', 'jefe-cocina', 
-        'cocinero', 'bartender', 'luncher', 'porcionador', 'ayudante-cocina'
-    ];
-    if (!rolesPermitidos.includes(userRole)) {
-        return res.redirect('/logout');
-    }
+            let comandas = [];
+            if (habilitarMonitores && pool) {
+                // Consulta de comandas activas
+                let tipoFilter = '';
+                if (areaKey === 'cocina') {
+                    tipoFilter = "AND (COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') = 'COMESTIBLES' OR cp.tipo = 'cocina' OR cp.tipo IS NULL OR cp.tipo = '')";
+                } else if (areaKey === 'bar') {
+                    tipoFilter = "AND (COALESCE(pd.tipo, cp.tipo, '') = 'BEBIDAS' OR cp.tipo = 'bar')";
+                }
 
-    // Restricción por rol de área
-    if (['jefe-cocina', 'cocinero', 'luncher', 'porcionador', 'ayudante-cocina'].includes(userRole) && area === 'bar') {
-        return res.redirect('/monitor/cocina');
-    }
-    if (['bartender'].includes(userRole) && area === 'cocina') {
-        return res.redirect('/monitor/bar');
-    }
+                const [items] = await pool.query(`
+                    SELECT dp.id AS detalle_id, dp.id_pedido, dp.cantidad, dp.notas_especiales, 
+                           dp.estado_item, p.creado_en AS fecha_item,
+                           COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre_platillo,
+                           pm.categoria AS categoria_id,
+                           COALESCE(cp.nombre, 'Oferta Especial') AS categoria_nombre,
+                           COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') AS categoria_tipo,
+                           p.id_mesa, m.numero AS numero_mesa, m.ubicacion AS mesa_ubicacion,
+                           u.nombre AS mesero_nombre, p.creado_en AS fecha_pedido
+                    FROM detalles_pedido dp
+                    INNER JOIN pedidos p ON dp.id_pedido = p.id
+                    LEFT JOIN mesas m ON p.id_mesa = m.id
+                    LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+                    LEFT JOIN platillos_menu pm ON (dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL))
+                    LEFT JOIN platillos_dia pd ON (dp.id_platillo = pd.id AND dp.es_platillo_dia = 1)
+                    LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
+                    WHERE p.estado_pago = 'pendiente'
+                      AND dp.estado_item IN ('en_cocina', 'en_bar', 'en_espera', 'en_preparacion')
+                      ${tipoFilter}
+                    ORDER BY dp.id ASC
+                `);
 
-    // --- LÓGICA DE NAVEGACIÓN Y ROL ADMINISTRATIVO ---
-    const adminRoles = ['superadministrador', 'administrador', 'jefe-cocina'];
-    const isAdministrative = adminRoles.includes(userRole);
-    const exitUrl = isAdministrative ? '/admin/dashboard' : '/logout';
+                // Agrupar items por pedido / comanda
+                const comandasMap = new Map();
+                for (const row of items) {
+                    if (!comandasMap.has(row.id_pedido)) {
+                        comandasMap.set(row.id_pedido, {
+                            id_pedido: row.id_pedido,
+                            id_mesa: row.id_mesa,
+                            numero_mesa: row.numero_mesa || `${row.id_mesa}`,
+                            mesa_ubicacion: row.mesa_ubicacion,
+                            mesero_nombre: row.mesero_nombre || 'Mesero',
+                            fecha_pedido: row.fecha_pedido,
+                            items: []
+                        });
+                    }
+                    comandasMap.get(row.id_pedido).items.push({
+                        detalle_id: row.detalle_id,
+                        nombre_platillo: row.nombre_platillo,
+                        cantidad: row.cantidad,
+                        notas_especiales: row.notas_especiales,
+                        estado_item: row.estado_item,
+                        categoria_tipo: row.categoria_tipo,
+                        fecha_item: row.fecha_item
+                    });
+                }
 
-    try {
-        // Determinación del estado a filtrar según el área elegida
-        const estadoFiltro = area === 'cocina' 
-            ? (STATUS.ITEM.EN_COCINA || 'en_cocina') 
-            : (STATUS.ITEM.EN_BAR || 'en_bar');
-
-        // QUERY CON RESOLUCIÓN CONDICIONAL (platillos_menu + platillos_dia):
-        const query = `
-            SELECT 
-                pd.id AS detalle_id,
-                pd.id_pedido,
-                pd.id_platillo,
-                pd.es_platillo_dia,
-                pd.cantidad,
-                pd.notas_especiales,
-                pd.estado_item,
-                p.id_mesa,
-                m.numero AS numero_mesa,
-                CASE 
-                    WHEN pd.es_platillo_dia = 1 THEN COALESCE(p_dia.nombre, pl.nombre, 'Platillo del Día')
-                    ELSE COALESCE(pl.nombre, p_dia.nombre, 'Platillo')
-                END AS nombre_platillo
-            FROM detalles_pedido pd
-            INNER JOIN pedidos p ON pd.id_pedido = p.id
-            INNER JOIN mesas m ON p.id_mesa = m.id
-            LEFT JOIN platillos_menu pl ON pd.id_platillo = pl.id AND pd.es_platillo_dia = 0
-            LEFT JOIN platillos_dia p_dia ON pd.id_platillo = p_dia.id AND pd.es_platillo_dia = 1
-            WHERE LOWER(pd.estado_item) = LOWER(?)
-              AND LOWER(p.estado_pedido) NOT IN ('cerrado', 'pagado', 'cancelado')
-            ORDER BY p.creado_en ASC, pd.id ASC
-        `;
-        
-        const [items] = await db.query(query, [estadoFiltro]);
-
-        // Agrupación de ítems en sus respectivas comandas
-        const comandas = {};
-        items.forEach(item => {
-            if (!comandas[item.id_pedido]) {
-                comandas[item.id_pedido] = {
-                    id_pedido: item.id_pedido,
-                    numero_mesa: item.numero_mesa,
-                    items: []
-                };
+                comandas = Array.from(comandasMap.values());
             }
-            comandas[item.id_pedido].items.push(item);
-        });
 
-        res.render('monitor', {
-            area: area.toUpperCase(),
-            areaKey: area,
-            comandas: Object.values(comandas),
-            pageTitle: `Monitor de ${area.charAt(0).toUpperCase() + area.slice(1)} - Restaurante Bahía`,
-            view: area === 'cocina' ? 'monitor_cocina' : 'monitor_bar',
-            user: req.user || { nombre: 'Monitor', rol: 'personal' },
-            isAdministrative,
-            exitUrl
-        });
-    } catch (error) {
-        console.error(`Error al cargar el monitor de ${area}:`, error);
-        res.status(500).send('Error interno al cargar la pantalla de producción.');
-    }
-};
-
-/**
- * API para actualizar el estado de preparación de un ítem individual
- */
-exports.apiActualizarEstadoItem = async (req, res) => {
-    const { detalle_id, nuevo_estado } = req.body;
-    const estadosPermitidos = [STATUS.ITEM.LISTO, STATUS.ITEM.CANCELADO, 'entregado'];
-    
-    if (!estadosPermitidos.includes(nuevo_estado)) {
-        return res.status(400).json({ success: false, message: 'Estado de destino no válido para el monitor.' });
-    }
-
-    try {
-        const [detalle] = await db.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [detalle_id]);
-        if (!detalle.length) {
-            return res.status(404).json({ success: false, message: 'Ítem no encontrado.' });
+            res.render('monitor', {
+                pageTitle: `Monitor de ${area} • Restaurante Bahía`,
+                area,
+                areaKey,
+                habilitarMonitores,
+                comandas,
+                isAdministrative,
+                exitUrl,
+                user: req.user || null
+            });
+        } catch (err) {
+            console.error('Error al cargar monitor:', err);
+            res.status(500).send('Error interno en Monitor');
         }
-        const id_pedido = detalle[0].id_pedido;
+    },
 
-        // Actualizar estado del renglón en detalles_pedido
-        await db.query(
-            'UPDATE detalles_pedido SET estado_item = ? WHERE id = ?',
-            [nuevo_estado, detalle_id]
-        );
+    // API de Polling de comandas activas
+    getComandasAPI: async (req, res) => {
+        try {
+            const rawArea = req.query.area || 'cocina';
+            const areaKey = rawArea.toLowerCase() === 'bar' ? 'bar' : 'cocina';
+            const habilitarMonitores = await SettingService.get('habilitar_monitores_elaboracion', true);
 
-        // Verificar si quedan más ítems en cocina o bar para esta comanda
-        const [pendientes] = await db.query(
-            `SELECT COUNT(*) as restantes 
-             FROM detalles_pedido 
-             WHERE id_pedido = ? AND LOWER(estado_item) IN ('en_cocina', 'en_bar')`,
-            [id_pedido]
-        );
-
-        // Si ya no quedan platillos por preparar en esta ronda, marcar el pedido global como 'listo'
-        if (pendientes[0].restantes === 0) {
-            await db.query(
-                'UPDATE pedidos SET estado_pedido = ? WHERE id = ?',
-                [STATUS.PEDIDO.LISTO || 'listo', id_pedido]
-            );
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: `El producto ha sido marcado como: ${nuevo_estado}.`
-        });
-    } catch (error) {
-        console.error('Error al actualizar estado del ítem:', error);
-        return res.status(500).json({ success: false, message: 'Error interno del servidor.' });
-    }
-};
-
-/**
- * API para obtener la lista de comandas activas en formato JSON (Polling Asíncrono)
- */
-exports.getComandasAPI = async (req, res) => {
-    const area = req.query.area || 'cocina';
-
-    if (!['cocina', 'bar'].includes(area)) {
-        return res.status(400).json({ success: false, message: 'Área no válida.' });
-    }
-
-    try {
-        const estadoFiltro = area === 'cocina' 
-            ? (STATUS.ITEM.EN_COCINA || 'en_cocina') 
-            : (STATUS.ITEM.EN_BAR || 'en_bar');
-
-        const query = `
-            SELECT 
-                pd.id AS detalle_id,
-                pd.id_pedido,
-                pd.id_platillo,
-                pd.es_platillo_dia,
-                pd.cantidad,
-                pd.notas_especiales,
-                pd.estado_item,
-                p.id_mesa,
-                m.numero AS numero_mesa,
-                CASE 
-                    WHEN pd.es_platillo_dia = 1 THEN COALESCE(p_dia.nombre, pl.nombre, 'Platillo del Día')
-                    ELSE COALESCE(pl.nombre, p_dia.nombre, 'Platillo')
-                END AS nombre_platillo
-            FROM detalles_pedido pd
-            INNER JOIN pedidos p ON pd.id_pedido = p.id
-            INNER JOIN mesas m ON p.id_mesa = m.id
-            LEFT JOIN platillos_menu pl ON pd.id_platillo = pl.id AND pd.es_platillo_dia = 0
-            LEFT JOIN platillos_dia p_dia ON pd.id_platillo = p_dia.id AND pd.es_platillo_dia = 1
-            WHERE LOWER(pd.estado_item) = LOWER(?)
-              AND LOWER(p.estado_pedido) NOT IN ('cerrado', 'pagado', 'cancelado')
-            ORDER BY p.creado_en ASC, pd.id ASC
-        `;
-        
-        const [items] = await db.query(query, [estadoFiltro]);
-
-        const comandas = {};
-        items.forEach(item => {
-            if (!comandas[item.id_pedido]) {
-                comandas[item.id_pedido] = {
-                    id_pedido: item.id_pedido,
-                    numero_mesa: item.numero_mesa,
-                    items: []
-                };
+            if (!habilitarMonitores) {
+                return res.json({
+                    success: true,
+                    habilitarMonitores: false,
+                    message: 'Monitores de elaboración deshabilitados en Opciones Generales',
+                    comandas: []
+                });
             }
-            comandas[item.id_pedido].items.push(item);
-        });
 
-        return res.status(200).json({
-            success: true,
-            comandas: Object.values(comandas)
-        });
-    } catch (error) {
-        console.error(`Error al consultar comandas vía API (${area}):`, error);
-        return res.status(500).json({ success: false, message: 'Error al consultar datos.' });
+            if (!pool) return res.json({ success: true, habilitarMonitores: true, comandas: [] });
+
+            let tipoFilter = '';
+            if (areaKey === 'cocina') {
+                tipoFilter = "AND (COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') = 'COMESTIBLES' OR cp.tipo = 'cocina' OR cp.tipo IS NULL OR cp.tipo = '')";
+            } else if (areaKey === 'bar') {
+                tipoFilter = "AND (COALESCE(pd.tipo, cp.tipo, '') = 'BEBIDAS' OR cp.tipo = 'bar')";
+            }
+
+            const [items] = await pool.query(`
+                SELECT dp.id AS detalle_id, dp.id_pedido, dp.cantidad, dp.notas_especiales, 
+                       dp.estado_item, p.creado_en AS fecha_item,
+                       COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre_platillo,
+                       pm.categoria AS categoria_id,
+                       COALESCE(cp.nombre, 'Oferta Especial') AS categoria_nombre,
+                       COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') AS categoria_tipo,
+                       p.id_mesa, m.numero AS numero_mesa, m.ubicacion AS mesa_ubicacion,
+                       u.nombre AS mesero_nombre, p.creado_en AS fecha_pedido
+                FROM detalles_pedido dp
+                INNER JOIN pedidos p ON dp.id_pedido = p.id
+                LEFT JOIN mesas m ON p.id_mesa = m.id
+                LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+                LEFT JOIN platillos_menu pm ON (dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL))
+                LEFT JOIN platillos_dia pd ON (dp.id_platillo = pd.id AND dp.es_platillo_dia = 1)
+                LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
+                WHERE p.estado_pago = 'pendiente'
+                  AND dp.estado_item IN ('en_cocina', 'en_bar', 'en_espera', 'en_preparacion')
+                  ${tipoFilter}
+                ORDER BY dp.id ASC
+            `);
+
+            const comandasMap = new Map();
+            for (const row of items) {
+                if (!comandasMap.has(row.id_pedido)) {
+                    comandasMap.set(row.id_pedido, {
+                        id_pedido: row.id_pedido,
+                        id_mesa: row.id_mesa,
+                        numero_mesa: row.numero_mesa || `${row.id_mesa}`,
+                        mesa_ubicacion: row.mesa_ubicacion,
+                        mesero_nombre: row.mesero_nombre || 'Mesero',
+                        fecha_pedido: row.fecha_pedido,
+                        items: []
+                    });
+                }
+                comandasMap.get(row.id_pedido).items.push({
+                    detalle_id: row.detalle_id,
+                    nombre_platillo: row.nombre_platillo,
+                    cantidad: row.cantidad,
+                    notas_especiales: row.notas_especiales,
+                    estado_item: row.estado_item,
+                    categoria_tipo: row.categoria_tipo,
+                    fecha_item: row.fecha_item
+                });
+            }
+
+            res.json({
+                success: true,
+                habilitarMonitores: true,
+                total_comandas: comandasMap.size,
+                comandas: Array.from(comandasMap.values())
+            });
+        } catch (err) {
+            console.error('Error en getComandasAPI:', err);
+            res.status(500).json({ success: false, error: err.message });
+        }
+    },
+
+    // Actualizar estado de ítem desde el monitor (ej: marcar como 'listo')
+    apiActualizarEstadoItem: async (req, res) => {
+        try {
+            const { detalle_id, id_detalle, nuevo_estado } = req.body;
+            const targetId = detalle_id || id_detalle;
+            const targetEstado = nuevo_estado || 'listo';
+
+            if (!targetId) {
+                return res.status(400).json({ success: false, message: 'Falta detalle_id' });
+            }
+
+            if (!pool) return res.json({ success: true, message: 'Estado actualizado' });
+
+            await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [targetEstado, targetId]);
+
+            // Actualizar estado general del pedido si aplica
+            const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [targetId]);
+            if (rows.length > 0) {
+                const pedidoId = rows[0].id_pedido;
+                if (targetEstado === 'en_preparacion') {
+                    await pool.query("UPDATE pedidos SET estado_pedido = 'preparando' WHERE id = ? AND estado_pedido = 'pendiente'", [pedidoId]);
+                }
+            }
+
+            res.json({
+                success: true,
+                detalle_id: targetId,
+                nuevo_estado: targetEstado,
+                message: `Estado actualizado a "${targetEstado}"`
+            });
+        } catch (err) {
+            console.error('Error en monitor apiActualizarEstadoItem:', err);
+            res.status(500).json({ success: false, error: err.message });
+        }
     }
 };

@@ -738,6 +738,11 @@
 </head>
 <body>
     <input type="hidden" id="pos_id_pedido" value="<%= id_pedido %>">
+    <input type="hidden" id="pos_id_mesa" value="<%= typeof id_mesa !== 'undefined' ? id_mesa : '' %>">
+
+    <% 
+        const monitoresHabilitados = (typeof habilitarMonitores !== 'undefined') ? Boolean(habilitarMonitores) : true;
+    %>
 
     <!-- Header Principal -->
     <header class="pos-header position-relative">
@@ -769,9 +774,17 @@
             </div>
         </div>
 
-        <div class="order-badge-header" id="order-badge-header">
-            <i class="fa-solid fa-receipt text-sky-400"></i>
-            <span>ORDEN #<%= id_pedido %></span>
+        <div class="d-flex align-items-center gap-2">
+            <div class="order-badge-header" id="order-badge-header">
+                <i class="fa-solid fa-receipt text-sky-400"></i>
+                <span>ORDEN #<%= id_pedido %></span>
+            </div>
+
+            <% if (!monitoresHabilitados) { %>
+                <span class="badge bg-warning text-dark border border-warning-subtle font-bold px-2 py-1 rounded-pill d-none d-sm-inline-flex align-items-center gap-1" style="font-size: 11px;" title="Servicio Directo sin Monitores de Cocina/Bar">
+                    <i class="fa-solid fa-bolt text-xs"></i> Directo
+                </span>
+            <% } %>
         </div>
         
         <div class="d-flex align-items-center gap-2">
@@ -834,7 +847,7 @@
                         <% if (locals.platillos && platillos.length > 0) { %>
                             <% platillos.forEach(platillo => { %>
                                 <% const esDisponible = typeof platillo.disponible === 'undefined' || platillo.disponible === 1 || platillo.disponible === true; %>
-                                <% const esDelDia = platillo.es_platillo_dia === true || platillo.es_platillo_dia === 1; %>
+                                <% const esDelDia = platillo.es_platillo_dia === true || platillo.es_platillo_dia === 1 || platillo.es_platillo_dia === '1'; %>
                                 
                                 <div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" 
                                      data-id="<%= platillo.id %>"
@@ -916,9 +929,17 @@
                     <span class="mesa-pill">
                         <i class="fa-solid fa-table text-info"></i> <%= textoMesa %>
                     </span>
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1 font-bold" style="font-size: 11px;">
-                        RONDA ACTUAL
-                    </span>
+                    <div class="d-flex align-items-center gap-1">
+                        <% if (!monitoresHabilitados) { %>
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2 py-0.5 font-bold" style="font-size: 10px;">
+                                SERVICIO DIRECTO
+                            </span>
+                        <% } else { %>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1 font-bold" style="font-size: 11px;">
+                                RONDA ACTUAL
+                            </span>
+                        <% } %>
+                    </div>
                     <button class="btn btn-sm btn-light border-0 d-md-none btn-back-to-menu text-dark p-1">
                         <i class="fa-solid fa-xmark fs-5"></i>
                     </button>
@@ -951,6 +972,14 @@
                     </button>
                     
                     <div id="history-collapse" class="p-2.5 bg-white border-top custom-scrollbar overflow-y-auto" style="display: none; max-height: 220px;">
+                        <% if (!monitoresHabilitados) { %>
+                            <div class="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom">
+                                <small class="text-muted font-bold" style="font-size: 11px;">Entregas de Servicio Directo</small>
+                                <button type="button" id="btn-deliver-all-direct" class="btn btn-xs btn-outline-success py-0 px-2 rounded-pill fw-bold" style="font-size: 10px;">
+                                    <i class="fa-solid fa-check-double me-1"></i> Entregar Todo
+                                </button>
+                            </div>
+                        <% } %>
                         <div id="history-wrapper"></div>
                     </div>
                 </div>
@@ -981,7 +1010,8 @@
 
                         <div class="col-8">
                             <button class="btn-pos-action btn-enviar-cocina" id="btn-save-order">
-                                <i class="fa-solid fa-paper-plane text-xs"></i> Enviar a Cocina
+                                <i class="fa-solid <%= monitoresHabilitados ? 'fa-paper-plane' : 'fa-check-double' %> text-xs"></i> 
+                                <%= monitoresHabilitados ? 'Enviar a Cocina' : 'Guardar Pedido' %>
                             </button>
                         </div>
 
@@ -1016,6 +1046,8 @@
     <script src="/js/sweetalert2.all.min.js"></script>
 
     <script>
+        const MONITORES_HABILITADOS = <%= monitoresHabilitados ? 'true' : 'false' %>;
+        const FACTURA_IMPUESTO = <%= parseFloat(typeof facturaImpuesto !== 'undefined' ? facturaImpuesto : 0) || 0 %>;
         let carrito = []; 
         let historicoDetalles = []; 
         let activeCategory = 'todos';
@@ -1089,22 +1121,17 @@
         }
 
         document.addEventListener("DOMContentLoaded", () => {
-            const rawDetails = `<%- typeof detallesActuales !== 'undefined' ? detallesActuales : '' %>`;
-            if (rawDetails && rawDetails !== 'null' && rawDetails.trim() !== '') {
-                try {
-                    const items = JSON.parse(rawDetails);
-                    historicoDetalles = items.map(item => ({
-                        id_detalle: item.id_detalle || item.id,
-                        id_platillo: item.id_platillo,
-                        nombre: item.nombre || item.nombre_platillo,
-                        precio: parseFloat(item.precio || item.precio_unitario),
-                        cantidad: parseInt(item.cantidad),
-                        estado: item.estado || item.estado_item || 'en_cocina',
-                        notas: item.notas_especiales || item.notas || ''
-                    }));
-                } catch (e) {
-                    console.error("Error al procesar histórico:", e);
-                }
+            const items = <%- JSON.stringify(typeof detallesActuales !== 'undefined' ? detallesActuales : []) %>;
+            if (Array.isArray(items) && items.length > 0) {
+                historicoDetalles = items.map(item => ({
+                    id_detalle: item.id_detalle || item.id,
+                    id_platillo: item.id_platillo,
+                    nombre: item.nombre || item.nombre_platillo,
+                    precio: parseFloat(item.precio || item.precio_unitario),
+                    cantidad: parseInt(item.cantidad),
+                    estado: item.estado || item.estado_item || (MONITORES_HABILITADOS ? 'en_cocina' : 'en_espera'),
+                    notas: item.notas_especiales || item.notas || ''
+                }));
             }
             
             renderCart();
@@ -1128,6 +1155,11 @@
                     historyChevron.style.transform = 'rotate(0deg)';
                 }
             });
+
+            const btnDeliverAll = document.getElementById('btn-deliver-all-direct');
+            if (btnDeliverAll) {
+                btnDeliverAll.addEventListener('click', entregarTodosLosItems);
+            }
 
             // Filtros de Categorías
             document.querySelectorAll('.category-btn').forEach(btn => {
@@ -1159,7 +1191,6 @@
                 }
                 applyFilters();
 
-                // Si se buscó desde el header flotante y la reducción de tarjetas subió el scroll al inicio
                 if (origin === 'header') {
                     const scrollTop = menuSection ? menuSection.scrollTop : (window.pageYOffset || document.documentElement.scrollTop || 0);
                     if (scrollTop <= 100) {
@@ -1217,7 +1248,6 @@
                         const teniaFocoEnHeader = (document.activeElement === headerSearchInput);
                         headerSearchContainer.classList.remove('visible');
                         
-                        // Si el usuario estaba escribiendo en el buscador del header, transferir el foco al buscador principal
                         if (teniaFocoEnHeader && searchInput) {
                             searchInput.focus();
                             const len = searchInput.value.length;
@@ -1515,7 +1545,6 @@
                     renderCart();
                 }
             } else if (Swal.getDenyButton() && Swal.getDenyButton().dataset.clicked) {
-                // Deny action (Quitar nota)
                 item.notas = '';
                 renderCart();
             }
@@ -1537,7 +1566,7 @@
 
             Swal.fire({
                 title: '¿Vaciar ronda actual?',
-                text: 'Se eliminarán los productos en captura no enviados a cocina.',
+                text: 'Se eliminarán los productos en captura no guardados.',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#e11d48',
@@ -1634,7 +1663,7 @@
                 return;
             }
 
-            const estadosCancelables = ['en_cocina', 'en_bar', 'listo'];
+            const estadosCancelables = ['en_cocina', 'en_bar', 'listo', 'en_espera'];
 
             wrapper.innerHTML = '';
             historicoDetalles.forEach(item => {
@@ -1647,7 +1676,8 @@
                 if (estadoLimpio === 'cancelado') badgeClass = 'bg-danger-subtle text-danger border-danger-subtle line-through';
 
                 let botonAccion = '';
-                if (estadoLimpio === 'listo') {
+                // Si está listo, o si estamos en Servicio Directo y no está entregado ni cancelado:
+                if (estadoLimpio === 'listo' || (!MONITORES_HABILITADOS && estadoLimpio !== 'entregado' && estadoLimpio !== 'cancelado')) {
                     botonAccion = `
                         <button type="button" 
                                 data-id="${item.id_detalle}" 
@@ -1715,6 +1745,35 @@
                 cancelarItemPedido(btnCancel.dataset.id, btnCancel.dataset.estado, btnCancel.dataset.nombre);
             }
         });
+
+        async function entregarTodosLosItems() {
+            const idPedido = document.getElementById('pos_id_pedido').value;
+            if (!idPedido || idPedido == 0) return;
+
+            try {
+                const response = await fetch(`/api/pos/entregar-todos/${idPedido}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    historicoDetalles.forEach(it => {
+                        if (it.estado !== 'cancelado') it.estado = 'entregado';
+                    });
+                    renderHistory();
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Todos entregados!',
+                        text: 'Todos los productos han sido marcados como servidos.',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                }
+            } catch (err) {
+                Swal.fire('Error de red', 'No se pudo completar la entrega.', 'error');
+            }
+        }
 
         async function cancelarItemPedido(idDetalle, estadoItem, nombreProducto) {
             const { value: motivo, isConfirmed } = await Swal.fire({
@@ -1800,25 +1859,34 @@
         function saveOrderToServer() {
             const id_pedido = document.getElementById('pos_id_pedido').value;
             if (carrito.length === 0) {
-                Swal.fire('Ronda vacía', 'Agrega productos antes de enviar a cocina.', 'warning');
+                Swal.fire('Ronda vacía', 'Agrega productos antes de guardar la orden.', 'warning');
                 return;
             }
 
+            const confirmTitle = MONITORES_HABILITADOS ? '¿Enviar ronda a cocina y bar?' : '¿Guardar ronda en la mesa?';
+            const confirmText = MONITORES_HABILITADOS 
+                ? 'Se enviarán únicamente los productos agregados en esta captura a los monitores de producción.'
+                : 'Se guardarán los productos en la mesa para su entrega directa.';
+
             Swal.fire({
-                title: '¿Enviar ronda a cocina?',
-                text: "Se enviarán únicamente los productos agregados en esta captura.",
+                title: confirmTitle,
+                text: confirmText,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#059669',
                 cancelButtonColor: '#e11d48',
-                confirmButtonText: 'Sí, enviar',
+                confirmButtonText: 'Sí, continuar',
                 cancelButtonText: 'Cancelar',
                 showLoaderOnConfirm: true,
                 preConfirm: () => {
                     return fetch('/api/pos/save', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id_pedido, items: carrito })
+                        body: JSON.stringify({
+                            id_pedido,
+                            id_mesa: parseInt(document.getElementById('pos_id_mesa').value) || null,
+                            items: carrito
+                        })
                     })
                     .then(response => response.json())
                     .catch(err => { Swal.showValidationMessage(`Error de red: ${err}`); });
@@ -1833,7 +1901,7 @@
                                 nombre: itemBD.nombre,
                                 precio: parseFloat(itemBD.precio),
                                 cantidad: parseInt(itemBD.cantidad),
-                                estado: itemBD.estado || 'en_cocina',
+                                estado: itemBD.estado || (MONITORES_HABILITADOS ? 'en_cocina' : 'en_espera'),
                                 notas: itemBD.notas || ''
                             });
                         });
@@ -1842,24 +1910,33 @@
                     vaciarCarritoDirecto();
                     renderHistory();
 
-                    Swal.fire({ icon: 'success', title: '¡Enviado!', text: 'Ronda enviada a cocina.', confirmButtonColor: '#059669' });
+                    Swal.fire({ 
+                        icon: 'success', 
+                        title: '¡Guardado!', 
+                        text: result.value.message || 'Ronda registrada exitosamente.', 
+                        confirmButtonColor: '#059669',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
                 } else if (result.value && !result.value.success) {
-                    Swal.fire('Error', result.value.message, 'error');
+                    Swal.fire('Error', result.value.message || result.value.error, 'error');
                 }
             });
         }
 
         function printPrecuenta() {
             const id_pedido = document.getElementById('pos_id_pedido').value;
-            if (!id_pedido) return Swal.fire('Error', 'ID de pedido inválido.', 'warning');
+            if (!id_pedido || id_pedido == 0) return Swal.fire('Error', 'ID de pedido inválido.', 'warning');
             window.open(`/pos/precuenta/${id_pedido}`, '_blank');
         }
 
         async function checkoutOrder() {
             if (carrito.length > 0) {
-                return Swal.fire('Productos en captura', 'Hay productos sin enviar. Envíelos o vacíe la captura antes de cobrar.', 'warning');
+                return Swal.fire('Productos en captura', 'Hay productos sin guardar. Envíelos o vacíe la captura antes de cobrar.', 'warning');
             }
 
+            // Validación SIEMPRE activa: no se puede cobrar mientras existan
+            // platillos que no hayan sido entregados al cliente.
             if (historicoDetalles && historicoDetalles.length > 0) {
                 const pendientes = historicoDetalles.filter(item => {
                     const estado = (item.estado || '').toLowerCase();
@@ -1867,7 +1944,13 @@
                 });
 
                 if (pendientes.length > 0) {
-                    return Swal.fire('Platillos en preparación', `Existen ${pendientes.length} producto(s) sin marcar como entregados.`, 'warning');
+                    return Swal.fire({
+                        icon: 'warning',
+                        title: 'Platillos sin entregar',
+                        html: `Existen <b>${pendientes.length} producto(s)</b> que aún no han sido entregados al cliente.<br><span class="small text-muted">Marca los productos como entregados (o usa el botón <b>"Entregar Todo"</b>) antes de cobrar.</span>`,
+                        confirmButtonColor: '#d33',
+                        confirmButtonText: 'Entendido'
+                    });
                 }
             }
 
@@ -1882,7 +1965,7 @@
                 return Swal.fire('Sin consumos', 'No hay productos guardados para efectuar el cobro.', 'warning');
             }
 
-            const impuestoBase = subtotalHistorico * 0.10;
+            const impuestoBase = subtotalHistorico * (FACTURA_IMPUESTO / 100);
             const totalBaseCalculado = subtotalHistorico + impuestoBase;
             const idPedido = document.getElementById('pos_id_pedido').value;
 
@@ -1902,7 +1985,7 @@
                     <div class="text-start small p-1">
                         <div class="bg-light p-2.5 rounded border d-flex justify-content-between text-center mb-3">
                             <div>
-                                <small class="text-muted d-block font-semibold">Subtotal+Tax</small>
+                                <small class="text-muted d-block font-semibold">${FACTURA_IMPUESTO > 0 ? 'Subtotal+Tax' : 'Subtotal'}</small>
                                 <strong class="font-digits fs-6">$${totalBaseCalculado.toFixed(2)}</strong>
                             </div>
                             <div>
@@ -2189,7 +2272,7 @@
                         window.location.href = '/admin/dashboard';
                     });
                 } else {
-                    Swal.fire('Error en el cobro', data.message, 'error');
+                    Swal.fire('Error en el cobro', data.message || 'No se pudo registrar el pago', 'error');
                 }
             } catch (err) {
                 Swal.fire('Error de Red', 'Fallo al procesar el pago.', 'error');
@@ -2198,7 +2281,10 @@
 
         let itemsListosAnteriores = new Set();
         function verificarItemsListos() {
+            if (!MONITORES_HABILITADOS) return;
             const idPedido = document.getElementById('pos_id_pedido').value;
+            if (!idPedido || idPedido == 0) return;
+
             fetch(`/api/pos/items-listos/${idPedido}`)
                 .then(res => res.json())
                 .then(data => {
@@ -2233,6 +2319,7 @@
 
         let pollTimer = null;
         function iniciarPollingItemsListos() {
+            if (!MONITORES_HABILITADOS) return;
             verificarItemsListos();
             if (!pollTimer) pollTimer = setInterval(verificarItemsListos, 8000);
         }

@@ -70,7 +70,7 @@
                                         <div class="p-3 bg-light rounded">
                                             <div class="text-muted small text-capitalize"><%= item.tipo %></div>
                                             <div class="fs-4 fw-bold text-dark"><%= item.total_salidas %></div>
-                                            <div class="text-muted small"><%= item.total_cantidad.toFixed(2) } unidades</div>
+                                            <div class="text-muted small"><%= item.total_cantidad.toFixed(2) %> unidades</div>
                                         </div>
                                     </div>
                                 <% }) %>
@@ -260,6 +260,14 @@
                 motivo: formData.get('motivo'),
                 notas: formData.get('notas')
             };
+
+            Swal.fire({
+                title: 'Registrando salida...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
 
             fetch('/admin/api/salidas-manuales', {
                 method: 'POST',
