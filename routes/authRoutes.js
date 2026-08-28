@@ -193,6 +193,14 @@ router.post('/login', authLimiter, (req, res, next) => {
                 }
             }
 
+            // Un login exitoso no debe consumir el límite anti-fuerza bruta.
+            // La opción skipSuccessfulRequests solo salta respuestas 2xx y el
+            // login de formulario responde 302, así que el contador se resetea
+            // aquí manualmente (los intentos fallidos siguen acumulándose).
+            try {
+                authLimiter.resetKey(req.ip);
+            } catch (_) { /* el limiter nunca debe tumbar un login válido */ }
+
             return res.redirect('/admin/dashboard');
         });
     })(req, res, next);

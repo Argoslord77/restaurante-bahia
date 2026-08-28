@@ -96,7 +96,11 @@ module.exports = {
                 nombre_mesa: nombreMesa,
                 carta: pricingContext.carta,
                 pricingContext,
-                detallesActuales: JSON.stringify(detallesActuales),
+                // Se pasa el array como está: la vista lo serializa una sola
+                // vez. Pasarlo ya con JSON.stringify producía un string
+                // doble-serializado que la vista no parseaba y el POS cargaba
+                // la orden sin historial ni importe.
+                detallesActuales: detallesActuales,
                 platillos,
                 categorias,
                 habilitarMonitores,
@@ -396,7 +400,7 @@ module.exports = {
             const pedidoId = req.params.id_pedido;
             const body = req.body || {};
             const pagos = body.pagos || [];
-            const { es_cortesia, es_factura_credito, es_pendiente_pago, descuento, recargo } = body;
+            const { es_cortesia, es_factura_credito, es_pendiente_pago, descuento, recargo, propina } = body;
             const cajeroId = req.user ? req.user.id : 1;
 
             if (!pedidoId) return res.status(400).json({ success: false, message: 'ID de pedido requerido.' });
@@ -436,9 +440,16 @@ module.exports = {
             const subtotal = Number(totales[0]?.subtotal || 0);
             const desc = Math.max(0, Number(descuento || 0));
             const rec = Math.max(0, Number(recargo || 0));
+            const prop = Math.max(0, Number(propina || 0));
             const facturaImpuesto = parseFloat(await SettingService.get('factura_impuesto', 0) || 0);
             const impuesto = Number(Math.max(0, subtotal * facturaImpuesto / 100).toFixed(2));
-            const totalFinal = es_cortesia ? 0 : Number(Math.max(0, subtotal + impuesto - desc + rec).toFixed(2));
+            // Total de la orden (lo que factura la mesa). La propina NO va en
+            // el total: se guarda separada en pedidos.propina y el cierre del
+            // día la suma aparte al efectivo de caja (si se sumara aquí se
+            // contaría doble en el cuadre).
+            const totalOrden = es_cortesia ? 0 : Number(Math.max(0, subtotal + impuesto - desc + rec).toFixed(2));
+            // Lo que el cliente debe abonar físicamente: orden + propina.
+            const totalFinal = es_cortesia ? 0 : Number((totalOrden + prop).toFixed(2));
 
             let estadoPago = 'pagado';
             if (es_pendiente_pago) estadoPago = 'pendiente_pago';
@@ -531,9 +542,9 @@ module.exports = {
             await connection.query(`
                 UPDATE pedidos
                 SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
-                    id_usuario_cajero = ?, descuento = ?, impuesto = ?, total = ?
+                    id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
                 WHERE id = ?
-            `, [estadoPago, cajeroId, desc, impuesto, totalFinal, pedidoId]);
+            `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
             await connection.query(`
                 UPDATE detalles_pedido SET estado_item = 'entregado'
                 WHERE id_pedido = ? AND estado_item != 'cancelado'
@@ -561,7 +572,7 @@ module.exports = {
             }
             await pool.query("UPDATE mesas SET estado = 'libre' WHERE id = ?", [pedido.id_mesa]);
 
-            return res.json({ success: true, carta: pricingContext.carta, moneda_codigo: pricingContext.moneda_codigo, total: totalFinal, message: 'Mesa cobrada y liberada con éxito' });
+            return res.json({ success: true, carta: pricingContext.carta, moneda_codigo: pricingContext.moneda_codigo, total: totalFinal, total_orden: totalOrden, propina: prop, message: 'Mesa cobrada y liberada con éxito' });
         } catch (err) {
             if (connection) {
                 try { await connection.rollback(); } catch (_) { /* noop */ }
@@ -599,10 +610,17 @@ module.exports = {
             const idMesa = req.params.idMesa;
             if (!pool) return res.redirect('/pos');
 
+            // Si la mesa tuviera varias órdenes pendientes, se abre la que
+            // tiene más consumos vigentes (nunca una vacía con $0.00 cuando
+            // existe otra con productos).
             const [pedidos] = await pool.query(`
-                SELECT id FROM pedidos 
-                WHERE id_mesa = ? AND estado_pago = 'pendiente' 
-                ORDER BY id DESC LIMIT 1
+                SELECT p.id, COUNT(dp.id) AS n_items
+                FROM pedidos p
+                LEFT JOIN detalles_pedido dp ON dp.id_pedido = p.id AND dp.estado_item != 'cancelado'
+                WHERE p.id_mesa = ? AND p.estado_pago = 'pendiente'
+                GROUP BY p.id
+                ORDER BY n_items DESC, p.id DESC
+                LIMIT 1
             `, [idMesa]);
             const prePedidoQuery = req.query.cargarPrePedido
                 ? `?cargarPrePedido=${encodeURIComponent(req.query.cargarPrePedido)}`
@@ -650,10 +668,16 @@ module.exports = {
             }
             const turnoId = turnos[0].id;
 
+            // Mismo criterio que abrirOObtenerPedidoMesa: priorizar la orden
+            // con más consumos vigentes para no abrir una vacía con $0.00.
             const [existentes] = await pool.query(`
-                SELECT id FROM pedidos 
-                WHERE id_mesa = ? AND estado_pago = 'pendiente' AND turno_servicio_id = ?
-                ORDER BY id DESC LIMIT 1
+                SELECT p.id, COUNT(dp.id) AS n_items
+                FROM pedidos p
+                LEFT JOIN detalles_pedido dp ON dp.id_pedido = p.id AND dp.estado_item != 'cancelado'
+                WHERE p.id_mesa = ? AND p.estado_pago = 'pendiente' AND p.turno_servicio_id = ?
+                GROUP BY p.id
+                ORDER BY n_items DESC, p.id DESC
+                LIMIT 1
             `, [id_mesa, turnoId]);
 
             let pedidoId;

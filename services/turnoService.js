@@ -202,6 +202,10 @@ class TurnoService {
             throw new Error("No hay un turno de servicio activo.");
         }
 
+        // Si el snapshot del turno tuviera filas duplicadas por moneda (p. ej.
+        // guardado dos veces), se toma SOLO la fila más reciente de cada
+        // moneda. Sin esto el JOIN duplicaba cada moneda en los selects de
+        // cobro/turnos.
         const query = `
             SELECT 
                 m.id AS moneda_id,
@@ -211,12 +215,21 @@ class TurnoService {
                 m.es_moneda_base,
                 COALESCE(mt.factor_cambio_turno, m.factor_cambio) AS factor_cambio
             FROM monedas m
-            LEFT JOIN monedas_turno mt
-              ON mt.moneda_id = m.id AND mt.turno_servicio_id = ?
+            LEFT JOIN (
+                SELECT t2.moneda_id, t2.factor_cambio_turno
+                FROM monedas_turno t2
+                INNER JOIN (
+                    SELECT moneda_id, MAX(id) AS id_max
+                    FROM monedas_turno
+                    WHERE turno_servicio_id = ?
+                    GROUP BY moneda_id
+                ) latest ON latest.id_max = t2.id
+                WHERE t2.turno_servicio_id = ?
+            ) mt ON mt.moneda_id = m.id
             WHERE m.activo = 1
-              AND (mt.turno_servicio_id IS NOT NULL OR UPPER(m.codigo) = 'ZELLE')
+              AND (mt.moneda_id IS NOT NULL OR UPPER(m.codigo) = 'ZELLE')
         `;
-        const [rows] = await db.query(query, [turnoActivo.id]);
+        const [rows] = await db.query(query, [turnoActivo.id, turnoActivo.id]);
         const [[snapshot]] = await db.query(
             'SELECT COUNT(*) AS total FROM monedas_turno WHERE turno_servicio_id = ?',
             [turnoActivo.id]

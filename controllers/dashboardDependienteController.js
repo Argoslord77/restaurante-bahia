@@ -62,7 +62,7 @@ const DashboardDependienteController = {
                         ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ?
                         AND p.estado_pago = 'pendiente'
-                        AND p.estado_pedido NOT IN ('cancelado', 'entregado')
+                        AND p.estado_pedido != 'cancelado'
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                     WHERE dam.dependiente_id = ?
                       AND ad.turno_id = ?
@@ -98,7 +98,7 @@ const DashboardDependienteController = {
                         ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ?
                         AND p.estado_pago = 'pendiente'
-                        AND p.estado_pedido NOT IN ('cancelado', 'entregado')
+                        AND p.estado_pedido != 'cancelado'
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                     GROUP BY m.id
                     ORDER BY CAST(m.numero AS UNSIGNED) ASC

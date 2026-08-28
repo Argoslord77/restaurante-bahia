@@ -10,7 +10,11 @@ Veo que estableciste en ambas vistas enlaces a los cdn de bootstrap y fontawesom
 
 En la vista de recetas tecnicas de platillo del menu, cuando se selecciona eliminar definitivamente no la esta borrando de la BD. Solamente la esta desactivando. Vas a utilizar estos archivos para depurar, ya que son los archivos reales del proyecto.
 
+
 Cuando se selecciona pago por ZELLE en la mesa, al momento de cobrar debe de comprobarse que la moneda seleccionada para el pago sea la que coincida con 'ZELLE' en BD porque puede pasar por otra de no chequearse. 
 
+En el modulo de POS, con los monitores de cocina y bar deshabilitados, encargue como dependiente 2 productos, los entregue al cliente utilizando el boton "entregar todo", luego pinche pre-cuenta la visualice y cuando pinche la precuenta para visualizar el boton de regresar atras me redirecciono al dashboard de dependiente donde muestra la mesa ocupada pero el boton no dice "atender" sino "abrir". Es un bug raro porque a pesar de estar activo el pedido no me deja verlo en el POS. Depura ese error y despues asegurate de que todo el proceso del pos funciona correctamente. Prueba distintos escenarios.
 
+El problema persiste, durante el servicio directo, cuando se entrega el producto al cliente, se visualiza la precuenta y para cuando se regresa al POS ya la orden no muestra importe y si se navega al dashboard del dependiente la mesa sale como ocupada pero el boton de servicio dice "Abrir Mesa" en lugar de "atender pedido". Necesito ese bug arreglado lo antes posible. 
 
+Tengo 3 bugs. Primero en el POS al cobrar me esta listando doble las monedas en el select de [Moneda], segundo en la vista de Caja y Cierre del dia no me esta mostrando la propina. Tercero cuando en el cierre del dia seleccionamos imprimir ticket de una orden nos lleva a precuenta cuando en realidad deberia de haber una vista diferente para el ticket en solitario no como precuenta del servicio y que cuando se pinche el boton de navegacion para retroceder redireccione a la vista inicial de cierre del dia en la caja, no al POS.

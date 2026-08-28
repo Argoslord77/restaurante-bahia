@@ -393,6 +393,67 @@ const CierreDiaController = {
             console.error('Error en apiObtenerDetalleCierre:', error);
             return res.status(500).json({ success: false, message: 'Error en el servidor.' });
         }
+    },
+
+    /**
+     * Vista de impresión: TICKET de una orden individual desde Cierre del Día.
+     * Es un ticket en solitario (distinto de la pre-cuenta de servicio del POS)
+     * y su botón de navegación regresa al Cierre del Día, no al POS.
+     * GET /admin/cierre-dia/ticket-pedido/:id_pedido
+     */
+    viewTicketPedido: async (req, res) => {
+        try {
+            const pedidoId = req.params.id_pedido;
+
+            const [pedidos] = await db.query(`
+                SELECT p.*, m.numero AS mesa_numero, u.nombre AS mesero_nombre
+                FROM pedidos p
+                LEFT JOIN mesas m ON p.id_mesa = m.id
+                LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+                WHERE p.id = ?
+                LIMIT 1
+            `, [pedidoId]);
+
+            if (pedidos.length === 0) {
+                return res.status(404).send('Pedido no encontrado');
+            }
+            const pedido = pedidos[0];
+
+            const [detalles] = await db.query(`
+                SELECT dp.cantidad, dp.precio_unitario, dp.notas_especiales,
+                       COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre
+                FROM detalles_pedido dp
+                LEFT JOIN platillos_menu pm
+                  ON (dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL))
+                LEFT JOIN platillos_dia pd
+                  ON (dp.id_platillo = pd.id AND dp.es_platillo_dia = 1)
+                WHERE dp.id_pedido = ? AND dp.estado_item != 'cancelado'
+                ORDER BY dp.id ASC
+            `, [pedidoId]);
+
+            const subtotal = Number(pedido.subtotal || 0);
+            const propina = Number(pedido.propina || 0);
+            const impuesto = Number(pedido.impuesto || 0);
+            const total = Number(pedido.total || 0);
+
+            res.render('caja/ticket_pedido', {
+                pageTitle: `Ticket Orden #${pedidoId}`,
+                id_pedido: pedido.id,
+                nombre_mesa: pedido.mesa_numero ? `Mesa ${pedido.mesa_numero}` : `Mesa ${pedido.id_mesa || '-'}`,
+                atendio: pedido.mesero_nombre || null,
+                pedido,
+                detalles,
+                subtotal,
+                propina,
+                impuesto,
+                total,
+                total_a_pagar: Number((total + propina).toFixed(2)),
+                user: req.user || null
+            });
+        } catch (err) {
+            console.error('Error en viewTicketPedido:', err);
+            res.status(500).send('Error al generar el ticket de la orden');
+        }
     }
 };
 

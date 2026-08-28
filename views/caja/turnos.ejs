@@ -234,6 +234,9 @@
                                                             <span class="text-muted">Esp:</span> $<%= parseFloat(t.monto_cierre_esperado).toFixed(2) %> | 
                                                             <span class="text-muted">Real:</span> $<%= parseFloat(t.monto_cierre_real).toFixed(2) %>
                                                         </div>
+                                                        <% if (parseFloat(t.total_propinas) > 0) { %>
+                                                            <div class="small text-success fw-semibold">+ Propinas: $<%= parseFloat(t.total_propinas).toFixed(2) %></div>
+                                                        <% } %>
                                                         <div class="text-secondary fs-7"><%= new Date(t.fecha_cierre).toLocaleString() %></div>
                                                     <% } %>
                                                 </td>
@@ -282,6 +285,7 @@
                                                             data-sistema="<%= t.estado === 'cerrado' ? parseFloat(t.monto_cierre_esperado).toFixed(2) : '0.00' %>"
                                                             data-real="<%= t.estado === 'cerrado' ? parseFloat(t.monto_cierre_real).toFixed(2) : '0.00' %>"
                                                             data-dif="<%= t.estado === 'cerrado' ? (t.monto_cierre_real - t.monto_cierre_esperado).toFixed(2) : '0.00' %>"
+                                                            data-propinas="<%= t.estado === 'cerrado' ? parseFloat(t.total_propinas || 0).toFixed(2) : '0.00' %>"
                                                             data-balance="<%= t.estado === 'cerrado' ? (t.monto_cierre_real - t.monto_cierre_esperado === 0 ? 'cuadrado' : (t.monto_cierre_real - t.monto_cierre_esperado > 0 ? 'sobrante' : 'faltante')) : '' %>"
                                                             data-fecha-cr="<%= t.estado === 'cerrado' ? new Date(t.fecha_cierre).toLocaleString() : '-' %>"
                                                             data-obs-cr="<%= t.observaciones %>"
@@ -330,6 +334,7 @@
                             <div id="auditBodyCierre">
                                 <p class="mb-1 text-secondary small"><strong>Fecha/Hora Cierre:</strong> <span id="auditFechaCr" class="text-dark"></span></p>
                                 <p class="mb-1 text-secondary small"><strong>Monto Esperado (Sistema):</strong> <span class="font-monospace text-dark">$<span id="auditMontoSis"></span></span></p>
+                                <p class="mb-1 text-secondary small"><strong>Propinas del Turno:</strong> <span class="font-monospace text-success fw-bold">$<span id="auditPropinas">0.00</span></span></p>
                                 <p class="mb-1 text-secondary small"><strong>Monto Recibido (Arqueo):</strong> <span class="font-monospace text-dark">$<span id="auditMontoReal"></span></span></p>
                                 <p class="mb-2 text-secondary small"><strong>Diferencia Calculada:</strong> <span id="auditBadgeDif" class="font-monospace fw-bold"></span></p>
                                 <p class="mb-3 text-secondary small"><strong>Balance de Auditoría:</strong> <span id="auditBadgeBalance" class="badge text-uppercase fs-8"></span></p>
@@ -481,6 +486,7 @@
                     const sistema = btnAuditar.getAttribute('data-sistema');
                     const real = btnAuditar.getAttribute('data-real');
                     const dif = btnAuditar.getAttribute('data-dif');
+                    const propinas = btnAuditar.getAttribute('data-propinas') || '0.00';
                     const balance = btnAuditar.getAttribute('data-balance');
                     const fechaCr = btnAuditar.getAttribute('data-fecha-cr');
                     const obsCr = btnAuditar.getAttribute('data-obs-cr');
@@ -500,6 +506,7 @@
                         
                         document.getElementById('auditFechaCr').textContent = fechaCr;
                         document.getElementById('auditMontoSis').textContent = sistema;
+                        document.getElementById('auditPropinas').textContent = propinas;
                         document.getElementById('auditMontoReal').textContent = real;
                         document.getElementById('auditObsCr').textContent = (obsCr && obsCr !== 'null' && obsCr.trim() !== '') ? obsCr : 'Sin notas de cierre registradas.';
                         

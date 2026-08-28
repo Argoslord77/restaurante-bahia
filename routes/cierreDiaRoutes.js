@@ -6,6 +6,9 @@ const cierreDiaController = require('../controllers/cierreDiaController');
 const { ensureAuthenticated, checkRole } = require('../middlewares/auth');
 router.get('/cierre-dia', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'economico']), cierreDiaController.renderCierreDia);
 router.get('/cierre-dia/ticket', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'economico']), cierreDiaController.renderCierreTicket);
+// Ticket en solitario de una orden individual (desde Cierre del Día).
+// Distinto de la pre-cuenta del POS: regresa al Cierre del Día, no al POS.
+router.get('/cierre-dia/ticket-pedido/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'economico']), cierreDiaController.viewTicketPedido);
 router.post('/cierre-dia/liquidar-cuenta/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), cierreDiaController.liquidarCuenta);
 // routes/cierreDiaRoutes.js
 router.get(

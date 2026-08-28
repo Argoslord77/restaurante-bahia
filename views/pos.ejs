@@ -744,10 +744,19 @@
         const monitoresHabilitados = (typeof habilitarMonitores !== 'undefined') ? Boolean(habilitarMonitores) : true;
     %>
 
+    <%
+        // El dashboard al que regresa el personal de servicio depende del rol:
+        // dependiente y capitán no tienen acceso a /admin/dashboard (el intento
+        // caía en una cadena /login -> /dependiente/dashboard).
+        const POS_ROLES_SERVICIO = ['dependiente', 'capitan'];
+        const posDashboardUrl = (typeof user !== 'undefined' && user && POS_ROLES_SERVICIO.includes(user.rol))
+            ? '/dependiente/dashboard'
+            : '/admin/dashboard';
+    %>
     <!-- Header Principal -->
     <header class="pos-header position-relative">
         <div class="d-flex align-items-center gap-3">
-            <a href="/admin/dashboard" class="btn-back-dashboard" title="Regresar al Dashboard">
+            <a href="<%= posDashboardUrl %>" class="btn-back-dashboard" title="Regresar al Dashboard">
                 <i class="fa-solid fa-arrow-left text-xs"></i>
             </a>
             <div>
@@ -1047,6 +1056,7 @@
 
     <script>
         const MONITORES_HABILITADOS = <%= monitoresHabilitados ? 'true' : 'false' %>;
+        const POS_DASHBOARD_URL = '<%= posDashboardUrl %>';
         const FACTURA_IMPUESTO = <%= parseFloat(typeof facturaImpuesto !== 'undefined' ? facturaImpuesto : 0) || 0 %>;
         let carrito = []; 
         let historicoDetalles = []; 
@@ -1121,7 +1131,14 @@
         }
 
         document.addEventListener("DOMContentLoaded", () => {
-            const items = <%- JSON.stringify(typeof detallesActuales !== 'undefined' ? detallesActuales : []) %>;
+            let items = <%- JSON.stringify(typeof detallesActuales !== 'undefined' ? detallesActuales : []) %>;
+            // Compatible con las dos formas en que puede llegar el histórico:
+            // array o string JSON pre-serializado. Antes, al pasarse string y
+            // re-serializarse, Array.isArray fallaba y al recargar la página el
+            // historial de la orden y el TOTAL quedaban en $0.00.
+            if (typeof items === 'string') {
+                try { items = JSON.parse(items); } catch (e) { items = []; }
+            }
             if (Array.isArray(items) && items.length > 0) {
                 historicoDetalles = items.map(item => ({
                     id_detalle: item.id_detalle || item.id,
@@ -2003,15 +2020,19 @@
                         </div>
 
                         <div class="row g-2 mb-3 bg-light p-2 rounded border">
-                            <div class="col-4">
+                            <div class="col-6">
                                 <label class="small fw-bold">Descuento ($)</label>
                                 <input type="number" id="swal-descuento" min="0" step="0.01" value="0.00" class="form-control form-control-sm font-digits">
                             </div>
-                            <div class="col-4">
+                            <div class="col-6">
                                 <label class="small fw-bold">Recargo ($)</label>
                                 <input type="number" id="swal-recargo" min="0" step="0.01" value="0.00" class="form-control form-control-sm font-digits">
                             </div>
-                            <div class="col-4">
+                            <div class="col-6">
+                                <label class="small fw-bold text-success">Propina ($)</label>
+                                <input type="number" id="swal-propina" min="0" step="0.01" value="0.00" class="form-control form-control-sm font-digits text-success">
+                            </div>
+                            <div class="col-6">
                                 <label class="small fw-bold">Motivo</label>
                                 <input type="text" id="swal-motivo-ajuste" class="form-control form-control-sm" placeholder="VIP / Servicio">
                             </div>
@@ -2097,6 +2118,7 @@
 
                     const inputDescuento = document.getElementById('swal-descuento');
                     const inputRecargo = document.getElementById('swal-recargo');
+                    const inputPropina = document.getElementById('swal-propina');
 
                     const lblTotalPagar = document.getElementById('lbl-total-pagar');
                     const lblRestante = document.getElementById('lbl-restante');
@@ -2108,7 +2130,10 @@
                         if (chkCortesia && chkCortesia.checked) return 0;
                         const desc = Math.max(0, parseFloat(inputDescuento ? inputDescuento.value : 0) || 0);
                         const rec = Math.max(0, parseFloat(inputRecargo ? inputRecargo.value : 0) || 0);
-                        return Math.max(0, (totalBaseCalculado - desc + rec));
+                        const prop = Math.max(0, parseFloat(inputPropina ? inputPropina.value : 0) || 0);
+                        // La propina se suma al total a pagar: el cliente paga
+                        // órdenes + propina y ambas cantidades entran a caja.
+                        return Math.max(0, (totalBaseCalculado - desc + rec + prop));
                     }
 
                     function updateTabla() {
@@ -2187,6 +2212,7 @@
 
                     if (inputDescuento) inputDescuento.addEventListener('input', updateTabla);
                     if (inputRecargo) inputRecargo.addEventListener('input', updateTabla);
+                    if (inputPropina) inputPropina.addEventListener('input', updateTabla);
 
                     const btnAddPago = document.getElementById('btn-add-pago');
                     if (btnAddPago) {
@@ -2232,6 +2258,7 @@
                     const esPendientePago = document.getElementById('swal-es-pendiente-pago')?.checked || false;
                     const descuento = Math.max(0, parseFloat(document.getElementById('swal-descuento')?.value) || 0);
                     const recargo = Math.max(0, parseFloat(document.getElementById('swal-recargo')?.value) || 0);
+                    const propina = Math.max(0, parseFloat(document.getElementById('swal-propina')?.value) || 0);
                     const motivo_ajuste = document.getElementById('swal-motivo-ajuste')?.value || '';
                     const pagos = window._tempPagosModal || [];
 
@@ -2246,6 +2273,7 @@
                         es_pendiente_pago: esPendientePago,
                         descuento,
                         recargo,
+                        propina,
                         motivo_ajuste
                     };
                 }
@@ -2269,7 +2297,7 @@
                         timer: 2000,
                         showConfirmButton: false
                     }).then(() => {
-                        window.location.href = '/admin/dashboard';
+                        window.location.href = POS_DASHBOARD_URL;
                     });
                 } else {
                     Swal.fire('Error en el cobro', data.message || 'No se pudo registrar el pago', 'error');

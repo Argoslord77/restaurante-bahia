@@ -28,8 +28,15 @@ class TurnoModel {
             const [result] = await connection.query(queryTurno, [usuarioId, montoApertura, observaciones || null]);
             const turnoId = result.insertId;
 
-            // Registrar snapshot de monedas para el turno activo
+            // Registrar snapshot de monedas para el turno activo.
+            // Se limpian filas previas del mismo turno para que un guardado
+            // repetido nunca deje monedas duplicadas (que duplicaban los
+            // selects de cobro).
             if (Array.isArray(monedasTurno) && monedasTurno.length > 0) {
+                await connection.query(
+                    'DELETE FROM monedas_turno WHERE turno_servicio_id = ?',
+                    [turnoId]
+                );
                 const queryMoneda = `
                     INSERT INTO monedas_turno (turno_servicio_id, moneda_id, factor_cambio_turno)
                     VALUES ?
@@ -103,10 +110,12 @@ class TurnoModel {
                 t.estado,
                 t.observaciones,
                 u1.nombre AS usuario_apertura,
-                u2.nombre AS usuario_cierre
+                u2.nombre AS usuario_cierre,
+                COALESCE(cs.total_propinas, 0) AS total_propinas
             FROM turnos_servicio t
             LEFT JOIN usuarios u1 ON t.usuario_apertura_id = u1.id
             LEFT JOIN usuarios u2 ON t.usuario_cierre_id = u2.id
+            LEFT JOIN cierres_servicio cs ON cs.turno_servicio_id = t.id
             ORDER BY t.fecha_apertura DESC 
             LIMIT ?
         `;
