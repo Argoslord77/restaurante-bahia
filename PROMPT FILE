@@ -18,3 +18,7 @@ En el modulo de POS, con los monitores de cocina y bar deshabilitados, encargue 
 El problema persiste, durante el servicio directo, cuando se entrega el producto al cliente, se visualiza la precuenta y para cuando se regresa al POS ya la orden no muestra importe y si se navega al dashboard del dependiente la mesa sale como ocupada pero el boton de servicio dice "Abrir Mesa" en lugar de "atender pedido". Necesito ese bug arreglado lo antes posible. 
 
 Tengo 3 bugs. Primero en el POS al cobrar me esta listando doble las monedas en el select de [Moneda], segundo en la vista de Caja y Cierre del dia no me esta mostrando la propina. Tercero cuando en el cierre del dia seleccionamos imprimir ticket de una orden nos lleva a precuenta cuando en realidad deberia de haber una vista diferente para el ticket en solitario no como precuenta del servicio y que cuando se pinche el boton de navegacion para retroceder redireccione a la vista inicial de cierre del dia en la caja, no al POS.
+
+Me esta saltando este error: Cannot GET /admin/cierre-dia/ticket-pedido/17 y en la tarjeta de cobrado en caja no esta apareciendo la propina. Depura este error. 
+
+En el mensaje de stock insuficiente esta perfecto listar los ingredientes con sus respectivas unidades, pero hay 2 detalles. 1ro las unidades de medida se muestran como undefined y lo mejor seria no mostrar inicialmente los ingredientes, bien pudieran estar en un div colapsable o mostrarse cuando se pinche un boton que diga ingredientes, elige la opcion mas profesional. 

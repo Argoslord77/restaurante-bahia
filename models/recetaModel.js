@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const Schema = require('../config/schema');
+const UnidadMedidaService = require('../services/unidadMedidaService');
 
 const Receta = {
     // Obtener todos los ingredientes de una receta por su receta_id.
@@ -45,6 +46,76 @@ const Receta = {
             ORDER BY rd.orden_preparacion ASC, p.nombre ASC
         `;
         const [rows] = await db.query(query, [recetaId]);
+        return await Receta._converitirStockADetalles(rows, categoriaExpr);
+    },
+
+    /**
+     * Recalcula los campos de stock de cada detalle aplicando la CONVERSIÓN
+     * de unidades de cada lote a la unidad de la receta (rd.unidad_medida).
+     *
+     * Sin esto, un insumo con lotes en "Botella 700ml" mostraba la cantidad de
+     * botellas (7) como si fueran mililitros, cuando la receta lo pide en ML.
+     * `stock_disponible/logistico/produccion` pasan a estar expresados en la
+     * MISMA unidad que `cantidad_requerida`, permitiendo la comparación real.
+     */
+    _converitirStockADetalles: async (rows, categoriaExpr) => {
+        if (!rows || rows.length === 0) return rows || [];
+
+        // Mapa almacen_id -> categoria operativa (logistico | produccion)
+        let categoriaPorAlmacen = {};
+        try {
+            const [almacenes] = await db.query(`
+                SELECT a.id AS almacen_id, ${categoriaExpr} AS almacen_categoria
+                FROM almacenes a
+                WHERE a.activo = 1
+            `);
+            for (const a of almacenes) {
+                categoriaPorAlmacen[a.almacen_id] = a.almacen_categoria;
+            }
+        } catch (e) {
+            // Si no se puede leer la categoría, se asume todo como produccion
+            // para no romper la vista; el total disponible sigue siendo correcto.
+        }
+
+        // Caché por producto para no repetir la conversión entre filas
+        const cacheStock = new Map();
+
+        for (const fila of rows) {
+            const clave = `${fila.producto_id}::${fila.unidad_medida}`;
+            if (!cacheStock.has(clave)) {
+                let conv = { total: 0, porAlmacen: {} };
+                try {
+                    conv = await UnidadMedidaService.stockLotesConvertidos(
+                        fila.producto_id,
+                        fila.unidad_medida,
+                        { estrictoActivo: false }
+                    );
+                } catch (e) {
+                    // Sin conversión disponible: se conserva el valor crudo del SQL
+                    conv = {
+                        total: parseFloat(fila.stock_disponible || 0),
+                        porAlmacen: {}
+                    };
+                }
+                cacheStock.set(clave, conv);
+            }
+            const conv = cacheStock.get(clave);
+
+            // El valor crudo del SQL se usa como referencia cuando la conversión
+            // devolvió cero pero el SQL tenía stock (no debería ocurrir).
+            fila.stock_disponible = conv.total > 0 ? conv.total : parseFloat(fila.stock_disponible || 0);
+
+            let logistico = 0;
+            let produccion = 0;
+            for (const [almacenId, cant] of Object.entries(conv.porAlmacen)) {
+                const categoria = categoriaPorAlmacen[Number(almacenId)];
+                if (categoria === 'logistico') logistico += cant;
+                else produccion += cant; // produccion o sin categoría conocida
+            }
+            // Si la conversión no produjo desglose, se conservan los valores crudos
+            fila.stock_logistico = logistico > 0 ? logistico : parseFloat(fila.stock_logistico || 0);
+            fila.stock_produccion = produccion > 0 ? produccion : parseFloat(fila.stock_produccion || 0);
+        }
         return rows;
     },
 
@@ -80,6 +151,35 @@ const Receta = {
             ORDER BY ${categoriaExpr} DESC, a.nombre ASC
         `;
         const [rows] = await db.query(query, [recetaId]);
+
+        // Reemplaza el stock crudo por el stock CONVERTIDO a la unidad de la
+        // receta (el SQL suma cantidad_actual en la unidad de cada lote).
+        const [detallesReceta] = await db.query(
+            'SELECT producto_id, unidad_medida FROM receta_detalles WHERE receta_id = ?',
+            [recetaId]
+        );
+        const unidadPorProducto = new Map(detallesReceta.map(d => [d.producto_id, d.unidad_medida]));
+
+        const cacheStock = new Map();
+        for (const fila of rows) {
+            const clave = String(fila.producto_id);
+            if (!cacheStock.has(clave)) {
+                const unidadReceta = unidadPorProducto.get(fila.producto_id) || null;
+                let conv = { porAlmacen: {} };
+                if (unidadReceta) {
+                    try {
+                        conv = await UnidadMedidaService.stockLotesConvertidos(fila.producto_id, unidadReceta, { estrictoActivo: false });
+                    } catch (e) {
+                        conv = { porAlmacen: {} };
+                    }
+                }
+                cacheStock.set(clave, conv);
+            }
+            const conv = cacheStock.get(clave);
+            if (conv.porAlmacen && conv.porAlmacen[fila.almacen_id] > 0) {
+                fila.stock = conv.porAlmacen[fila.almacen_id];
+            }
+        }
         return rows;
     },
 
@@ -155,6 +255,22 @@ const Receta = {
             ORDER BY rd.orden_preparacion ASC, p.nombre ASC
         `;
         const [rows] = await db.query(query, [almacenId, recetaId]);
+
+        // Stock disponible convertido a la unidad de la receta (el subquery SQL
+        // suma cantidad_actual en la unidad de cada lote).
+        for (const fila of rows) {
+            if (!fila.unidad_medida) continue;
+            try {
+                const conv = await UnidadMedidaService.stockLotesConvertidos(
+                    fila.producto_id,
+                    fila.unidad_medida,
+                    { almacenId, estrictoActivo: false }
+                );
+                if (conv.total > 0) fila.stock_disponible = conv.total;
+            } catch (e) {
+                // Sin conversión: se conserva el valor crudo
+            }
+        }
         return rows;
     },
 

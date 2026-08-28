@@ -352,6 +352,71 @@ class UnidadMedidaService {
         }
         return { ok: true, factor: f, valor: valor * f };
     }
+
+    /**
+     * Stock disponible de un producto con CONVERSIÓN por lote.
+     *
+     * Los lotes se almacenan en la unidad de cada lote (`lotes.unidad_medida_id`),
+     * que puede diferir de la unidad en la que se quiere expresar el stock
+     * (p. ej. receta en ML pero lote en Botella 700ml). Este método convierte
+     * la cantidad de cada lote a `unidadDestinoRef` usando el factor activo
+     * (por producto, global o vía base de tipo) y la suma.
+     *
+     * @param {number} productoId
+     * @param {string|number} unidadDestinoRef  id, código o abreviatura de unidad destino
+     * @param {object} [opts]
+     * @param {number|null} [opts.almacenId]    si se pasa, solo lotes de ese almacén
+     * @param {boolean}  [opts.estRICToActivo]  true: solo estado='ACTIVO' (como el
+     *                                           descuento POS); false: también NULL
+     * @returns {Promise<{total:number, porAlmacen:Object<number,number>, sinConversion:boolean}>}
+     *   sinConversion=true indica que algún lote NO tenía factor de conversión y
+     *   se contó sin convertir (comportamiento de compatibilidad).
+     */
+    static async stockLotesConvertidos(productoId, unidadDestinoRef, opts = {}) {
+        const { almacenId = null, estrictoActivo = false } = opts;
+        const estadoCond = estrictoActivo ? "l.estado = 'ACTIVO'" : "(l.estado IS NULL OR l.estado = 'ACTIVO')";
+        const filtroAlmacen = almacenId ? ' AND l.almacen_id = ?' : '';
+        const params = [productoId];
+        if (almacenId) params.push(almacenId);
+
+        const [lotes] = await db.query(`
+            SELECT l.almacen_id, l.cantidad_actual, l.unidad_medida_id,
+                   p.unidad_inventario_id
+            FROM lotes l
+            INNER JOIN productos p ON p.id = l.producto_id
+            WHERE l.producto_id = ?
+              AND l.cantidad_actual > 0
+              AND ${estadoCond}
+              ${filtroAlmacen}
+        `, params);
+
+        let total = 0;
+        const porAlmacen = {};
+        let sinConversion = false;
+
+        for (const lote of lotes) {
+            // La unidad del lote; si el lote no la declara se asume la unidad
+            // de inventario del producto (supuesto que usa el resto del sistema).
+            const unidadLote = lote.unidad_medida_id || lote.unidad_inventario_id;
+            let factor = 1;
+            if (unidadLote) {
+                const f = await this.obtenerFactor(unidadLote, unidadDestinoRef, productoId);
+                if (f === null) {
+                    // Sin factor de conversión: se cuenta sin convertir
+                    // (comportamiento previo), pero se marca para que el
+                    // llamante pueda advertirlo si lo necesita.
+                    sinConversion = true;
+                } else {
+                    factor = f;
+                }
+            }
+            const cant = parseFloat(lote.cantidad_actual || 0) * factor;
+            total += cant;
+            porAlmacen[lote.almacen_id] = (porAlmacen[lote.almacen_id] || 0) + cant;
+        }
+
+        return { total, porAlmacen, sinConversion };
+    }
 }
 
 module.exports = UnidadMedidaService;

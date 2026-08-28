@@ -116,9 +116,12 @@ module.exports = {
     // Verificación de stock antes de agregar al carrito
     apiVerifyStock: async (req, res) => {
         try {
-            const platilloId = req.query.platillo_id || req.body.platillo_id;
-            const cantidad = parseFloat(req.query.cantidad || req.body.cantidad || 1);
-            const almacenId = req.query.almacen_id || req.body.almacen_id || null;
+            // req.body puede ser undefined en GETs sin body (Express 5);
+            // se lee siempre query primero y body de forma segura.
+            const body = req.body || {};
+            const platilloId = req.query.platillo_id || body.platillo_id;
+            const cantidad = parseFloat(req.query.cantidad || body.cantidad || 1);
+            const almacenId = req.query.almacen_id || body.almacen_id || null;
 
             if (!platilloId) {
                 return res.status(400).json({ success: false, error: 'platillo_id requerido' });
@@ -227,6 +230,68 @@ module.exports = {
                 let estadoInicial = esBebida ? 'en_bar' : 'en_cocina';
                 if (!habilitarMonitores) estadoInicial = 'en_espera';
                 itemsVerificados.push({ idPlatillo, esDia, cantidad, notas, nombre: platillo.nombre, precio, estadoInicial });
+            }
+
+            // ============================================================
+            // VERIFICACIÓN DE STOCK EN ÁREAS PRODUCTIVAS (puerta del servidor)
+            // Antes de insertar la ronda, se simula el consumo de TODOS los
+            // insumos NO OPCIONALES de la ronda contra el stock de las áreas
+            // de producción (cocina/bar). Si algún insumo indispensable no
+            // hay, la ronda se rechaza con el detalle de lo que falta.
+            // ============================================================
+            if (itemsVerificados.length > 0) {
+                // La demanda a verificar es la ORDEN COMPLETA: rondas previas
+                // ya guardadas + la ronda nueva. Así se evita que varias
+                // rondas, válidas por separado, sumen más consumo del que
+                // existe en producción.
+                let itemsParaVerificar = itemsVerificados.map(iv => ({
+                    platillo_id: iv.idPlatillo,
+                    es_platillo_dia: iv.esDia === 1 || iv.esDia === true,
+                    cantidad: iv.cantidad
+                }));
+                if (currentPedidoId) {
+                    try {
+                        const [previos] = await pool.query(
+                            `SELECT id_platillo, es_platillo_dia, cantidad
+                               FROM detalles_pedido
+                              WHERE id_pedido = ? AND estado_item != 'cancelado'`,
+                            [currentPedidoId]
+                        );
+                        itemsParaVerificar = [
+                            ...previos.map(p => ({
+                                platillo_id: p.id_platillo,
+                                es_platillo_dia: p.es_platillo_dia === 1 || p.es_platillo_dia === true,
+                                cantidad: Number(p.cantidad) || 1
+                            })),
+                            ...itemsParaVerificar
+                        ];
+                    } catch (ePrev) {
+                        console.error('No se pudieron leer las rondas previas para verificar stock:', ePrev);
+                    }
+                }
+
+                let stockRonda = null;
+                try {
+                    stockRonda = await InventarioService.verificarStockRonda(itemsParaVerificar);
+                } catch (eStock) {
+                    // Un fallo del propio chequeo no debe tumbar el POS: se
+                    // registra y se deja pasar (el descuento de venta sigue
+                    // validando al cobrar).
+                    console.error('Error en la verificación de stock de producción (se omite el chequeo):', eStock);
+                }
+                if (stockRonda && !stockRonda.suficiente) {
+                    const resumen = stockRonda.faltantes.map(f => {
+                        const nombrePlatillo = itemsVerificados.find(iv => Number(iv.idPlatillo) === Number(f.platillo_id));
+                        const label = nombrePlatillo ? nombrePlatillo.nombre : `platillo #${f.platillo_id}`;
+                        return `«${label}» requiere ${f.insumo_nombre} (${f.requerido} ${f.unidad}) pero solo hay ${f.disponible} ${f.unidad} en ${f.areas}`;
+                    });
+                    return res.status(400).json({
+                        success: false,
+                        message: `No hay stock suficiente en producción para completar la orden. Falta: ${resumen.join('; ')}.`,
+                        faltantes: stockRonda.faltantes,
+                        advertencias: stockRonda.advertencias || []
+                    });
+                }
             }
 
             if (!pedidoExistente) {
