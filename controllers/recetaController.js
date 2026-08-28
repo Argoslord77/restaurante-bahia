@@ -1,6 +1,7 @@
 // controllers/recetaController.js - Controlador para gestión de recetas / fichas técnicas
 const RecetaService = require('../services/recetaService');
 const UnidadMedidaService = require('../services/unidadMedidaService');
+const AlmacenService = require('../services/almacenService');
 const ProductoModel = require('../models/productoModel');
 const logger = require('../config/logger');
 
@@ -61,6 +62,8 @@ const RecetaController = {
                 costo_estimado: ing.costo_estimado,
                 orden_preparacion: ing.orden_preparacion,
                 stock_disponible: ing.stock_disponible,
+                stock_logistico: ing.stock_logistico,
+                stock_produccion: ing.stock_produccion,
                 es_opcional: ing.es_opcional
             }));
 
@@ -143,16 +146,18 @@ const RecetaController = {
         }
     },
 
-    // API: Verificar stock crítico en un almacén específico antes de confirmar un pedido
+    // API: Verificar stock crítico antes de confirmar un pedido.
+    // El almacén es opcional: si no se envía, cada platillo resuelve su propio
+    // almacén de PRODUCCIÓN (nunca se comprueba contra el logístico).
     verificarStock: async (req, res) => {
         try {
             const { items, almacen_id } = req.body;
             
-            if (!items || !almacen_id) {
+            if (!items || !Array.isArray(items) || items.length === 0) {
                 return res.status(400).json({ success: false, message: 'Parámetros insuficientes para la verificación' });
             }
 
-            const resultado = await RecetaService.verificarStockParaPedido(items, almacen_id);
+            const resultado = await RecetaService.verificarStockParaPedido(items, almacen_id || null);
             return res.status(200).json(resultado);
         } catch (error) {
             logger.error('Error al verificar stock de ingredientes:', error);
@@ -213,11 +218,21 @@ const RecetaController = {
             }
             const insumosValidos = [...(materiasPrimas || []), ...(productosVenta || [])];
 
+            // Catálogo de almacenes por categoría operativa para la matriz de existencias
+            let almacenes = { logisticos: [], produccion: [] };
+            try {
+                almacenes = await AlmacenService.listarPorCategoriasOperativas();
+            } catch (errAlmacenes) {
+                logger.warn('Error al cargar almacenes por categoría:', errAlmacenes);
+            }
+
             res.render('inventarios/configurar-receta', {
                 platillo: recetaCompleta || { nombre: 'Receta', id: platilloId },
                 ingredientes: recetaCompleta ? recetaCompleta.detalles : [],
                 productos: insumosValidos,               
                 unidades: unidades || [], 
+                almacenesLogisticos: almacenes.logisticos || [],
+                almacenesProduccion: almacenes.produccion || [],
                 user: req.user || (req.session && req.session.user) || { rol: 'administrador' },
                 view: 'admin_recetas',
                 pageTitle: `Configurar Receta: ${recetaCompleta ? (recetaCompleta.nombre || recetaCompleta.receta_nombre) : 'Ficha Técnica'}`

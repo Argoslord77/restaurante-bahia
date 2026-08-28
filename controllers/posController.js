@@ -217,7 +217,7 @@ module.exports = {
                     throw new Error(`El platillo con ID ${idPlatillo} no existe, está inactivo o no pertenece al turno.`);
                 }
 
-                const precio = PrecioService.validarPrecioConfigurado(platillo, pricingContext.carta);
+                const precio = PrecioService.validarPrecioConfigurado(platillo, pricingContext);
                 const tipo = esDia ? platillo.tipo : platillo.tipo_categoria;
                 const esBebida = String(tipo || '').toUpperCase() === 'BEBIDAS';
                 let estadoInicial = esBebida ? 'en_bar' : 'en_cocina';

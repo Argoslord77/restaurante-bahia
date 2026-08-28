@@ -51,6 +51,46 @@
                     back_url: '/admin/recetas'
                 }) %>
 
+                <%
+                    const almProduccion = (typeof almacenesProduccion !== 'undefined' && almacenesProduccion) ? almacenesProduccion : [];
+                    const almLogisticos = (typeof almacenesLogisticos !== 'undefined' && almacenesLogisticos) ? almacenesLogisticos : [];
+                    const fmtStock = (n) => {
+                        const v = parseFloat(n || 0);
+                        return (Math.round(v * 10000) / 10000).toLocaleString('es-ES', { maximumFractionDigits: 4 });
+                    };
+                    // Cantidad realmente necesaria por porción, incluyendo merma
+                    const requeridoConMerma = (ing) => {
+                        const cant = parseFloat(ing.cantidad_requerida || 0);
+                        const merma = parseFloat(ing.porcentaje_merma || 0);
+                        return merma > 0 ? cant * (1 + merma / 100) : cant;
+                    };
+                %>
+
+                <% if (almProduccion.length === 0) { %>
+                    <div class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 mb-4">
+                        <i class="fa-solid fa-triangle-exclamation fs-4 mt-1"></i>
+                        <div>
+                            <div class="fw-bold">No hay almacenes de producción configurados</div>
+                            <div class="small">
+                                El descuento de insumos por venta en el POS solo ocurre en almacenes de categoría
+                                <strong>Producción</strong>. Asigna esa categoría a los almacenes de cocina, bar o
+                                pastelería en <a href="/admin/almacenes" class="alert-link">Gestión de Almacenes</a>
+                                para que esta ficha muestre existencias reales.
+                            </div>
+                        </div>
+                    </div>
+                <% } %>
+
+                <div class="alert alert-light border shadow-sm d-flex align-items-start gap-3 mb-4 py-2">
+                    <i class="fa-solid fa-circle-info text-primary mt-1"></i>
+                    <div class="small text-secondary">
+                        El <strong class="text-dark">stock de producción</strong> es el único que respalda una venta:
+                        al cobrar en el POS los insumos se descuentan de los almacenes de producción.
+                        El <strong class="text-dark">stock logístico</strong> es de referencia — abastece a producción
+                        mediante transferencias y nunca se descuenta por venta.
+                    </div>
+                </div>
+
                 <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
                     <div class="card-body p-0">
                         <div class="table-responsive">
@@ -62,14 +102,21 @@
                                         <th class="py-3">Unidad</th>
                                         <th class="py-3 text-center">% Merma</th>
                                         <th class="py-3 text-center">Tipo</th>
-                                        <th class="py-3 text-center">Stock Disponible</th>
-                                        <th class="text-center py-3" style="width: 120px;">Acciones</th>
+                                        <th class="py-3 text-center border-start" style="min-width: 180px;">
+                                            <i class="fa-solid fa-warehouse me-1 text-secondary"></i>Stock Logístico
+                                            <div class="text-muted fw-normal text-lowercase fs-8">solo referencia</div>
+                                        </th>
+                                        <th class="py-3 text-center border-start bg-body-tertiary" style="min-width: 200px;">
+                                            <i class="fa-solid fa-utensils me-1 text-primary"></i>Stock Producción
+                                            <div class="text-muted fw-normal text-lowercase fs-8">descuenta el POS</div>
+                                        </th>
+                                        <th class="text-center py-3 border-start" style="width: 120px;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <% if (!ingredientes || ingredientes.length === 0) { %>
                                         <tr>
-                                            <td colspan="7" class="text-center py-5 text-muted">
+                                            <td colspan="8" class="text-center py-5 text-muted">
                                                 <i class="fa-solid fa-carrot d-block fs-2 mb-2 text-secondary"></i> 
                                                 No hay ingredientes configurados para esta ficha técnica.
                                             </td>
@@ -77,11 +124,15 @@
                                     <% } else { %>
                                         <% ingredientes.forEach(ingrediente => { %>
                                             <% 
-                                                const stock = parseFloat(ingrediente.stock_disponible || 0);
                                                 const cant = parseFloat(ingrediente.cantidad_requerida || 0);
-                                                const factorMerma = parseFloat(ingrediente.porcentaje_merma || 0) > 0 ? (1 + (parseFloat(ingrediente.porcentaje_merma) / 100)) : 1;
-                                                const cantTotal = cant * factorMerma;
-                                                const tieneStock = stock >= cantTotal;
+                                                const cantTotal = requeridoConMerma(ingrediente);
+                                                const stockLogistico = parseFloat(ingrediente.stock_logistico || 0);
+                                                const stockProduccion = parseFloat(ingrediente.stock_produccion || 0);
+                                                const detalleLogistico = ingrediente.almacenes_logisticos || [];
+                                                const detalleProduccion = ingrediente.almacenes_produccion || [];
+                                                const tieneStock = stockProduccion >= cantTotal && cantTotal > 0;
+                                                const porcionesPosibles = cantTotal > 0 ? Math.floor(stockProduccion / cantTotal) : null;
+                                                const unidad = ingrediente.unidad_medida || '';
                                             %>
                                             <tr>
                                                 <td class="ps-4 fw-semibold text-dark">
@@ -91,8 +142,11 @@
                                                 </td>
                                                 <td class="fw-bold text-dark text-end font-monospace">
                                                     <%= cant.toFixed(4).replace(/\.?0+$/, '') || '0' %>
+                                                    <% if (cantTotal > cant) { %>
+                                                        <div class="text-muted fw-normal fs-8">c/merma: <%= fmtStock(cantTotal) %></div>
+                                                    <% } %>
                                                 </td>
-                                                <td><span class="badge bg-light text-dark border"><%= ingrediente.unidad_medida || '—' %></span></td>
+                                                <td><span class="badge bg-light text-dark border"><%= unidad || '—' %></span></td>
                                                 <td class="text-center font-monospace text-muted fs-7">
                                                     <%= parseFloat(ingrediente.porcentaje_merma || 0).toFixed(1) %>%
                                                 </td>
@@ -103,13 +157,56 @@
                                                         <span class="badge bg-secondary-subtle text-secondary rounded-pill fs-8">Indispensable</span>
                                                     <% } %>
                                                 </td>
-                                                <td class="text-center">
-                                                    <span class="badge <%= tieneStock ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle' %> px-3 py-1 rounded-pill fs-7">
-                                                        <i class="fa-solid <%= tieneStock ? 'fa-check' : 'fa-triangle-exclamation' %> me-1"></i>
-                                                        <%= stock.toFixed(2) %> <%= ingrediente.unidad_medida || '' %>
+
+                                                <!-- Existencias en almacenes logísticos (referencia / abastecimiento) -->
+                                                <td class="text-center border-start">
+                                                    <span class="badge bg-light text-dark border px-3 py-1 rounded-pill fs-7 font-monospace">
+                                                        <i class="fa-solid fa-warehouse me-1 text-secondary"></i>
+                                                        <%= fmtStock(stockLogistico) %> <%= unidad %>
                                                     </span>
+                                                    <% if (detalleLogistico.length > 0) { %>
+                                                        <div class="mt-1 text-start d-inline-block">
+                                                            <% detalleLogistico.forEach(a => { %>
+                                                                <div class="fs-8 text-muted d-flex justify-content-between gap-2">
+                                                                    <span><%= a.nombre %></span>
+                                                                    <span class="font-monospace <%= parseFloat(a.stock) > 0 ? 'text-dark' : 'text-danger' %>"><%= fmtStock(a.stock) %></span>
+                                                                </div>
+                                                            <% }) %>
+                                                        </div>
+                                                    <% } else { %>
+                                                        <div class="fs-8 text-muted mt-1">Sin almacén logístico</div>
+                                                    <% } %>
                                                 </td>
-                                                <td class="text-center pe-3">
+
+                                                <!-- Existencias en almacenes de producción (las que sostienen la venta) -->
+                                                <td class="text-center border-start bg-body-tertiary">
+                                                    <span class="badge <%= tieneStock ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle' %> px-3 py-1 rounded-pill fs-7 font-monospace">
+                                                        <i class="fa-solid <%= tieneStock ? 'fa-check' : 'fa-triangle-exclamation' %> me-1"></i>
+                                                        <%= fmtStock(stockProduccion) %> <%= unidad %>
+                                                    </span>
+                                                    <% if (detalleProduccion.length > 0) { %>
+                                                        <div class="mt-1 text-start d-inline-block">
+                                                            <% detalleProduccion.forEach(a => { %>
+                                                                <% const ok = parseFloat(a.stock) >= cantTotal && cantTotal > 0; %>
+                                                                <div class="fs-8 d-flex justify-content-between gap-2">
+                                                                    <span class="text-muted"><%= a.nombre %></span>
+                                                                    <span class="font-monospace fw-semibold <%= ok ? 'text-success' : (parseFloat(a.stock) > 0 ? 'text-warning-emphasis' : 'text-danger') %>">
+                                                                        <%= fmtStock(a.stock) %>
+                                                                    </span>
+                                                                </div>
+                                                            <% }) %>
+                                                        </div>
+                                                    <% } else { %>
+                                                        <div class="fs-8 text-danger mt-1">Sin almacén de producción</div>
+                                                    <% } %>
+                                                    <% if (porcionesPosibles !== null && detalleProduccion.length > 0) { %>
+                                                        <div class="fs-8 text-muted mt-1 border-top pt-1">
+                                                            Alcanza para <strong class="<%= porcionesPosibles > 0 ? 'text-dark' : 'text-danger' %>"><%= porcionesPosibles %></strong> porción(es)
+                                                        </div>
+                                                    <% } %>
+                                                </td>
+
+                                                <td class="text-center pe-3 border-start">
                                                     <div class="btn-group gap-1">
                                                         <% if (user && ['superadministrador', 'administrador', 'jefe-cocina'].includes(user.rol)) { %>
                                                             <button type="button" class="btn btn-sm btn-outline-danger border-0 btn-eliminar-ingrediente" 
@@ -134,32 +231,73 @@
                 <div class="card card-custom shadow-sm border-0">
                     <div class="card-header bg-white border-0 py-3">
                         <h6 class="fw-bold mb-0"><i class="fa-solid fa-chart-pie me-2 text-primary"></i>Resumen de Receta</h6>
+                        <div class="text-muted fs-8">La disponibilidad se evalúa contra el stock de los almacenes de producción</div>
                     </div>
                     <div class="card-body">
+                        <%
+                            const listaIng = ingredientes || [];
+                            const cubiertos = listaIng.filter(i => parseFloat(i.stock_produccion || 0) >= requeridoConMerma(i));
+                            const faltantes = listaIng.filter(i => parseFloat(i.stock_produccion || 0) < requeridoConMerma(i));
+                            // Solo en logística: hay existencia en el central pero cero en producción -> requiere transferencia
+                            const porTransferir = listaIng.filter(i =>
+                                parseFloat(i.stock_produccion || 0) < requeridoConMerma(i) &&
+                                parseFloat(i.stock_logistico || 0) > 0
+                            );
+                            const porcionesReceta = listaIng
+                                .filter(i => !i.es_opcional)
+                                .map(i => {
+                                    const req = requeridoConMerma(i);
+                                    return req > 0 ? Math.floor(parseFloat(i.stock_produccion || 0) / req) : null;
+                                })
+                                .filter(v => v !== null);
+                            const porcionesMax = porcionesReceta.length ? Math.min(...porcionesReceta) : 0;
+                        %>
                         <div class="row g-3">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="p-3 bg-light rounded">
                                     <div class="text-muted small">Total Ingredientes</div>
-                                    <div class="fs-4 fw-bold text-dark"><%= ingredientes ? ingredientes.length : 0 %></div>
+                                    <div class="fs-4 fw-bold text-dark"><%= listaIng.length %></div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="p-3 bg-light rounded">
-                                    <div class="text-muted small">Ingredientes con Stock</div>
-                                    <div class="fs-4 fw-bold text-success">
-                                        <%= ingredientes ? ingredientes.filter(i => parseFloat(i.stock_disponible || 0) >= parseFloat(i.cantidad_requerida || 0)).length : 0 %>
-                                    </div>
+                                    <div class="text-muted small">Con stock en Producción</div>
+                                    <div class="fs-4 fw-bold text-success"><%= cubiertos.length %></div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="p-3 bg-light rounded">
-                                    <div class="text-muted small">Ingredientes sin Stock</div>
-                                    <div class="fs-4 fw-bold text-danger">
-                                        <%= ingredientes ? ingredientes.filter(i => parseFloat(i.stock_disponible || 0) < parseFloat(i.cantidad_requerida || 0)).length : 0 %>
-                                    </div>
+                                    <div class="text-muted small">Sin stock en Producción</div>
+                                    <div class="fs-4 fw-bold text-danger"><%= faltantes.length %></div>
+                                    <% if (porTransferir.length > 0) { %>
+                                        <div class="fs-8 text-warning-emphasis mt-1">
+                                            <i class="fa-solid fa-truck-fast me-1"></i>
+                                            <%= porTransferir.length %> disponible(s) en logístico — requiere transferencia
+                                        </div>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="text-muted small">Porciones elaborables</div>
+                                    <div class="fs-4 fw-bold <%= porcionesMax > 0 ? 'text-primary' : 'text-danger' %>"><%= porcionesMax %></div>
+                                    <div class="fs-8 text-muted mt-1">Según el insumo indispensable más escaso</div>
                                 </div>
                             </div>
                         </div>
+
+                        <% if (porTransferir.length > 0) { %>
+                            <div class="alert alert-warning border-0 mt-3 mb-0 py-2 d-flex align-items-start gap-2">
+                                <i class="fa-solid fa-truck-fast mt-1"></i>
+                                <div class="small">
+                                    Hay insumos con existencia en el <strong>almacén logístico</strong> pero sin stock suficiente
+                                    en producción:
+                                    <strong><%= porTransferir.map(i => i.producto_nombre).join(', ') %></strong>.
+                                    Realiza una <a href="/admin/transferencias" class="alert-link">transferencia a producción</a>
+                                    para poder venderlos, ya que el POS nunca descuenta del logístico.
+                                </div>
+                            </div>
+                        <% } %>
                     </div>
                 </div>
             </main>

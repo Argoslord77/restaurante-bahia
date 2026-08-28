@@ -1,0 +1,248 @@
+================================================================================
+ RESTAURANTE BAHIA - PAQUETE DE ACTUALIZACION ACUMULADO
+ P1 Inventario | P2 Auditoria | P3 Ficha de Costo | P4 Correcciones
+ P5 Sistema de Licencias (NUEVO)
+================================================================================
+
+ Base:   commit af67c56 (rama main)
+ Fecha:  27 de agosto de 2026
+ Guia completa: GUIA-ACTUALIZACION.pdf   <-- LEER ESTO PRIMERO
+
+--------------------------------------------------------------------------------
+ TRANQUILIDAD ANTES DE EMPEZAR
+--------------------------------------------------------------------------------
+
+ El sistema de licencias llega DORMIDO. Mientras no exista el archivo
+ config/licencia.pub NO restringe absolutamente nada. Puedes desplegar esta
+ actualizacion sin tocar el tema de licencias y no pasara nada. Se activa
+ cuando tu decidas.
+
+--------------------------------------------------------------------------------
+ CINCO ENTREGAS, 68 ARCHIVOS, 7 MIGRACIONES
+--------------------------------------------------------------------------------
+
+ P1 - Inventario por almacen (17 archivos, migraciones 1 y 2)
+ P2 - Auditoria en profundidad (15 archivos, migracion 3)
+ P3 - Ficha de Costo (10 archivos, migracion 4)
+ P4 - Correcciones y tokens cifrados (11 archivos, migraciones 5 y 6)
+ P5 - Sistema de licencias (NUEVO, 15 archivos, migracion 7)
+
+ Todas las migraciones son idempotentes: reaplicar una parte ya desplegada no
+ hace nada.
+
+--------------------------------------------------------------------------------
+ QUE TRAE LA PARTE 5
+--------------------------------------------------------------------------------
+
+ LO QUE NO PUEDE HACER (dicho antes que nada)
+   El codigo corre en un equipo que controla el cliente. Quien sepa de Node y
+   tenga acceso de administrador puede abrir middlewares/licencia.js, borrar
+   dos lineas y saltarselo todo. Le pasa a CUALQUIER sistema de licencias del
+   lado del cliente, incluidos los comerciales de pago.
+   El objetivo realista, que si se cumple: que copiar la instalacion y
+   manipular la hora no funcionen, y que todo intento quede registrado.
+
+ INMUNIDAD A LOS CAMBIOS DE HORA
+   No se usa el reloj del equipo. Se usa un trinquete que SOLO AVANZA:
+
+     tiempo_confiable = MAXIMO de:
+        - el reloj del sistema
+        - el trinquete ya guardado
+        - LOS DATOS DEL NEGOCIO: ultima venta, ultimo cierre de turno,
+          ultimo asiento de auditoria, ultimo movimiento de inventario
+        - la hora de un servidor externo, si hay internet (oportunista)
+
+   La tercera fuente es la clave: para "recuperar" tiempo habria que borrar las
+   ventas, los cierres de caja y la auditoria, o sea destruir la contabilidad
+   que el negocio necesita. El propio uso del sistema prueba el tiempo pasado.
+
+   Ademas se cuentan DIAS NATURALES DISTINTOS con actividad: atrasar el reloj
+   repite el mismo dia y no suma; adelantarlo quema los dias mas rapido.
+
+ INMUNIDAD A LA COPIA FISICA
+   Huella del equipo PONDERADA y tolerante (no un hash rigido):
+
+     Mismo equipo .................. 100%  funciona
+     Tarjeta de red nueva ...........  80%  funciona (queda anotado)
+     Mas memoria / renombrar equipo .  72%  funciona
+     Otro equipo ....................   8%  BLOQUEA
+
+   Se exige 70%. Ningun componente vale por si solo mas que el umbral.
+   Ademas la licencia esta atada a un UUID de instalacion en la base de datos.
+
+ RESTAURAR UN RESPALDO ANTIGUO
+   El estado se replica FUERA de la base (licencia/estado.dat) y siempre gana
+   el valor mas avanzado:
+     - Restauras la BD  -> el archivo conserva el contador
+     - Borras el archivo -> la BD lo conserva
+     - Borras los dos    -> los datos del negocio siguen probando el tiempo
+     - Editas por SQL    -> el sello HMAC de la fila no cuadra y se detecta
+
+ BLOQUEO ESCALONADO (no tumba el servicio)
+     NO CONFIGURADA  sistema dormido, no restringe nada
+     ACTIVA          todo normal
+     GRACIA (7 dias) todo funciona, solo se avisa a administracion
+     BLOQUEADA       no se abren turnos ni comandas nuevas, PERO si se puede
+                     cobrar las cuentas abiertas, cerrar el turno e imprimir
+
+--------------------------------------------------------------------------------
+ PASOS RESUMIDOS
+--------------------------------------------------------------------------------
+
+ 1. DETENER Y RESPALDAR
+    pm2 stop rest_cafe_bar
+    mysqldump -u root -p restaurante_db --routines --triggers \
+        --single-transaction > respaldo_$(date +%Y%m%d_%H%M).sql
+    tar czf respaldo_codigo.tar.gz app.js controllers models services views \
+        config middlewares routes scripts public/js
+
+ 2. COPIAR ARCHIVOS
+    cd /ruta/al/proyecto
+    unzip -o restaurante-bahia-actualizacion-completa.zip
+    (no hay dependencias nuevas; la criptografia usa el modulo crypto de Node)
+
+ 3. MIGRACIONES DE LAS PARTES 1 A 4  (en este orden)
+    mysql -u root -p restaurante_db < scripts/migracion_categoria_almacenes.sql
+    mysql -u root -p restaurante_db < scripts/migracion_guardia_consumo_produccion.sql
+    mysql -u root -p restaurante_db < scripts/migracion_auditoria_profunda.sql
+    mysql -u root -p restaurante_db < scripts/migracion_ficha_costo.sql
+    mysql -u root -p restaurante_db < scripts/migracion_precios_cartas.sql
+    mysql -u root -p restaurante_db < scripts/migracion_tokens_hash.sql
+
+    Las dos ultimas van a la vez que el codigo: si migras los tokens sin
+    actualizar los archivos, todos tendran que volver a iniciar sesion.
+
+ 4. MIGRACION DE LA PARTE 5
+    mysql -u root -p restaurante_db < scripts/migracion_licencia.sql
+    (crea las tablas; NO activa nada)
+
+ 5. REVISAR CATEGORIAS Y PARAMETROS  *** REQUIERE TU CRITERIO ***
+    a) /admin/almacenes -> los almacenes desde los que se cocina y se sirve son
+       Produccion; el central y las reservas, Logistico.
+    b) /admin/settings -> Categorias de Platillos: cada categoria del menu debe
+       apuntar al almacen del area que la elabora.
+    c) SELECT clave, valor, descripcion FROM configuraciones
+        WHERE clave LIKE 'costo_%' OR clave LIKE 'carta_%';
+
+ 6. ARRANCAR Y COMPROBAR
+    npx jest services/licencia/licencia.test.js services/precioService.test.js \
+              services/costeoService.test.js services/recetaService.test.js \
+              services/almacenService.test.js config/auditoriaCatalogo.test.js
+    pm2 start rest_cafe_bar
+
+--------------------------------------------------------------------------------
+ ACTIVAR LAS LICENCIAS (OPCIONAL, solo el proveedor)
+--------------------------------------------------------------------------------
+
+ A. Generar el par de claves, UNA SOLA VEZ, en TU equipo:
+      node scripts/licencia-emitir.js claves
+    -> licencia-privada/licencia.key  LA CLAVE PRIVADA. Nunca sale de tu equipo.
+       licencia-privada/licencia.pub  se copia a config/licencia.pub del cliente
+
+    CRITICO: guarda licencia.key fuera del repositorio y con respaldo. Si la
+    pierdes no podras renovar licencias ya desplegadas. Si se filtra, cualquiera
+    podra emitirlas.
+
+ B. El cliente genera su solicitud (sin internet):
+      node scripts/licencia-solicitar.js --cliente "Restaurante Bahia"
+    Muestra un codigo dictable por telefono, p.ej. P23DF-45KE8-SHWMU-H579P
+    (sin caracteres que se confundan: ni 0/O ni 1/I/L)
+
+ C. Tu emites la licencia:
+      node scripts/licencia-emitir.js emitir \
+           --solicitud solicitud-licencia.json \
+           --cliente "Restaurante Bahia" --plan PROFESIONAL \
+           --dias 365 --gracia 7 --salida licencia.lic
+
+      Opciones: --perpetua | --dias-uso 300 | --funciones pos,inventario,...
+
+ D. El cliente instala:
+      copiar el archivo a licencia/licencia.lic
+      o pegar su contenido en /admin/licencia
+      y copiar la clave publica a config/licencia.pub  <- el interruptor
+
+ Diagnostico en cualquier momento:
+      node scripts/licencia-estado.js
+      node scripts/licencia-estado.js --red
+
+--------------------------------------------------------------------------------
+ ANTES DE DESPLEGAR - EJECUTA ESTAS CONSULTAS
+--------------------------------------------------------------------------------
+
+ 1) Platillos que dejaran de descontar (defecto del ID cruzado ya corregido):
+
+    SELECT pm.id, pm.nombre
+      FROM platillos_menu pm
+      LEFT JOIN recetas r ON r.platillo_id = pm.id AND r.activa = 1
+     WHERE r.id IS NULL
+     ORDER BY pm.nombre;
+
+ 2) Insumos sin ficha de costo, por impacto:
+
+    SELECT p.id, p.nombre, COUNT(DISTINCT rd.receta_id) AS recetas
+      FROM receta_detalles rd
+      INNER JOIN productos p ON p.id = rd.producto_id
+      LEFT JOIN fichas_costo_producto f ON f.producto_id = p.id AND f.vigente = 1
+     WHERE f.id IS NULL
+     GROUP BY p.id, p.nombre ORDER BY recetas DESC;
+
+ 3) Tras migrar, que no quede ningun token en claro:
+
+    SELECT COUNT(*) total,
+           SUM(CASE WHEN CHAR_LENGTH(token) <> 64 THEN 1 ELSE 0 END) en_claro
+      FROM usuarios_tokens;   -- en_claro debe ser 0
+
+--------------------------------------------------------------------------------
+ ARCHIVOS DE LA PARTE 5
+--------------------------------------------------------------------------------
+
+   services/licencia/licenciaService.js   Orquestacion, estado replicado, gracia
+   services/licencia/huella.js            Huella ponderada del equipo
+   services/licencia/reloj.js             Trinquete monotono de tiempo
+   services/licencia/firma.js             Ed25519 y serializacion canonica
+   services/licencia/licencia.test.js     13 pruebas
+   middlewares/licencia.js                Bloqueo escalonado
+   controllers/licenciaController.js      Panel, solicitud, instalacion
+   routes/licenciaRoutes.js               Rutas
+   views/admin/licencia.ejs               Panel de estado
+   views/admin/licencia-bloqueada.ejs     Pantalla de bloqueo
+   scripts/licencia-emitir.js             PROVEEDOR: claves y emision
+   scripts/licencia-solicitar.js          Cliente: genera la solicitud
+   scripts/licencia-estado.js             Diagnostico por consola
+   scripts/migracion_licencia.sql         MIGRACION 7
+   licencia/.gitignore                    La licencia no viaja en el repo
+
+ EXTRAS
+   GUIA-ACTUALIZACION.pdf     Guia completa (12 paginas)
+   parche/CAMBIOS.patch       Diferencias de los 68 archivos contra af67c56
+
+--------------------------------------------------------------------------------
+ REVERTIR
+--------------------------------------------------------------------------------
+
+    pm2 stop rest_cafe_bar
+    tar xzf respaldo_codigo.tar.gz
+    pm2 start rest_cafe_bar
+
+ Salvedad: si ya migraste los tokens, el codigo anterior compara la cookie en
+ claro contra la huella y nunca coincidira. Nada se rompe, pero todos tendran
+ que volver a entrar. Para evitarlo:  TRUNCATE TABLE usuarios_tokens;
+
+ Desactivar SOLO una funcion, sin revertir nada:
+    mv config/licencia.pub config/licencia.pub.desactivada   <- licencias
+    // app.use(auditoriaGlobal());                            <- en app.js
+    // app.use('/admin', fichaCostoRoutes);                   <- en app.js
+    UPDATE configuraciones SET valor='0' WHERE clave='carta_precio_derivado';
+
+--------------------------------------------------------------------------------
+ LO MAS URGENTE QUE SIGUE PENDIENTE
+--------------------------------------------------------------------------------
+
+ El archivo .env con la contrasena de la base de datos y los secretos de sesion,
+ junto con certs/key.pem, SIGUEN PUBLICADOS en el historial de GitHub. Cualquiera
+ puede clonar el repositorio y, con el SESSION_SECRET expuesto, falsificar
+ sesiones directamente. Proteger el software con licencias mientras las
+ credenciales estan publicas es poner la alarma y dejar la llave puesta.
+ Rotar esas credenciales y anadirlas a .gitignore es hoy la tarea mas urgente.
+
+================================================================================

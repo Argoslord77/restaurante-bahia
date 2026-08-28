@@ -92,6 +92,7 @@
                                         <th class="ps-4 py-3">Código</th>
                                         <th class="py-3">Nombre / Descripción</th>
                                         <th class="py-3">Tipo Almacén</th>
+                                        <th class="py-3">Categoría Operativa</th>
                                         <th class="py-3">Ubicación</th>
                                         <th class="py-3 text-center">Estado</th>
                                         <th class="text-center py-3" style="width: 220px;">Acciones</th>
@@ -100,7 +101,7 @@
                                 <tbody>
                                     <% if (almacenes.length === 0) { %>
                                         <tr>
-                                            <td colspan="6" class="text-center py-5 text-muted">
+                                            <td colspan="7" class="text-center py-5 text-muted">
                                                 <i class="fa-solid fa-boxes-stacked d-block fs-2 mb-2 text-secondary"></i> No hay almacenes registrados.
                                             </td>
                                         </tr>
@@ -120,6 +121,24 @@
                                                     <span class="badge bg-secondary text-white text-capitalize px-3 py-1 rounded-pill fs-7">
                                                         <%= almacen.tipo ? almacen.tipo.replace('_', ' ') : 'otro' %>
                                                     </span>
+                                                </td>
+                                                <td>
+                                                    <% const catOperativa = almacen.categoria_efectiva || almacen.categoria || ''; %>
+                                                    <% if (catOperativa === 'produccion') { %>
+                                                        <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-1 rounded-pill fs-7">
+                                                            <i class="fa-solid fa-utensils me-1"></i>Producción
+                                                        </span>
+                                                        <div class="text-muted fs-8 mt-1">El POS descuenta aquí</div>
+                                                    <% } else if (catOperativa === 'logistico') { %>
+                                                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-1 rounded-pill fs-7">
+                                                            <i class="fa-solid fa-warehouse me-1"></i>Logístico
+                                                        </span>
+                                                        <div class="text-muted fs-8 mt-1">Solo abastece por transferencia</div>
+                                                    <% } else { %>
+                                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-1 rounded-pill fs-7">
+                                                            <i class="fa-solid fa-circle-question me-1"></i>Sin definir
+                                                        </span>
+                                                    <% } %>
                                                 </td>
                                                 <td class="text-secondary"><%= almacen.ubicacion || '—' %></td>
                                                 <td class="text-center">
@@ -191,6 +210,20 @@
                             </select>
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label fw-semibold text-secondary small">
+                                Categoría Operativa <span class="text-danger">*</span>
+                            </label>
+                            <select id="categoria" class="form-select shadow-sm" required>
+                                <option value="logistico">Logístico (almacén central / abastecedor)</option>
+                                <option value="produccion">Producción (área que consume por venta)</option>
+                            </select>
+                            <div class="form-text fs-8">
+                                <i class="fa-solid fa-circle-info me-1"></i>
+                                El POS <strong>solo</strong> descuenta insumos de los almacenes de <em>Producción</em>.
+                                Los <em>Logísticos</em> abastecen a producción mediante transferencias.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold text-secondary small">Ubicación física</label>
                             <input type="text" id="ubicacion" class="form-control shadow-sm" placeholder="Ej: Planta Baja Trasera">
                         </div>
@@ -239,6 +272,21 @@
     <script src="/js/sweetalert2.all.min.js"></script>
     <script>
         const almacenModalEl = document.getElementById('almacenModal');
+
+        // Tipos físicos que por defecto pertenecen a un área de producción
+        const TIPOS_PRODUCCION = ['cocina', 'bar', 'produccion'];
+
+        // Sugerencia de categoría operativa a partir del tipo físico.
+        // 'logistico' es el valor conservador: un almacén logístico nunca es
+        // descontado automáticamente por el POS.
+        function inferirCategoria(tipo) {
+            return TIPOS_PRODUCCION.includes((tipo || '').toLowerCase()) ? 'produccion' : 'logistico';
+        }
+
+        // Al cambiar el tipo se propone la categoría coherente (el usuario puede sobrescribirla)
+        document.getElementById('tipo').addEventListener('change', function () {
+            document.getElementById('categoria').value = inferirCategoria(this.value);
+        });
         
         almacenModalEl.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
@@ -248,6 +296,7 @@
                 document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus me-2"></i>Nuevo Almacén';
                 document.getElementById('statusGroup').classList.add('d-none');
                 document.getElementById('activa').checked = true;
+                document.getElementById('categoria').value = inferirCategoria(document.getElementById('tipo').value);
             }
         });
 
@@ -285,6 +334,7 @@
                     document.getElementById('nombre').value = d.nombre || '';
                     document.getElementById('descripcion').value = d.descripcion || '';
                     document.getElementById('tipo').value = d.tipo || 'principal';
+                    document.getElementById('categoria').value = d.categoria || d.categoria_efectiva || inferirCategoria(d.tipo);
                     document.getElementById('ubicacion').value = d.ubicacion || '';
                     
                     document.getElementById('responsable_usuario_id').value = d.responsable_usuario_id || d.responsable_id || '';
@@ -318,6 +368,7 @@
                 nombre: document.getElementById('nombre').value.trim(),
                 descripcion: document.getElementById('descripcion').value.trim(),
                 tipo: document.getElementById('tipo').value,
+                categoria: document.getElementById('categoria').value,
                 ubicacion: document.getElementById('ubicacion').value.trim(),
                 responsable_usuario_id: document.getElementById('responsable_usuario_id').value || null,
                 permite_ventas: document.getElementById('permite_ventas').checked ? 1 : 0,

@@ -66,10 +66,38 @@ class UnidadMedidaService {
         return r.insertId;
     }
 
-    static async actualizarUnidad(id, { codigo, nombre, abreviatura, tipo, permite_decimales, activa }) {
+    /**
+     * Actualiza una unidad admitiendo ACTUALIZACIONES PARCIALES.
+     *
+     * El mismo endpoint lo usan dos acciones distintas de la interfaz: el modal
+     * de edición, que envía todos los campos, y el botón de activar/desactivar,
+     * que envía únicamente `activa`. Antes se hacía `codigo.trim()` sobre un
+     * valor ausente y el operario recibía en pantalla el error crudo
+     * "Cannot read properties of undefined (reading 'trim')".
+     *
+     * Ahora se parte de la fila actual y solo se sobrescribe lo que llegue.
+     */
+    static async actualizarUnidad(id, datos = {}) {
+        const [filas] = await db.query('SELECT * FROM unidades_medida WHERE id = ? LIMIT 1', [id]);
+        const actual = filas[0];
+        if (!actual) throw new Error('Unidad no encontrada.');
+
+        const texto = (valor, porDefecto) =>
+            valor === undefined || valor === null || String(valor).trim() === ''
+                ? porDefecto : String(valor).trim();
+        const bandera = (valor, porDefecto) =>
+            valor === undefined || valor === null ? porDefecto : (valor ? 1 : 0);
+
+        const codigo = texto(datos.codigo, actual.codigo).toUpperCase();
+        const nombre = texto(datos.nombre, actual.nombre);
+        const abreviatura = texto(datos.abreviatura, actual.abreviatura);
+        const tipo = texto(datos.tipo, actual.tipo);
+        const permiteDecimales = bandera(datos.permite_decimales, actual.permite_decimales ? 1 : 0);
+        const activa = bandera(datos.activa, actual.activa ? 1 : 0);
+
         const [r] = await db.query(
             `UPDATE unidades_medida SET codigo=?, nombre=?, abreviatura=?, tipo=?, permite_decimales=?, activa=? WHERE id=?`,
-            [codigo.trim().toUpperCase(), nombre.trim(), abreviatura.trim(), tipo, permite_decimales ? 1 : 0, activa ? 1 : 0, id]
+            [codigo, nombre, abreviatura, tipo, permiteDecimales, activa, id]
         );
         if (r.affectedRows === 0) throw new Error('Unidad no encontrada.');
         this.invalidateCache();

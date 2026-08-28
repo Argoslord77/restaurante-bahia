@@ -86,6 +86,19 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'licencia'){ %> active<% } %>" href="/admin/licencia">
+                <i class="fa-solid fa-key me-2 text-dark"></i> Licencia
+                <% if (locals.licencia && locals.licencia.estado && locals.licencia.estado !== 'ACTIVA') { %>
+                    <span class="badge bg-danger ms-1" style="font-size:.6rem">!</span>
+                <% } %>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'fichas_costo'){ %> active<% } %>" href="/admin/fichas-costo">
+                <i class="fa-solid fa-calculator me-2 text-dark"></i> Fichas de Costo
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'stock'){ %> active<% } %>" href="/admin/inventario/stock">
                 <i class="fa-solid fa-boxes-stacked me-2 text-dark"></i> Stock / Existencias
             </a>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Licencia no válida - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <style>
+        body { background:#0f172a; min-height:100vh; display:flex; align-items:center; }
+        .tarjeta { max-width: 720px; margin: 0 auto; border-radius: 1rem; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .codigo { font-family: ui-monospace, monospace; font-size:1.3rem; font-weight:700; letter-spacing:.08em; }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="card border-0 shadow-lg tarjeta">
+            <div class="card-body p-4 p-md-5">
+                <div class="text-center mb-4">
+                    <i class="fa-solid fa-lock fs-1 text-danger"></i>
+                    <h1 class="h3 fw-bold mt-3 mb-1">Licencia no válida</h1>
+                    <p class="text-secondary mb-0">
+                        Esta instalación no tiene una licencia válida. Puedes seguir
+                        <strong>cerrando</strong> las operaciones abiertas (cobrar cuentas y cerrar el
+                        turno), pero no abrir trabajo nuevo.
+                    </p>
+                </div>
+
+                <div class="alert alert-danger border-0">
+                    <div class="fw-bold mb-2">Motivo</div>
+                    <ul class="mb-0 small">
+                        <% (evaluacion.problemas || []).forEach(p => { %>
+                            <li><span class="mono">[<%= p.codigo %>]</span> <%= p.mensaje %></li>
+                        <% }) %>
+                    </ul>
+                </div>
+
+                <div class="bg-light rounded p-3 mb-3">
+                    <div class="small text-secondary mb-1">Código de instalación</div>
+                    <div class="codigo"><%= evaluacion.instalacion.codigo %></div>
+                    <div class="small text-muted mt-2">
+                        Facilita este código al proveedor para obtener o renovar tu licencia.
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="/admin/licencia" class="btn btn-primary">
+                        <i class="fa-solid fa-key me-1"></i>Instalar o revisar licencia
+                    </a>
+                    <a href="/admin/cierre-dia" class="btn btn-outline-secondary">
+                        <i class="fa-solid fa-cash-register me-1"></i>Cerrar cuentas pendientes
+                    </a>
+                    <a href="/logout" class="btn btn-outline-secondary">Salir</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,9 +1,26 @@
 const db = require('../config/db');
+const Schema = require('../config/schema');
 
 const Receta = {
-    // Obtener todos los ingredientes de una receta por su receta_id (Stock global)
+    // Obtener todos los ingredientes de una receta por su receta_id.
+    // Además del stock global, devuelve el stock segmentado por categoría
+    // operativa de almacén: logístico (abastecedor) y producción (el que
+    // realmente consume el POS al vender).
     getByPlatillo: async (recetaId) => {
         if (!db) return [];
+        const categoriaExpr = await Schema.categoriaAlmacenExpr('a');
+        const subStock = (filtroCategoria) => `
+            COALESCE((
+                SELECT SUM(l.cantidad_actual)
+                  FROM lotes l
+                  INNER JOIN almacenes a ON a.id = l.almacen_id
+                 WHERE l.producto_id = rd.producto_id
+                   AND l.cantidad_actual > 0
+                   AND (l.estado IS NULL OR l.estado = 'ACTIVO')
+                   AND a.activo = 1
+                   ${filtroCategoria}
+            ), 0)`;
+
         const query = `
             SELECT 
                 rd.id,
@@ -18,7 +35,9 @@ const Receta = {
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
                 c.nombre AS categoria_nombre,
-                COALESCE((SELECT SUM(l.cantidad_actual) FROM lotes l WHERE l.producto_id = rd.producto_id AND l.cantidad_actual > 0), 0) AS stock_disponible
+                COALESCE((SELECT SUM(l.cantidad_actual) FROM lotes l WHERE l.producto_id = rd.producto_id AND l.cantidad_actual > 0), 0) AS stock_disponible,
+                ${subStock(`AND ${categoriaExpr} = 'logistico'`)} AS stock_logistico,
+                ${subStock(`AND ${categoriaExpr} = 'produccion'`)} AS stock_produccion
             FROM receta_detalles rd
             INNER JOIN productos p ON rd.producto_id = p.id
             LEFT JOIN categorias c ON p.categoria_id = c.id
@@ -27,6 +46,90 @@ const Receta = {
         `;
         const [rows] = await db.query(query, [recetaId]);
         return rows;
+    },
+
+    /**
+     * Desglose fino: una fila por (ingrediente de la receta × almacén operativo).
+     * Incluye los almacenes con existencia CERO para que la ficha técnica muestre
+     * explícitamente dónde falta el insumo, no solo dónde lo hay.
+     *
+     * @returns {Array<{producto_id, almacen_id, almacen_codigo, almacen_nombre, almacen_categoria, stock}>}
+     */
+    getDesgloseStockPorAlmacen: async (recetaId) => {
+        if (!db) return [];
+        const categoriaExpr = await Schema.categoriaAlmacenExpr('a');
+        const query = `
+            SELECT
+                rd.producto_id,
+                a.id       AS almacen_id,
+                a.codigo   AS almacen_codigo,
+                a.nombre   AS almacen_nombre,
+                ${categoriaExpr} AS almacen_categoria,
+                COALESCE(SUM(l.cantidad_actual), 0) AS stock
+            FROM receta_detalles rd
+            CROSS JOIN almacenes a
+            LEFT JOIN lotes l
+                   ON l.producto_id = rd.producto_id
+                  AND l.almacen_id  = a.id
+                  AND l.cantidad_actual > 0
+                  AND (l.estado IS NULL OR l.estado = 'ACTIVO')
+            WHERE rd.receta_id = ?
+              AND a.activo = 1
+              AND ${categoriaExpr} IN ('logistico', 'produccion')
+            GROUP BY rd.producto_id, a.id, a.codigo, a.nombre, ${categoriaExpr}
+            ORDER BY ${categoriaExpr} DESC, a.nombre ASC
+        `;
+        const [rows] = await db.query(query, [recetaId]);
+        return rows;
+    },
+
+    /**
+     * Resuelve el ID de la receta ACTIVA que produce un platillo del menú.
+     *
+     * ⚠️ `detalles_pedido.id_platillo` apunta a `platillos_menu.id`, NO a
+     * `recetas.id`. El enlace canónico es `recetas.platillo_id` (y, en
+     * instalaciones que la tengan, `recetas.producto_resultante_id`), tal como
+     * ya lo resuelve InventarioService.descontarPorReceta.
+     *
+     * @returns {number|null} receta_id, o null si el platillo no tiene receta activa.
+     */
+    resolverRecetaIdPorPlatillo: async (platilloId) => {
+        if (!db || !platilloId) return null;
+        const tieneResultante = await Schema.hasColumn('recetas', 'producto_resultante_id');
+        const condicion = tieneResultante
+            ? '(r.platillo_id = ? OR r.producto_resultante_id = ?)'
+            : 'r.platillo_id = ?';
+        const params = tieneResultante ? [platilloId, platilloId] : [platilloId];
+
+        const [rows] = await db.query(
+            `SELECT r.id
+               FROM recetas r
+              WHERE r.activa = 1
+                AND ${condicion}
+              ORDER BY r.id ASC
+              LIMIT 1`,
+            params
+        );
+        return rows.length ? rows[0].id : null;
+    },
+
+    /**
+     * Ingredientes a descontar por la venta de un PLATILLO DEL MENÚ, con el
+     * stock disponible en un almacén concreto (que siempre debe ser de
+     * producción).
+     *
+     * A diferencia de `getByPlatilloAndAlmacen`, que recibe un `receta_id`,
+     * esta función parte del `platillos_menu.id` que viaja en el pedido y
+     * resuelve la receta por el enlace correcto.
+     *
+     * @returns {Array} Vacío si el platillo no tiene receta activa (no lleva
+     *                  explosión de inventario, p. ej. una bebida embotellada).
+     */
+    getIngredientesParaVenta: async (platilloId, almacenId) => {
+        if (!db) return [];
+        const recetaId = await Receta.resolverRecetaIdPorPlatillo(platilloId);
+        if (!recetaId) return [];
+        return await Receta.getByPlatilloAndAlmacen(recetaId, almacenId);
     },
 
     getByPlatilloAndAlmacen: async (recetaId, almacenId) => {
@@ -44,7 +147,7 @@ const Receta = {
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
                 c.nombre AS categoria_nombre,
-                COALESCE((SELECT SUM(l.cantidad_actual) FROM lotes l WHERE l.producto_id = rd.producto_id AND l.almacen_id = ? AND l.cantidad_actual > 0), 0) AS stock_disponible
+                COALESCE((SELECT SUM(l.cantidad_actual) FROM lotes l WHERE l.producto_id = rd.producto_id AND l.almacen_id = ? AND l.cantidad_actual > 0 AND (l.estado IS NULL OR l.estado = 'ACTIVO')), 0) AS stock_disponible
             FROM receta_detalles rd
             INNER JOIN productos p ON rd.producto_id = p.id
             LEFT JOIN categorias c ON p.categoria_id = c.id

@@ -21,16 +21,86 @@ function numeroPrecio(valor) {
     return Number.isFinite(numero) && numero >= 0 ? numero : null;
 }
 
-function seleccionarPrecio(platillo, carta = 'CUP') {
-    const regla = REGLAS_CARTA[normalizarCarta(carta)];
-    return numeroPrecio(platillo && platillo[regla.campo]);
+// Factores de reserva cuando una carta secundaria no tiene precio propio
+const FACTOR_COMISION_DEFECTO = 1.10;
+
+/**
+ * Normaliza el segundo argumento, que puede ser el nombre de la carta o el
+ * contexto de cobro completo. Así los llamadores antiguos siguen funcionando y
+ * los nuevos pueden aportar los datos necesarios para derivar el precio.
+ */
+function opcionesDePrecio(cartaOContexto) {
+    if (cartaOContexto && typeof cartaOContexto === 'object') {
+        return {
+            carta: normalizarCarta(cartaOContexto.carta),
+            permitirDerivado: cartaOContexto.permitir_precio_derivado !== false,
+            factorComision: Number(cartaOContexto.factor_comision) > 0
+                ? Number(cartaOContexto.factor_comision) : FACTOR_COMISION_DEFECTO,
+            tasaZelle: Number(cartaOContexto.tasa_zelle) > 0 ? Number(cartaOContexto.tasa_zelle) : null
+        };
+    }
+    return {
+        carta: normalizarCarta(cartaOContexto),
+        permitirDerivado: false,
+        factorComision: FACTOR_COMISION_DEFECTO,
+        tasaZelle: null
+    };
 }
 
-function validarPrecioConfigurado(platillo, carta = 'CUP') {
-    const cartaNormalizada = normalizarCarta(carta);
-    const precio = seleccionarPrecio(platillo, cartaNormalizada);
+function redondear2(valor) {
+    return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Precio de una carta, con derivación desde CUP cuando la carta secundaria no
+ * tiene precio propio.
+ *
+ * Un platillo con precio en CUP pero sin `precio_alt` o `precio_usd` NO es un
+ * platillo agotado: es un platillo al que le falta configurar esa carta. Antes
+ * se devolvía null, la vista lo mostraba a 0 y el cliente lo percibía como no
+ * disponible. Ahora, si se permite la derivación, se calcula a partir del
+ * precio base y se marca como derivado para que la interfaz lo advierta.
+ *
+ * @returns {{precio: number|null, derivado: boolean, base: string|null}}
+ */
+function resolverPrecio(platillo, cartaOContexto = 'CUP') {
+    const { carta, permitirDerivado, factorComision, tasaZelle } = opcionesDePrecio(cartaOContexto);
+    const regla = REGLAS_CARTA[carta];
+    const propio = numeroPrecio(platillo && platillo[regla.campo]);
+
+    if (propio !== null) return { precio: propio, derivado: false, base: null };
+    if (!permitirDerivado || carta === 'CUP') return { precio: null, derivado: false, base: null };
+
+    // La derivación siempre parte del precio base en CUP
+    const base = numeroPrecio(platillo && platillo.precio);
+    if (base === null || base <= 0) return { precio: null, derivado: false, base: null };
+
+    if (carta === 'COMISION') {
+        return {
+            precio: redondear2(base * factorComision),
+            derivado: true,
+            base: `Derivado del precio CUP × ${factorComision}`
+        };
+    }
+
+    // ZELLE: se convierte con la tasa de la moneda; sin tasa no se inventa nada
+    if (!tasaZelle || tasaZelle <= 0) return { precio: null, derivado: false, base: null };
+    return {
+        precio: redondear2(base / tasaZelle),
+        derivado: true,
+        base: `Derivado del precio CUP ÷ ${tasaZelle}`
+    };
+}
+
+function seleccionarPrecio(platillo, cartaOContexto = 'CUP') {
+    return resolverPrecio(platillo, cartaOContexto).precio;
+}
+
+function validarPrecioConfigurado(platillo, cartaOContexto = 'CUP') {
+    const { carta } = opcionesDePrecio(cartaOContexto);
+    const precio = seleccionarPrecio(platillo, cartaOContexto);
     if (precio === null) {
-        const regla = REGLAS_CARTA[cartaNormalizada];
+        const regla = REGLAS_CARTA[carta];
         throw new Error(
             `El platillo "${platillo && platillo.nombre ? platillo.nombre : 'seleccionado'}" ` +
             `no tiene configurado un valor válido en el campo ${regla.campo} para la ${regla.descripcion}.`
@@ -40,7 +110,10 @@ function validarPrecioConfigurado(platillo, carta = 'CUP') {
 }
 
 function aplicarPrecio(platillo, contexto) {
-    const precioCobro = seleccionarPrecio(platillo, contexto.carta);
+    // Se pasa el contexto COMPLETO (no solo la carta) para que la derivación
+    // desde CUP funcione igual aquí que en el momento del cobro.
+    const resuelto = resolverPrecio(platillo, contexto);
+    const precioCobro = resuelto.precio;
     const disponibleOriginal = !(
         platillo &&
         (platillo.disponible === 0 || platillo.disponible === false || platillo.disponible === '0')
@@ -57,6 +130,8 @@ function aplicarPrecio(platillo, contexto) {
         precio_cobro: precioCobro,
         precio_configurado: precioCobro !== null,
         precio_no_configurado: precioCobro === null,
+        precio_derivado: resuelto.derivado,
+        precio_origen: resuelto.base,
         disponible: disponibleOriginal && precioCobro !== null,
         moneda_codigo: contexto.moneda_codigo,
         codigo_moneda: contexto.moneda_codigo,
@@ -115,6 +190,31 @@ async function obtenerMonedaZelle(turnoId, connection = db) {
     };
 }
 
+/**
+ * Parámetros de derivación de precios, configurables desde Configuración.
+ * Se consultan de forma tolerante: si la tabla o las claves no existen, se
+ * usan los valores por defecto y el sistema sigue funcionando.
+ */
+async function obtenerParametrosDerivacion(connection = db) {
+    const valores = { permitir: true, factorComision: FACTOR_COMISION_DEFECTO };
+    try {
+        const [rows] = await connection.query(
+            `SELECT clave, valor FROM configuraciones
+              WHERE clave IN ('carta_precio_derivado', 'carta_comision_factor')`
+        );
+        for (const fila of rows) {
+            if (fila.clave === 'carta_precio_derivado') {
+                valores.permitir = !(fila.valor === '0' || fila.valor === 0 || fila.valor === 'false');
+            }
+            if (fila.clave === 'carta_comision_factor') {
+                const f = Number(fila.valor);
+                if (Number.isFinite(f) && f > 0) valores.factorComision = f;
+            }
+        }
+    } catch (_) { /* se mantienen los valores por defecto */ }
+    return valores;
+}
+
 async function obtenerContextoCobro({ idMesa = null, turnoId = null, connection = db } = {}) {
     let carta = 'CUP';
     if (idMesa !== null && idMesa !== undefined && idMesa !== '') {
@@ -129,9 +229,16 @@ async function obtenerContextoCobro({ idMesa = null, turnoId = null, connection 
     const monedaZelle = await obtenerMonedaZelle(turnoId, connection);
     const esZelle = carta === 'ZELLE';
     const moneda = esZelle ? monedaZelle : monedaBase;
+    const derivacion = await obtenerParametrosDerivacion(connection);
 
     return {
         carta,
+        // Permiten que un platillo sin precio propio en la carta secundaria se
+        // muestre y se cobre a partir del precio base, en vez de aparecer como
+        // no disponible.
+        permitir_precio_derivado: derivacion.permitir,
+        factor_comision: derivacion.factorComision,
+        tasa_zelle: Number(monedaZelle.factor_cambio) || null,
         es_zelle: esZelle,
         campo_precio: REGLAS_CARTA[carta].campo,
         moneda_id: moneda.moneda_id || null,
@@ -171,6 +278,8 @@ module.exports = {
     REGLAS_CARTA,
     normalizarCarta,
     seleccionarPrecio,
+    resolverPrecio,
+    obtenerParametrosDerivacion,
     validarPrecioConfigurado,
     aplicarPrecio,
     aplicarPrecios,

@@ -10,10 +10,15 @@
     <style>
         .audit-table { font-size: .78rem; }
         .audit-table td { vertical-align: top; }
-        .audit-details { max-width: 360px; white-space: pre-wrap; word-break: break-word; }
+        .audit-details { max-width: 320px; white-space: pre-wrap; word-break: break-word; }
         .audit-success { color: #047857; }
         .audit-failure { color: #be123c; }
         .audit-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; }
+        .audit-chip { font-size: .66rem; font-weight: 600; letter-spacing: .02em; padding: .18rem .45rem; border-radius: .35rem; }
+        .audit-row-critico { box-shadow: inset 3px 0 0 #be123c; }
+        .audit-row-aviso   { box-shadow: inset 3px 0 0 #b45309; }
+        .audit-kpi { border-left: 3px solid #0e7c86; }
+        .audit-kpi .valor { font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
     </style>
 </head>
 <body>
@@ -23,38 +28,185 @@
     <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
         <%- include('../includes/header', {
             encabezado_pagina: 'Auditoría de Operaciones',
-            desc_pagina: 'Registro histórico de las acciones realizadas por los usuarios en la aplicación.',
+            desc_pagina: 'Registro histórico de accesos, consultas, modificaciones, impresiones y cierres realizados por los usuarios.',
             add_btn: false
         }) %>
+
+        <%
+            // Colores por categoría y severidad
+            const colorCategoria = {
+                AUTENTICACION: 'bg-primary-subtle text-primary-emphasis',
+                LECTURA:       'bg-secondary-subtle text-secondary-emphasis',
+                ESCRITURA:     'bg-info-subtle text-info-emphasis',
+                IMPRESION:     'bg-purple bg-opacity-10 text-body',
+                CIERRE:        'bg-success-subtle text-success-emphasis',
+                EXPORTACION:   'bg-warning-subtle text-warning-emphasis',
+                SEGURIDAD:     'bg-danger-subtle text-danger-emphasis',
+                SISTEMA:       'bg-dark-subtle text-body-emphasis'
+            };
+            const iconoCategoria = {
+                AUTENTICACION: 'fa-right-to-bracket',
+                LECTURA:       'fa-eye',
+                ESCRITURA:     'fa-pen',
+                IMPRESION:     'fa-print',
+                CIERRE:        'fa-cash-register',
+                EXPORTACION:   'fa-file-export',
+                SEGURIDAD:     'fa-shield-halved',
+                SISTEMA:       'fa-gears'
+            };
+            const colorSeveridad = {
+                INFO:    'bg-light text-secondary border',
+                AVISO:   'bg-warning-subtle text-warning-emphasis',
+                CRITICO: 'bg-danger text-white'
+            };
+            const res = (typeof resumen !== 'undefined' && resumen) ? resumen : null;
+            const ops = (typeof opciones !== 'undefined' && opciones) ? opciones : { modulos: [], entidades: [], roles: [] };
+            // Conserva los filtros al paginar
+            const qs = (extra = {}) => {
+                const base = { ...filtros, ...extra };
+                return Object.entries(base)
+                    .filter(([k, v]) => v !== '' && v !== null && v !== undefined && k !== 'porPagina')
+                    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+            };
+        %>
+
+        <!-- Resumen del conjunto filtrado -->
+        <% if (res) { %>
+            <div class="row g-3 mt-1">
+                <div class="col-6 col-lg-3">
+                    <div class="card border-0 shadow-sm audit-kpi h-100">
+                        <div class="card-body py-3">
+                            <div class="text-secondary small text-uppercase">Operaciones</div>
+                            <div class="valor text-dark"><%= res.total.toLocaleString('es-ES') %></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card border-0 shadow-sm audit-kpi h-100" style="border-left-color:#1b3a5c">
+                        <div class="card-body py-3">
+                            <div class="text-secondary small text-uppercase">Usuarios distintos</div>
+                            <div class="valor text-dark"><%= res.usuarios.toLocaleString('es-ES') %></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card border-0 shadow-sm audit-kpi h-100" style="border-left-color:#b45309">
+                        <div class="card-body py-3">
+                            <div class="text-secondary small text-uppercase">Fallidas</div>
+                            <div class="valor <%= res.fallidas > 0 ? 'text-warning-emphasis' : 'text-dark' %>"><%= res.fallidas.toLocaleString('es-ES') %></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card border-0 shadow-sm audit-kpi h-100" style="border-left-color:#be123c">
+                        <div class="card-body py-3">
+                            <div class="text-secondary small text-uppercase">Críticas</div>
+                            <div class="valor <%= res.criticas > 0 ? 'text-danger' : 'text-dark' %>"><%= res.criticas.toLocaleString('es-ES') %></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <% if (res.porCategoria && res.porCategoria.length) { %>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <% res.porCategoria.forEach(c => { %>
+                        <a href="/admin/auditoria?<%= qs({ categoria: c.categoria === 'SIN CLASIFICAR' ? '' : c.categoria, pagina: 1 }) %>"
+                           class="text-decoration-none">
+                            <span class="audit-chip <%= colorCategoria[c.categoria] || 'bg-light text-secondary border' %>">
+                                <i class="fa-solid <%= iconoCategoria[c.categoria] || 'fa-circle' %> me-1"></i>
+                                <%= c.categoria %> · <%= Number(c.total).toLocaleString('es-ES') %>
+                            </span>
+                        </a>
+                    <% }) %>
+                </div>
+            <% } %>
+        <% } %>
 
         <div class="card border-0 shadow-sm mt-4 mb-4">
             <div class="card-header bg-white border-0">
                 <form method="get" action="/admin/auditoria" class="row g-2 align-items-end">
-                    <div class="col-sm-6 col-md-2">
+                    <div class="col-6 col-md-3">
+                        <label for="accion" class="form-label small fw-semibold text-secondary">Buscar</label>
+                        <input type="text" maxlength="150" class="form-control form-control-sm" id="accion" name="accion"
+                               value="<%= filtros.accion %>" placeholder="Acción, entidad, usuario o ruta">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="categoria" class="form-label small fw-semibold text-secondary">Categoría</label>
+                        <select class="form-select form-select-sm" id="categoria" name="categoria">
+                            <option value="">Todas</option>
+                            <% (categorias || []).forEach(c => { %>
+                                <option value="<%= c %>" <%= filtros.categoria === c ? 'selected' : '' %>><%= c %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="severidad" class="form-label small fw-semibold text-secondary">Severidad</label>
+                        <select class="form-select form-select-sm" id="severidad" name="severidad">
+                            <option value="">Todas</option>
+                            <% (severidades || []).forEach(sv => { %>
+                                <option value="<%= sv %>" <%= filtros.severidad === sv ? 'selected' : '' %>><%= sv %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="modulo" class="form-label small fw-semibold text-secondary">Módulo</label>
+                        <select class="form-select form-select-sm" id="modulo" name="modulo">
+                            <option value="">Todos</option>
+                            <% (ops.modulos || []).forEach(m => { %>
+                                <option value="<%= m %>" <%= filtros.modulo === m ? 'selected' : '' %>><%= m %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label for="entidad" class="form-label small fw-semibold text-secondary">Entidad</label>
+                        <select class="form-select form-select-sm" id="entidad" name="entidad">
+                            <option value="">Todas</option>
+                            <% (ops.entidades || []).forEach(e => { %>
+                                <option value="<%= e %>" <%= filtros.entidad === e ? 'selected' : '' %>><%= e %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+
+                    <div class="col-6 col-md-2">
                         <label for="usuarioId" class="form-label small fw-semibold text-secondary">ID usuario</label>
-                        <input type="number" min="1" class="form-control form-control-sm" id="usuarioId" name="usuarioId" value="<%= filtros.usuarioId %>" placeholder="Todos">
+                        <input type="number" min="1" class="form-control form-control-sm" id="usuarioId" name="usuarioId"
+                               value="<%= filtros.usuarioId %>" placeholder="Todos">
                     </div>
-                    <div class="col-sm-6 col-md-3">
-                        <label for="accion" class="form-label small fw-semibold text-secondary">Acción</label>
-                        <input type="text" maxlength="150" class="form-control form-control-sm" id="accion" name="accion" value="<%= filtros.accion %>" placeholder="POST /...">
+                    <div class="col-6 col-md-2">
+                        <label for="rol" class="form-label small fw-semibold text-secondary">Rol</label>
+                        <select class="form-select form-select-sm" id="rol" name="rol">
+                            <option value="">Todos</option>
+                            <% (ops.roles || []).forEach(r => { %>
+                                <option value="<%= r %>" <%= filtros.rol === r ? 'selected' : '' %>><%= r %></option>
+                            <% }) %>
+                        </select>
                     </div>
-                    <div class="col-sm-6 col-md-2">
+                    <div class="col-6 col-md-2">
                         <label for="desde" class="form-label small fw-semibold text-secondary">Desde</label>
                         <input type="date" class="form-control form-control-sm" id="desde" name="desde" value="<%= filtros.desde %>">
                     </div>
-                    <div class="col-sm-6 col-md-2">
+                    <div class="col-6 col-md-2">
                         <label for="hasta" class="form-label small fw-semibold text-secondary">Hasta</label>
                         <input type="date" class="form-control form-control-sm" id="hasta" name="hasta" value="<%= filtros.hasta %>">
                     </div>
-                    <div class="col-md-3 d-flex gap-2">
+                    <div class="col-12 col-md-4 d-flex gap-2 align-items-end">
+                        <div class="form-check mb-1 me-2">
+                            <input class="form-check-input" type="checkbox" value="1" id="soloFallidas" name="soloFallidas"
+                                   <%= filtros.soloFallidas ? 'checked' : '' %>>
+                            <label class="form-check-label small text-secondary" for="soloFallidas">Solo fallidas</label>
+                        </div>
                         <button type="submit" class="btn btn-sm btn-dark flex-grow-1"><i class="fa-solid fa-filter me-1"></i>Filtrar</button>
                         <a href="/admin/auditoria" class="btn btn-sm btn-outline-secondary" title="Limpiar filtros"><i class="fa-solid fa-rotate-left"></i></a>
+                        <a href="/admin/auditoria/exportar?<%= qs() %>" class="btn btn-sm btn-outline-success" title="Exportar a CSV (queda auditado)">
+                            <i class="fa-solid fa-file-csv"></i>
+                        </a>
                     </div>
                 </form>
             </div>
+
             <div class="card-body border-top p-0">
                 <div class="px-3 py-2 bg-light d-flex justify-content-between align-items-center">
-                    <span class="small text-secondary"><i class="fa-solid fa-shield-halved me-1"></i><strong><%= paginacion.total %></strong> operación(es) registrada(s)</span>
+                    <span class="small text-secondary"><i class="fa-solid fa-shield-halved me-1"></i><strong><%= paginacion.total.toLocaleString('es-ES') %></strong> operación(es) registrada(s)</span>
                     <span class="small text-muted">Página <%= paginacion.pagina %> de <%= paginacion.totalPaginas %></span>
                 </div>
                 <div class="table-responsive">
@@ -63,33 +215,56 @@
                             <tr>
                                 <th class="ps-3">Fecha</th>
                                 <th>Usuario</th>
+                                <th>Categoría</th>
                                 <th>Acción</th>
-                                <th>Ruta</th>
+                                <th>Entidad</th>
+                                <th>Origen</th>
                                 <th>Resultado</th>
-                                <th>IP</th>
                                 <th>Datos</th>
                             </tr>
                         </thead>
                         <tbody>
                             <% if (logs && logs.length > 0) { %>
                                 <% logs.forEach(log => { %>
-                                    <tr>
+                                    <tr class="<%= log.severidad === 'CRITICO' ? 'audit-row-critico' : (log.severidad === 'AVISO' ? 'audit-row-aviso' : '') %>">
                                         <td class="ps-3 text-nowrap">
                                             <%= log.creado_en ? new Date(log.creado_en).toLocaleString('es-ES') : '—' %>
-                                            <small class="d-block text-muted"><%= log.duracion_ms || 0 %> ms</small>
+                                            <small class="d-block text-muted">
+                                                <%= log.duracion_ms || 0 %> ms
+                                                <% if (log.repeticiones && log.repeticiones > 1) { %>
+                                                    · <span class="text-info-emphasis" title="Peticiones de sondeo agrupadas en este asiento">×<%= log.repeticiones %></span>
+                                                <% } %>
+                                            </small>
                                         </td>
                                         <td class="text-nowrap">
                                             <strong><%= log.usuario_nombre || 'Anónimo' %></strong>
-                                            <small class="d-block text-muted"><%= log.usuario_rol || 'publico' %><%= log.usuario_id ? ` · #${log.usuario_id}` : '' %></small>
+                                            <small class="d-block text-muted"><%= log.usuario_rol || 'público' %><%= log.usuario_id ? ` · #${log.usuario_id}` : '' %></small>
                                         </td>
-                                        <td class="audit-code"><%= log.accion %></td>
-                                        <td class="audit-code"><%= log.metodo_http %> <%= log.ruta %></td>
+                                        <td class="text-nowrap">
+                                            <span class="audit-chip <%= colorCategoria[log.categoria] || 'bg-light text-secondary border' %>">
+                                                <i class="fa-solid <%= iconoCategoria[log.categoria] || 'fa-circle' %> me-1"></i><%= log.categoria || '—' %>
+                                            </span>
+                                            <% if (log.severidad && log.severidad !== 'INFO') { %>
+                                                <span class="audit-chip <%= colorSeveridad[log.severidad] %> ms-1"><%= log.severidad %></span>
+                                            <% } %>
+                                            <% if (log.modulo) { %><small class="d-block text-muted mt-1"><%= log.modulo %></small><% } %>
+                                        </td>
+                                        <td><%= log.accion %></td>
+                                        <td class="text-nowrap">
+                                            <% if (log.entidad) { %>
+                                                <%= log.entidad %>
+                                                <% if (log.entidad_id) { %><small class="d-block text-muted audit-code">#<%= log.entidad_id %></small><% } %>
+                                            <% } else { %>—<% } %>
+                                        </td>
+                                        <td class="audit-code text-nowrap">
+                                            <%= log.metodo_http %> <%= log.ruta %>
+                                            <small class="d-block text-muted"><%= log.ip_origen || '—' %></small>
+                                        </td>
                                         <td class="text-nowrap">
                                             <span class="fw-bold <%= log.operacion_exitosa ? 'audit-success' : 'audit-failure' %>">
                                                 <i class="fa-solid <%= log.operacion_exitosa ? 'fa-circle-check' : 'fa-circle-xmark' %> me-1"></i><%= log.estado_http || '—' %>
                                             </span>
                                         </td>
-                                        <td class="audit-code"><%= log.ip_origen || '—' %></td>
                                         <td class="audit-details">
                                             <% if (log.datos_operacion) { %>
                                                 <details>
@@ -101,26 +276,73 @@
                                     </tr>
                                 <% }) %>
                             <% } else { %>
-                                <tr><td colspan="7" class="text-center text-muted py-5"><i class="fa-solid fa-clipboard-check fs-3 d-block mb-2"></i>No hay operaciones para los filtros seleccionados.</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted py-5"><i class="fa-solid fa-clipboard-check fs-3 d-block mb-2"></i>No hay operaciones para los filtros seleccionados.</td></tr>
                             <% } %>
                         </tbody>
                     </table>
                 </div>
             </div>
+
             <% if (paginacion.totalPaginas > 1) { %>
+                <%
+                    const actual = paginacion.pagina;
+                    const ultima = paginacion.totalPaginas;
+                    // Ventana de páginas alrededor de la actual: evita pintar
+                    // cientos de enlaces cuando el historial es grande
+                    const inicio = Math.max(1, actual - 2);
+                    const fin = Math.min(ultima, actual + 2);
+                %>
                 <div class="card-footer bg-white border-0 d-flex justify-content-center">
                     <nav aria-label="Paginación de auditoría">
                         <ul class="pagination pagination-sm mb-0">
-                            <% for (let pagina = 1; pagina <= paginacion.totalPaginas; pagina++) { %>
-                                <li class="page-item <%= pagina === paginacion.pagina ? 'active' : '' %>">
-                                    <a class="page-link" href="/admin/auditoria?pagina=<%= pagina %>&usuarioId=<%= filtros.usuarioId %>&accion=<%= encodeURIComponent(filtros.accion) %>&desde=<%= filtros.desde %>&hasta=<%= filtros.hasta %>"><%= pagina %></a>
+                            <li class="page-item <%= actual === 1 ? 'disabled' : '' %>">
+                                <a class="page-link" href="/admin/auditoria?<%= qs({ pagina: 1 }) %>">«</a>
+                            </li>
+                            <% if (inicio > 1) { %><li class="page-item disabled"><span class="page-link">…</span></li><% } %>
+                            <% for (let p = inicio; p <= fin; p++) { %>
+                                <li class="page-item <%= p === actual ? 'active' : '' %>">
+                                    <a class="page-link" href="/admin/auditoria?<%= qs({ pagina: p }) %>"><%= p %></a>
                                 </li>
                             <% } %>
+                            <% if (fin < ultima) { %><li class="page-item disabled"><span class="page-link">…</span></li><% } %>
+                            <li class="page-item <%= actual === ultima ? 'disabled' : '' %>">
+                                <a class="page-link" href="/admin/auditoria?<%= qs({ pagina: ultima }) %>">»</a>
+                            </li>
                         </ul>
                     </nav>
                 </div>
             <% } %>
         </div>
+
+        <!-- Política de retención: solo superadministrador -->
+        <% if (user && user.rol === 'superadministrador') { %>
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-1"><i class="fa-solid fa-broom me-2 text-secondary"></i>Retención del historial</h6>
+                    <p class="small text-secondary mb-3">
+                        El registro crece de forma continua. Esta purga elimina la actividad ordinaria
+                        más antigua y conserva durante más tiempo los asientos <strong>críticos</strong>
+                        (cobros, cierres, borrados, permisos y accesos denegados).
+                    </p>
+                    <form method="post" action="/admin/auditoria/purgar" class="row g-2 align-items-end"
+                          onsubmit="return confirm('Se eliminarán definitivamente los asientos anteriores a los días indicados. ¿Continuar?');">
+                        <div class="col-6 col-md-3">
+                            <label for="dias" class="form-label small fw-semibold text-secondary">Conservar actividad ordinaria (días)</label>
+                            <input type="number" min="7" max="3650" class="form-control form-control-sm" id="dias" name="dias" value="180">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="diasCritico" class="form-label small fw-semibold text-secondary">Conservar asientos críticos (días)</label>
+                            <input type="number" min="30" max="3650" class="form-control form-control-sm" id="diasCritico" name="diasCritico" value="730">
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="fa-solid fa-trash me-1"></i>Ejecutar purga
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <% } %>
 
         <footer class="mt-auto"><%- include('../includes/footer') %></footer>
     </main>

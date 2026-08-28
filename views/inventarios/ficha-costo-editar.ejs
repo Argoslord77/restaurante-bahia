@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= pageTitle %> - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .fc-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .fc-chip { font-size: .68rem; font-weight: 600; padding: .18rem .45rem; border-radius: .35rem; }
+        .fc-paso { border-left: 3px solid #dee2e6; padding-left: .75rem; }
+        .fc-paso.destacado { border-left-color: #0e7c86; }
+        .fc-resultado { background: linear-gradient(180deg,#0e7c86 0%, #0b6169 100%); color: #fff; }
+        .fc-resultado .cifra { font-size: 1.9rem; font-weight: 700; line-height: 1; }
+        .fc-linea { display: flex; justify-content: space-between; padding: .3rem 0; border-bottom: 1px dashed #e2e8f0; font-size: .84rem; }
+        .fc-linea:last-child { border-bottom: 0; }
+        .fc-linea .etiqueta { color: #64748b; }
+        .fc-linea .valor { font-family: ui-monospace, monospace; font-weight: 600; color: #0f172a; }
+        .fc-total { border-top: 2px solid #0e7c86; margin-top: .35rem; padding-top: .5rem; }
+        .tabla-cartas th, .tabla-cartas td { font-size: .8rem; vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <%- include('../includes/topBarMobile') %>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+                <%- include('../includes/header', {
+                    encabezado_pagina: '🧮 Ficha de Costo',
+                    desc_pagina: `Insumo: <strong>${producto.nombre}</strong>`,
+                    add_btn: false,
+                    back_btn: true,
+                    back_url: '/admin/fichas-costo'
+                }) %>
+
+                <%
+                    const f = ficha || {};
+                    const v = (campo, def = 0) => (f[campo] !== undefined && f[campo] !== null ? f[campo] : def);
+                    const unidad = producto.unidad_inventario || 'unidad';
+                    const fmt = (n, d = 2) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
+                %>
+
+                <div class="row g-4">
+                    <!-- ══════════ Formulario ══════════ -->
+                    <div class="col-lg-7">
+                        <form id="formFicha">
+                            <input type="hidden" id="productoId" value="<%= producto.id %>">
+
+                            <div class="card border-0 shadow-sm mb-3">
+                                <div class="card-header bg-white border-0 py-3">
+                                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-cart-shopping me-2 text-primary"></i>1 · Compra</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold text-secondary">
+                                                Precio de compra <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="number" step="0.0001" min="0" class="form-control fc-mono campo"
+                                                   id="precio_compra" value="<%= v('precio_compra') %>">
+                                            <div class="form-text fs-8">Lo pagado por la presentación completa (saco, caja, litro…)</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold text-secondary">
+                                                Cantidad de la presentación <span class="text-danger">*</span>
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="number" step="0.0001" min="0.0001" class="form-control fc-mono campo"
+                                                       id="cantidad_presentacion" value="<%= v('cantidad_presentacion', 1) %>">
+                                                <span class="input-group-text"><%= unidad %></span>
+                                            </div>
+                                            <div class="form-text fs-8">Ej.: un saco de 25 kg → 25</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold text-secondary">Proveedor</label>
+                                            <input type="text" class="form-control" id="proveedor" value="<%= f.proveedor || '' %>">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card border-0 shadow-sm mb-3">
+                                <div class="card-header bg-white border-0 py-3">
+                                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-scissors me-2 text-warning"></i>2 · Merma y rendimiento</h6>
+                                </div>
+                                <div class="card-body">
+                                    <label class="form-label small fw-semibold text-secondary">% de merma de limpieza / preparación</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.1" min="0" max="99.9" class="form-control fc-mono campo"
+                                               id="porcentaje_merma" value="<%= v('porcentaje_merma') %>">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <div class="form-text fs-8">
+                                        Lo que se pierde al pelar, deshuesar o limpiar. Si de 1 kg comprado aprovechas
+                                        600 g, la merma es del 40%.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card border-0 shadow-sm mb-3">
+                                <div class="card-header bg-white border-0 py-3">
+                                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-truck me-2 text-secondary"></i>3 · Costos directos de la compra</h6>
+                                    <div class="text-muted fs-8">Importes sobre la presentación completa; se reparten entre sus unidades</div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-6 col-md-3">
+                                            <label class="form-label small fw-semibold text-secondary">Flete</label>
+                                            <input type="number" step="0.01" min="0" class="form-control fc-mono campo" id="costo_flete" value="<%= v('costo_flete') %>">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="form-label small fw-semibold text-secondary">Envase</label>
+                                            <input type="number" step="0.01" min="0" class="form-control fc-mono campo" id="costo_envase" value="<%= v('costo_envase') %>">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="form-label small fw-semibold text-secondary">Mano de obra</label>
+                                            <input type="number" step="0.01" min="0" class="form-control fc-mono campo" id="costo_mano_obra" value="<%= v('costo_mano_obra') %>">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="form-label small fw-semibold text-secondary">Otros</label>
+                                            <input type="number" step="0.01" min="0" class="form-control fc-mono campo" id="otros_costos" value="<%= v('otros_costos') %>">
+                                        </div>
+                                    </div>
+
+                                    <hr class="my-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label small fw-semibold text-secondary mb-0">Conceptos propios</label>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAgregarConcepto">
+                                            <i class="fa-solid fa-plus me-1"></i>Añadir
+                                        </button>
+                                    </div>
+                                    <div class="form-text fs-8 mb-2">
+                                        Para lo que no encaje en las casillas anteriores. Un concepto en % se aplica
+                                        sobre el costo ya ajustado por merma.
+                                    </div>
+                                    <div id="listaConceptos">
+                                        <% conceptos.forEach(c => { %>
+                                            <div class="row g-2 mb-2 fila-concepto">
+                                                <div class="col-6"><input type="text" class="form-control form-control-sm concepto-nombre" value="<%= c.concepto %>" placeholder="Concepto"></div>
+                                                <div class="col-3">
+                                                    <select class="form-select form-select-sm concepto-tipo">
+                                                        <option value="FIJO" <%= c.tipo === 'FIJO' ? 'selected' : '' %>>Importe</option>
+                                                        <option value="PORCENTAJE" <%= c.tipo === 'PORCENTAJE' ? 'selected' : '' %>>%</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm fc-mono concepto-valor" value="<%= c.valor %>"></div>
+                                                <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger border-0 btn-quitar-concepto"><i class="fa-solid fa-xmark"></i></button></div>
+                                            </div>
+                                        <% }) %>
+                                    </div>
+
+                                    <hr class="my-3">
+                                    <label class="form-label small fw-semibold text-secondary">% de imprevistos</label>
+                                    <div class="input-group" style="max-width: 200px;">
+                                        <input type="number" step="0.1" min="0" max="50" class="form-control fc-mono campo"
+                                               id="porcentaje_imprevistos" value="<%= f.porcentaje_imprevistos !== undefined && f.porcentaje_imprevistos !== null ? f.porcentaje_imprevistos : parametros.imprevistos %>">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <div class="form-text fs-8">Colchón habitual del sector: 5%</div>
+                                </div>
+                            </div>
+
+                            <div class="card border-0 shadow-sm mb-3">
+                                <div class="card-body">
+                                    <label class="form-label small fw-semibold text-secondary">Observaciones</label>
+                                    <textarea class="form-control" id="observaciones" rows="2"><%= f.observaciones || '' %></textarea>
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2 mb-4">
+                                <button type="submit" class="btn btn-primary px-4">
+                                    <i class="fa-solid fa-save me-2"></i>Guardar ficha de costo
+                                </button>
+                                <a href="/admin/fichas-costo" class="btn btn-outline-secondary">Cancelar</a>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- ══════════ Resultado en vivo ══════════ -->
+                    <div class="col-lg-5">
+                        <div class="card border-0 shadow-sm mb-3 sticky-lg-top" style="top:1rem; z-index: 5;">
+                            <div class="card-body fc-resultado rounded-top">
+                                <div class="text-uppercase small opacity-75">Costo final por <%= unidad %></div>
+                                <div class="cifra" id="resCostoFinal">—</div>
+                                <div class="small opacity-75 mt-1" id="resComparativa"></div>
+                            </div>
+                            <div class="card-body">
+                                <div class="fc-linea"><span class="etiqueta">Costo bruto (precio ÷ presentación)</span><span class="valor" id="resBruto">—</span></div>
+                                <div class="fc-linea"><span class="etiqueta">Sobrecosto por merma</span><span class="valor text-warning-emphasis" id="resMerma">—</span></div>
+                                <div class="fc-linea"><span class="etiqueta">Costo neto aprovechable</span><span class="valor" id="resNeto">—</span></div>
+                                <div class="fc-linea"><span class="etiqueta">Costos directos</span><span class="valor" id="resDirectos">—</span></div>
+                                <div class="fc-linea"><span class="etiqueta">Conceptos propios</span><span class="valor" id="resConceptos">—</span></div>
+                                <div class="fc-linea"><span class="etiqueta">Imprevistos</span><span class="valor" id="resImprevistos">—</span></div>
+                                <div class="fc-linea fc-total"><span class="etiqueta fw-bold text-dark">Costo final</span><span class="valor" id="resFinal2">—</span></div>
+
+                                <div class="mt-3 pt-2 border-top small">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-secondary">Rendimiento</span>
+                                        <span class="fc-mono fw-semibold" id="resRendimiento">—</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-secondary">Factor de rendimiento</span>
+                                        <span class="fc-mono fw-semibold" id="resFactor">—</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <% if (platillosAfectados.length > 0) { %>
+                            <div class="card border-0 shadow-sm mb-3">
+                                <div class="card-header bg-white border-0 py-3">
+                                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-utensils me-2 text-primary"></i>Platillos que usan este insumo</h6>
+                                    <div class="text-muted fs-8">Al guardar se te preguntará si deseas ajustar sus precios</div>
+                                </div>
+                                <div class="card-body p-0">
+                                    <ul class="list-group list-group-flush">
+                                        <% platillosAfectados.slice(0, 8).forEach(p => { %>
+                                            <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                                <span class="small"><%= p.platillo_nombre %></span>
+                                                <span class="fc-chip bg-<%= p.evaluacion.clase %>-subtle text-<%= p.evaluacion.clase %>-emphasis">
+                                                    <%= p.sugerencias.CUP.indicadores_actual.food_cost_porcentaje !== null
+                                                        ? fmt(p.sugerencias.CUP.indicadores_actual.food_cost_porcentaje, 1) + '%' : 'sin precio' %>
+                                                </span>
+                                            </li>
+                                        <% }) %>
+                                        <% if (platillosAfectados.length > 8) { %>
+                                            <li class="list-group-item text-muted small py-2">y <%= platillosAfectados.length - 8 %> más…</li>
+                                        <% } %>
+                                    </ul>
+                                </div>
+                            </div>
+                        <% } %>
+
+                        <% if (historial.length > 1) { %>
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-header bg-white border-0 py-3">
+                                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Versiones anteriores</h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <table class="table table-sm mb-0" style="font-size:.78rem">
+                                        <thead class="table-light"><tr><th class="ps-3">Ver.</th><th>Fecha</th><th class="text-end">Compra</th><th class="text-end pe-3">Costo final</th></tr></thead>
+                                        <tbody>
+                                            <% historial.forEach(h => { %>
+                                                <tr class="<%= h.vigente ? 'table-success' : '' %>">
+                                                    <td class="ps-3">v<%= h.version %></td>
+                                                    <td><%= new Date(h.creado_en).toLocaleDateString('es-ES') %></td>
+                                                    <td class="text-end fc-mono"><%= fmt(h.precio_compra) %></td>
+                                                    <td class="text-end fc-mono pe-3"><%= fmt(h.costo_final_unitario, 4) %></td>
+                                                </tr>
+                                            <% }) %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <!-- ══════════ Diálogo de revisión de precios de carta ══════════ -->
+    <div class="modal fade" id="modalPrecios" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fa-solid fa-tags me-2 text-warning"></i>¿Actualizar los precios de la carta?
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info border-0 d-flex align-items-start gap-3 py-2">
+                        <i class="fa-solid fa-circle-info mt-1"></i>
+                        <div class="small" id="textoResumenCambio"></div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="small text-secondary">
+                            Marca los platillos y las cartas que quieras actualizar. Puedes editar cualquier
+                            precio antes de aplicarlo.
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary" id="btnMarcarTodo">Marcar todo</button>
+                            <button type="button" class="btn btn-outline-secondary" id="btnDesmarcarTodo">Ninguno</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle tabla-cartas">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:34px"></th>
+                                    <th>Platillo</th>
+                                    <th class="text-end">Costo/porción</th>
+                                    <th class="text-center">Carta CUP</th>
+                                    <th class="text-center">Carta Comisión</th>
+                                    <th class="text-center">Carta Zelle</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoPrecios"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-outline-secondary" id="btnNoActualizar">
+                        No, dejar los precios como están
+                    </button>
+                    <button type="button" class="btn btn-primary px-4" id="btnAplicarPrecios">
+                        <i class="fa-solid fa-check me-2"></i>Aplicar los precios marcados
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+    (function () {
+        'use strict';
+        const productoId = document.getElementById('productoId').value;
+        const foodCostObjetivo = <%= parametros.foodCostObjetivo %>;
+        const nf = (n, d = 2) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+        // ── Conceptos libres ────────────────────────────────────────────
+        const lista = document.getElementById('listaConceptos');
+        document.getElementById('btnAgregarConcepto').addEventListener('click', () => {
+            const fila = document.createElement('div');
+            fila.className = 'row g-2 mb-2 fila-concepto';
+            fila.innerHTML =
+                '<div class="col-6"><input type="text" class="form-control form-control-sm concepto-nombre" placeholder="Concepto"></div>' +
+                '<div class="col-3"><select class="form-select form-select-sm concepto-tipo"><option value="FIJO">Importe</option><option value="PORCENTAJE">%</option></select></div>' +
+                '<div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm fc-mono concepto-valor" value="0"></div>' +
+                '<div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger border-0 btn-quitar-concepto"><i class="fa-solid fa-xmark"></i></button></div>';
+            lista.appendChild(fila);
+        });
+        lista.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-quitar-concepto');
+            if (btn) { btn.closest('.fila-concepto').remove(); recalcular(); }
+        });
+        lista.addEventListener('input', recalcular);
+        lista.addEventListener('change', recalcular);
+
+        function leerConceptos() {
+            return Array.from(document.querySelectorAll('.fila-concepto')).map(f => ({
+                concepto: f.querySelector('.concepto-nombre').value,
+                tipo: f.querySelector('.concepto-tipo').value,
+                valor: parseFloat(f.querySelector('.concepto-valor').value) || 0
+            })).filter(c => c.concepto && c.concepto.trim());
+        }
+
+        function leerFormulario() {
+            const n = id => parseFloat(document.getElementById(id).value) || 0;
+            return {
+                precio_compra: n('precio_compra'),
+                cantidad_presentacion: n('cantidad_presentacion') || 1,
+                porcentaje_merma: n('porcentaje_merma'),
+                costo_flete: n('costo_flete'),
+                costo_envase: n('costo_envase'),
+                costo_mano_obra: n('costo_mano_obra'),
+                otros_costos: n('otros_costos'),
+                porcentaje_imprevistos: n('porcentaje_imprevistos'),
+                proveedor: document.getElementById('proveedor').value,
+                observaciones: document.getElementById('observaciones').value,
+                conceptos: leerConceptos()
+            };
+        }
+
+        // ── Cálculo en vivo contra el servidor (una sola fuente de verdad) ──
+        const costoAnterior = <%= ficha ? Number(ficha.costo_final_unitario) : 'null' %>;
+        let temporizador = null;
+
+        function recalcular() {
+            clearTimeout(temporizador);
+            temporizador = setTimeout(async () => {
+                try {
+                    const r = await fetch('/admin/api/fichas-costo/previsualizar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(leerFormulario())
+                    });
+                    const data = await r.json();
+                    if (!data.success) return;
+                    pintar(data.calculo);
+                } catch (_) { /* sin conexión: se mantiene lo mostrado */ }
+            }, 180);
+        }
+
+        function pintar(c) {
+            document.getElementById('resCostoFinal').textContent = nf(c.costo_final_unitario, 4);
+            document.getElementById('resBruto').textContent = nf(c.costo_unitario_bruto, 4);
+            document.getElementById('resMerma').textContent = '+' + nf(c.sobrecosto_merma, 4);
+            document.getElementById('resNeto').textContent = nf(c.costo_unitario_neto, 4);
+            document.getElementById('resDirectos').textContent = '+' + nf(c.costos_directos_unitarios, 4);
+            document.getElementById('resConceptos').textContent =
+                '+' + nf(c.conceptos_fijos_unitarios + c.conceptos_porcentaje_unitarios, 4);
+            document.getElementById('resImprevistos').textContent = '+' + nf(c.importe_imprevistos, 4);
+            document.getElementById('resFinal2').textContent = nf(c.costo_final_unitario, 4);
+            document.getElementById('resRendimiento').textContent = nf(c.rendimiento_porcentaje, 1) + '%';
+            document.getElementById('resFactor').textContent = '×' + nf(c.factor_rendimiento, 4);
+
+            const comp = document.getElementById('resComparativa');
+            if (costoAnterior && costoAnterior > 0) {
+                const dif = ((c.costo_final_unitario - costoAnterior) / costoAnterior) * 100;
+                if (Math.abs(dif) < 0.01) comp.textContent = 'Sin variación respecto a la ficha vigente';
+                else comp.textContent = (dif > 0 ? '▲ ' : '▼ ') + nf(Math.abs(dif), 1) +
+                                        '% respecto a la ficha vigente (' + nf(costoAnterior, 4) + ')';
+            } else {
+                comp.textContent = 'Primera ficha de este insumo';
+            }
+        }
+
+        document.querySelectorAll('.campo').forEach(el => el.addEventListener('input', recalcular));
+        recalcular();
+
+        // ── Guardar y, si procede, ofrecer el ajuste de precios ─────────
+        let platillosPendientes = [];
+
+        document.getElementById('formFicha').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const datos = leerFormulario();
+            if (!(datos.precio_compra > 0)) {
+                Swal.fire('Falta el precio', 'Indica el precio de compra del insumo.', 'warning');
+                return;
+            }
+
+            try {
+                const r = await fetch('/admin/api/fichas-costo/' + productoId, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datos)
+                });
+                const data = await r.json();
+                if (!data.success) {
+                    Swal.fire('Error', data.message || 'No se pudo guardar la ficha.', 'error');
+                    return;
+                }
+
+                if (data.requiere_revision_precios && data.platillos.length) {
+                    platillosPendientes = data.platillos;
+                    abrirDialogoPrecios(data);
+                } else {
+                    Swal.fire({ title: 'Ficha guardada', text: data.message, icon: 'success', timer: 1800, showConfirmButton: false })
+                        .then(() => window.location.reload());
+                }
+            } catch (_) {
+                Swal.fire('Error', 'No se pudo comunicar con el servidor.', 'error');
+            }
+        });
+
+        function abrirDialogoPrecios(data) {
+            const variacion = data.variacion_porcentaje;
+            let texto = 'El costo de <strong><%= producto.nombre %></strong> ahora es <strong>' +
+                        nf(data.costo_nuevo, 4) + '</strong>';
+            if (variacion !== null && variacion !== undefined) {
+                texto += ' (' + (variacion > 0 ? 'subió ' : 'bajó ') + nf(Math.abs(variacion), 1) + '%)';
+            }
+            texto += '. Este insumo se usa en <strong>' + data.platillos.length +
+                     '</strong> platillo(s). Los precios propuestos mantienen la proporción actual entre ' +
+                     'las tres cartas y buscan un food cost del <strong>' + foodCostObjetivo + '%</strong>.';
+            document.getElementById('textoResumenCambio').innerHTML = texto;
+
+            const cuerpo = document.getElementById('cuerpoPrecios');
+            cuerpo.innerHTML = '';
+
+            data.platillos.forEach((p, i) => {
+                if (!p.tiene_platillo) return;
+                const fila = document.createElement('tr');
+                const celdaCarta = (carta) => {
+                    const s = p.sugerencias[carta];
+                    const actual = s.actual !== null ? nf(s.actual, 2) : '—';
+                    const fcActual = s.indicadores_actual.food_cost_porcentaje;
+                    const fcNuevo = s.indicadores_sugerido.food_cost_porcentaje;
+                    const clase = fcActual === null ? 'secondary' : (fcActual <= foodCostObjetivo ? 'success' : (fcActual <= foodCostObjetivo * 1.25 ? 'warning' : 'danger'));
+                    return '<td class="text-center">' +
+                        '<div class="form-check d-inline-block me-1">' +
+                          '<input class="form-check-input chk-carta" type="checkbox" data-fila="' + i + '" data-carta="' + carta + '" checked>' +
+                        '</div>' +
+                        '<input type="number" step="0.01" min="0" class="form-control form-control-sm fc-mono d-inline-block precio-carta" ' +
+                               'style="width:92px" data-fila="' + i + '" data-carta="' + carta + '" value="' + s.sugerido + '">' +
+                        '<div class="fs-8 text-muted mt-1">antes ' + actual +
+                          (fcActual !== null ? ' · <span class="text-' + clase + '">FC ' + nf(fcActual, 1) + '%</span>' : '') +
+                          (fcNuevo !== null ? ' → ' + nf(fcNuevo, 1) + '%' : '') +
+                        '</div></td>';
+                };
+
+                fila.innerHTML =
+                    '<td><input class="form-check-input chk-platillo" type="checkbox" data-fila="' + i + '" checked></td>' +
+                    '<td><div class="fw-semibold">' + p.platillo_nombre + '</div>' +
+                        '<div class="fs-8 text-muted">' + (p.variacion_costo !== null
+                            ? 'costo ' + (p.variacion_costo > 0 ? '▲' : '▼') + nf(Math.abs(p.variacion_costo), 1) + '%'
+                            : 'nuevo cálculo') +
+                            (p.ingredientes_sin_ficha > 0
+                                ? ' · <span class="text-danger">' + p.ingredientes_sin_ficha + ' insumo(s) sin ficha</span>'
+                                : '') + '</div></td>' +
+                    '<td class="text-end fc-mono">' + nf(p.costo_nuevo, 2) + '</td>' +
+                    celdaCarta('CUP') + celdaCarta('COMISION') + celdaCarta('ZELLE');
+                cuerpo.appendChild(fila);
+            });
+
+            if (!cuerpo.children.length) {
+                cuerpo.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">' +
+                    'Las recetas afectadas no están vinculadas a ningún platillo de la carta.</td></tr>';
+            }
+
+            new bootstrap.Modal(document.getElementById('modalPrecios')).show();
+        }
+
+        document.getElementById('btnMarcarTodo').addEventListener('click', () => {
+            document.querySelectorAll('#cuerpoPrecios input[type=checkbox]').forEach(c => c.checked = true);
+        });
+        document.getElementById('btnDesmarcarTodo').addEventListener('click', () => {
+            document.querySelectorAll('#cuerpoPrecios input[type=checkbox]').forEach(c => c.checked = false);
+        });
+
+        document.getElementById('btnNoActualizar').addEventListener('click', () => {
+            Swal.fire({
+                title: 'Ficha guardada',
+                text: 'Los precios de la carta se mantienen sin cambios.',
+                icon: 'success', timer: 1800, showConfirmButton: false
+            }).then(() => window.location.reload());
+        });
+
+        document.getElementById('btnAplicarPrecios').addEventListener('click', async () => {
+            const cambios = [];
+            platillosPendientes.forEach((p, i) => {
+                const chkPlatillo = document.querySelector('.chk-platillo[data-fila="' + i + '"]');
+                if (!chkPlatillo || !chkPlatillo.checked || !p.tiene_platillo) return;
+
+                const cartas = {};
+                ['CUP', 'COMISION', 'ZELLE'].forEach(carta => {
+                    const chk = document.querySelector('.chk-carta[data-fila="' + i + '"][data-carta="' + carta + '"]');
+                    const inp = document.querySelector('.precio-carta[data-fila="' + i + '"][data-carta="' + carta + '"]');
+                    if (chk && chk.checked && inp && inp.value !== '') cartas[carta] = parseFloat(inp.value);
+                });
+                if (Object.keys(cartas).length) {
+                    cambios.push({ platillo_id: p.platillo_id, es_platillo_dia: false, cartas, costo_platillo: p.costo_nuevo });
+                }
+            });
+
+            if (!cambios.length) {
+                Swal.fire('Nada que aplicar', 'No has marcado ningún precio.', 'info');
+                return;
+            }
+
+            try {
+                const r = await fetch('/admin/api/fichas-costo/precios/aplicar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ producto_id: productoId, cambios })
+                });
+                const data = await r.json();
+                if (data.success) {
+                    Swal.fire({ title: 'Precios actualizados', text: data.message, icon: 'success' })
+                        .then(() => window.location.reload());
+                } else {
+                    Swal.fire('Error', data.message || 'No se pudieron aplicar los precios.', 'error');
+                }
+            } catch (_) {
+                Swal.fire('Error', 'No se pudo comunicar con el servidor.', 'error');
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

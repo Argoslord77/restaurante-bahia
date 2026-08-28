@@ -162,15 +162,22 @@ const pedidoService = {
             const [pedido] = await connection.query("SELECT id_mesa FROM pedidos WHERE id = ?", [id_pedido]);
             if (pedido.length === 0) throw new Error('Pedido no encontrado');
 
+            // Se incluye `es_platillo_dia`: los platillos del día viven en otra
+            // tabla, no tienen receta y sus IDs pueden colisionar con los de
+            // platillos_menu. Sin esta bandera se explotaría la receta equivocada.
             const [detalles] = await connection.query(
-                `SELECT id_platillo, cantidad FROM detalles_pedido 
-                 WHERE id_pedido = ? AND estado_item != 'cancelado'`, [id_pedido]
+                `SELECT id_platillo, es_platillo_dia, cantidad FROM detalles_pedido 
+                 WHERE id_pedido = ? 
+                   AND estado_item != 'cancelado'
+                   AND (afecta_inventario = 1 OR afecta_inventario IS NULL)`, [id_pedido]
             );
 
             if (detalles.length > 0) {
                 try {
-                    await RecetaService.descontarStockPedido(detalles, 1, id_pedido, id_usuario_cajero);
-                    logger.info(`Stock descontado para pedido ${id_pedido}`);
+                    // El almacén se resuelve por platillo dentro del servicio: siempre un
+                    // almacén de PRODUCCIÓN (el logístico nunca se descuenta por venta).
+                    await RecetaService.descontarStockPedido(detalles, null, id_pedido, id_usuario_cajero);
+                    logger.info(`Stock descontado para pedido ${id_pedido} desde almacenes de producción`);
                 } catch (error) {
                     logger.error(`Error al descontar stock para pedido ${id_pedido}:`, error);
                 }

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= pageTitle %> - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .rc-tabla { font-size: .8rem; }
+        .rc-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .rc-chip { font-size: .68rem; font-weight: 600; padding: .18rem .45rem; border-radius: .35rem; }
+        .rc-kpi { border-left: 3px solid #0e7c86; }
+        .rc-kpi .valor { font-size: 1.4rem; font-weight: 700; line-height: 1.1; }
+        .rc-barra { height: 6px; border-radius: 3px; background: #e2e8f0; overflow: hidden; min-width: 70px; }
+        .rc-barra span { display: block; height: 100%; }
+    </style>
+</head>
+<body>
+    <%- include('../includes/topBarMobile') %>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+                <%- include('../includes/header', {
+                    encabezado_pagina: '📈 Rentabilidad de la Carta',
+                    desc_pagina: 'Food cost de cada platillo calculado a partir de las fichas de costo de sus insumos.',
+                    add_btn: false,
+                    back_btn: true,
+                    back_url: '/admin/fichas-costo'
+                }) %>
+
+                <%
+                    const fmt = (n, d = 2) => n === null || n === undefined
+                        ? '—' : Number(n).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
+                    const objetivo = parametros.foodCostObjetivo;
+                %>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-lg-3">
+                        <div class="card border-0 shadow-sm rc-kpi h-100">
+                            <div class="card-body py-3">
+                                <div class="text-secondary small text-uppercase">Platillos con receta</div>
+                                <div class="valor text-dark"><%= resumen.total %></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card border-0 shadow-sm rc-kpi h-100" style="border-left-color:#1b3a5c">
+                            <div class="card-body py-3">
+                                <div class="text-secondary small text-uppercase">Food cost medio</div>
+                                <div class="valor text-dark"><%= resumen.food_cost_medio !== null ? fmt(resumen.food_cost_medio, 1) + '%' : '—' %></div>
+                                <div class="fs-8 text-muted">objetivo <%= objetivo %>%</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card border-0 shadow-sm rc-kpi h-100" style="border-left-color:#be123c">
+                            <div class="card-body py-3">
+                                <div class="text-secondary small text-uppercase">Por encima del objetivo</div>
+                                <div class="valor <%= resumen.criticos ? 'text-danger' : 'text-dark' %>"><%= resumen.criticos %></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card border-0 shadow-sm rc-kpi h-100" style="border-left-color:#b45309">
+                            <div class="card-body py-3">
+                                <div class="text-secondary small text-uppercase">Cálculo incompleto</div>
+                                <div class="valor <%= resumen.incompletos ? 'text-warning-emphasis' : 'text-dark' %>"><%= resumen.incompletos %></div>
+                                <div class="fs-8 text-muted">insumos sin ficha</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <% if (resumen.incompletos > 0) { %>
+                    <div class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3">
+                        <i class="fa-solid fa-triangle-exclamation fs-4 mt-1"></i>
+                        <div class="small">
+                            <strong><%= resumen.incompletos %></strong> platillo(s) tienen ingredientes sin ficha de costo.
+                            Su food cost real es <strong>mayor</strong> que el mostrado aquí, porque esos insumos se
+                            están contando como si fueran gratis.
+                            <a href="/admin/fichas-costo?sinFicha=1" class="alert-link">Completar las fichas que faltan</a>.
+                        </div>
+                    </div>
+                <% } %>
+
+                <div class="card card-custom border-0 shadow-sm">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 rc-tabla">
+                                <thead class="table-custom-thead text-uppercase fs-7 bg-light">
+                                    <tr>
+                                        <th class="ps-4 py-3">Platillo</th>
+                                        <th class="py-3 text-end">Costo</th>
+                                        <th class="py-3 text-end">Precio CUP</th>
+                                        <th class="py-3 text-end">Comisión</th>
+                                        <th class="py-3 text-end">Zelle</th>
+                                        <th class="py-3 text-center" style="min-width:150px">Food cost</th>
+                                        <th class="py-3 text-end">Margen</th>
+                                        <th class="py-3 text-end pe-4">Sugerido CUP</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!platillos.length) { %>
+                                        <tr><td colspan="8" class="text-center py-5 text-muted">
+                                            <i class="fa-solid fa-clipboard-list d-block fs-2 mb-2"></i>
+                                            No hay recetas activas para analizar.
+                                        </td></tr>
+                                    <% } else { %>
+                                        <% platillos.forEach(p => {
+                                            const fc = p.food_cost_porcentaje;
+                                            const ancho = fc === null ? 0 : Math.min(100, (fc / (objetivo * 2)) * 100);
+                                        %>
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <div class="fw-semibold text-dark"><%= p.nombre %></div>
+                                                    <% if (p.ingredientes_sin_ficha > 0) { %>
+                                                        <div class="fs-8 text-danger">
+                                                            <i class="fa-solid fa-circle-exclamation me-1"></i><%= p.ingredientes_sin_ficha %> insumo(s) sin ficha
+                                                        </div>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-end rc-mono"><%= fmt(p.costo) %></td>
+                                                <td class="text-end rc-mono fw-semibold"><%= fmt(p.precio_cup) %></td>
+                                                <td class="text-end rc-mono text-muted"><%= fmt(p.precio_comision) %></td>
+                                                <td class="text-end rc-mono text-muted"><%= fmt(p.precio_zelle) %></td>
+                                                <td class="text-center">
+                                                    <% if (fc === null) { %>
+                                                        <span class="rc-chip bg-light text-secondary border">Sin precio</span>
+                                                    <% } else { %>
+                                                        <div class="d-flex align-items-center gap-2 justify-content-center">
+                                                            <span class="rc-chip bg-<%= p.evaluacion.clase %>-subtle text-<%= p.evaluacion.clase %>-emphasis rc-mono"><%= fmt(fc, 1) %>%</span>
+                                                            <div class="rc-barra flex-grow-1">
+                                                                <span class="bg-<%= p.evaluacion.clase %>" style="width:<%= ancho %>%"></span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="fs-8 text-muted mt-1"><%= p.evaluacion.etiqueta %></div>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-end rc-mono <%= p.margen !== null && p.margen < 0 ? 'text-danger fw-bold' : '' %>">
+                                                    <%= fmt(p.margen) %>
+                                                </td>
+                                                <td class="text-end pe-4">
+                                                    <span class="rc-mono fw-semibold text-primary"><%= fmt(p.sugerido) %></span>
+                                                    <% if (p.precio_cup && p.sugerido > p.precio_cup) { %>
+                                                        <div class="fs-8 text-danger">▲ <%= fmt(p.sugerido - p.precio_cup) %></div>
+                                                    <% } else if (p.precio_cup && p.sugerido < p.precio_cup) { %>
+                                                        <div class="fs-8 text-success">holgura <%= fmt(p.precio_cup - p.sugerido) %></div>
+                                                    <% } %>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white border-0 small text-secondary">
+                        <i class="fa-solid fa-circle-info me-1"></i>
+                        El food cost se mide contra la carta CUP. «Sugerido» es el precio mínimo para alcanzar el
+                        objetivo del <%= objetivo %>%: <span class="rc-mono">Costo ÷ <%= (objetivo / 100).toFixed(2) %></span>,
+                        redondeado a múltiplos de <%= parametros.multiploRedondeo %>.
+                    </div>
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

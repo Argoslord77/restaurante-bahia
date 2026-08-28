@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= pageTitle %> - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .fc-tabla { font-size: .82rem; }
+        .fc-chip { font-size: .68rem; font-weight: 600; padding: .18rem .45rem; border-radius: .35rem; }
+        .fc-kpi { border-left: 3px solid #0e7c86; }
+        .fc-kpi .valor { font-size: 1.4rem; font-weight: 700; line-height: 1.1; }
+        .fc-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .fc-formula { background: #f1f5f9; border-left: 3px solid #0e7c86; }
+        .fc-formula code { color: #0f172a; font-size: .78rem; }
+    </style>
+</head>
+<body>
+    <%- include('../includes/topBarMobile') %>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+                <%- include('../includes/header', {
+                    encabezado_pagina: '🧮 Fichas de Costo',
+                    desc_pagina: 'Costo real de cada insumo de almacén, desde el precio de compra hasta el costo puesto en producción.',
+                    add_btn: false
+                }) %>
+
+                <%
+                    const fmt = (n, d = 2) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
+                    const conFicha = productos.filter(p => p.ficha_id);
+                    const sinFicha = productos.filter(p => !p.ficha_id);
+                    const usadosEnRecetas = productos.filter(p => Number(p.recetas_afectadas) > 0);
+                    const sinFichaEnRecetas = usadosEnRecetas.filter(p => !p.ficha_id);
+                %>
+
+                <!-- Ayuda: la fórmula estándar -->
+                <div class="card border-0 shadow-sm mb-4 fc-formula">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h6 class="fw-bold mb-2"><i class="fa-solid fa-lightbulb me-2 text-warning"></i>Cómo se calcula (fórmula estándar del sector)</h6>
+                            <button class="btn btn-sm btn-link text-decoration-none p-0" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#ayudaFormula">Ver / ocultar</button>
+                        </div>
+                        <div class="collapse show" id="ayudaFormula">
+                            <div class="row g-3 small">
+                                <div class="col-md-6">
+                                    <div class="fw-semibold text-secondary mb-1">1 · Del precio de compra al costo útil</div>
+                                    <code class="d-block">Rendimiento (%) = 100 − % merma</code>
+                                    <code class="d-block">Costo bruto = Precio de compra ÷ cantidad de la presentación</code>
+                                    <code class="d-block">Costo neto = Costo bruto ÷ (1 − % merma)</code>
+                                    <code class="d-block">Costo final = (Costo neto + costos directos) × (1 + % imprevistos)</code>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="fw-semibold text-secondary mb-1">2 · Del insumo al precio de carta</div>
+                                    <code class="d-block">Costo del platillo = Σ (cantidad × costo final del insumo)</code>
+                                    <code class="d-block">Precio sugerido = Costo ÷ (food cost objetivo ÷ 100)</code>
+                                    <code class="d-block">Food cost (%) = (Costo ÷ Precio de venta) × 100</code>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-2 border-top">
+                                <span class="text-secondary small me-2">Food cost orientativo:</span>
+                                <% referencias.forEach(r => { %>
+                                    <span class="fc-chip bg-white border text-secondary me-1"><%= r.tipo %>: <%= r.min %>–<%= r.max %>%</span>
+                                <% }) %>
+                                <span class="fc-chip bg-primary-subtle text-primary-emphasis ms-2">
+                                    Objetivo configurado: <%= parametros.foodCostObjetivo %>%
+                                </span>
+                            </div>
+                            <div class="small text-secondary mt-2 mb-0">
+                                <i class="fa-solid fa-circle-info me-1"></i>
+                                La ficha es una <strong>ayuda</strong>: puedes añadir los conceptos que necesites
+                                (flete, envase, mano de obra o cualquier otro) y ajustarla a tu operación.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicadores -->
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-lg-3">
+                        <div class="card border-0 shadow-sm fc-kpi h-100">
+                            <div class="card-body py-3">
+                                <div class="text-secondary small text-uppercase">Insumos activos</div>
+                                <div class="valor text-dark"><%= productos.length %></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card border-0 shadow-sm fc-kpi h-100" style="border-left-color:#1e6e43">
+                            <div class="card-body py-3">
+                                <div class="text-secondary small text-uppercase">Con ficha</div>
+                                <div class="valor text-success"><%= conFicha.length %></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card border-0 shadow-sm fc-kpi h-100" style="border-left-color:#b45309">
+                            <div class="card-body py-3">
+                                <div class="text-secondary small text-uppercase">Sin ficha</div>
+                                <div class="valor <%= sinFicha.length ? 'text-warning-emphasis' : 'text-dark' %>"><%= sinFicha.length %></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card border-0 shadow-sm fc-kpi h-100" style="border-left-color:#be123c">
+                            <div class="card-body py-3">
+                                <div class="text-secondary small text-uppercase">Usados en recetas sin ficha</div>
+                                <div class="valor <%= sinFichaEnRecetas.length ? 'text-danger' : 'text-dark' %>"><%= sinFichaEnRecetas.length %></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <% if (sinFichaEnRecetas.length > 0) { %>
+                    <div class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3">
+                        <i class="fa-solid fa-triangle-exclamation fs-4 mt-1"></i>
+                        <div>
+                            <div class="fw-bold">Hay insumos en uso sin ficha de costo</div>
+                            <div class="small">
+                                <strong><%= sinFichaEnRecetas.length %></strong> insumo(s) se utilizan en recetas pero no
+                                tienen ficha. El food cost de esos platillos aparecerá <strong>más bajo de lo real</strong>,
+                                porque esos ingredientes se cuentan como si no costaran nada.
+                                <a href="/admin/fichas-costo?sinFicha=1" class="alert-link">Ver solo los que faltan</a>.
+                            </div>
+                        </div>
+                    </div>
+                <% } %>
+
+                <div class="card card-custom border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <form method="get" action="/admin/fichas-costo" class="row g-2 align-items-end">
+                            <div class="col-sm-6 col-md-5">
+                                <label for="busqueda" class="form-label small fw-semibold text-secondary">Buscar insumo</label>
+                                <input type="text" class="form-control form-control-sm" id="busqueda" name="busqueda"
+                                       value="<%= filtros.busqueda %>" placeholder="Nombre o código">
+                            </div>
+                            <div class="col-sm-6 col-md-3">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" value="1" id="sinFicha" name="sinFicha"
+                                           <%= filtros.sinFicha ? 'checked' : '' %>>
+                                    <label class="form-check-label small text-secondary" for="sinFicha">Solo los que no tienen ficha</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4 d-flex gap-2">
+                                <button type="submit" class="btn btn-sm btn-dark flex-grow-1"><i class="fa-solid fa-filter me-1"></i>Filtrar</button>
+                                <a href="/admin/fichas-costo" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate-left"></i></a>
+                                <a href="/admin/fichas-costo/rentabilidad" class="btn btn-sm btn-outline-primary text-nowrap">
+                                    <i class="fa-solid fa-chart-line me-1"></i>Rentabilidad
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 fc-tabla">
+                                <thead class="table-custom-thead text-uppercase fs-7 bg-light">
+                                    <tr>
+                                        <th class="ps-4 py-3">Insumo</th>
+                                        <th class="py-3 text-end">Precio compra</th>
+                                        <th class="py-3 text-center">% Merma</th>
+                                        <th class="py-3 text-center">Rendimiento</th>
+                                        <th class="py-3 text-end">Costo final</th>
+                                        <th class="py-3 text-center">En recetas</th>
+                                        <th class="py-3 text-center">Estado</th>
+                                        <th class="py-3 text-center pe-3" style="width:110px">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!productos.length) { %>
+                                        <tr><td colspan="8" class="text-center py-5 text-muted">
+                                            <i class="fa-solid fa-box-open d-block fs-2 mb-2"></i>No hay insumos que coincidan con el filtro.
+                                        </td></tr>
+                                    <% } else { %>
+                                        <% productos.forEach(p => { %>
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <div class="fw-semibold text-dark"><%= p.nombre %></div>
+                                                    <div class="text-muted small fc-mono"><%= p.codigo || 'S/C' %><%= p.unidad_inventario ? ' · ' + p.unidad_inventario : '' %></div>
+                                                </td>
+                                                <td class="text-end fc-mono">
+                                                    <%= p.ficha_id ? fmt(p.precio_compra) : '—' %>
+                                                </td>
+                                                <td class="text-center fc-mono text-muted">
+                                                    <%= p.ficha_id ? fmt(p.porcentaje_merma, 1) + '%' : '—' %>
+                                                </td>
+                                                <td class="text-center fc-mono text-muted">
+                                                    <%= p.ficha_id ? fmt(p.rendimiento_porcentaje, 1) + '%' : '—' %>
+                                                </td>
+                                                <td class="text-end fw-bold fc-mono text-dark">
+                                                    <%= p.ficha_id ? fmt(p.costo_final_unitario, 4) : fmt(p.costo_promedio, 4) %>
+                                                </td>
+                                                <td class="text-center">
+                                                    <% if (Number(p.recetas_afectadas) > 0) { %>
+                                                        <span class="fc-chip bg-info-subtle text-info-emphasis"><%= p.recetas_afectadas %></span>
+                                                    <% } else { %><span class="text-muted">—</span><% } %>
+                                                </td>
+                                                <td class="text-center">
+                                                    <% if (p.ficha_id) { %>
+                                                        <span class="fc-chip bg-success-subtle text-success-emphasis">
+                                                            <i class="fa-solid fa-check me-1"></i>Con ficha
+                                                        </span>
+                                                    <% } else { %>
+                                                        <span class="fc-chip <%= Number(p.recetas_afectadas) > 0 ? 'bg-danger-subtle text-danger-emphasis' : 'bg-light text-secondary border' %>">
+                                                            <i class="fa-solid fa-circle-exclamation me-1"></i>Sin ficha
+                                                        </span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-center pe-3">
+                                                    <a href="/admin/fichas-costo/<%= p.id %>" class="btn btn-sm btn-outline-primary border-0" title="Abrir ficha de costo">
+                                                        <i class="fa-solid fa-calculator"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

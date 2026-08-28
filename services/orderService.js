@@ -57,7 +57,7 @@ class OrderService {
                         esPlatilloDia = true;
                         esBebida = (platilloDia.tipo === 'BEBIDAS');
                         nombreProducto = platilloDia.nombre;
-                        precioReal = PrecioService.validarPrecioConfigurado(platilloDia, contextoCobro.carta);
+                        precioReal = PrecioService.validarPrecioConfigurado(platilloDia, contextoCobro);
                     } else {
                         throw new Error(`El platillo del día con ID ${item.id} no existe.`);
                     }
@@ -68,7 +68,7 @@ class OrderService {
                         const tipoCat = String(platilloMenu.tipo_categoria || platilloMenu.tipo || '').toUpperCase();
                         esBebida = (tipoCat === 'BEBIDAS');
                         nombreProducto = platilloMenu.nombre;
-                        precioReal = PrecioService.validarPrecioConfigurado(platilloMenu, contextoCobro.carta);
+                        precioReal = PrecioService.validarPrecioConfigurado(platilloMenu, contextoCobro);
                     } else {
                         // Fallback de seguridad: si no está en platillos_menu, buscar en platillos_dia
                         const platilloDia = await platilloDiaModel.getById(item.id);
@@ -76,7 +76,7 @@ class OrderService {
                             esPlatilloDia = true;
                             esBebida = (platilloDia.tipo === 'BEBIDAS');
                             nombreProducto = platilloDia.nombre;
-                            precioReal = PrecioService.validarPrecioConfigurado(platilloDia, contextoCobro.carta);
+                            precioReal = PrecioService.validarPrecioConfigurado(platilloDia, contextoCobro);
                         } else {
                             throw new Error(`El producto seleccionado (ID ${item.id}) no existe en el catálogo.`);
                         }

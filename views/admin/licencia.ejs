@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= pageTitle %> - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .lic-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .lic-codigo { font-family: ui-monospace, monospace; font-size: 1.35rem; font-weight: 700;
+                      letter-spacing: .08em; color: #0f172a; }
+        .lic-chip { font-size: .68rem; font-weight: 600; padding: .2rem .5rem; border-radius: .35rem; }
+        .lic-barra { height: 8px; border-radius: 4px; background: #e2e8f0; overflow: hidden; }
+        .lic-barra span { display: block; height: 100%; }
+        .lic-comp { font-size: .78rem; padding: .35rem 0; border-bottom: 1px dashed #e2e8f0; }
+        .lic-comp:last-child { border-bottom: 0; }
+    </style>
+</head>
+<body>
+    <%- include('../includes/topBarMobile') %>
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4">
+                <%- include('../includes/header', {
+                    encabezado_pagina: '🔐 Licencia del Sistema',
+                    desc_pagina: 'Estado de la licencia, identidad de esta instalación y comprobaciones de integridad.',
+                    add_btn: false
+                }) %>
+
+                <%
+                    const e = evaluacion;
+                    const colores = { ACTIVA:'success', GRACIA:'warning', BLOQUEADA:'danger', SIN_LICENCIA:'danger' };
+                    const color = colores[e.estado] || 'secondary';
+                    const fecha = v => v ? new Date(v).toLocaleString('es-ES') : '—';
+                    const nombresComponente = {
+                        maquina:'Identificador del sistema operativo', disco:'Disco / volumen raíz',
+                        red:'Tarjetas de red', cpu:'Procesador', nucleos:'Núcleos',
+                        so:'Sistema y arquitectura', equipo:'Nombre del equipo', memoria:'Memoria instalada'
+                    };
+                %>
+
+                <!-- Estado general -->
+                <div class="card border-0 shadow-sm mb-4 border-start border-4 border-<%= color %>">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                            <div>
+                                <div class="text-uppercase small text-secondary">Estado</div>
+                                <div class="fs-3 fw-bold text-<%= color %>"><%= e.estado.replace('_',' ') %></div>
+                                <% if (e.licencia) { %>
+                                    <div class="text-secondary small mt-1">
+                                        <%= e.licencia.cliente %> · plan <%= e.licencia.plan %> ·
+                                        <span class="lic-mono"><%= e.licencia.id %></span>
+                                    </div>
+                                <% } else { %>
+                                    <div class="text-secondary small mt-1">No hay ninguna licencia instalada en este equipo.</div>
+                                <% } %>
+                            </div>
+                            <div class="text-end">
+                                <% if (e.licencia && e.licencia.expira_en) { %>
+                                    <div class="text-uppercase small text-secondary">Caduca</div>
+                                    <div class="fw-bold"><%= new Date(e.licencia.expira_en).toLocaleDateString('es-ES') %></div>
+                                <% } else if (e.licencia) { %>
+                                    <span class="lic-chip bg-success-subtle text-success-emphasis">Perpetua</span>
+                                <% } %>
+                            </div>
+                        </div>
+
+                        <% if (e.gracia) { %>
+                            <div class="alert alert-warning border-0 mt-3 mb-0 d-flex align-items-start gap-3">
+                                <i class="fa-solid fa-hourglass-half fs-4 mt-1"></i>
+                                <div>
+                                    <div class="fw-bold">Periodo de gracia · quedan <%= e.gracia.dias_restantes %> de <%= e.gracia.dias_totales %> días</div>
+                                    <div class="small">
+                                        El sistema funciona con normalidad, pero al agotarse este plazo solo se
+                                        permitirá <strong>cerrar</strong> las operaciones abiertas: cobrar las cuentas
+                                        en curso y cerrar el turno. No se podrán abrir turnos ni comandas nuevas.
+                                    </div>
+                                </div>
+                            </div>
+                        <% } %>
+
+                        <% if (e.problemas.length) { %>
+                            <div class="alert alert-danger border-0 mt-3 mb-0">
+                                <div class="fw-bold mb-2"><i class="fa-solid fa-triangle-exclamation me-2"></i>Problemas detectados</div>
+                                <ul class="mb-0 small">
+                                    <% e.problemas.forEach(p => { %>
+                                        <li><span class="lic-mono text-danger-emphasis">[<%= p.codigo %>]</span> <%= p.mensaje %></li>
+                                    <% }) %>
+                                </ul>
+                            </div>
+                        <% } %>
+
+                        <% if (e.avisos.length) { %>
+                            <div class="alert alert-warning border-0 mt-3 mb-0">
+                                <ul class="mb-0 small">
+                                    <% e.avisos.forEach(p => { %>
+                                        <li><span class="lic-mono">[<%= p.codigo %>]</span> <%= p.mensaje %></li>
+                                    <% }) %>
+                                </ul>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <!-- Identidad de la instalación -->
+                    <div class="col-lg-6">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header bg-white border-0 py-3">
+                                <h6 class="fw-bold mb-0"><i class="fa-solid fa-fingerprint me-2 text-primary"></i>Identidad de esta instalación</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="text-secondary small mb-1">Código de instalación (dictable por teléfono)</div>
+                                <div class="lic-codigo mb-3"><%= e.instalacion.codigo %></div>
+
+                                <div class="lic-comp d-flex justify-content-between">
+                                    <span class="text-secondary">Identificador</span>
+                                    <span class="lic-mono"><%= e.instalacion.uuid %></span>
+                                </div>
+                                <div class="lic-comp d-flex justify-content-between">
+                                    <span class="text-secondary">Huella del equipo</span>
+                                    <span class="lic-mono"><%= e.instalacion.huella_resumen %>…</span>
+                                </div>
+
+                                <a href="/admin/licencia/solicitud" class="btn btn-sm btn-outline-primary mt-3">
+                                    <i class="fa-solid fa-download me-1"></i>Descargar solicitud de licencia
+                                </a>
+                                <div class="form-text fs-8 mt-2">
+                                    Envía este archivo (o dicta el código) al proveedor para obtener tu licencia.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tiempo de confianza -->
+                    <div class="col-lg-6">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header bg-white border-0 py-3">
+                                <h6 class="fw-bold mb-0"><i class="fa-solid fa-clock me-2 text-primary"></i>Tiempo de confianza</h6>
+                                <div class="text-muted fs-8">Inmune a los cambios de hora del equipo</div>
+                            </div>
+                            <div class="card-body">
+                                <div class="lic-comp d-flex justify-content-between">
+                                    <span class="text-secondary">Tiempo verificado</span>
+                                    <span class="lic-mono fw-semibold"><%= fecha(e.tiempo.confiable) %></span>
+                                </div>
+                                <div class="lic-comp d-flex justify-content-between">
+                                    <span class="text-secondary">Reloj del equipo</span>
+                                    <span class="lic-mono <%= e.tiempo.reloj_manipulado ? 'text-danger fw-bold' : '' %>"><%= fecha(e.tiempo.sistema) %></span>
+                                </div>
+                                <div class="lic-comp d-flex justify-content-between">
+                                    <span class="text-secondary">Fuente del tiempo</span>
+                                    <span class="lic-mono"><%= e.tiempo.fuente %></span>
+                                </div>
+
+                                <% if (e.tiempo.reloj_manipulado) { %>
+                                    <div class="alert alert-danger border-0 mt-3 mb-0 py-2 small">
+                                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                        El reloj del equipo va <strong><%= e.tiempo.retraso_horas %> horas</strong> por
+                                        detrás del tiempo que el propio sistema ya tiene registrado en sus ventas,
+                                        cierres y auditoría. Atrasar la hora no prolonga la licencia.
+                                    </div>
+                                <% } %>
+
+                                <div class="mt-3 pt-2 border-top">
+                                    <div class="d-flex justify-content-between small">
+                                        <span class="text-secondary">Días de uso</span>
+                                        <span class="lic-mono fw-semibold">
+                                            <%= e.uso.dias_consumidos %><%= e.uso.dias_contratados ? ' / ' + e.uso.dias_contratados : '' %>
+                                        </span>
+                                    </div>
+                                    <% if (e.uso.dias_contratados) {
+                                        const pct = Math.min(100, Math.round((e.uso.dias_consumidos / e.uso.dias_contratados) * 100));
+                                        const c = pct >= 90 ? 'danger' : (pct >= 75 ? 'warning' : 'success'); %>
+                                        <div class="lic-barra mt-2"><span class="bg-<%= c %>" style="width:<%= pct %>%"></span></div>
+                                    <% } %>
+                                    <div class="d-flex justify-content-between small mt-2">
+                                        <span class="text-secondary">Arranques registrados</span>
+                                        <span class="lic-mono"><%= e.uso.secuencia %></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Huella del equipo -->
+                    <div class="col-lg-6">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header bg-white border-0 py-3">
+                                <h6 class="fw-bold mb-0"><i class="fa-solid fa-microchip me-2 text-primary"></i>Componentes del equipo</h6>
+                                <% if (comparacion) { %>
+                                    <div class="text-muted fs-8">
+                                        Coincidencia con el equipo autorizado:
+                                        <strong class="text-<%= comparacion.coincide ? 'success' : 'danger' %>"><%= comparacion.puntuacion %>%</strong>
+                                        (se exige <%= comparacion.umbral %>%)
+                                    </div>
+                                <% } %>
+                            </div>
+                            <div class="card-body">
+                                <% Object.entries(huella.componentes).forEach(([nombre, valor]) => {
+                                    let estadoComp = 'no-detectado';
+                                    if (comparacion) {
+                                        if (comparacion.coincidentes.includes(nombre)) estadoComp = 'coincide';
+                                        else if (comparacion.divergentes.includes(nombre)) estadoComp = 'difiere';
+                                        else if (comparacion.ausentes.includes(nombre)) estadoComp = 'no-registrado';
+                                    } else if (valor) estadoComp = 'detectado';
+                                %>
+                                    <div class="lic-comp d-flex justify-content-between align-items-center">
+                                        <span class="text-secondary"><%= nombresComponente[nombre] || nombre %>
+                                            <span class="text-muted">· peso <%= huella.pesos[nombre] %></span>
+                                        </span>
+                                        <% if (estadoComp === 'coincide') { %>
+                                            <span class="lic-chip bg-success-subtle text-success-emphasis"><i class="fa-solid fa-check me-1"></i>coincide</span>
+                                        <% } else if (estadoComp === 'difiere') { %>
+                                            <span class="lic-chip bg-danger-subtle text-danger-emphasis"><i class="fa-solid fa-xmark me-1"></i>difiere</span>
+                                        <% } else if (estadoComp === 'no-registrado') { %>
+                                            <span class="lic-chip bg-light text-secondary border">no registrado</span>
+                                        <% } else if (valor) { %>
+                                            <span class="lic-mono text-muted"><%= valor.slice(0,10) %>…</span>
+                                        <% } else { %>
+                                            <span class="lic-chip bg-light text-secondary border">no disponible</span>
+                                        <% } %>
+                                    </div>
+                                <% }) %>
+                                <div class="form-text fs-8 mt-3">
+                                    La comprobación es ponderada y tolerante: cambiar una tarjeta de red o ampliar la
+                                    memoria no invalida la licencia. Copiar la instalación a otro equipo, sí.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Instalar licencia -->
+                    <div class="col-lg-6">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header bg-white border-0 py-3">
+                                <h6 class="fw-bold mb-0"><i class="fa-solid fa-file-signature me-2 text-primary"></i>Instalar licencia</h6>
+                            </div>
+                            <div class="card-body">
+                                <% if (user && user.rol === 'superadministrador') { %>
+                                    <form method="post" action="/admin/licencia/instalar">
+                                        <label class="form-label small fw-semibold text-secondary">
+                                            Pega aquí el contenido del archivo <span class="lic-mono">licencia.lic</span>
+                                        </label>
+                                        <textarea class="form-control lic-mono" name="licencia" rows="8"
+                                                  style="font-size:.72rem" placeholder='{ "datos": { … }, "firma": "…" }'></textarea>
+                                        <button type="submit" class="btn btn-primary mt-3">
+                                            <i class="fa-solid fa-upload me-1"></i>Instalar
+                                        </button>
+                                        <div class="form-text fs-8 mt-2">
+                                            Solo se instala si la firma es válida. Si no lo es, el archivo actual no se toca.
+                                        </div>
+                                    </form>
+                                <% } else { %>
+                                    <div class="text-secondary small">
+                                        Solo el superadministrador puede instalar una licencia.
+                                    </div>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bitácora -->
+                <div class="card border-0 shadow-sm mt-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="fa-solid fa-list-check me-2 text-secondary"></i>Bitácora de la licencia</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.8rem">
+                                <thead class="table-light">
+                                    <tr><th class="ps-3">Fecha</th><th>Evento</th><th>Gravedad</th><th>Detalle</th></tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!eventos.length) { %>
+                                        <tr><td colspan="4" class="text-center text-muted py-4">Sin eventos registrados.</td></tr>
+                                    <% } else { eventos.forEach(ev => { %>
+                                        <tr>
+                                            <td class="ps-3 text-nowrap"><%= new Date(ev.creado_en).toLocaleString('es-ES') %></td>
+                                            <td class="lic-mono"><%= ev.tipo %></td>
+                                            <td>
+                                                <span class="lic-chip bg-<%= ev.gravedad === 'CRITICO' ? 'danger' : (ev.gravedad === 'AVISO' ? 'warning' : 'light') %>-subtle">
+                                                    <%= ev.gravedad %>
+                                                </span>
+                                            </td>
+                                            <td class="text-muted lic-mono" style="font-size:.7rem"><%= ev.detalle %></td>
+                                        </tr>
+                                    <% }) } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

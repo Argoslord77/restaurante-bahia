@@ -154,7 +154,7 @@ const ClienteController = {
           platillo = rows[0];
         }
         if (!platillo) return res.status(400).json({ success: false, message: `El platillo ${idPlatillo} no está disponible.` });
-        PrecioService.validarPrecioConfigurado(platillo, pricingContext.carta);
+        PrecioService.validarPrecioConfigurado(platillo, pricingContext);
         values.push(id_mesa, idPlatillo, esDia, cantidad, item.notas_especiales || item.notas || null);
       }
 

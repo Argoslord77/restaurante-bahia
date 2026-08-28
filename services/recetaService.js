@@ -3,6 +3,7 @@ const Receta = require('../models/recetaModel');
 const UnidadMedida = require('../models/unidadMedidaModel');
 const Producto = require('../models/productoModel'); 
 const MenuModel = require('../models/menuModel');
+const AlmacenService = require('./almacenService');
 const db = require('../config/db');
 const logger = require('../config/logger');
 
@@ -37,13 +38,67 @@ const RecetaService = {
         try {
             const maestro = await Receta.getById(id);
             if (!maestro) return null;
-            
-            const detalles = await Receta.getByPlatillo(id);
-            return { ...maestro, detalles };
+
+            const [detalles, desglose] = await Promise.all([
+                Receta.getByPlatillo(id),
+                Receta.getDesgloseStockPorAlmacen(id).catch(err => {
+                    logger.warn(`No se pudo calcular el desglose de stock por almacén de la receta ${id}: ${err.message}`);
+                    return [];
+                })
+            ]);
+
+            return { ...maestro, detalles: RecetaService.fusionarStockPorAlmacen(detalles, desglose) };
         } catch (error) {
             logger.error(`Error al empaquetar estructura de receta ${id}:`, error);
             throw new Error('Error al recuperar datos integrales de la ficha técnica');
         }
+    },
+
+    /**
+     * Adjunta a cada ingrediente su existencia real segmentada por almacén.
+     *
+     * Cada detalle recibe:
+     *   - stock_logistico          Total en almacenes de categoría 'logistico'
+     *   - stock_produccion         Total en almacenes de categoría 'produccion'
+     *   - almacenes_logisticos[]   Desglose {almacen_id, codigo, nombre, stock}
+     *   - almacenes_produccion[]   Desglose {almacen_id, codigo, nombre, stock}
+     *
+     * El stock de producción es el único que determina si el platillo se puede
+     * vender: el POS nunca descuenta del logístico.
+     */
+    fusionarStockPorAlmacen: (detalles, desglose) => {
+        const filas = Array.isArray(desglose) ? desglose : [];
+
+        // Index: producto_id => { logistico: [], produccion: [] }
+        const porProducto = new Map();
+        for (const fila of filas) {
+            const clave = String(fila.producto_id);
+            if (!porProducto.has(clave)) porProducto.set(clave, { logistico: [], produccion: [] });
+            const destino = fila.almacen_categoria === 'produccion' ? 'produccion' : 'logistico';
+            porProducto.get(clave)[destino].push({
+                almacen_id: fila.almacen_id,
+                codigo: fila.almacen_codigo,
+                nombre: fila.almacen_nombre,
+                stock: parseFloat(fila.stock || 0)
+            });
+        }
+
+        const sumar = (lista) => lista.reduce((acc, a) => acc + (parseFloat(a.stock) || 0), 0);
+
+        return (detalles || []).map(detalle => {
+            const grupo = porProducto.get(String(detalle.producto_id)) || { logistico: [], produccion: [] };
+            return {
+                ...detalle,
+                stock_logistico: grupo.logistico.length
+                    ? sumar(grupo.logistico)
+                    : parseFloat(detalle.stock_logistico || 0),
+                stock_produccion: grupo.produccion.length
+                    ? sumar(grupo.produccion)
+                    : parseFloat(detalle.stock_produccion || 0),
+                almacenes_logisticos: grupo.logistico,
+                almacenes_produccion: grupo.produccion
+            };
+        });
     },
 
     // Obtener receta con stock disponible por almacén
@@ -182,16 +237,39 @@ const RecetaService = {
         }
     },
 
-    // Verificar si hay suficiente stock para preparar platillos (Tomando en cuenta mermas)
-    verificarStockParaPedido: async (items, almacenId) => {
+    /**
+     * Verificar si hay suficiente stock para preparar platillos (con mermas).
+     *
+     * ⚠️ Regla de negocio: la comprobación SIEMPRE se hace contra almacenes de
+     * PRODUCCIÓN. El almacén logístico solo abastece por transferencia y nunca
+     * respalda una venta, así que su existencia no se toma en cuenta aquí.
+     *
+     * Los ítems sin receta activa (bebidas embotelladas, platillos del día...)
+     * se omiten: no llevan explosión de inventario.
+     *
+     * @param {Array} items          Ítems del pedido ({id_platillo, cantidad})
+     * @param {number|null} almacenId Almacén de producción explícito (opcional).
+     *                                Si se omite, se resuelve por platillo.
+     */
+    verificarStockParaPedido: async (items, almacenId = null) => {
         try {
             const errores = [];
+            const sinReceta = [];
 
             for (const item of items) {
-                const recetaId = item.id_platillo || item.platillo_id; 
+                if (RecetaService._esPlatilloDelDia(item)) continue;
+
+                const platilloId = item.id_platillo || item.platillo_id;
                 const cantidad = item.cantidad || 1;
 
-                const ingredientes = await Receta.getByPlatilloAndAlmacen(recetaId, almacenId);
+                // Resuelve (y valida) el almacén de producción de este ítem
+                const almacenProduccion = await AlmacenService.resolverAlmacenProduccion(platilloId, almacenId);
+
+                const ingredientes = await Receta.getIngredientesParaVenta(platilloId, almacenProduccion.id);
+                if (ingredientes.length === 0) {
+                    sinReceta.push(platilloId);
+                    continue;
+                }
 
                 for (const ingrediente of ingredientes) {
                     const factorMerma = ingrediente.porcentaje_merma > 0 ? (1 + (ingrediente.porcentaje_merma / 100)) : 1;
@@ -201,8 +279,10 @@ const RecetaService = {
                     if (ingrediente.stock_disponible < cantidadRequerida) {
                         if (!ingrediente.es_opcional) {
                             errores.push({
-                                platillo: ingrediente.receta_id,
+                                platillo: platilloId,
                                 ingrediente: ingrediente.producto_nombre,
+                                almacen_id: almacenProduccion.id,
+                                almacen_nombre: almacenProduccion.nombre,
                                 disponible: parseFloat(ingrediente.stock_disponible),
                                 requerido: parseFloat(cantidadRequerida.toFixed(4))
                             });
@@ -212,29 +292,60 @@ const RecetaService = {
             }
 
             if (errores.length > 0) {
-                return { suficiente: false, errores };
+                return { suficiente: false, errores, sin_receta: sinReceta };
             }
 
-            return { suficiente: true };
+            return { suficiente: true, sin_receta: sinReceta };
         } catch (error) {
             logger.error('Error al verificar stock para pedido:', error);
-            throw new Error('Error al verificar el stock disponible');
+            throw new Error(error.message || 'Error al verificar el stock disponible');
         }
     },
 
-    // Descontar stock de ingredientes al cerrar pedido con CONTROL DE TRANSACCIONES
-    descontarStockPedido: async (items, almacenId, idPedido = null, usuarioId = null) => {
+    /**
+     * Los platillos del día (`platillos_dia`) son fichas ad-hoc del turno y no
+     * tienen receta. Sus IDs viven en otra tabla y pueden colisionar con los de
+     * `platillos_menu`, así que jamás deben explotar inventario.
+     */
+    _esPlatilloDelDia: (item) => {
+        const flag = item.es_platillo_dia;
+        return flag === 1 || flag === true || flag === '1';
+    },
+
+    /**
+     * Descontar stock de ingredientes al cerrar pedido con CONTROL DE TRANSACCIONES.
+     *
+     * ⚠️ Regla de negocio: el descuento ocurre EXCLUSIVAMENTE en almacenes de
+     * PRODUCCIÓN. Si se recibe un almacén logístico, la operación se aborta.
+     * Cuando `almacenId` es null, cada platillo resuelve su propio almacén de
+     * producción a través de la categoría de menú a la que pertenece.
+     */
+    descontarStockPedido: async (items, almacenId = null, idPedido = null, usuarioId = null) => {
         if (!db) return { success: true, movimientos: [] };
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction(); 
             const movimientos = [];
+            const sinReceta = [];
 
             for (const item of items) {
-                const recetaId = item.id_platillo || item.platillo_id;
+                // Los platillos del día no tienen receta: no explotan inventario
+                if (RecetaService._esPlatilloDelDia(item)) continue;
+
+                const platilloId = item.id_platillo || item.platillo_id;
                 const cantidad = item.cantidad || 1;
 
-                const ingredientes = await Receta.getByPlatilloAndAlmacen(recetaId, almacenId);
+                // Resuelve (y valida) el almacén de producción de este ítem.
+                // Lanza si el almacén recibido fuese logístico o no hubiese ninguno.
+                const almacenProduccion = await AlmacenService.resolverAlmacenProduccion(platilloId, almacenId);
+                const almacenDestinoId = almacenProduccion.id;
+
+                const ingredientes = await Receta.getIngredientesParaVenta(platilloId, almacenDestinoId);
+                if (ingredientes.length === 0) {
+                    // Producto sin receta activa (bebida embotellada, etc.): no lleva explosión
+                    sinReceta.push(platilloId);
+                    continue;
+                }
 
                 for (const ingrediente of ingredientes) {
                     const factorMerma = ingrediente.porcentaje_merma > 0 ? (1 + (ingrediente.porcentaje_merma / 100)) : 1;
@@ -246,11 +357,12 @@ const RecetaService = {
                         WHERE producto_id = ? 
                         AND almacen_id = ? 
                         AND cantidad_actual > 0
+                        AND (estado IS NULL OR estado = 'ACTIVO')
                         ORDER BY 
                             CASE WHEN fecha_vencimiento IS NOT NULL THEN fecha_vencimiento ELSE '9999-12-31' END ASC,
                             id ASC
                     `;
-                    const [lotes] = await connection.query(lotesQuery, [ingrediente.producto_id, almacenId]);
+                    const [lotes] = await connection.query(lotesQuery, [ingrediente.producto_id, almacenDestinoId]);
 
                     let cantidadPendiente = cantidadRequerida;
 
@@ -267,20 +379,23 @@ const RecetaService = {
                         await connection.query(
                             `INSERT INTO movimientos_inventario 
                             (producto_id, almacen_id, lote_id, tipo_movimiento, referencia_tipo, referencia_id, cantidad, usuario_id, observaciones, documento_numero) 
-                            VALUES (?, ?, ?, 'CONSUMO_RECETA', 'PEDIDO', ?, ?, ?, 'Consumo por venta de receta', ?)`,
+                            VALUES (?, ?, ?, 'CONSUMO_RECETA', 'PEDIDO', ?, ?, ?, ?, ?)`,
                             [
                                 ingrediente.producto_id,
-                                almacenId,
+                                almacenDestinoId,
                                 lote.id,
                                 idPedido,
                                 cantidadADescontar,
                                 usuarioId,
+                                `Consumo por venta de receta (almacén de producción: ${almacenProduccion.nombre})`,
                                 idPedido ? `PED-${idPedido}` : `REC-${Date.now()}`
                             ]
                         );
 
                         movimientos.push({
                             lote_id: lote.id,
+                            almacen_id: almacenDestinoId,
+                            almacen_nombre: almacenProduccion.nombre,
                             producto: ingrediente.producto_nombre,
                             cantidad: cantidadADescontar
                         });
@@ -290,9 +405,9 @@ const RecetaService = {
 
                     if (cantidadPendiente > 0.0001) { 
                         if (!ingrediente.es_opcional) {
-                            throw new Error(`Inconsistencia de inventario: Stock insuficiente para el insumo indispensable "${ingrediente.producto_nombre}". Faltaron ${cantidadPendiente.toFixed(3)} unidades.`);
+                            throw new Error(`Inconsistencia de inventario: Stock insuficiente en el almacén de producción "${almacenProduccion.nombre}" para el insumo indispensable "${ingrediente.producto_nombre}". Faltaron ${cantidadPendiente.toFixed(3)} unidades. Verifica si el insumo sigue en el almacén logístico pendiente de transferencia.`);
                         } else {
-                            logger.warn(`Ingrediente opcional "${ingrediente.producto_nombre}" agotado parcialmente en almacén ${almacenId}. Se descontó solo el stock disponible.`);
+                            logger.warn(`Ingrediente opcional "${ingrediente.producto_nombre}" agotado parcialmente en el almacén de producción ${almacenProduccion.nombre} (${almacenDestinoId}). Se descontó solo el stock disponible.`);
                         }
                     }
                 }
@@ -300,7 +415,10 @@ const RecetaService = {
 
             await connection.commit(); 
             logger.info(`Stock rebajado de manera exitosa para el pedido. Movimientos generados: ${movimientos.length}`);
-            return { success: true, movimientos };
+            if (sinReceta.length > 0) {
+                logger.warn(`Platillos vendidos sin receta activa vinculada (no descontaron inventario): ${sinReceta.join(', ')}`);
+            }
+            return { success: true, movimientos, sin_receta: sinReceta };
 
         } catch (error) {
             await connection.rollback(); 

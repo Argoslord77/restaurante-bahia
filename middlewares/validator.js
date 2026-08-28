@@ -381,8 +381,12 @@ const recetaValidationRules = {
         body('items')
             .isArray().withMessage('Los items deben ser un array'),
         
-        body('almacenId')
-            .notEmpty().withMessage('El ID del almacén es obligatorio')
+        // Almacén OPCIONAL: si no se envía, el servicio resuelve el almacén de
+        // producción de cada platillo. Nunca se comprueba contra el logístico.
+        // (Nota: antes se validaba 'almacenId' en camelCase, que jamás coincidía
+        //  con el campo real 'almacen_id' del body y rompía siempre la ruta.)
+        body('almacen_id')
+            .optional({ nullable: true, checkFalsy: true })
             .isInt().withMessage('El ID del almacén debe ser un número entero'),
         
         body('items.*.id_platillo')

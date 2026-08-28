@@ -107,6 +107,25 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
+// 2.b AUDITORÍA GLOBAL DE OPERACIONES
+// ==========================================
+// Debe ir DESPUÉS de la sesión, Passport y checkRememberMe (para conocer al
+// usuario) y ANTES de las rutas (para envolver toda la aplicación).
+// Registra consultas, altas, modificaciones, bajas, impresiones y cierres.
+// El detalle semántico de cada ruta vive en config/auditoriaCatalogo.js.
+const { auditoriaGlobal } = require('./middlewares/auditoria');
+app.use(auditoriaGlobal());
+
+// ==========================================
+// 2.c LICENCIA DE LA INSTALACIÓN
+// ==========================================
+// Va después de la auditoría (para que el intento quede registrado) y antes de
+// las rutas. Nunca bloquea el inicio de sesión, la pantalla de licencia ni el
+// cierre de las operaciones que ya estén abiertas.
+const { exigirLicencia } = require('./middlewares/licencia');
+app.use(exigirLicencia());
+
+// ==========================================
 // 3. SERVIR EL FAVICON CON EXPRESS y serve-favicon
 // ==========================================
 app.use(favicon(path.join(__dirname, 'public/img', 'favicon.png')));
@@ -133,6 +152,8 @@ const cierreDiaRoutes = require('./routes/cierreDiaRoutes');
 const clienteRoutes = require('./routes/clienteRoutes'); 
 const unidadMedidaRoutes = require('./routes/unidadMedidaRoutes'); 
 const auditoriaRoutes = require('./routes/auditoriaRoutes'); 
+const fichaCostoRoutes = require('./routes/fichaCostoRoutes');
+const licenciaRoutes = require('./routes/licenciaRoutes');
 
 app.use('/', authRoutes);
 app.use('/admin', userRoutes);
@@ -152,6 +173,8 @@ app.use('/admin', monedaRoutes);
 app.use('/admin', cierreDiaRoutes);
 app.use('/admin', unidadMedidaRoutes);
 app.use('/admin', auditoriaRoutes);
+app.use('/admin', fichaCostoRoutes);
+app.use('/admin', licenciaRoutes);
 
 app.use(posRoutes);
 app.use(clienteRoutes);
