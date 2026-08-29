@@ -30,12 +30,14 @@ Que un inicio se arranque con caja y cuenta de Cliente, para por etapa ir insert
 7. Actualizar el monitor de cocina y bar para que muestre los pedidos de platillos del dia [OKOKOK]
 8. Las notificaciones no estan reproduciendose 
 9. Hacer un polling en el dashboard para actualizar el movimiento del restaurante. [OKOKOK]
-10. Agregar ficha de costo a los platillos del menu/dia y a los items no elaborados vendidos en el restaurante. 
-11. Agregar un enlace en el menu lateral (3er spot) para mostrar mediante un modal con un QR con la ruta ya actualizada con el IP asignado por el DCHP del router en caso de que sea dinamico y se evita el tecleo de la ruta en el dispositivo del dependiente. Este enlace solo navega a la ruta el dependiente tiene que autentificarse. 
+10. Agregar ficha de costo a los platillos del menu/dia y a los items no elaborados vendidos en el restaurante. [PENDIENTE]
+11. Agregar un enlace en el menu lateral (3er spot) para mostrar mediante un modal con un QR con la ruta ya actualizada con el IP asignado por el DCHP del router en caso de que sea dinamico y se evita el tecleo de la ruta en el dispositivo del dependiente. Este enlace solo navega a la ruta el dependiente tiene que autentificarse. [OKOKOK]
 12. Agregar a las acciones que tienen que loggearse en actividades debe de incluirse: 
-	12.1 Entrada/salida de usuarios del sistema.
-	12.2 Creacion/edicion/eliminacion de cualquier objeto en el sistema (mesa,platillo,transferencia,etc)
-	12.3 Visualizacion de ciertos reportes criticos
+	12.1 Entrada/salida de usuarios del sistema. [OKOKOK]
+	12.2 Creacion/edicion/eliminacion de cualquier objeto en el sistema (mesa,platillo,transferencia,etc) [OKOKOK]
+	12.3 Visualizacion de ciertos reportes criticos [OKOKOK]
 
 13. Al guardar el producto en creacion/edicion no se esta guardando la unidad de medida de consumo, arreglar. [OKOKOK]
-14. En la vista de configurar receta no se esta mostrando la cantidad de disponibilidad correcta porque no se esta haciendo uso del servicio UnidadMedidaService con su funcion UnidadMedidaService.convertir(). Verificalo. 
+14. En la vista de configurar receta no se esta mostrando la cantidad de disponibilidad correcta porque no se esta haciendo uso del servicio UnidadMedidaService con su funcion UnidadMedidaService.convertir(). Verificalo. [OKOKOK]
+13. En la vista de POS cuando un item no puede ser agregado esta listando las unidades necesarias del item en la unidad de medida utilizada durante su estancia en almacen o de compra no en la unidad de produccion o consumo como deberia de ser. [PENDING]
+14. Agregar en la vista de caja y cierre del dia el movimiento de inventario segun venta, mermas, etc. [PENDING]
