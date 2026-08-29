@@ -34,6 +34,9 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
             scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            // helmet trae script-src-attr 'none' por defecto y bloqueaba TODOS los
+            // onclick inline (botones de impresion, acciones de tablas, etc.)
+            scriptSrcAttr: ["'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
             connectSrc: ["'self'"],
             fontSrc: ["'self'", "https://cdn.jsdelivr.net"],

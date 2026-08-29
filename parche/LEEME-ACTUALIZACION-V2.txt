@@ -23,12 +23,17 @@
    54d842a  Reportes de CONSUMO POR INSUMO (rango libre, con
             desglose de a qué se fue cada salida) y VENTAS POR HORA Y
             DÍA (picos de tráfico para dimensionar personal)
-   HEAD     NUEVO — CORRECCIÓN de la explosión de recetas en
-            producción: "Unknown column 'ts.nombre'" (la tabla
-            turnos_servicio no tiene esa columna). El turno se
-            etiqueta "#id · usuario de apertura · fecha" y el
-            filtro por turno ya carga; se añade al paquete
-            models/reporteModel.js (venía del código base).
+   5c78f40  CORRECCIÓN de la explosión de recetas en producción:
+            "Unknown column 'ts.nombre'" (la tabla turnos_servicio
+            no tiene esa columna). El turno se etiqueta "#id ·
+            usuario de apertura · fecha" y el filtro por turno ya
+            carga; se añade al paquete models/reporteModel.js
+            (venía del código base).
+   HEAD     NUEVO — Usabilidad y avisos: encabezado sin recorte,
+            CSP permite los onclick inline (botones de impresión
+            vuelven a funcionar), icono de vaciado (x) en las cajas
+            de búsqueda y sonido success.mp3 al avisar ítems
+            agregados en la supervisión del POS.
 
  ESTE PAQUETE ES ACUMULATIVO: incluye todo el contenido del zip anterior
  (restaurante-bahia-actualizacion-2026-08-29.zip) más el update de áreas
@@ -180,12 +185,37 @@ CORRECCIÓN EN ESTA VERSIÓN — EXPLOSIÓN DE RECETAS
  * models/reporteModel.js entra al paquete por primera vez (archivo
    del código base que nunca se había modificado).
 
+MEJORA 5 DE ESTA VERSIÓN — USABILIDAD Y AVISOS SONOROS
+----------------------------------------------------------------
+ * ENCABEZADO SIN RECORTE: el título y la descripción de cada vista
+   se muestran completos y se ajustan al ancho disponible (antes la
+   clase text-truncate los cortaba con puntos suspensivos y la
+   descripción quedaba a medias).
+ * BOTONES BLOQUEADOS POR LA CSP: el casco de seguridad (helmet)
+   trae "script-src-attr 'none'" por defecto, lo que bloqueaba TODOS
+   los onclick de las vistas (consola: "The page's settings blocked
+   an event handler"). Ahora se permiten y vuelven a funcionar los
+   botones de impresión de los reportes, el kardex y la valorización,
+   y las acciones de tablas (pedidos, usuarios, almacén).
+ * ICONO DE VACIADO EN LAS BÚSQUEDAS: todas las cajas de búsqueda
+   (catálogo de platillos, productos, stock, comandas del cierre,
+   cierres históricos, facturas por cobrar, kardex, fichas de costo,
+   auditoría y el menú del cliente) muestran una (x) sobre el borde
+   derecho mientras tienen texto: un clic la vacía y el filtro se
+   actualiza solo. En los filtros de servidor (kardex, fichas de
+   costo, auditoría) además se reenvía el formulario. El POS ya
+   traía su propia (x) y se respeta.
+ * SONIDO EN LA SUPERVISIÓN: cuando el POS en modo visualización
+   avisa que el mesero agregó ítems a la orden se reproduce
+   /sounds/success.mp3. Si el navegador bloquea el autoplay, el
+   aviso visual aparece igual.
+
 CONTENIDO DEL PAQUETE
 ---------------------
 Los archivos mantienen la estructura de carpetas del proyecto: se pueden
 extraer directamente sobre la raíz del proyecto (respaldar antes).
 
-1) ARCHIVOS ACTUALIZADOS (54)
+1) ARCHIVOS ACTUALIZADOS (59, más el sonido success.mp3)
 
    A. Supervisión en vivo + auditoría limpia (9, NUEVO)
 
@@ -334,6 +364,34 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    services/inventarioService.test.js (nuevo) ...... 12 tests.
    services/recetaService.test.js .................. +4 tests de descuento.
 
+   F. Usabilidad de las vistas y avisos sonoros (6 nuevos en el paquete)
+
+   public/js/limpiar-busqueda.js (nuevo) ........ Icono de vaciado
+        (x) automático para las cajas de búsqueda: las detecta por
+        id/name/placeholder o data-limpiar, vacía con un clic y
+        dispara los eventos que escuchan los filtros. Aparece solo
+        cuando hay texto (también en modales y contenido dinámico).
+   views/includes/header.ejs ..................... Encabezado sin
+        text-truncate (título y descripción completos) + incluye el
+        script del icono de vaciado en todas las vistas admin.
+   app.js ....................................... CSP: scriptSrcAttr
+        'unsafe-inline' (helmet lo trae en 'none' y bloqueaba los
+        onclick inline: impresión y acciones de tablas).
+   views/pos.ejs ................................ Buscador del POS
+        marcado data-limpiar="no" (ya tiene su propia x) y sonido
+        /sounds/success.mp3 al avisar ítems agregados.
+   views/inventarios/kardex.ejs ................. Caja "Producto"
+        con vaciado + reenvío del formulario (data-limpiar-enviar).
+   views/inventarios/fichas-costo.ejs ........... Caja "Buscar
+        insumo" con reenvío del formulario al vaciar.
+   views/admin/auditoria.ejs .................... Caja "Buscar" con
+        vaciado + reenvío (data-limpiar).
+   views/cliente/dashboard.ejs .................. Incluye el script
+        del icono de vaciado (búsqueda de platos del cliente).
+   public/sounds/success.mp3 (nuevo) ............ Sonido de ítems
+        agregados en la supervisión del POS (por si falta en
+        producción; el archivo ya suele existir en public/sounds).
+
 2) SCRIPTS DE MIGRACIONES (15, carpeta scripts/)
    Solo se incluyen los scripts de migración; ningún otro script.
 
@@ -384,8 +442,8 @@ PASOS DE DESPLIEGUE
 -------------------
  1. Respaldar el proyecto y la base de datos:
       mysqldump restaurante_db > respaldo_antes_actualizacion_v2.sql
- 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 54
-    archivos listados y deja los scripts de migración en scripts/).
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 59
+    archivos listados (y deja el sonido success.mp3 en public/sounds) y deja los scripts de migración en scripts/).
  3. Aplicar scripts/migracion_ubicacion_mesa.sql (y los requisitos
     pendientes del punto anterior). POS mesero no requiere migración.
  4. No hay dependencias nuevas: no hace falta npm install.
@@ -440,6 +498,19 @@ PASOS DE DESPLIEGUE
         y el día pico del período elegido.
     - Botón "Exportar CSV" en cada reporte: descarga un archivo que
       Excel abre con columnas separadas (también en el kardex).
+    - Encabezado de una vista con descripción larga (p.ej. la
+      explosión de recetas): el texto se ve completo, en varias
+      líneas, sin puntos suspensivos.
+    - Botón "Imprimir" de los reportes, el kardex y la
+      valorización: abre el diálogo de impresión y la consola ya
+      no muestra el aviso de CSP sobre window.print.
+    - Cajas de búsqueda (p.ej. catálogo de productos): al escribir
+      aparece una (x) a la derecha; un clic la vacía y la lista se
+      refresca sola. En kardex / fichas de costo / auditoría
+      también reenvía el filtro del formulario.
+    - POS en modo visualización: pedirle al mesero que agregue un
+      ítem a la orden; al refrescarse (~12 s) suena success.mp3 y
+      aparece el aviso "El mesero agregó".
 
 NOTAS DE COMPORTAMIENTO NUEVO (para el personal)
 ------------------------------------------------

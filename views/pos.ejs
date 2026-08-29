@@ -881,7 +881,7 @@
                         <div class="search-wrapper">
                             <i class="fa-solid fa-magnifying-glass text-muted position-absolute" style="left: 12px; top: 12px; font-size: 13px;"></i>
                             <input type="text" 
-                                   id="dish-search-input" 
+                                   id="dish-search-input" data-limpiar="no" 
                                    class="search-input" 
                                    placeholder="Buscar por nombre de platillo o bebida..." 
                                    autocomplete="off">
@@ -1199,6 +1199,21 @@
                 setTimeout(() => { if (aviso.parentNode) aviso.parentNode.removeChild(aviso); }, 200);
             }
 
+            // Sonido de exito al detectar que el mesero agrego items a la orden
+            // (/sounds/success.mp3). Si el navegador bloquea el autoplay (sin
+            // interaccion previa del usuario), queda en silencio y solo se
+            // muestra el aviso visual.
+            function posVistaSonidoAgregado() {
+                try {
+                    const audio = new Audio('/sounds/success.mp3');
+                    audio.currentTime = 0;
+                    audio.volume = 0.85;
+                    audio.play().catch(err => {
+                        console.warn('Autoplay bloqueado por el navegador. Requiere una interaccion previa del usuario:', err);
+                    });
+                } catch (_) { /* sin audio disponible: el aviso visual basta */ }
+            }
+
             function posVistaAgregarAviso(titulo, detalle, tipo) {
                 let contenedor = document.getElementById('pos-vista-avisos');
                 if (!contenedor) {
@@ -1262,7 +1277,10 @@
                     if (!actualesIds.has(String(item.id))) eliminados.push(`${item.cantidad}× ${item.nombre}`);
                 });
 
-                if (agregados.length) posVistaAgregarAviso('El mesero agregó', posVistaListaCorta(agregados), 'success');
+                if (agregados.length) {
+                    posVistaSonidoAgregado();
+                    posVistaAgregarAviso('El mesero agregó', posVistaListaCorta(agregados), 'success');
+                }
                 if (cancelados.length) posVistaAgregarAviso('El mesero canceló', posVistaListaCorta(cancelados), 'danger');
                 if (eliminados.length) posVistaAgregarAviso('El mesero quitó de la orden', posVistaListaCorta(eliminados), 'warning');
                 if (cantidades.length) posVistaAgregarAviso('Cantidades actualizadas', posVistaListaCorta(cantidades), 'info');

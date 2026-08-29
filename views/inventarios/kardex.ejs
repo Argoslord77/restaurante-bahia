@@ -41,7 +41,7 @@
                         <% } %>
                         <div class="col-12 col-md-3">
                             <label class="form-label small text-muted fw-semibold mb-1">Producto</label>
-                            <input type="text" name="q" class="form-control form-control-sm" placeholder="Nombre o código…" value="<%= typeof filtros.q !== 'undefined' ? filtros.q : '' %>" <%= modo === 'tarjeta' ? 'disabled' : '' %>>
+                            <input type="text" name="q" class="form-control form-control-sm" placeholder="Nombre o código…" value="<%= typeof filtros.q !== 'undefined' ? filtros.q : '' %>" data-limpiar data-limpiar-enviar="si" <%= modo === 'tarjeta' ? 'disabled' : '' %>>
                         </div>
                         <div class="col-6 col-md-2">
                             <label class="form-label small text-muted fw-semibold mb-1">Desde</label>
