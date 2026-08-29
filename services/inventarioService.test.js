@@ -26,6 +26,7 @@ const CONVERSIONES = [
 const INGREDIENTE_RON = [{
     insumo_id: 10,
     insumo_nombre: 'Ron Añejo',
+    producto_nombre: 'Ron Añejo',
     cantidad_receta: 50,
     unidad_receta: 'Mililitro',
     porcentaje_merma: 0,
@@ -48,7 +49,10 @@ function mockQuery(respuestas = {}) {
         salidas = []
     } = respuestas;
 
+    const registro = [];
+
     db.query.mockImplementation(async (sql, params = []) => {
+        registro.push({ sql: String(sql), params });
         const q = String(sql);
         if (q.includes('FROM unidades_medida')) return [UNIDADES];
         if (q.includes('FROM conversiones_unidades')) return [CONVERSIONES];
@@ -60,13 +64,16 @@ function mockQuery(respuestas = {}) {
             return [[{ id: 2, nombre: 'Cocina' }, { id: 5, nombre: 'Bar' }]];
         }
         if (q.includes('FROM lotes l')) {
-            // stockLotesConvertidos: params = [productoId] o [productoId, almacenId]
+            // stockLotesConvertidos / descontarPorReceta: params = [productoId, almacenId]
             const almacenId = params.length > 1 ? Number(params[1]) : null;
             const rows = (lotesPorAlmacen[almacenId] || []).map(l => ({
+                id: l.id || 99,
                 almacen_id: almacenId,
                 cantidad_actual: l.cantidad,
+                numero_lote: l.numero_lote || 'L-001',
+                costo_unitario: l.costo_unitario,
                 unidad_medida_id: l.unidad_medida_id,
-                unidad_inventario_id: 2
+                unidad_inventario_id: l.unidad_inventario_id === undefined ? 2 : l.unidad_inventario_id
             }));
             return [rows];
         }
@@ -76,6 +83,21 @@ function mockQuery(respuestas = {}) {
         if (q.includes("IN ('MERMA', 'AJUSTE_NEGATIVO', 'DEVOLUCION_PROVEEDOR')")) return [salidas];
         return [[]];
     });
+
+    return { registro };
+}
+
+/** Conexión transaccional que delega en el pool mockeado (para descontarPorReceta). */
+function mockConexion() {
+    const conn = {
+        beginTransaction: jest.fn().mockResolvedValue(),
+        commit: jest.fn().mockResolvedValue(),
+        rollback: jest.fn().mockResolvedValue(),
+        release: jest.fn(),
+        query: (sql, params) => db.query(sql, params)
+    };
+    db.getConnection.mockResolvedValue(conn);
+    return conn;
 }
 
 // ------------------------------------------------------------------ Punto 5
@@ -178,6 +200,94 @@ describe('InventarioService.verificarStockRonda (unidades de producción/consumo
         expect(res.detalle[0].unidad).toBe('ml');
         expect(res.detalle[0].requerido).toBeCloseTo(100, 4);
         expect(res.detalle[0].disponible).toBeCloseTo(700, 4);
+    });
+});
+
+// ------------------------------------------- Observación 2 (conversión por lote)
+describe('InventarioService.descontarPorReceta (conversión receta → unidad de cada lote)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        const UMS = require('./unidadMedidaService');
+        UMS.invalidateCache();
+    });
+
+    it('convierte el consumo a la unidad del lote y registra el costo real del lote', async () => {
+        const { registro } = mockQuery({
+            lotesPorAlmacen: { 2: [{ id: 99, cantidad: 1, unidad_medida_id: 2, costo_unitario: 700 }] }
+        });
+        const conn = mockConexion();
+
+        // Platillo 20: 50 ml de Ron; el lote está en Botellas (1 bt = 700 ml)
+        const res = await InventarioService.descontarPorReceta(20, 1, 2);
+
+        expect(res.success).toBe(true);
+        expect(res.faltantes).toHaveLength(0);
+
+        // Descuento: 50 ml = 0.071429 botellas → al lote le quedan 0.928571
+        const update = registro.find(l => l.sql.includes('UPDATE lotes'));
+        expect(update).toBeDefined();
+        expect(update.params[0]).toBeCloseTo(0.928571, 4);
+        expect(update.params[1]).toBe('ACTIVO');
+        expect(update.params[2]).toBe(99);
+
+        // Kardex: cantidad en botellas con el costo del lote (700/botella → 50 de costo total)
+        const insert = registro.find(l => l.sql.includes('INSERT INTO movimientos_inventario'));
+        expect(insert).toBeDefined();
+        expect(insert.params[5]).toBeCloseTo(0.071429, 4); // cantidad (botellas)
+        expect(insert.params[6]).toBe(700);                 // costo_unitario
+        expect(insert.params[7]).toBeCloseTo(50, 4);        // costo_total
+
+        expect(res.descuentos[0].costo_total).toBeCloseTo(50, 4);
+        expect(conn.commit).toHaveBeenCalled();
+    });
+
+    it('consume el lote completo (AGOTADO) cuando la conversión lo agota exactamente', async () => {
+        const { registro } = mockQuery({
+            ingredientes: [{ ...INGREDIENTE_RON[0], cantidad_receta: 700 }], // 700 ml = 1 botella
+            lotesPorAlmacen: { 2: [{ id: 99, cantidad: 1, unidad_medida_id: 2, costo_unitario: 700 }] }
+        });
+        mockConexion();
+
+        const res = await InventarioService.descontarPorReceta(20, 1, 2);
+
+        expect(res.faltantes).toHaveLength(0);
+        const update = registro.find(l => l.sql.includes('UPDATE lotes'));
+        expect(update.params[0]).toBe(0);
+        expect(update.params[1]).toBe('AGOTADO');
+    });
+
+    it('NO descuenta a ciegas si el lote está en una unidad sin factor de conversión', async () => {
+        // Receta en Mililitro pero el lote del insumo está en Gramos (sin conversión)
+        const { registro } = mockQuery({
+            lotesPorAlmacen: { 2: [{ id: 98, cantidad: 5, unidad_medida_id: 3, costo_unitario: 10 }] }
+        });
+        mockConexion();
+
+        const res = await InventarioService.descontarPorReceta(20, 1, 2);
+
+        expect(registro.find(l => l.sql.includes('UPDATE lotes'))).toBeUndefined();
+        expect(res.descuentos).toHaveLength(0);
+        expect(res.faltantes).toHaveLength(0);
+        expect(res.advertencias).toHaveLength(1);
+        expect(res.advertencias[0].detalle).toMatch(/Sin factor de conversión/);
+        expect(res.advertencias[0].detalle).toMatch(/sin descontar/);
+    });
+
+    it('reporta el faltante real en la unidad de la receta', async () => {
+        // Necesita 100 ml pero el lote solo tiene 0.05 botellas (35 ml)
+        const { registro } = mockQuery({
+            ingredientes: [{ ...INGREDIENTE_RON[0], cantidad_receta: 50 }],
+            lotesPorAlmacen: { 2: [{ id: 97, cantidad: 0.05, unidad_medida_id: 2, costo_unitario: 700 }] }
+        });
+        mockConexion();
+
+        const res = await InventarioService.descontarPorReceta(20, 2, 2);
+
+        expect(res.faltantes).toHaveLength(1);
+        expect(res.faltantes[0].faltante).toBeCloseTo(65, 3); // 100 - 35 ml
+        expect(res.faltantes[0].unidad).toBe('Mililitro');
+        const update = registro.find(l => l.sql.includes('UPDATE lotes'));
+        expect(update.params[1]).toBe('AGOTADO');
     });
 });
 

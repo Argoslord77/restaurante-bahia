@@ -57,6 +57,13 @@ const InventarioService = {
      * Descuenta del inventario los insumos correspondientes a un producto vendido
      * explotando su receta activa (FEFO/FIFO por fecha de ingreso).
      *
+     * La cantidad pendiente se mantiene en la unidad de la RECETA y se convierte
+     * a la unidad de CADA LOTE al descontar (con UnidadMedidaService), el mismo
+     * criterio con el que la verificación de stock del POS cuenta el inventario
+     * (stockLotesConvertidos). Los lotes cuya unidad no tenga factor de
+     * conversión se saltan y el insumo queda reportado como advertencia
+     * ("insumo sin descontar"); nunca se descuenta 1:1 a ciegas.
+     *
      * @param {number} productoVendidoId - ID del plato/bebida (recetas.platillo_id o producto_resultante_id)
      * @param {number} cantidadVendida - Unidades vendidas
      * @param {number} almacenDefaultId - Almacén del que se extraen los insumos
@@ -78,7 +85,9 @@ const InventarioService = {
                     rd.cantidad AS cantidad_receta,
                     rd.porcentaje_merma,
                     rd.unidad_medida AS unidad_receta,
-                    ui.abreviatura AS unidad_inventario
+                    ui.abreviatura AS unidad_inventario,
+                    pi.nombre AS producto_nombre,
+                    pi.unidad_inventario_id
                 FROM receta_detalles rd
                 INNER JOIN recetas r ON rd.receta_id = r.id
                 LEFT JOIN productos pi ON pi.id = rd.producto_id
@@ -102,52 +111,65 @@ const InventarioService = {
                 const cantidadReceta = parseFloat(ingrediente.cantidad_receta);
                 const merma = parseFloat(ingrediente.porcentaje_merma || 0);
 
-                // Cantidad bruta real (neta / (1 - %merma))
-                let cantidadNecesaria = (merma > 0)
+                // Cantidad bruta real (neta / (1 - %merma)), en la UNIDAD DE LA
+                // RECETA (producción/consumo).
+                let cantidadNecesaria = (merma > 0 && merma < 100)
                     ? (cantidadReceta / (1 - (merma / 100))) * cantidadVendida
                     : cantidadReceta * cantidadVendida;
                 cantidadNecesaria = isNaN(cantidadNecesaria) ? 0 : cantidadNecesaria;
+                if (cantidadNecesaria <= 0) continue;
 
-                // 2b. CONVERSIÓN AUTOMÁTICA DE UNIDADES. Sólo se ejecuta si
-                //     existe una entrada de almacén con unidad registrada y un
-                //     factor activo aplicable al producto; nunca se asume 1:1.
-                const uReceta = (ingrediente.unidad_receta || '').trim().toLowerCase();
-                const uInv = (ingrediente.unidad_inventario || '').trim().toLowerCase();
-                if (cantidadNecesaria > 0 && uReceta && uInv && uReceta !== uInv) {
-                    try {
-                        const infoConversion = await UnidadMedidaService.validarProductoParaConversion(
-                            insumoId,
-                            ingrediente.unidad_receta,
-                            ingrediente.unidad_inventario
-                        );
-                        cantidadNecesaria *= infoConversion.factor;
-                    } catch (conversionError) {
-                        advertencias.push({
-                            insumo_id: insumoId,
-                            detalle: `${conversionError.message} (receta en ${ingrediente.unidad_receta}, inventario en ${ingrediente.unidad_inventario}) — insumo sin descontar`
-                        });
-                        continue;
-                    }
-                }
+                const uReceta = String(ingrediente.unidad_receta || '').trim();
 
-                // 3. Lotes ACTIVOS del insumo en el almacén (FIFO, bloqueados)
+                // 3. Lotes ACTIVOS del insumo en el almacén (FIFO, bloqueados).
+                //    Se trae la unidad de cada lote (y la de inventario del
+                //    producto como supuesto cuando el lote no la declara).
                 const [lotes] = await conn.query(`
-                    SELECT id, cantidad_actual, numero_lote, costo_unitario
-                    FROM lotes
-                    WHERE producto_id = ? AND almacen_id = ? AND estado = 'ACTIVO' AND cantidad_actual > 0
-                    ORDER BY fecha_ingreso ASC, id ASC
+                    SELECT l.id, l.cantidad_actual, l.numero_lote, l.costo_unitario,
+                           l.unidad_medida_id, p.unidad_inventario_id
+                    FROM lotes l
+                    INNER JOIN productos p ON p.id = l.producto_id
+                    WHERE l.producto_id = ? AND l.almacen_id = ? AND l.estado = 'ACTIVO' AND l.cantidad_actual > 0
+                    ORDER BY l.fecha_ingreso ASC, l.id ASC
                     FOR UPDATE
                 `, [insumoId, almacenDefaultId]);
 
-                // 4. Consumir lotes de forma secuencial
+                // 2b. CONVERSIÓN AUTOMÁTICA DE UNIDADES POR LOTE. El pendiente se
+                //     mantiene en la unidad de la receta y se convierte a la unidad
+                //     de cada lote al descontar (mismo criterio que cuenta
+                //     UnidadMedidaService.stockLotesConvertidos en la verificación
+                //     del POS). Antes se convertía una sola vez a la unidad de
+                //     inventario del producto y se restaba 1:1 de lotes que podían
+                //     estar en otra unidad (p. ej. "Botella 700 ml"), descuadrando
+                //     el kardex. Nunca se asume 1:1 si hay unidades declaradas y
+                //     difieren: el lote sin factor se salta y el insumo queda
+                //     reportado como "sin descontar".
+                let sinConversion = true; // ningún lote pudo convertirse todavía
                 for (const lote of lotes) {
-                    if (cantidadNecesaria <= 0) break;
+                    if (cantidadNecesaria <= 0.000001) break;
+
+                    const unidadLote = lote.unidad_medida_id || lote.unidad_inventario_id || null;
+
+                    // Sin unidad de receta o de lote declarada: 1:1 (compatibilidad
+                    // con recetas e inventario cargados en la misma unidad).
+                    let factorLote = 1;
+                    if (uReceta && unidadLote) {
+                        try {
+                            factorLote = await UnidadMedidaService.obtenerFactor(uReceta, unidadLote, insumoId);
+                        } catch (e) { factorLote = null; }
+                    }
+                    if (factorLote === null) continue; // lote no convertible: se salta
+                    sinConversion = false;
 
                     const stockAnterior = parseFloat(lote.cantidad_actual);
-                    const cantidadADescontar = Math.min(stockAnterior, cantidadNecesaria);
-                    const stockNuevo = stockAnterior - cantidadADescontar;
+                    const pendienteEnLote = cantidadNecesaria * factorLote;
+                    let cantidadADescontar = Math.min(stockAnterior, pendienteEnLote);
+                    // Anti-residuo: si al lote le quedaría menos de media milésima
+                    // (ruido de redondeo), se consume completo.
+                    if (stockAnterior - cantidadADescontar < 0.0005) cantidadADescontar = stockAnterior;
+                    const stockNuevo = Number((stockAnterior - cantidadADescontar).toFixed(6));
                     const costoUnitario = parseFloat(lote.costo_unitario || 0);
-                    cantidadNecesaria -= cantidadADescontar;
+                    cantidadNecesaria -= cantidadADescontar / factorLote;
 
                     await conn.query(`
                         UPDATE lotes 
@@ -176,16 +198,37 @@ const InventarioService = {
                         'Deducción automática por receta (venta)'
                     ]);
 
-                    descuentos.push({ insumo_id: insumoId, lote_id: lote.id, cantidad: cantidadADescontar });
+                    descuentos.push({
+                        insumo_id: insumoId,
+                        lote_id: lote.id,
+                        cantidad: cantidadADescontar,
+                        unidad_lote: unidadLote || null,
+                        unidad_receta: uReceta || null,
+                        costo_total: costoUnitario * cantidadADescontar
+                    });
                 }
 
                 // 6. Sin stock suficiente: NO detener la venta (salvaguarda de negocio),
                 //    se reporta el faltante. Con opts.strict=true se lanza el error.
                 if (cantidadNecesaria > 0.000001) {
-                    if (opts.strict) {
-                        throw new Error(`Stock insuficiente para el insumo ID ${insumoId}. Faltan ${cantidadNecesaria.toFixed(3)} unidades.`);
+                    if (sinConversion && lotes.length > 0) {
+                        // Había lotes pero en unidades sin conversión definida:
+                        // no se descuenta a ciegas (mismo criterio que el
+                        // verificador de stock del POS).
+                        const unidadLoteEjemplo = lotes[0].unidad_medida_id || lotes[0].unidad_inventario_id || 'sin unidad';
+                        advertencias.push({
+                            insumo_id: insumoId,
+                            detalle: `Sin factor de conversión ${uReceta || 'sin unidad'} → unidad del lote (${unidadLoteEjemplo}) para "${ingrediente.producto_nombre || 'insumo ' + insumoId}" — insumo sin descontar`
+                        });
+                    } else if (opts.strict) {
+                        throw new Error(`Stock insuficiente para el insumo ID ${insumoId}. Faltan ${cantidadNecesaria.toFixed(3)} ${uReceta || 'unidades'}.`);
+                    } else {
+                        faltantes.push({
+                            insumo_id: insumoId,
+                            faltante: Number(cantidadNecesaria.toFixed(3)),
+                            unidad: uReceta || null
+                        });
                     }
-                    faltantes.push({ insumo_id: insumoId, faltante: Number(cantidadNecesaria.toFixed(3)) });
                 }
             }
 
@@ -765,9 +808,10 @@ const InventarioService = {
         const rango = [desde, hasta];
 
         const num = (v) => Number(v || 0);
-        // Costo del movimiento: usa el asentado y, si el movimiento no lo
-        // trae (p.ej. el consumo por receta no lo graba), estima con el costo
-        // unitario del lote consumido.
+        // Costo del movimiento: usa el costo ASENTADO en el movimiento (los
+        // descuentos por venta lo graban desde el lote afectado). El cálculo
+        // contra lotes.costo_unitario queda solo como fallback para
+        // movimientos históricos que nacieron sin costo.
         const costoExpr = `COALESCE(NULLIF(mi.costo_total, 0), mi.cantidad * l.costo_unitario, 0)`;
 
         // 1) Resumen agregado por tipo de movimiento
