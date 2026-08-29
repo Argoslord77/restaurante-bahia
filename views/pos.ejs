@@ -734,9 +734,33 @@
                 display: flex !important;
             }
         }
+        /* ===== Modo Visualización (POS mesero) ===== */
+        .pos-vista-banner {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 18px;
+            background: linear-gradient(90deg, #fef3c7, #fde68a);
+            color: #78350f;
+            border-bottom: 1px solid #f59e0b;
+            font-size: 13px;
+        }
+        .pos-vista-banner i.fa-eye { font-size: 20px; }
+        .pos-vista-banner small { display: block; opacity: .8; }
+        body.pos-vista #btn-save-order,
+        body.pos-vista #btn-checkout-order,
+        body.pos-vista #btn-clear-cart,
+        body.pos-vista #btn-deliver-all-direct,
+        body.pos-vista .btn-deliver-item,
+        body.pos-vista .btn-cancel-item { display: none !important; }
+        body.pos-vista .dish-card { cursor: not-allowed; }
+        body.pos-vista .update-qty,
+        body.pos-vista .remove-item,
+        body.pos-vista .clear-note-btn,
+        body.pos-vista .add-notes { opacity: .45; }
     </style>
 </head>
-<body>
+<body<% if (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) { %> class="pos-vista"<% } %>>
     <input type="hidden" id="pos_id_pedido" value="<%= id_pedido %>">
     <input type="hidden" id="pos_id_mesa" value="<%= typeof id_mesa !== 'undefined' ? id_mesa : '' %>">
 
@@ -749,9 +773,14 @@
         // dependiente y capitán no tienen acceso a /admin/dashboard (el intento
         // caía en una cadena /login -> /dependiente/dashboard).
         const POS_ROLES_SERVICIO = ['dependiente', 'capitan'];
-        const posDashboardUrl = (typeof user !== 'undefined' && user && POS_ROLES_SERVICIO.includes(user.rol))
-            ? '/dependiente/dashboard'
-            : '/admin/dashboard';
+        // En modo visualización (POS mesero) el regreso es al salón del mesero
+        // supervisado, no al dashboard propio.
+        const esVistaSupervision = (typeof soloVisualizacion !== 'undefined' && soloVisualizacion);
+        const posDashboardUrl = (esVistaSupervision && typeof posVolverUrl !== 'undefined' && posVolverUrl)
+            ? posVolverUrl
+            : ((typeof user !== 'undefined' && user && POS_ROLES_SERVICIO.includes(user.rol))
+                ? '/dependiente/dashboard'
+                : '/admin/dashboard');
     %>
     <!-- Header Principal -->
     <header class="pos-header position-relative">
@@ -807,6 +836,20 @@
             </div>
         </div>
     </header>
+
+    <% if (esVistaSupervision) { %>
+    <div class="pos-vista-banner">
+        <i class="fa-solid fa-eye"></i>
+        <div class="flex-grow-1">
+            <strong>Modo Visualización</strong> — Orden atendida por
+            <strong><%= (typeof meseroDeLaOrden !== 'undefined' && meseroDeLaOrden) ? meseroDeLaOrden : 'el mesero asignado' %></strong>.
+            <small>Solo consulta: agregar productos, enviar a producción, entregar, cancelar y cobrar están deshabilitados.</small>
+        </div>
+        <a href="<%= posVolverUrl || '/admin/pos-mesero' %>" class="btn btn-sm btn-dark rounded-pill px-3 flex-shrink-0">
+            <i class="fa-solid fa-arrow-left me-1"></i> Volver al salón del mesero
+        </a>
+    </div>
+    <% } %>
 
     <div class="container-fluid pos-container">
         <div class="row h-100">
@@ -1056,11 +1099,50 @@
 
     <script>
         const MONITORES_HABILITADOS = <%= monitoresHabilitados ? 'true' : 'false' %>;
+        const SOLO_VISUALIZACION = <%= (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) ? 'true' : 'false' %>;
         const POS_DASHBOARD_URL = '<%= posDashboardUrl %>';
         const FACTURA_IMPUESTO = <%= parseFloat(typeof facturaImpuesto !== 'undefined' ? facturaImpuesto : 0) || 0 %>;
         let carrito = []; 
         let historicoDetalles = []; 
         let activeCategory = 'todos';
+
+        // Modo Visualización (POS mesero): bloqueo en fase de captura de todas
+        // las acciones que modifican la orden. El interceptor vive en document
+        // (fase captura) y detiene la propagación ANTES de que los manejadores
+        // normales (fase burbuja) puedan ejecutarse.
+        if (SOLO_VISUALIZACION) {
+            const SELECTORES_BLOQUEADOS_VISTA = [
+                '#btn-save-order',          // enviar a cocina / guardar
+                '#btn-checkout-order',       // cobrar
+                '#btn-clear-cart',           // vaciar captura
+                '#btn-deliver-all-direct',   // entregar todo
+                '#btn-add-pago',             // agregar pago (modal cobro)
+                '.btn-deliver-item',         // entregar ítem
+                '.btn-cancel-item',          // cancelar ítem
+                '.update-qty',               // cantidades en captura
+                '.remove-item',              // quitar ítem de captura
+                '.clear-note-btn',           // limpiar nota
+                '.add-notes',                // editar nota
+                '.cart-item-note',           // nota del ítem
+                '#dishes-grid .dish-card'    // agregar platillo al hacer clic
+            ].join(',');
+            document.addEventListener('click', (e) => {
+                const objetivo = e.target.closest(SELECTORES_BLOQUEADOS_VISTA);
+                if (!objetivo) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'info',
+                        title: 'Modo visualización: acción deshabilitada',
+                        showConfirmButton: false,
+                        timer: 1800
+                    });
+                }
+            }, true);
+        }
 
         function procesarPrePedidoDesdeURL() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -1460,7 +1542,13 @@
                 const areas = f.areas ? ` <span class="text-muted">(${esc(f.areas)})</span>` : '';
                 const req = (f.requerido === null || f.requerido === undefined)
                     ? `<span class="text-danger">${esc(f.error || 'unidad sin conversión definida')}</span>`
-                    : `se requieren <b>${fmtCant(f.requerido)} ${unidad}</b>, disponible <b>${fmtCant(f.disponible)} ${unidad}</b>`;
+                    : `se requieren <b>${fmtCant(f.requerido)} ${unidad}</b>, disponible <b>${fmtCant(f.disponible)} ${unidad}</b>` +
+                      // Equivalencia secundaria en la unidad de almacén/compra
+                      // (útil para reponer), solo si difiere de la de producción.
+                      ((f.unidad_inventario && f.unidad && String(f.unidad_inventario).trim().toLowerCase() !== String(f.unidad).trim().toLowerCase()
+                        && f.requerido_inventario !== null && f.requerido_inventario !== undefined)
+                          ? ` <span class="text-muted">(≈ ${fmtCant(f.requerido_inventario)} ${escapeHtml(f.unidad_inventario)} en almacén)</span>`
+                          : '');
                 return `<li class="mb-1"><b>${esc(f.insumo_nombre)}</b>: ${req}${areas}</li>`;
             }).join('');
             const avisos = advertencias.map(f =>

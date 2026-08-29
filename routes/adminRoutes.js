@@ -4,6 +4,7 @@ const userController = require('../controllers/userController');
 const tableController = require('../controllers/tableController');
 const menuController = require('../controllers/menuController');
 const dashboardController = require('../controllers/dashboardController');
+const dashboardDependienteController = require('../controllers/dashboardDependienteController');
 const path = require('path');
 const multer = require('multer');
 const { menuValidationRules, mesaValidationRules, handleValidationErrors } = require('../middlewares/validator');
@@ -27,6 +28,10 @@ const { ensureAuthenticated, checkRole } = require('../middlewares/auth');
 
 // URL Real: GET http://localhost:3000/admin/dashboard
 router.get('/dashboard', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), dashboardController.index);
+
+// POS MESERO — Visualización del salón/POS de un mesero (solo administración)
+router.get('/pos-mesero', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), dashboardDependienteController.viewSelectorMesero);
+router.get('/pos-mesero/ver', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), dashboardDependienteController.viewDashboardMesero);
 // Endpoint API para polling periódico del Dashboard
 router.get('/api/dashboard/metrics', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), dashboardController.apiMetrics);
 

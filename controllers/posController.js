@@ -11,10 +11,23 @@ module.exports = {
             const habilitarMonitores = await SettingService.get('habilitar_monitores_elaboracion', true);
             const facturaImpuesto = parseFloat(await SettingService.get('factura_impuesto', 0) || 0);
 
+            // Modo visualización (herramienta "POS mesero"): el administrador
+            // consulta la orden sin poder modificarla. La vista deshabilita
+            // agregar/enviar/entregar/cancelar/cobrar.
+            const soloVisualizacion = req.query.vista === '1';
+            let posVolverUrl = null;
+            if (soloVisualizacion) {
+                const meseroVistaId = parseInt(req.query.mesero, 10);
+                posVolverUrl = (meseroVistaId && Number.isFinite(meseroVistaId))
+                    ? `/admin/pos-mesero/ver?mesero=${meseroVistaId}`
+                    : '/admin/pos-mesero';
+            }
+
             let idMesa = req.query.id_mesa || null;
             let turnoId = null;
             let nombreMesa = 'Mesa Activa';
             let detallesActuales = [];
+            let meseroDeLaOrden = null;
 
             // Resolver primero la mesa/pedido para saber qué carta debe usarse
             // en todas las tarjetas del catálogo.
@@ -35,6 +48,7 @@ module.exports = {
                     idMesa = ped.id_mesa;
                     turnoId = ped.turno_servicio_id;
                     nombreMesa = ped.mesa_numero || nombreMesa;
+                    meseroDeLaOrden = ped.mesero_nombre || null;
 
                     const [detalles] = await pool.query(`
                         SELECT dp.id AS id_detalle,
@@ -91,7 +105,9 @@ module.exports = {
             );
 
             return res.render('pos', {
-                pageTitle: `Terminal POS • Orden #${pedidoId || 'Nueva'}`,
+                pageTitle: soloVisualizacion
+                    ? `POS (Visualización) • Orden #${pedidoId || 'Nueva'}`
+                    : `Terminal POS • Orden #${pedidoId || 'Nueva'}`,
                 id_pedido: pedidoId || 0,
                 id_mesa: idMesa,
                 nombre_mesa: nombreMesa,
@@ -106,6 +122,9 @@ module.exports = {
                 categorias,
                 habilitarMonitores,
                 facturaImpuesto,
+                soloVisualizacion,
+                posVolverUrl,
+                meseroDeLaOrden,
                 user: req.user || null
             });
         } catch (err) {
@@ -281,10 +300,17 @@ module.exports = {
                     console.error('Error en la verificación de stock de producción (se omite el chequeo):', eStock);
                 }
                 if (stockRonda && !stockRonda.suficiente) {
+                    // Formato numérico legible (máx. 3 decimales, sin ceros sobrantes)
+                    const fmtCant = (n) => {
+                        const v = Number(n);
+                        return Number.isFinite(v) ? v.toLocaleString('es', { maximumFractionDigits: 3 }) : '—';
+                    };
                     const resumen = stockRonda.faltantes.map(f => {
                         const nombrePlatillo = itemsVerificados.find(iv => Number(iv.idPlatillo) === Number(f.platillo_id));
                         const label = nombrePlatillo ? nombrePlatillo.nombre : `platillo #${f.platillo_id}`;
-                        return `«${label}» requiere ${f.insumo_nombre} (${f.requerido} ${f.unidad}) pero solo hay ${f.disponible} ${f.unidad} en ${f.areas}`;
+                        // Las cantidades llegan en la unidad de PRODUCCIÓN/CONSUMO
+                        // (la de la receta): es la que usan cocina/bar.
+                        return `«${label}» requiere ${f.insumo_nombre} (${fmtCant(f.requerido)} ${f.unidad}) pero solo hay ${fmtCant(f.disponible)} ${f.unidad} en ${f.areas}`;
                     });
                     return res.status(400).json({
                         success: false,

@@ -42,6 +42,13 @@
                 <i class="fa-solid fa-table-cells me-2 text-dark"></i> Monitoreo de Mesas
             </a>
         </li>
+        <% if (locals.user && (locals.user.rol === 'superadministrador' || locals.user.rol === 'administrador')) { %>
+            <li class="nav-item">
+                <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'pos_mesero'){ %> active<% } %>" href="/admin/pos-mesero">
+                    <i class="fa-solid fa-eye me-2 text-dark"></i> POS mesero
+                </a>
+            </li>
+        <% } %>
         <li class="nav-item">
             <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'dishes'){ %> active<% } %>" href="/admin/menu">
                 <i class="fa-solid fa-burger me-2 text-dark"></i> Menú / Platillos

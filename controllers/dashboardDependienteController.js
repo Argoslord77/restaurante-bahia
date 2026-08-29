@@ -29,10 +29,32 @@ const DashboardDependienteController = {
                 return res.redirect('/logout');
             }
 
-            const usuarioId = req.user?.id || 1;
-            const usuarioRol = req.user?.rol || 'dependiente';
-            const turnoId = turnoActivo ? turnoActivo.id : null;
+            return await DashboardDependienteController.renderDashboardSalon(req, res, {
+                usuarioId: req.user?.id || 1,
+                usuarioRol: req.user?.rol || 'dependiente'
+            });
+        } catch (error) {
+            console.error('Error al cargar dashboard de dependiente:', error);
+            req.flash('error_msg', 'Error al cargar el dashboard. Inténtalo de nuevo.');
+            return res.redirect('/dependiente/dashboard');
+        }
+    },
 
+    // Núcleo compartido: construye y renderiza el salón de mesas del usuario
+    // indicado. Lo usa el dashboard del dependiente y la herramienta de
+    // supervisión "POS mesero" (administrador visualizando a un mesero).
+    renderDashboardSalon: async (req, res, opciones = {}) => {
+        const {
+            usuarioId,
+            usuarioRol,
+            modoVisualizacion = false,
+            meseroVisualizado = null
+        } = opciones;
+
+        const turnoActivo = await turnoService.obtenerTurnoActivo();
+        const turnoId = turnoActivo ? turnoActivo.id : null;
+
+        try {
             let queryMesas = '';
             let paramsMesas = [];
 
@@ -121,14 +143,112 @@ const DashboardDependienteController = {
                 pageTitle: 'Dashboard - Dependiente | Restaurante Bahía',
                 clientDashboardBaseUrl: `${obtenerBasePublica(req)}/cliente/dashboard/`,
                 view: 'dashboard',
+                modoVisualizacion,
+                meseroVisualizado,
                 success_msg: req.flash('success_msg'),
                 error_msg: req.flash('error_msg')
             });
 
         } catch (error) {
-            console.error('Error al cargar dashboard de dependiente:', error);
-            req.flash('error_msg', 'Error al cargar el dashboard. Inténtalo de nuevo.');
-            return res.redirect('/dependiente/dashboard');
+            console.error('Error al renderizar el salón de mesas:', error);
+            throw error;
+        }
+    },
+
+    // ================================================================
+    // POS MESERO — Herramienta de visualización para administradores
+    // ================================================================
+    // Paso 1: selector del mesero a supervisar
+    viewSelectorMesero: async (req, res) => {
+        try {
+            const turnoActivo = await turnoService.obtenerTurnoActivo();
+            const turnoId = turnoActivo ? turnoActivo.id : null;
+
+            // Personal de servicio activo con sus mesas/órdenes abiertas del
+            // turno vigente (misma semántica de asignación que el dashboard).
+            let meseros = [];
+            const [rows] = await db.query(`
+                SELECT
+                    u.id,
+                    CONCAT(u.nombre, ' ', u.apellidos) AS nombre_completo,
+                    u.nombre,
+                    u.apellidos,
+                    u.rol,
+                    COUNT(DISTINCT CASE WHEN ad.id IS NOT NULL THEN dam.mesa_id END) AS mesas_asignadas,
+                    COUNT(DISTINCT CASE WHEN p.id IS NOT NULL THEN p.id END) AS ordenes_abiertas,
+                    COALESCE(SUM(CASE WHEN p.id IS NOT NULL THEN COALESCE(p.total, 0) ELSE 0 END), 0) AS consumo_abierto
+                FROM usuarios u
+                LEFT JOIN detalle_asignacion_mesa dam ON dam.dependiente_id = u.id
+                LEFT JOIN asignaciones_diarias ad ON dam.asignacion_diaria_id = ad.id
+                    AND ad.turno_id = ?
+                    AND ad.id IN (
+                        SELECT MAX(a2.id) FROM asignaciones_diarias a2
+                        WHERE a2.turno_id = ?
+                        GROUP BY a2.ubicacion
+                    )
+                LEFT JOIN pedidos p ON ad.id IS NOT NULL
+                    AND p.id_mesa = dam.mesa_id
+                    AND p.turno_servicio_id = ?
+                    AND p.estado_pago = 'pendiente'
+                    AND p.estado_pedido != 'cancelado'
+                WHERE u.activo = 1 AND u.rol IN ('dependiente', 'capitan')
+                GROUP BY u.id
+                ORDER BY u.nombre ASC
+            `, [turnoId, turnoId, turnoId]);
+            meseros = rows;
+
+            res.render('admin/pos_mesero', {
+                pageTitle: 'POS Mesero - Restaurante Bahía',
+                view: 'pos_mesero',
+                meseros,
+                turnoActivo,
+                user: req.user || null,
+                success_msg: req.flash('success_msg'),
+                error_msg: req.flash('error_msg')
+            });
+        } catch (error) {
+            console.error('Error al cargar el selector de meseros:', error);
+            res.status(500).send('Error interno al cargar el selector de meseros');
+        }
+    },
+
+    // Paso 2: salón de mesas del mesero elegido (solo visualización)
+    viewDashboardMesero: async (req, res) => {
+        try {
+            const meseroId = parseInt(req.query.mesero, 10);
+
+            if (!meseroId || Number.isNaN(meseroId)) {
+                req.flash('error_msg', 'Selecciona un mesero para visualizar su salón.');
+                return res.redirect('/admin/pos-mesero');
+            }
+
+            const [usuarios] = await db.query(
+                'SELECT id, nombre, apellidos, rol, activo FROM usuarios WHERE id = ? LIMIT 1',
+                [meseroId]
+            );
+            const mesero = usuarios && usuarios[0] ? usuarios[0] : null;
+
+            if (!mesero || !mesero.activo || !['dependiente', 'capitan'].includes(mesero.rol)) {
+                req.flash('error_msg', 'El mesero seleccionado no existe o no está disponible.');
+                return res.redirect('/admin/pos-mesero');
+            }
+
+            // Se fuerza rol 'dependiente' para ver exactamente el salón que
+            // ve ese mesero (sus mesas asignadas y sus órdenes abiertas).
+            return await DashboardDependienteController.renderDashboardSalon(req, res, {
+                usuarioId: mesero.id,
+                usuarioRol: 'dependiente',
+                modoVisualizacion: true,
+                meseroVisualizado: {
+                    id: mesero.id,
+                    nombre: `${mesero.nombre} ${mesero.apellidos || ''}`.trim(),
+                    rol: mesero.rol
+                }
+            });
+        } catch (error) {
+            console.error('Error al visualizar el salón del mesero:', error);
+            req.flash('error_msg', 'Error al visualizar el salón del mesero.');
+            return res.redirect('/admin/pos-mesero');
         }
     },
 
