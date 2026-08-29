@@ -350,10 +350,14 @@ exports.viewExplosionRecetas = async (req, res) => {
     try {
         const turnoId = parseInt(req.query.turno, 10) || null;
 
+        // turnos_servicio no tiene columna "nombre": se etiqueta con quien abrio el turno
         const [turnos] = await db.query(`
-            SELECT id, nombre, fecha_inicio
-            FROM turnos_servicio
-            ORDER BY id DESC
+            SELECT ts.id,
+                   COALESCE(CONCAT(ua.nombre, ' ', ua.apellidos), 'N/D') AS nombre,
+                   ts.fecha_apertura AS fecha_inicio
+            FROM turnos_servicio ts
+            LEFT JOIN usuarios ua ON ts.usuario_apertura_id = ua.id
+            ORDER BY ts.id DESC
             LIMIT 30
         `).catch(() => [[]]);
 

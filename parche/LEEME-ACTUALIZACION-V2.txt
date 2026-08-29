@@ -20,9 +20,15 @@
             platillo y explosión de recetas teórico vs real)
    b2ff0e6  Reporte de VENTAS POR MESERO (cuentas cobradas, ticket
             promedio y propinas) y exportación CSV de los reportes
-   HEAD     NUEVO — Reportes de CONSUMO POR INSUMO (rango libre, con
+   54d842a  Reportes de CONSUMO POR INSUMO (rango libre, con
             desglose de a qué se fue cada salida) y VENTAS POR HORA Y
             DÍA (picos de tráfico para dimensionar personal)
+   HEAD     NUEVO — CORRECCIÓN de la explosión de recetas en
+            producción: "Unknown column 'ts.nombre'" (la tabla
+            turnos_servicio no tiene esa columna). El turno se
+            etiqueta "#id · usuario de apertura · fecha" y el
+            filtro por turno ya carga; se añade al paquete
+            models/reporteModel.js (venía del código base).
 
  ESTE PAQUETE ES ACUMULATIVO: incluye todo el contenido del zip anterior
  (restaurante-bahia-actualizacion-2026-08-29.zip) más el update de áreas
@@ -158,12 +164,28 @@ NOVEDAD 1 — ÁREAS DE SERVICIO (ubicacion_mesa)
  * La columna legada mesas.ubicacion se conserva como espejo del nombre
    (compatibilidad con respaldos y consultas antiguas).
 
+CORRECCIÓN EN ESTA VERSIÓN — EXPLOSIÓN DE RECETAS
+----------------------------------------------------------------
+ * Síntoma en producción: "Error al cargar la explosión de recetas:
+   Unknown column 'ts.nombre' in 'SELECT'". La tabla turnos_servicio
+   no tiene columna "nombre" (sus campos reales: fecha_apertura,
+   fecha_cierre, montos y usuarios de apertura/cierre): la consulta
+   arrastraba ese campo desde el código base y ninguna versión
+   anterior del paquete lo corregía.
+ * Solución: el turno se etiqueta "#id · usuario de apertura ·
+   fecha" (LEFT JOIN a usuarios) en el detalle por venta y en el
+   CSV. El desplegable del filtro por turno usa la misma composición
+   (ese segundo SELECT tenía el mismo error, pero quedaba oculto por
+   un catch y el filtro salía vacío).
+ * models/reporteModel.js entra al paquete por primera vez (archivo
+   del código base que nunca se había modificado).
+
 CONTENIDO DEL PAQUETE
 ---------------------
 Los archivos mantienen la estructura de carpetas del proyecto: se pueden
 extraer directamente sobre la raíz del proyecto (respaldar antes).
 
-1) ARCHIVOS ACTUALIZADOS (53)
+1) ARCHIVOS ACTUALIZADOS (54)
 
    A. Supervisión en vivo + auditoría limpia (9, NUEVO)
 
@@ -192,7 +214,7 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    config/auditoriaCatalogo.test.js .............. Tests actualizados (los
         sondeos se excluyen; las escrituras se auditan).
 
-   B. Kardex y Centro de Reportes (19, NUEVO)
+   B. Kardex y Centro de Reportes (20, NUEVO)
 
    services/kardexService.js (nuevo) ............ Tarjeta de kardex:
         saldo inicial, saldo corrido, totales, descuadre vs lotes y
@@ -209,6 +231,11 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
         reportes.
    controllers/reportesController.js (nuevo) .... Hub con indicadores,
         salud, margen y explosión de recetas (reusa reporteModel).
+   models/reporteModel.js (corrección) ......... La explosión de
+        recetas fallaba con "Unknown column 'ts.nombre'"
+        (turnos_servicio no tiene columna "nombre"). El turno
+        se etiqueta "#id · usuario de apertura · fecha" (JOIN a
+        usuarios) y el filtro por turno ya carga.
    views/reportes/hub.ejs (nuevo) ................ Centro de reportes
         con tarjetas agrupadas por control físico/financiero/registros.
    views/reportes/salud_inventario.ejs (nuevo) .. Bajo mínimo, vencidos,
@@ -357,7 +384,7 @@ PASOS DE DESPLIEGUE
 -------------------
  1. Respaldar el proyecto y la base de datos:
       mysqldump restaurante_db > respaldo_antes_actualizacion_v2.sql
- 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 53
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 54
     archivos listados y deja los scripts de migración en scripts/).
  3. Aplicar scripts/migracion_ubicacion_mesa.sql (y los requisitos
     pendientes del punto anterior). POS mesero no requiere migración.
@@ -402,6 +429,8 @@ PASOS DE DESPLIEGUE
       food cost ponderado y el ranking de margen se calculan.
     - Reportes → Explosión de recetas: elegir un turno con ventas
       cobradas; la desviación por insumo muestra teórico vs real.
+      Debe cargar SIN el error "Unknown column 'ts.nombre'" y el
+      desplegable de turnos debe listar "#id · usuario (fecha)".
     - Reportes → Ventas por mesero: elegir un período con ventas; cada
       mesero muestra sus cuentas, ticket promedio y propinas.
     - Reportes → Consumo por insumo: cada insumo muestra entradas,

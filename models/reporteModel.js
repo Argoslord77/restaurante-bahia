@@ -4,7 +4,8 @@ const ReporteModel = {
   async getReporteKardexPos(turnoId) {
     const query = `
       SELECT 
-        ts.nombre AS turno,
+        CONCAT('Turno #', ts.id, ' · ', COALESCE(ua.nombre, 'N/D'), ' · ',
+                DATE_FORMAT(ts.fecha_apertura, '%d/%m %H:%i')) AS turno,
         p.id AS numero_pedido,
         m.numero AS mesa,
         pm.nombre AS platillo_vendido,
@@ -22,6 +23,7 @@ const ReporteModel = {
         ), 0.0000) AS consumo_real_kardex,
         ROUND(((rd.cantidad * dp.cantidad) * (1 + (rd.porcentaje_merma / 100))) * rd.costo_estimado, 2) AS costo_total_insumo
       FROM turnos_servicio ts
+      LEFT JOIN usuarios ua ON ts.usuario_apertura_id = ua.id
       INNER JOIN pedidos p ON ts.id = p.turno_servicio_id
       INNER JOIN mesas m ON p.id_mesa = m.id
       INNER JOIN detalles_pedido dp ON p.id = dp.id_pedido
