@@ -1142,6 +1142,26 @@
                     });
                 }
             }, true);
+
+            // Auto-refresco de la orden supervisada: recarga periódica
+            // para ver los cambios que va haciendo el mesero (nuevos
+            // productos, estados, totales) sin intervenir. Solo recarga
+            // cuando es seguro: pestaña visible y sin modales abiertos.
+            // El refresco se marca con ?autorefresco=1 para que la
+            // auditoría no lo registre como navegación del usuario.
+            const POS_VISTA_REFRESH_MS = 12000;
+            setInterval(() => {
+                if (document.visibilityState !== 'visible') return;
+                if (document.querySelector('.modal.show')) return;
+                if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('autorefresco', '1');
+                    window.location.replace(url.toString());
+                } catch (_) {
+                    window.location.reload();
+                }
+            }, POS_VISTA_REFRESH_MS);
         }
 
         function procesarPrePedidoDesdeURL() {

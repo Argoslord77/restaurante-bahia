@@ -159,18 +159,11 @@ const REGLAS = [
     { patron: /^\/pos\/cancelar-item\//, entidad: 'Ítem de comanda', modulo: 'Punto de Venta',
       accion: 'Cancelar ítem de la comanda', categoria: CATEGORIAS.ESCRITURA,
       severidad: SEVERIDADES.CRITICO },
-    { patron: /^\/pos\/alertas-pendientes$/, entidad: 'Alertas', modulo: 'Punto de Venta',
-      accion: 'Sondeo de alertas pendientes', categoria: CATEGORIAS.LECTURA,
-      severidad: SEVERIDADES.INFO, agregarSegundos: 300 },
-    { patron: /^\/api\/pos\/items-listos\//, entidad: 'Comanda', modulo: 'Punto de Venta',
-      accion: 'Sondeo de ítems listos', categoria: CATEGORIAS.LECTURA,
-      severidad: SEVERIDADES.INFO, agregarSegundos: 300 },
+    // NOTA: los sondeos de /pos/alertas-pendientes, /api/pos/items-listos/:id y
+    // /pos/mesas/:id/pre-pedidos (GET) NO se auditan: ver EXCLUIDAS_SONDEO.
     { patron: /^\/api\/pos\/verify-stock$/, entidad: 'Stock', modulo: 'Punto de Venta',
       accion: 'Verificar disponibilidad de insumos', categoria: CATEGORIAS.LECTURA,
       severidad: SEVERIDADES.INFO, agregarSegundos: 120 },
-    { patron: /^\/pos\/mesas\/[^/]+\/pre-pedidos$/, metodos: ['GET'], entidad: 'Pre-pedido',
-      modulo: 'Punto de Venta', accion: 'Sondeo de pre-pedidos de la mesa',
-      categoria: CATEGORIAS.LECTURA, severidad: SEVERIDADES.INFO, agregarSegundos: 300 },
     { patron: /^\/pos\/(pre-pedidos|mesas)/, entidad: 'Pre-pedido', modulo: 'Punto de Venta' },
     { patron: /^\/pos\/notificaciones/, entidad: 'Notificación', modulo: 'Punto de Venta',
       severidad: SEVERIDADES.INFO, agregarSegundos: 120 },
@@ -180,27 +173,24 @@ const REGLAS = [
       severidad: SEVERIDADES.AVISO },
 
     // ══════════════ Monitores de producción ══════════════
-    { patron: /^\/api\/monitor\/comandas$/, entidad: 'Monitor de producción', modulo: 'Producción',
-      accion: 'Refresco automático del monitor', categoria: CATEGORIAS.LECTURA,
-      severidad: SEVERIDADES.INFO, agregarSegundos: 300 },
+    // NOTA: el refresco automático del monitor (/api/monitor/comandas) no se
+    // audita: ver EXCLUIDAS_SONDEO.
     { patron: /^\/api\/monitor\/cambiar-estado$/, entidad: 'Ítem de comanda', modulo: 'Producción',
       accion: 'Cambiar estado de elaboración', categoria: CATEGORIAS.ESCRITURA,
       severidad: SEVERIDADES.INFO },
     { patron: /^\/monitor\//, entidad: 'Monitor de producción', modulo: 'Producción' },
 
     // ══════════════ Turnos, monedas y caja ══════════════
-    { patron: /^\/admin\/turno\/estado-actual$/, entidad: 'Turno de servicio', modulo: 'Turnos',
-      accion: 'Sondeo del estado del turno', categoria: CATEGORIAS.LECTURA,
-      severidad: SEVERIDADES.INFO, agregarSegundos: 300 },
+    // NOTA: el sondeo del estado del turno (/admin/turno/estado-actual) no se
+    // audita: ver EXCLUIDAS_SONDEO.
     { patron: /^\/admin\/turnos?/, entidad: 'Turno de servicio', modulo: 'Turnos' },
     { patron: /^\/admin\/(api\/)?(monedas?|act-moneda|crear-moneda)/, entidad: 'Moneda',
       modulo: 'Caja', severidad: SEVERIDADES.AVISO },
 
     // ══════════════ Clientes y cuadros de mando ══════════════
     { patron: /^\/cliente\//, entidad: 'Cliente', modulo: 'Cliente (QR)' },
-    { patron: /^\/admin\/api\/dashboard\/metrics$/, entidad: 'Cuadro de mando', modulo: 'Dashboard',
-      accion: 'Refresco de métricas', categoria: CATEGORIAS.LECTURA,
-      severidad: SEVERIDADES.INFO, agregarSegundos: 300 },
+    // NOTA: el refresco de métricas (/admin/api/dashboard/metrics) no se
+    // audita: ver EXCLUIDAS_SONDEO.
     { patron: /^\/(admin|dependiente)\/dashboard/, entidad: 'Cuadro de mando', modulo: 'Dashboard',
       accion: 'Abrir cuadro de mando', categoria: CATEGORIAS.LECTURA, severidad: SEVERIDADES.INFO }
 ];
@@ -210,6 +200,21 @@ const EXCLUIDAS = [
     /^\/css\//, /^\/js\//, /^\/img\//, /^\/images\//, /^\/fonts\//, /^\/uploads\//,
     /^\/webfonts\//, /^\/favicon\.ico$/, /^\/favicon\.png$/, /^\/robots\.txt$/,
     /^\/manifest\.json$/, /^\/sw\.js$/, /\.(css|js|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot)$/i
+];
+
+// Sondeos GET de las vistas (polling) que tampoco se auditan. No son
+// actividad del usuario: la vista pregunta cada pocos segundos "¿hay algo
+// nuevo?" (alertas, ítems listos, comandas del monitor, estado del turno,
+// métricas). Registrarlos — aunque fuera agrupados — solo enterraba la
+// actividad real del historial. Las ESCRITURAS sobre estas mismas rutas
+// (p.ej. descartar los pre-pedidos de una mesa) SÍ se auditan.
+const EXCLUIDAS_SONDEO = [
+    /^\/pos\/alertas-pendientes$/,          // tablero del mesero: llamadas/pre-pedidos
+    /^\/api\/pos\/items-listos\//,          // POS: ¿hay ítems listos de la orden?
+    /^\/pos\/mesas\/[^/]+\/pre-pedidos$/,   // POS/tablero: pre-pedidos de la mesa
+    /^\/api\/monitor\/comandas$/,           // monitores de cocina/bar
+    /^\/admin\/turno\/estado-actual$/,      // estado del turno de servicio
+    /^\/admin\/api\/dashboard\/metrics$/    // métricas del cuadro de mando
 ];
 
 /** Categoría por defecto a partir del método HTTP. */
@@ -238,6 +243,17 @@ function verboPorMetodo(metodo, ruta) {
 /** ¿Esta ruta debe quedar fuera del registro? */
 function estaExcluida(ruta) {
     return EXCLUIDAS.some(patron => patron.test(ruta));
+}
+
+/**
+ * ¿Es un sondeo GET de las vistas (polling) que debe quedar fuera del
+ * registro? Solo aplica a lecturas: las escrituras sobre la misma ruta
+ * sí se auditan.
+ */
+function esSondeoExcluido(metodo, ruta) {
+    const metodoNorm = String(metodo || 'GET').toUpperCase();
+    if (metodoNorm !== 'GET' && metodoNorm !== 'HEAD') return false;
+    return EXCLUIDAS_SONDEO.some(patron => patron.test(ruta));
 }
 
 /**
@@ -284,8 +300,10 @@ module.exports = {
     SEVERIDADES,
     REGLAS,
     EXCLUIDAS,
+    EXCLUIDAS_SONDEO,
     describir,
     estaExcluida,
+    esSondeoExcluido,
     categoriaPorMetodo,
     severidadPorMetodo
 };

@@ -9,7 +9,8 @@
 // Tres garantías de diseño:
 //   1. Nunca bloquea ni retrasa la respuesta: se registra tras enviarla.
 //   2. Nunca tumba la aplicación: cualquier fallo se degrada a un aviso en log.
-//   3. Nunca ahoga la tabla: los endpoints de sondeo se agrupan por ventana.
+//   3. Nunca ahoga la tabla: los sondeos de las vistas (polling) quedan fuera
+//      del registro y los refrescos automáticos se marcan con ?autorefresco=1.
 'use strict';
 
 const AuditLogService = require('../services/auditLogService');
@@ -184,6 +185,18 @@ function auditoriaGlobal(opciones = {}) {
 
         // Recursos estáticos y ruido del navegador quedan fuera
         if (Catalogo.estaExcluida(rutaReal)) return next();
+
+        // Sondeos GET de las vistas (polling de alertas, ítems listos,
+        // comandas del monitor, estado del turno, métricas): no son
+        // actividad del usuario, la vista pregunta "¿hay algo nuevo?".
+        if (Catalogo.esSondeoExcluido(req.method, rutaReal)) return next();
+
+        // Refrescos automáticos de las vistas (?autorefresco=1): la propia
+        // vista se re-renderiza periódicamente para mantenerse al día. La
+        // marca los distingue de la navegación real del usuario, que sí
+        // se audita.
+        const queryParams = req.query || {};
+        if (queryParams.autorefresco === '1' || queryParams.autorefresco === 'true') return next();
 
         const descriptor = Catalogo.describir(req.method, rutaReal);
 

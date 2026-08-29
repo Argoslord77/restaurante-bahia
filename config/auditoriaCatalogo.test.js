@@ -5,7 +5,7 @@
 // impresión y cierres.
 
 const Catalogo = require('./auditoriaCatalogo');
-const { CATEGORIAS, SEVERIDADES, describir, estaExcluida } = Catalogo;
+const { CATEGORIAS, SEVERIDADES, describir, estaExcluida, esSondeoExcluido } = Catalogo;
 
 describe('Catálogo de auditoría · exclusiones', () => {
     it('deja fuera los recursos estáticos para no ahogar el registro', () => {
@@ -129,10 +129,31 @@ describe('Catálogo de auditoría · seguridad y sistema', () => {
 });
 
 describe('Catálogo de auditoría · control de ruido', () => {
-    it('agrupa los endpoints de sondeo que refrescan solos', () => {
+    it('excluye por completo los sondeos GET de las vistas (polling)', () => {
+        // El tablero del mesero comprobando alertas, el POS consultando
+        // ítems listos, el monitor de producción, el estado del turno y las
+        // métricas del dashboard no son actividad del usuario.
         ['/api/monitor/comandas', '/pos/alertas-pendientes',
-         '/admin/turno/estado-actual', '/admin/api/dashboard/metrics'].forEach(ruta => {
-            expect(describir('GET', ruta).agregarSegundos).toBeGreaterThan(0);
+         '/api/pos/items-listos/15', '/pos/mesas/3/pre-pedidos',
+         '/admin/turno/estado-actual', '/admin/api/dashboard/metrics'
+        ].forEach(ruta => {
+            expect(esSondeoExcluido('GET', ruta)).toBe(true);
+        });
+    });
+
+    it('sigue auditando las escrituras sobre las rutas de sondeo', () => {
+        // Descartar los pre-pedidos de una mesa es una acción real
+        expect(esSondeoExcluido('DELETE', '/pos/mesas/3/pre-pedidos')).toBe(false);
+        expect(esSondeoExcluido('POST', '/pos/alertas-pendientes')).toBe(false);
+        expect(esSondeoExcluido('PUT', '/api/monitor/comandas')).toBe(false);
+    });
+
+    it('las rutas de sondeo ya no generan reglas de agrupación', () => {
+        ['/pos/alertas-pendientes', '/api/pos/items-listos/15',
+         '/api/monitor/comandas', '/admin/turno/estado-actual',
+         '/admin/api/dashboard/metrics'
+        ].forEach(ruta => {
+            expect(describir('GET', ruta).agregarSegundos).toBe(0);
         });
     });
 

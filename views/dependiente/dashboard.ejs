@@ -366,8 +366,10 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const MODO_VISUALIZACION = <%= (typeof modoVisualizacion !== 'undefined' && modoVisualizacion) ? 'true' : 'false' %>;
-            const modalQrEl = document.getElementById('modalQrMesa');
-            const modalQr = modalQrEl ? new bootstrap.Modal(modalQrEl) : null;
+            // Operación en curso (abrir mesa): el auto-refresco no debe
+            // interrumpir una petición que está en vuelo.
+            let operacionEnCurso = false;
+            const modalQrEl = document.getElementById('modalQrMesa');            const modalQr = modalQrEl ? new bootstrap.Modal(modalQrEl) : null;
             const qrCanvas = document.getElementById('qrMesaCanvas');
             const qrUrlInput = document.getElementById('qrMesaUrl');
             const qrDescripcion = document.getElementById('qrMesaDescripcion');
@@ -432,6 +434,7 @@
                 if (MODO_VISUALIZACION) return; // Supervisión: nunca abrir mesas
                 const idMesa = abrirButton.getAttribute('data-mesa-id');
                 abrirButton.disabled = true;
+                operacionEnCurso = true;
                 abrirButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Abriendo...';
                 try {
                     const response = await fetch('/pos/init-manual', {
@@ -453,7 +456,32 @@
                     abrirButton.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
                 }
             });
+        // ============================================================
+        // AUTO-REFRESCO DEL TABLERO
+        // Refresca periódicamente la vista para reflejar los cambios de
+        // estado de las mesas (mesas abiertas o liberadas por otros
+        // meseros, órdenes nuevas) sin intervención del usuario.
+        // Solo recarga cuando es seguro: pestaña visible, sin modales ni
+        // alertas abiertas y sin una operación en curso. El refresco se
+        // marca con ?autorefresco=1 para que la auditoría no lo registre
+        // como navegación del usuario.
+        // ============================================================
+        const AUTO_REFRESH_MS = 15000;
+        setInterval(() => {
+            if (document.visibilityState !== 'visible') return;
+            if (operacionEnCurso) return;
+            if (document.querySelector('.modal.show')) return;
+            if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('autorefresco', '1');
+                window.location.replace(url.toString());
+            } catch (_) {
+                window.location.reload();
+            }
+        }, AUTO_REFRESH_MS);
         });
+
     </script>
 
     <!-- Audio para alertas -->

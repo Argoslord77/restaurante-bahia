@@ -9,8 +9,10 @@
             lote, merma alineada y costo real en el kardex
    5961803  Catálogo de áreas de servicio (ubicacion_mesa): CRUD en
             Configuración → Salón y Áreas y mesas vinculadas por FK
-   366cc24  NUEVO — POS mesero: visualización del salón y las órdenes de
-            cada mesero (solo consulta) para administradores
+   366cc24  POS mesero: visualización del salón y las órdenes de cada
+            mesero (solo consulta) para administradores
+   HEAD     NUEVO — Refresco automático de las vistas supervisadas y
+            limpieza de la auditoría (fuera los sondeos/polling)
 
  ESTE PAQUETE ES ACUMULATIVO: incluye todo el contenido del zip anterior
  (restaurante-bahia-actualizacion-2026-08-29.zip) más el update de áreas
@@ -19,7 +21,30 @@
  el proyecto tal como está.
 ============================================================================
 
-NOVEDAD 2 DE ESTA VERSIÓN — POS MESERO (visualización y control)
+MEJORA 3 DE ESTA VERSIÓN — REFRESCO AUTOMÁTICO Y AUDITORÍA LIMPIA
+----------------------------------------------------------------
+ * El tablero del dependiente se refresca solo cada 15 s para mostrar
+   los cambios de estado de las mesas (abiertas o liberadas por otros
+   meseros, órdenes nuevas). Nunca interrumpe: solo recarga si la
+   pestaña está visible, no hay modales ni alertas en pantalla y no
+   hay una operación en curso (p. ej. abriendo una mesa).
+ * El POS en modo visualización (POS mesero) se refresca solo cada
+   12 s para ver en vivo lo que hace el mesero en la orden: nuevos
+   productos, cambios de estado y totales. El POS operativo del mesero
+   NO se refresca solo (nunca se pierde una comanda en captura).
+ * Los refrescos automáticos viajan marcados (?autorefresco=1) y la
+   auditoría NO los registra como navegación del usuario.
+ * AUDITORÍA LIMPIA: los sondeos periódicos de las vistas (polling)
+   quedaron FUERA del registro de auditoría por completo:
+   - /pos/alertas-pendientes   (tablero: llamadas y pre-pedidos)
+   - /api/pos/items-listos/:id (POS: hay ítems listos de la orden?)
+   - /pos/mesas/:id/pre-pedidos (GET, sondeo de pre-pedidos)
+   - /api/monitor/comandas    (monitores de cocina y bar)
+   - /admin/turno/estado-actual y /admin/api/dashboard/metrics
+   Las ESCRITURAS sobre esas rutas (p. ej. descartar pre-pedidos o
+   marcar notificaciones leídas) SIGUEN auditándose.
+
+NOVEDAD 2 — POS MESERO (visualización y control)
 ----------------------------------------------------------------
  * Nueva entrada "POS mesero" en el menú lateral (visible solo para
    administradores) → /admin/pos-mesero.
@@ -39,7 +64,7 @@ NOVEDAD 2 DE ESTA VERSIÓN — POS MESERO (visualización y control)
  * Es una herramienta de supervisión en vivo: útil para auditar cómo
    trabaja cada mesero sin intervenir en su operación.
 
-NOVEDAD 1 DE ESTA VERSIÓN — ÁREAS DE SERVICIO (ubicacion_mesa)
+NOVEDAD 1 — ÁREAS DE SERVICIO (ubicacion_mesa)
 ----------------------------------------------------------------
  * Nueva tabla `ubicacion_mesa`: catálogo de salones/zonas del local
    (nombre, descripción, orden, activo). Las mesas ahora la referencian
@@ -62,9 +87,24 @@ CONTENIDO DEL PAQUETE
 Los archivos mantienen la estructura de carpetas del proyecto: se pueden
 extraer directamente sobre la raíz del proyecto (respaldar antes).
 
-1) ARCHIVOS ACTUALIZADOS (32)
+1) ARCHIVOS ACTUALIZADOS (36)
 
-   A. POS mesero — visualización (8, NUEVO)
+   A. Refresco automático + auditoría limpia (6, NUEVO)
+
+   views/dependiente/dashboard.ejs ................ Auto-refresco cada 15 s
+        con guardas (pestaña visible, sin modales/alertas, sin operación
+        en curso); marca el refresco con ?autorefresco=1.
+   views/pos.ejs ................................ Auto-refresco cada 12 s
+        SOLO en modo visualización (POS mesero), con las mismas guardas.
+   middlewares/auditoria.js ...................... Ignora los sondeos GET
+        de las vistas y los refrescos marcados ?autorefresco=1.
+   config/auditoriaCatalogo.js ................... Nuevo catálogo
+        EXCLUIDAS_SONDEO: los polling no se auditan (antes se agrupaban).
+   middlewares/auditoria.test.js (nuevo) ......... 4 tests del filtro.
+   config/auditoriaCatalogo.test.js .............. Tests actualizados (los
+        sondeos se excluyen; las escrituras se auditan).
+
+   B. POS mesero — visualización (8)
 
    views/includes/sideBarMenu.ejs ................. Entrada "POS mesero" en
         el menú lateral (solo administradores).
@@ -83,7 +123,7 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    views/pos.ejs ................................ Banner "Modo Visualización",
         ocultamiento de acciones y bloqueo por interceptor en fase captura.
 
-   B. Update de áreas de servicio (15)
+   C. Update de áreas de servicio (15)
 
    controllers/settingController.js ................ CRUD de ubicaciones
         (API /admin/api/ubicaciones-mesa) y carga del catálogo en la vista.
@@ -109,7 +149,7 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    controllers/dashboardDependienteController.js .. Ídem dashboard (mismo
         archivo del bloque A).
 
-   C. Update anterior que quedó ausente (12, reincluido completo)
+   D. Update anterior que quedó ausente (12, reincluido completo)
 
    TODO ............................................ Puntos 13/14 marcados [OKOKOK]
    controllers/cierreDiaController.js .............. Punto 6: movimiento de
@@ -184,7 +224,7 @@ PASOS DE DESPLIEGUE
 -------------------
  1. Respaldar el proyecto y la base de datos:
       mysqldump restaurante_db > respaldo_antes_actualizacion_v2.sql
- 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 32
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 36
     archivos listados y deja los scripts de migración en scripts/).
  3. Aplicar scripts/migracion_ubicacion_mesa.sql (y los requisitos
     pendientes del punto anterior). POS mesero no requiere migración.
@@ -193,9 +233,9 @@ PASOS DE DESPLIEGUE
       pm2 restart all   (o como tengas configurado el proceso)
  6. Verificación rápida:
       npm test
-    → deben pasar 171 tests. Los avisos esperados son los falsos positivos
+    → deben pasar 177 tests. Los avisos esperados son los falsos positivos
     conocidos (config/environments/test.js y suites que fallan al cargar
-    sin MySQL local): si "Tests: 171 passed" aparece, está bien.
+    sin MySQL local): si "Tests: 177 passed" aparece, está bien.
  7. Verificación funcional:
     - Menú lateral → "POS mesero": aparece la lista de dependientes y
       capitanes activos con sus métricas del turno.
@@ -207,6 +247,12 @@ PASOS DE DESPLIEGUE
       el aviso "acción deshabilitada". La pre-cuenta sí se puede consultar.
     - Configuración → Salón y Áreas: aparecen las áreas importadas de las
       mesas existentes (columna "Mesas" con el conteo).
+    - Dejar el tablero del dependiente abierto: en ~15 s se recarga solo
+      (si otro usuario cambia una mesa, el cambio aparece).
+    - Vigilar una orden desde POS mesero: los productos que agregue el
+      mesero aparecen solos en ~12 s.
+    - Auditoría: los sondeos (alertas, ítems listos, monitor) ya no
+      generan registros; la navegación real sí.
 
 NOTAS DE COMPORTAMIENTO NUEVO (para el personal)
 ------------------------------------------------
