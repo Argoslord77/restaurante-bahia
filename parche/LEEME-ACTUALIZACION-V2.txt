@@ -1,0 +1,176 @@
+============================================================================
+ ACTUALIZACIÓN V2 (ACUMULATIVA) — REST_CAFE_BAR / RESTAURANTE BAHÍA
+ Fecha: 29-08-2026
+ Rama: arena/01a04d02-restaurante-bahia (basada en main 1b629b8 "Finalizando")
+ Commits incluidos:
+   5757465  POS: unidades de producción/consumo en faltantes + movimiento
+            de inventario en Caja y Cierre del Día (puntos 5 y 6 del TODO)
+   795b174  Descuento de inventario por venta: conversión de unidades por
+            lote, merma alineada y costo real en el kardex
+   5961803  NUEVO — Catálogo de áreas de servicio (ubicacion_mesa): CRUD en
+            Configuración → Salón y Áreas y mesas vinculadas por FK
+
+ ESTE PAQUETE REEMPLAZA AL ANTERIOR (restaurante-bahia-actualizacion-
+ 2026-08-29.zip): incluye TODO su contenido más el update de áreas de
+ servicio. Si el update anterior quedó sin aplicar, este zip lo trae
+ completo: se puede extraer directamente sobre el proyecto tal como está.
+============================================================================
+
+NOVEDADES DE ESTA VERSIÓN — ÁREAS DE SERVICIO (ubicacion_mesa)
+--------------------------------------------------------------
+ * Nueva tabla `ubicacion_mesa`: catálogo de salones/zonas del local
+   (nombre, descripción, orden, activo). Las mesas ahora la referencian
+   por `mesas.ubicacion_id` (FK) en vez de texto libre.
+ * Configuración → pestaña "Salón y Áreas": CRUD completo (crear, editar,
+   activar/desactivar, eliminar con bloqueo si hay mesas asociadas).
+   Sustituye al antiguo textarea de "Áreas y Ubicaciones".
+ * Alta y edición de mesas (Admin → Mesas): el área se elige de un select
+   del catálogo; ya no se escribe a mano.
+ * Todas las vistas que muestran el área de una mesa (dashboard admin,
+   dashboard del dependiente, monitores de cocina/bar, POS, estados de
+   mesa) toman el nombre desde el catálogo.
+ * Renombrar un área actualiza automáticamente sus mesas y la
+   distribución de meseros guardada hoy.
+ * La columna legada mesas.ubicacion se conserva como espejo del nombre
+   (compatibilidad con respaldos y consultas antiguas).
+
+CONTENIDO DEL PAQUETE
+---------------------
+Los archivos mantienen la estructura de carpetas del proyecto: se pueden
+extraer directamente sobre la raíz del proyecto (respaldar antes).
+
+1) ARCHIVOS ACTUALIZADOS (28)
+
+   A. Update de áreas de servicio (16, NUEVO)
+
+   controllers/settingController.js ................ CRUD de ubicaciones
+        (API /admin/api/ubicaciones-mesa) y carga del catálogo en la vista.
+   routes/settingRoutes.js ........................ Rutas del CRUD de áreas.
+   models/ubicacionMesaModel.js (nuevo) ........... Modelo del catálogo.
+   models/ubicacionMesaModel.test.js (nuevo) ...... 12 tests.
+   controllers/tableController.js ................. Mesas: select de áreas y
+        validación del área al crear/editar.
+   models/tableModel.js ........................... JOIN a ubicacion_mesa y
+        escritura de ubicacion_id + espejo del nombre.
+   services/tableService.js ....................... Resuelve/valida el área
+        contra el catálogo (retrocompatible por nombre).
+   services/tableService.test.js (nuevo) .......... 10 tests.
+   models/tableModel.test.js (nuevo) .............. 9 tests.
+   views/admin/settings.ejs ....................... Pestaña "Salón y Áreas"
+        con la tabla CRUD y su modal.
+   views/admin/tables.ejs ......................... Modales de mesa con select
+        de áreas (con respaldo de texto si no hay catálogo).
+   controllers/dashboardDependienteController.js .. Área de la mesa vía JOIN.
+   controllers/monitorController.js ............... Ídem monitores cocina/bar.
+   controllers/posController.js ................... Ídem POS (incluye ADEMÁS
+        los cambios del update anterior: faltantes formateados).
+   services/dashboardService.js ................... Ídem estados de mesa.
+
+   B. Update anterior que quedó ausente (12, reincluido completo)
+
+   TODO ............................................ Puntos 13/14 marcados [OKOKOK]
+   controllers/cierreDiaController.js .............. Punto 6: movimiento de
+        inventario del turno en Cierre del Día y ticket.
+   controllers/turnoController.js .................. Punto 6: tarjeta resumida
+        en la vista de Caja (turnos/arqueo).
+   services/inventarioService.js ................... Punto 5: stock en unidad
+        de producción/consumo. Punto 6: movimientosPorTurno(). Observación 2:
+        descuento por receta convierte a la unidad de CADA LOTE.
+   services/unidadMedidaService.js ................. Nuevo resolverUnidad().
+   services/recetaService.js ....................... Observación 1: kardex con
+        costos reales y lotes AGOTADOS. Observación 2: conversión receta→lote
+        por lote, merma alineada, lotes bloqueados con FOR UPDATE.
+   views/pos.ejs ................................... Punto 5: modal de faltantes
+        con equivalencia de unidad de almacén.
+   views/caja/cierre_dia.ejs ....................... Punto 6: tarjeta
+        "Movimiento de Inventario del Turno".
+   views/caja/turnos.ejs ........................... Punto 6: tarjeta compacta
+        del movimiento del turno.
+   views/caja/cierre_dia_ticket.ejs ................ Punto 6: bloque
+        MOV. INVENTARIO en el ticket impreso.
+   services/inventarioService.test.js (nuevo) ...... 12 tests.
+   services/recetaService.test.js .................. +4 tests de descuento.
+
+2) SCRIPTS DE MIGRACIONES (15, carpeta scripts/)
+   Solo se incluyen los scripts de migración; ningún otro script.
+
+   scripts/migracion_ubicacion_mesa.sql   ← NUEVO, REQUERIDO por este update
+   scripts/migracion_asignaciones_por_turno.sql
+   scripts/migracion_auditoria_profunda.sql
+   scripts/migracion_auditoria_usuarios.sql
+   scripts/migracion_cartas_zelle_unidades.sql
+   scripts/migracion_categoria_almacenes.sql
+   scripts/migracion_dedup_monedas_turno.sql
+   scripts/migracion_ficha_costo.sql
+   scripts/migracion_guardia_consumo_produccion.sql
+   scripts/migracion_licencia.sql
+   scripts/migracion_precios_cartas.sql
+   scripts/migracion_salidas_manuales.sql
+   scripts/migracion_secuencias_lotes.sql
+   scripts/migracion_tokens_hash.sql
+   scripts/migracion_unidades_medida.sql
+
+MIGRACIONES — QUÉ APLICAR
+-------------------------
+ OBLIGATORIA para este update (solo una vez):
+
+   scripts/migracion_ubicacion_mesa.sql
+   → Crea la tabla ubicacion_mesa, la siembra con los valores que ya
+     existen en mesas.ubicacion (y con las zonas del ajuste salon_areas),
+     agrega mesas.ubicacion_id y hace el backfill por nombre.
+   Verifica si ya está aplicada (devuelve 1 = ya aplicada):
+
+   SELECT COUNT(*) FROM information_schema.tables
+   WHERE table_schema='restaurante_db' AND table_name='ubicacion_mesa';
+
+ REQUISITO del código del update anterior (solo si quedaron pendientes):
+
+   * scripts/migracion_cartas_zelle_unidades.sql → lotes.unidad_medida_id
+   * scripts/migracion_unidades_medida.sql       → conversiones_unidades.factor
+
+   SELECT COUNT(*) FROM information_schema.columns
+   WHERE table_schema='restaurante_db'
+     AND table_name='lotes' AND column_name='unidad_medida_id';
+
+ El resto de los scripts son acumulativos de updates previos: aplicar solo
+ los que falten en tu base (cada uno avisa si ya fue aplicado).
+
+PASOS DE DESPLIEGUE
+-------------------
+ 1. Respaldar el proyecto y la base de datos:
+      mysqldump restaurante_db > respaldo_antes_actualizacion_v2.sql
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 28
+    archivos listados y deja los scripts de migración en scripts/).
+ 3. Aplicar scripts/migracion_ubicacion_mesa.sql (y los requisitos
+    pendientes del punto anterior).
+ 4. No hay dependencias nuevas: no hace falta npm install.
+ 5. Reiniciar el servicio:
+      pm2 restart all   (o como tengas configurado el proceso)
+ 6. Verificación rápida:
+      npm test
+    → deben pasar 164 tests. Los avisos esperados son los falsos positivos
+    conocidos (config/environments/test.js y suites que fallan al cargar
+    sin MySQL local): si "Tests: 164 passed" aparece, está bien.
+ 7. Verificación funcional:
+    - Configuración → Salón y Áreas: deben aparecer las áreas importadas
+      de las mesas existentes (columna "Mesas" con el conteo).
+    - Admin → Mesas → editar una mesa: el área aparece en un desplegable.
+    - Crear/renombrar un área y comprobar que las mesas la reflejan.
+
+NOTAS DE COMPORTAMIENTO NUEVO (para el personal)
+------------------------------------------------
+ * Las áreas del salón se administran SOLO desde Configuración → Salón y
+   Áreas. Para dar de alta una mesa en una zona nueva, primero crea la zona
+   allí y luego selecciónala en el desplegable de la mesa.
+ * Un área con mesas asociadas no se puede eliminar (se reasignan o borran
+   las mesas primero). Un área inactiva deja de aparecer al crear mesas,
+   pero las mesas que ya la usan la conservan (marcada "inactiva").
+ * Si renombras un área, todas sus mesas y la distribución del día muestran
+   el nuevo nombre de inmediato.
+ * POS — stock insuficiente: cantidades en unidad de la receta con la
+   equivalencia de almacén entre paréntesis (del update anterior).
+ * Caja / Cierre del Día: movimiento de inventario del turno (consumo por
+   ventas con costo real del lote, mermas, salidas, transferencias).
+ * Descuento por venta: lotes sin factor de conversión quedan como
+   advertencia "insumo sin descontar" (definir el factor en Configuración
+   → Unidades de Medida). Merma: bruta = neta / (1 - %merma).
