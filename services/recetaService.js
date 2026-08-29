@@ -4,6 +4,7 @@ const UnidadMedida = require('../models/unidadMedidaModel');
 const Producto = require('../models/productoModel'); 
 const MenuModel = require('../models/menuModel');
 const AlmacenService = require('./almacenService');
+const UnidadMedidaService = require('./unidadMedidaService');
 const db = require('../config/db');
 const logger = require('../config/logger');
 
@@ -327,6 +328,21 @@ const RecetaService = {
             await connection.beginTransaction(); 
             const movimientos = [];
             const sinReceta = [];
+            const advertencias = [];
+            // Caché de factores de conversión (unidad receta → unidad lote) por
+            // insumo, para no resolver el mismo factor una y otra vez.
+            const factoresCache = new Map();
+
+            const factorParaLote = async (insumoId, uReceta, unidadLoteRef) => {
+                const clave = `${insumoId}:${uReceta}->${unidadLoteRef}`;
+                if (factoresCache.has(clave)) return factoresCache.get(clave);
+                let factor = null;
+                try {
+                    factor = await UnidadMedidaService.obtenerFactor(uReceta, unidadLoteRef, insumoId);
+                } catch (e) { factor = null; }
+                factoresCache.set(clave, factor);
+                return factor;
+            };
 
             for (const item of items) {
                 // Los platillos del día no tienen receta: no explotan inventario
@@ -348,44 +364,97 @@ const RecetaService = {
                 }
 
                 for (const ingrediente of ingredientes) {
-                    const factorMerma = ingrediente.porcentaje_merma > 0 ? (1 + (ingrediente.porcentaje_merma / 100)) : 1;
-                    const cantidadRequerida = ingrediente.cantidad_requerida * cantidad * factorMerma;
+                    // Cantidad bruta a consumir en la UNIDAD DE LA RECETA.
+                    // Misma fórmula que la verificación de stock del POS
+                    // (verificarStockRonda / verificarStockPlatilla): bruta = neta / (1 - %merma).
+                    const neta = parseFloat(ingrediente.cantidad_requerida || 0) * cantidad;
+                    const mermaPct = parseFloat(ingrediente.porcentaje_merma || 0);
+                    let cantidadRequerida = (mermaPct > 0 && mermaPct < 100)
+                        ? neta / (1 - (mermaPct / 100))
+                        : neta;
+                    cantidadRequerida = Number.isFinite(cantidadRequerida) ? cantidadRequerida : 0;
+                    if (cantidadRequerida <= 0) continue;
+
+                    const uReceta = String(ingrediente.unidad_medida || '').trim();
 
                     const lotesQuery = `
-                        SELECT id, cantidad_actual, fecha_vencimiento
-                        FROM lotes
-                        WHERE producto_id = ? 
-                        AND almacen_id = ? 
-                        AND cantidad_actual > 0
-                        AND (estado IS NULL OR estado = 'ACTIVO')
+                        SELECT l.id, l.cantidad_actual, l.fecha_vencimiento, l.costo_unitario,
+                               l.unidad_medida_id, p.unidad_inventario_id
+                        FROM lotes l
+                        INNER JOIN productos p ON p.id = l.producto_id
+                        WHERE l.producto_id = ? 
+                        AND l.almacen_id = ? 
+                        AND l.cantidad_actual > 0
+                        AND (l.estado IS NULL OR l.estado = 'ACTIVO')
                         ORDER BY 
-                            CASE WHEN fecha_vencimiento IS NOT NULL THEN fecha_vencimiento ELSE '9999-12-31' END ASC,
-                            id ASC
+                            CASE WHEN l.fecha_vencimiento IS NOT NULL THEN l.fecha_vencimiento ELSE '9999-12-31' END ASC, 
+                            l.id ASC
+                        FOR UPDATE
                     `;
                     const [lotes] = await connection.query(lotesQuery, [ingrediente.producto_id, almacenDestinoId]);
 
+                    // Pendiente SIEMPRE en unidad de la receta; se convierte a la
+                    // unidad de cada lote al momento de descontar (igual que cuenta
+                    // stockLotesConvertidos en la verificación de stock del POS).
                     let cantidadPendiente = cantidadRequerida;
+                    let sinConversion = true; // ningún lote pudo convertirse todavía
 
                     for (const lote of lotes) {
-                        if (cantidadPendiente <= 0) break;
+                        if (cantidadPendiente <= 0.000001) break;
 
-                        const cantidadADescontar = Math.min(lote.cantidad_actual, cantidadPendiente);
+                        // Unidad del lote; si el lote no la declara se asume la
+                        // unidad de inventario del producto (mismo supuesto que
+                        // UnidadMedidaService.stockLotesConvertidos).
+                        const unidadLote = lote.unidad_medida_id || lote.unidad_inventario_id || null;
+
+                        // Sin unidad de receta o de lote declarada: descuento 1:1
+                        // (comportamiento previo: receta e inventario en la misma unidad).
+                        let factorLote = 1;
+                        if (uReceta && unidadLote) {
+                            factorLote = await factorParaLote(ingrediente.producto_id, uReceta, unidadLote);
+                        }
+                        if (factorLote === null) {
+                            // Este lote está en una unidad a la que no se puede
+                            // convertir: se salta (no se descuenta a ciegas).
+                            continue;
+                        }
+                        sinConversion = false;
+
+                        const stockAnterior = parseFloat(lote.cantidad_actual);
+                        const pendienteEnLote = cantidadPendiente * factorLote;
+                        let cantidadADescontar = Math.min(stockAnterior, pendienteEnLote);
+                        // Anti-residuo: si al lote le quedaría menos de media
+                        // milésima (ruido de redondeo), se consume completo.
+                        if (stockAnterior - cantidadADescontar < 0.0005) cantidadADescontar = stockAnterior;
+                        const stockNuevo = Number((stockAnterior - cantidadADescontar).toFixed(6));
+                        const costoUnitario = parseFloat(lote.costo_unitario || 0);
 
                         await connection.query(
-                            'UPDATE lotes SET cantidad_actual = cantidad_actual - ? WHERE id = ?',
-                            [cantidadADescontar, lote.id]
+                            `UPDATE lotes
+                             SET cantidad_actual = ?, estado = ?, updated_at = NOW()
+                             WHERE id = ?`,
+                            [stockNuevo, stockNuevo <= 0 ? 'AGOTADO' : 'ACTIVO', lote.id]
                         );
 
+                        // Kardex con el costo real del lote afectado: Caja y Cierre
+                        // del Día reportan el costo exacto del consumo por venta
+                        // (antes el movimiento nacía sin costo y se estimaba después).
                         await connection.query(
                             `INSERT INTO movimientos_inventario 
-                            (producto_id, almacen_id, lote_id, tipo_movimiento, referencia_tipo, referencia_id, cantidad, usuario_id, observaciones, documento_numero) 
-                            VALUES (?, ?, ?, 'CONSUMO_RECETA', 'PEDIDO', ?, ?, ?, ?, ?)`,
+                            (producto_id, almacen_id, lote_id, tipo_movimiento, referencia_tipo, referencia_id, 
+                             cantidad, costo_unitario, costo_total, stock_anterior, stock_nuevo,
+                             usuario_id, observaciones, documento_numero) 
+                            VALUES (?, ?, ?, 'CONSUMO_RECETA', 'PEDIDO', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                             [
                                 ingrediente.producto_id,
                                 almacenDestinoId,
                                 lote.id,
                                 idPedido,
                                 cantidadADescontar,
+                                costoUnitario,
+                                costoUnitario * cantidadADescontar,
+                                stockAnterior,
+                                stockNuevo,
                                 usuarioId,
                                 `Consumo por venta de receta (almacén de producción: ${almacenProduccion.nombre})`,
                                 idPedido ? `PED-${idPedido}` : `REC-${Date.now()}`
@@ -397,15 +466,31 @@ const RecetaService = {
                             almacen_id: almacenDestinoId,
                             almacen_nombre: almacenProduccion.nombre,
                             producto: ingrediente.producto_nombre,
-                            cantidad: cantidadADescontar
+                            cantidad: cantidadADescontar,
+                            unidad_lote: unidadLote || null,
+                            unidad_receta: uReceta || null,
+                            costo_unitario: costoUnitario,
+                            costo_total: costoUnitario * cantidadADescontar
                         });
 
-                        cantidadPendiente -= cantidadADescontar;
+                        // Lo descontado, expresado de vuelta en unidad de receta
+                        cantidadPendiente -= cantidadADescontar / factorLote;
                     }
 
                     if (cantidadPendiente > 0.0001) { 
-                        if (!ingrediente.es_opcional) {
-                            throw new Error(`Inconsistencia de inventario: Stock insuficiente en el almacén de producción "${almacenProduccion.nombre}" para el insumo indispensable "${ingrediente.producto_nombre}". Faltaron ${cantidadPendiente.toFixed(3)} unidades. Verifica si el insumo sigue en el almacén logístico pendiente de transferencia.`);
+                        if (sinConversion && lotes.length > 0) {
+                            // Había lotes pero en unidades sin conversión definida:
+                            // no se descuenta a ciegas (mismo criterio que la
+                            // advertencia del verificador del POS).
+                            const unidadLoteEjemplo = lotes[0].unidad_medida_id || lotes[0].unidad_inventario_id || 'sin unidad';
+                            advertencias.push({
+                                insumo_id: ingrediente.producto_id,
+                                insumo: ingrediente.producto_nombre,
+                                detalle: `Sin factor de conversión ${uReceta || 'sin unidad'} → unidad del lote (${unidadLoteEjemplo}) para "${ingrediente.producto_nombre}": insumo sin descontar`
+                            });
+                            logger.warn(`Ingrediente "${ingrediente.producto_nombre}" sin factor de conversión (receta ${uReceta || '?'}, lote ${unidadLoteEjemplo}): no se descontó del almacén ${almacenProduccion.nombre}.`);
+                        } else if (!ingrediente.es_opcional) {
+                            throw new Error(`Inconsistencia de inventario: Stock insuficiente en el almacén de producción "${almacenProduccion.nombre}" para el insumo indispensable "${ingrediente.producto_nombre}". Faltaron ${cantidadPendiente.toFixed(3)} ${uReceta || 'unidades'}. Verifica si el insumo sigue en el almacén logístico pendiente de transferencia.`);
                         } else {
                             logger.warn(`Ingrediente opcional "${ingrediente.producto_nombre}" agotado parcialmente en el almacén de producción ${almacenProduccion.nombre} (${almacenDestinoId}). Se descontó solo el stock disponible.`);
                         }
@@ -418,7 +503,7 @@ const RecetaService = {
             if (sinReceta.length > 0) {
                 logger.warn(`Platillos vendidos sin receta activa vinculada (no descontaron inventario): ${sinReceta.join(', ')}`);
             }
-            return { success: true, movimientos, sin_receta: sinReceta };
+            return { success: true, movimientos, sin_receta: sinReceta, advertencias };
 
         } catch (error) {
             await connection.rollback(); 

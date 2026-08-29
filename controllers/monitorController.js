@@ -30,11 +30,12 @@ module.exports = {
                            pm.categoria AS categoria_id,
                            COALESCE(cp.nombre, 'Oferta Especial') AS categoria_nombre,
                            COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') AS categoria_tipo,
-                           p.id_mesa, m.numero AS numero_mesa, m.ubicacion AS mesa_ubicacion,
+                           p.id_mesa, m.numero AS numero_mesa, COALESCE(um.nombre, m.ubicacion) AS mesa_ubicacion,
                            u.nombre AS mesero_nombre, p.creado_en AS fecha_pedido
                     FROM detalles_pedido dp
                     INNER JOIN pedidos p ON dp.id_pedido = p.id
                     LEFT JOIN mesas m ON p.id_mesa = m.id
+                    LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                     LEFT JOIN platillos_menu pm ON (dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL))
                     LEFT JOIN platillos_dia pd ON (dp.id_platillo = pd.id AND dp.es_platillo_dia = 1)
@@ -121,11 +122,12 @@ module.exports = {
                        pm.categoria AS categoria_id,
                        COALESCE(cp.nombre, 'Oferta Especial') AS categoria_nombre,
                        COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') AS categoria_tipo,
-                       p.id_mesa, m.numero AS numero_mesa, m.ubicacion AS mesa_ubicacion,
+                       p.id_mesa, m.numero AS numero_mesa, COALESCE(um.nombre, m.ubicacion) AS mesa_ubicacion,
                        u.nombre AS mesero_nombre, p.creado_en AS fecha_pedido
                 FROM detalles_pedido dp
                 INNER JOIN pedidos p ON dp.id_pedido = p.id
                 LEFT JOIN mesas m ON p.id_mesa = m.id
+                LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
                 LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                 LEFT JOIN platillos_menu pm ON (dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL))
                 LEFT JOIN platillos_dia pd ON (dp.id_platillo = pd.id AND dp.es_platillo_dia = 1)

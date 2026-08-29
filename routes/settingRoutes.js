@@ -30,4 +30,12 @@ router.patch('/api/categorias-platillos/:id/estado', ensureAuthenticated, checkR
 router.put('/api/categorias-platillos/:id/toggle', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), settingController.toggleCategoriaPlatillo);
 router.delete('/api/categorias-platillos/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), settingController.deleteCategoriaPlatillo);
 
+// CRUD de Áreas de Servicio / Salones (API — tabla ubicacion_mesa)
+router.get('/api/ubicaciones-mesa', ensureAuthenticated, settingController.getUbicacionesMesa);
+router.post('/api/ubicaciones-mesa/guardar', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), settingController.saveUbicacionMesa);
+router.post('/api/ubicaciones-mesa', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), settingController.saveUbicacionMesa);
+router.patch('/api/ubicaciones-mesa/:id/estado', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), settingController.toggleUbicacionMesa);
+router.put('/api/ubicaciones-mesa/:id/toggle', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), settingController.toggleUbicacionMesa);
+router.delete('/api/ubicaciones-mesa/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), settingController.deleteUbicacionMesa);
+
 module.exports = router;

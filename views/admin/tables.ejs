@@ -191,11 +191,12 @@
                                         <div class="d-flex gap-2">
                                             <button class="btn btn-sm d-flex align-items-center justify-content-center btn-editar bg-secondary text-white border-secondary shadow-sm" 
                                                     style="width: 32px; height: 32px;" title="Editar Mesa"
-                                                    data-id="<%= mesa.id %>" 
-                                                    data-numero="<%= mesa.numero %>" 
-                                                    data-capacidad="<%= mesa.capacidad %>" 
-                                                    data-estado="<%= mesa.estado %>" 
+                                                    data-id="<%= mesa.id %>"
+                                                    data-numero="<%= mesa.numero %>"
+                                                    data-capacidad="<%= mesa.capacidad %>"
+                                                    data-estado="<%= mesa.estado %>"
                                                     data-ubicacion="<%= mesa.ubicacion %>"
+                                                    data-ubicacion-id="<%= mesa.ubicacion_id || '' %>"
                                                     data-carta="<%= mesa.carta || 'CUP' %>">
                                                 <i class="fa-solid fa-gear text-white" style="font-size: 14px;"></i>
                                             </button>
@@ -258,7 +259,22 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Ubicación / Área</label>
-                                <input type="text" name="ubicacion" class="form-control" value="Salon Principal" required>
+                                <%
+                                    const ubicacionesActivas = (typeof ubicaciones !== 'undefined' && ubicaciones)
+                                        ? ubicaciones.filter(u => u.activo)
+                                        : [];
+                                %>
+                                <% if (ubicacionesActivas.length > 0) { %>
+                                    <select name="ubicacion_id" class="form-select" required>
+                                        <% ubicacionesActivas.forEach(ubi => { %>
+                                            <option value="<%= ubi.id %>"><%= ubi.nombre %></option>
+                                        <% }) %>
+                                    </select>
+                                    <div class="form-text fs-7">Las áreas se administran en Configuración → Salón y Áreas.</div>
+                                <% } else { %>
+                                    <input type="text" name="ubicacion" class="form-control" value="Salon Principal" required>
+                                    <div class="form-text fs-7">Ejecuta scripts/migracion_ubicacion_mesa.sql para administrar las áreas desde Configuración.</div>
+                                <% } %>
                             </div>
                         </div>
                     </div>
@@ -311,7 +327,17 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Ubicación / Área</label>
-                                <input type="text" name="ubicacion" id="editUbicacion" class="form-control" required>
+                                <% if (typeof ubicaciones !== 'undefined' && ubicaciones && ubicaciones.length > 0) { %>
+                                    <select name="ubicacion_id" id="editUbicacionId" class="form-select" required>
+                                        <option value="" selected disabled>-- Selecciona el área de la mesa --</option>
+                                        <% ubicaciones.forEach(ubi => { %>
+                                            <option value="<%= ubi.id %>"><%= ubi.nombre %><%= ubi.activo ? '' : ' · (inactiva)' %></option>
+                                        <% }) %>
+                                    </select>
+                                    <div class="form-text fs-7">Las áreas se administran en Configuración → Salón y Áreas.</div>
+                                <% } else { %>
+                                    <input type="text" name="ubicacion" id="editUbicacion" class="form-control" required>
+                                <% } %>
                             </div>
 
                             <div class="col-12 text-center mt-3 pt-3 border-top" id="qrContainerWrapper">
@@ -488,13 +514,20 @@
                         const tableId = botonEditar.getAttribute('data-id');
                         const numero = botonEditar.getAttribute('data-numero');
                         const ubicacion = botonEditar.getAttribute('data-ubicacion');
+                        const ubicacionId = botonEditar.getAttribute('data-ubicacion-id');
                         const capacidad = botonEditar.getAttribute('data-capacidad');
                         const estado = botonEditar.getAttribute('data-estado');
                         const carta = botonEditar.getAttribute('data-carta') || 'CUP';
 
                         document.getElementById('editId').value = tableId;
                         document.getElementById('editNumero').value = numero;
-                        document.getElementById('editUbicacion').value = ubicacion;
+                        // Select del catálogo de áreas (o input de texto legado si no hay catálogo)
+                        const selectUbicacion = document.getElementById('editUbicacionId');
+                        if (selectUbicacion) {
+                            selectUbicacion.value = ubicacionId || '';
+                        } else {
+                            document.getElementById('editUbicacion').value = ubicacion;
+                        }
                         document.getElementById('editCapacidad').value = capacidad;
                         document.getElementById('editEstado').value = estado;
                         document.getElementById('editCarta').value = carta;
@@ -571,10 +604,15 @@
                 const formData = {
                     numero: this.numero.value,
                     capacidad: this.capacidad.value,
-                    ubicacion: this.ubicacion.value,
                     estado: this.estado.value,
                     carta: this.carta.value
                 };
+                // Área de servicio: select del catálogo (id) o input legado (nombre)
+                if (this.ubicacion_id) {
+                    formData.ubicacion_id = this.ubicacion_id.value;
+                } else if (this.ubicacion) {
+                    formData.ubicacion = this.ubicacion.value;
+                }
 
                 fetch('/admin/mesas/crear', {
                     method: 'POST',
@@ -600,10 +638,15 @@
                 const formData = {
                     numero: this.numero.value,
                     capacidad: this.capacidad.value,
-                    ubicacion: this.ubicacion.value,
                     estado: this.estado.value,
                     carta: this.carta.value
                 };
+                // Área de servicio: select del catálogo (id) o input legado (nombre)
+                if (this.ubicacion_id) {
+                    formData.ubicacion_id = this.ubicacion_id.value;
+                } else if (this.ubicacion) {
+                    formData.ubicacion = this.ubicacion.value;
+                }
 
                 fetch(`/admin/mesas/editar/${id}`, {
                     method: 'POST',

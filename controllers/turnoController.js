@@ -1,5 +1,6 @@
 // controllers/turnoController.js
 const TurnoService = require('../services/turnoService');
+const InventarioService = require('../services/inventarioService');
 
 /**
  * RENDERIZA LA VISTA PRINCIPAL DE TURNOS
@@ -9,12 +10,25 @@ exports.renderTurnos = async (req, res) => {
     try {
         const { turnoActivo, historial, monedas } = await TurnoService.obtenerDatosParaVista();
 
+        // Resumen del movimiento de inventario del turno activo (consumo por
+        // ventas, mermas, etc.) para tenerlo a la vista antes del arqueo.
+        // Un fallo del cálculo no debe bloquear la vista de caja.
+        let movimientosInventario = null;
+        if (turnoActivo) {
+            try {
+                movimientosInventario = await InventarioService.movimientosPorTurno(turnoActivo);
+            } catch (eInv) {
+                console.error('Error al calcular el movimiento de inventario del turno:', eInv);
+            }
+        }
+
         return res.render('caja/turnos', {
             title: 'Control de Turnos y Arqueo de Caja',
             user: req.user,
             turnoActivo,
             historial,
             monedas,
+            movimientosInventario,
             view: "turnos"
         });
     } catch (error) {

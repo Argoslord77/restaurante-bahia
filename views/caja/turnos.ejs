@@ -153,6 +153,45 @@
                                     </div>
                                 </div>
 
+                                <!-- RESUMEN DEL MOVIMIENTO DE INVENTARIO DEL TURNO (VENTAS, MERMAS, ETC.) -->
+                                <% if (typeof movimientosInventario !== 'undefined' && movimientosInventario && movimientosInventario.totales.movimientos > 0) {
+                                       const mInv = movimientosInventario;
+                                %>
+                                    <div class="card card-custom shadow-sm border-0 mb-4">
+                                        <div class="card-header bg-white py-3 border-0 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                            <h5 class="card-title mb-0 fw-bold fs-6">
+                                                <i class="fa-solid fa-boxes-stacked me-2 text-secondary"></i>Movimiento de Inventario del Turno
+                                            </h5>
+                                            <a href="/admin/cierre-dia" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold shadow-xs">
+                                                Ver detalle en Cierre del Día <i class="fa-solid fa-arrow-right ms-1"></i>
+                                            </a>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                                <% mInv.resumenTipos.forEach(t => { %>
+                                                    <span class="badge bg-white border px-3 py-2 rounded-pill small text-dark">
+                                                        <b><%= t.etiqueta %></b> &middot; <%= t.movimientos %> mov.
+                                                        <% if (t.costo_total > 0) { %>
+                                                            &middot; <span class="font-monospace">$<%= t.costo_total.toFixed(2) %></span>
+                                                        <% } %>
+                                                    </span>
+                                                <% }) %>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-4 mt-2">
+                                                <small class="text-muted">
+                                                    Consumo por ventas: <b class="font-monospace text-success">$<%= mInv.totales.costo_consumo_venta.toFixed(2) %></b>
+                                                </small>
+                                                <small class="text-muted">
+                                                    Mermas y salidas: <b class="font-monospace text-danger">$<%= mInv.totales.costo_mermas.toFixed(2) %></b>
+                                                </small>
+                                                <small class="text-muted">
+                                                    Total: <b class="font-monospace text-dark"><%= mInv.totales.movimientos %> movimiento(s)</b> de <b class="text-dark"><%= mInv.totales.productos %></b> producto(s)
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% } %>
+
                                 <div class="card card-custom shadow-sm border-0 mb-4">
                                     <div class="card-header bg-danger text-white py-3 border-0">
                                         <h5 class="card-title mb-0 fw-bold fs-6"><i class="fa-solid fa-calculator me-2"></i>Arqueo de Caja y Cierre Financiero</h5>

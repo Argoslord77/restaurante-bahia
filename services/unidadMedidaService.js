@@ -337,11 +337,24 @@ class UnidadMedidaService {
     }
 
     /**
+     * Resuelve la referencia de una unidad (id, código, abreviatura o nombre)
+     * a su fila completa de `unidades_medida`. Devuelve null si no existe.
+     *
+     * Lo usan los mensajes de stock del POS para etiquetar las cantidades en
+     * la UNIDAD DE PRODUCCIÓN/CONSUMO (la de la receta) en lugar de la unidad
+     * de almacén/compra.
+     */
+    static async resolverUnidad(ref) {
+        if (ref === null || ref === undefined || String(ref).trim() === '') return null;
+        await this._cache();
+        return this._buscarUnidad(ref);
+    }
+
+    /**
      * Convierte una cantidad entre unidades (acepta id, código o abreviatura).
      * Devuelve { ok, factor, valor } o { ok:false, error }.
      */
-    static async convertir(cantidad, origenRef, destinoRef, productoId = null) {
-        const valor = parseFloat(cantidad);
+    static async convertir(cantidad, origenRef, destinoRef, productoId = null) {        const valor = parseFloat(cantidad);
         if (Number.isNaN(valor) || valor < 0) {
             return { ok: false, error: 'La cantidad a convertir no es válida.' };
         }

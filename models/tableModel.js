@@ -11,13 +11,15 @@ const Table = {
                 m.carta, 
                 m.capacidad, 
                 m.estado, 
-                m.ubicacion, 
+                m.ubicacion_id,
+                COALESCE(um.nombre, m.ubicacion) AS ubicacion, 
                 m.creado_en, 
                 m.actualizado_en,
                 p.id AS orden_id,
                 p.estado_pedido AS orden_estado,
                 COALESCE(SUM(CASE WHEN dp.estado_item != 'cancelado' THEN dp.cantidad ELSE 0 END), 0) AS total_productos
             FROM mesas m
+            LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
             -- Unir ÚNICAMENTE el pedido activo no cerrado de la mesa
             LEFT JOIN pedidos p ON m.id = p.id_mesa 
                 AND p.estado_pago = 'pendiente' 
@@ -25,7 +27,7 @@ const Table = {
                 AND p.estado_pedido != 'cancelado'
             LEFT JOIN detalles_pedido dp ON p.id = dp.id_pedido
             GROUP BY m.id
-            ORDER BY m.ubicacion ASC, CAST(REGEXP_REPLACE(m.numero, '[^0-9]', '') AS UNSIGNED) ASC, m.numero ASC
+            ORDER BY COALESCE(um.nombre, m.ubicacion) ASC, CAST(REGEXP_REPLACE(m.numero, '[^0-9]', '') AS UNSIGNED) ASC, m.numero ASC
         `;
         const [rows] = await db.query(queryStr);
         return rows;
@@ -33,33 +35,39 @@ const Table = {
 
     getById: async (id) => {
         const [rows] = await db.query(
-            'SELECT id, numero, carta, capacidad, estado, ubicacion, creado_en, actualizado_en FROM mesas WHERE id = ?', 
+            `SELECT m.id, m.numero, m.carta, m.capacidad, m.estado, m.ubicacion_id,
+                    COALESCE(um.nombre, m.ubicacion) AS ubicacion, m.creado_en, m.actualizado_en
+             FROM mesas m
+             LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
+             WHERE m.id = ?`,
             [id]
         );
         return rows[0];
     },
 
-    // Crear una nueva mesa respetando 'carta'
+    // Crear una nueva mesa respetando 'carta' y el área del catálogo ubicacion_mesa.
+    // La columna legada `ubicacion` se mantiene como espejo del nombre del área.
     create: async (data) => {
-        const { numero, carta, capacidad, estado, ubicacion } = data;
+        const { numero, carta, capacidad, estado, ubicacion_id, ubicacion } = data;
         return await db.query(
-            'INSERT INTO mesas (numero, carta, capacidad, estado, ubicacion) VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO mesas (numero, carta, capacidad, estado, ubicacion_id, ubicacion) VALUES (?, ?, ?, ?, ?, ?)',
             [
                 numero, 
                 carta || 'CUP',
                 capacidad || 2, 
                 estado || 'libre', 
+                ubicacion_id || null,
                 ubicacion || 'Salon Principal'
             ]
         );
     },
 
     update: async (id, data) => {
-        const { numero, carta, capacidad, estado, ubicacion } = data;
+        const { numero, carta, capacidad, estado, ubicacion_id, ubicacion } = data;
         
         return await db.query(
-            'UPDATE mesas SET numero = ?, carta = ?, capacidad = ?, estado = ?, ubicacion = ? WHERE id = ?',
-            [numero, carta || 'CUP', capacidad, estado, ubicacion, id]
+            'UPDATE mesas SET numero = ?, carta = ?, capacidad = ?, estado = ?, ubicacion_id = ?, ubicacion = ? WHERE id = ?',
+            [numero, carta || 'CUP', capacidad, estado, ubicacion_id || null, ubicacion, id]
         );
     },
 

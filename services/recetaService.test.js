@@ -135,6 +135,155 @@ describe('RecetaService.descontarStockPedido (regla: nunca descuenta del logíst
     });
 });
 
+// ============================================================
+// Observaciones: conversión receta→lote, merma alineada con la
+// verificación del POS y costo real asentado en el kardex.
+// ============================================================
+describe('RecetaService.descontarStockPedido (conversión de unidades por lote + costo en el kardex)', () => {
+    let connection;
+    let llamadas;
+
+    const UNIDADES = [
+        { id: 1, codigo: 'ML', nombre: 'Mililitro', abreviatura: 'ml', tipo: 'VOLUMEN', permite_decimales: 1, activa: 1 },
+        { id: 2, codigo: 'BT', nombre: 'Botella', abreviatura: 'bt', tipo: 'VOLUMEN', permite_decimales: 1, activa: 1 },
+        { id: 3, codigo: 'GR', nombre: 'Gramo', abreviatura: 'gr', tipo: 'PESO', permite_decimales: 1, activa: 1 }
+    ];
+    // 1 botella de Ron (producto 10) = 700 ml
+    const CONVERSIONES = [
+        { id: 1, producto_id: 10, unidad_origen_id: 2, unidad_destino_id: 1, factor: 700, activa: 1 }
+    ];
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        connection = {
+            beginTransaction: jest.fn().mockResolvedValue(),
+            commit: jest.fn().mockResolvedValue(),
+            rollback: jest.fn().mockResolvedValue(),
+            release: jest.fn(),
+            query: jest.fn().mockResolvedValue([[]])
+        };
+        db.getConnection.mockResolvedValue(connection);
+        llamadas = [];
+
+        // El pool solo atiende la caché de unidades/conversiones del UMS
+        db.query.mockImplementation(async (sql) => {
+            const q = String(sql);
+            if (q.includes('FROM unidades_medida')) return [UNIDADES];
+            if (q.includes('FROM conversiones_unidades')) return [CONVERSIONES];
+            return [[]];
+        });
+
+        // La conexión transaccional atiende lotes y captura UPDATE/INSERT
+        connection.query.mockImplementation(async (sql, params = []) => {
+            llamadas.push({ sql: String(sql), params });
+            return [[]];
+        });
+    });
+
+    const conLotes = (lotes) => {
+        connection.query.mockImplementation(async (sql, params = []) => {
+            llamadas.push({ sql: String(sql), params });
+            const q = String(sql);
+            if (q.includes('FROM lotes l')) return [lotes];
+            return [[]];
+        });
+    };
+
+    it('convierte el consumo a la unidad del lote (ml → botellas) y registra costo y stocks', async () => {
+        AlmacenService.resolverAlmacenProduccion.mockResolvedValue(ALMACEN_COCINA);
+        Receta.getIngredientesParaVenta.mockResolvedValue([
+            { producto_id: 10, producto_nombre: 'Ron Añejo', cantidad_requerida: 50, unidad_medida: 'Mililitro', porcentaje_merma: 0, es_opcional: 0 }
+        ]);
+        conLotes([
+            { id: 91, cantidad_actual: 1, fecha_vencimiento: null, costo_unitario: 700, unidad_medida_id: 2, unidad_inventario_id: 2 },
+            { id: 92, cantidad_actual: 0.5, fecha_vencimiento: null, costo_unitario: 800, unidad_medida_id: 2, unidad_inventario_id: 2 }
+        ]);
+
+        // 20 tragos × 50 ml = 1000 ml = 1 botella (700 ml) + 300 ml (0.428571 bt)
+        const res = await RecetaService.descontarStockPedido([{ id_platillo: 7, cantidad: 20 }], null, 55, 3);
+
+        expect(res.success).toBe(true);
+        expect(res.faltantes).toBeUndefined();
+        expect(res.movimientos).toHaveLength(2);
+
+        const updates = llamadas.filter(l => l.sql.includes('UPDATE lotes'));
+        expect(updates[0].params).toEqual([0, 'AGOTADO', 91]);
+        expect(updates[1].params[0]).toBeCloseTo(0.071429, 4); // 0.5 - 0.428571 botellas
+        expect(updates[1].params[1]).toBe('ACTIVO');
+
+        // Kardex con costo real: lote 91 → 1 bt × $700; lote 92 → 0.428571 bt × $800 = $342.86
+        const inserts = llamadas.filter(l => l.sql.includes('INSERT INTO movimientos_inventario'));
+        expect(inserts).toHaveLength(2);
+        expect(inserts[0].params[4]).toBeCloseTo(1, 6);         // cantidad
+        expect(inserts[0].params[6]).toBe(700);                  // costo_total
+        expect(inserts[1].params[4]).toBeCloseTo(0.428571, 4);
+        expect(inserts[1].params[6]).toBeCloseTo(342.857, 2);
+
+        // El kardex ahora asienta stock_anterior/stock_nuevo del lote
+        expect(inserts[0].params[7]).toBe(1);  // stock_anterior
+        expect(inserts[0].params[8]).toBe(0);  // stock_nuevo
+
+        expect(connection.commit).toHaveBeenCalled();
+    });
+
+    it('aplica la merma con la MISMA fórmula que la verificación del POS (neta / (1 - %merma))', async () => {
+        AlmacenService.resolverAlmacenProduccion.mockResolvedValue(ALMACEN_COCINA);
+        Receta.getIngredientesParaVenta.mockResolvedValue([
+            { producto_id: 12, producto_nombre: 'Harina', cantidad_requerida: 100, unidad_medida: 'Gramo', porcentaje_merma: 20, es_opcional: 0 }
+        ]);
+        conLotes([
+            { id: 93, cantidad_actual: 200, fecha_vencimiento: null, costo_unitario: 2, unidad_medida_id: 3, unidad_inventario_id: 3 }
+        ]);
+
+        const res = await RecetaService.descontarStockPedido([{ id_platillo: 7, cantidad: 1 }], null, 55, 3);
+
+        expect(res.success).toBe(true);
+        const updates = llamadas.filter(l => l.sql.includes('UPDATE lotes'));
+        // 100 / (1 - 0.20) = 125 gr consumidos (antes: 100 × 1.2 = 120)
+        expect(updates[0].params[0]).toBe(75);
+        const insert = llamadas.find(l => l.sql.includes('INSERT INTO movimientos_inventario'));
+        expect(insert.params[4]).toBe(125);
+        expect(insert.params[6]).toBe(250); // 125 gr × $2
+    });
+
+    it('salta el lote y advierte (sin lanzar inconsistencia) si no hay factor de conversión', async () => {
+        AlmacenService.resolverAlmacenProduccion.mockResolvedValue(ALMACEN_COCINA);
+        Receta.getIngredientesParaVenta.mockResolvedValue([
+            { producto_id: 10, producto_nombre: 'Ron Añejo', cantidad_requerida: 50, unidad_medida: 'Mililitro', porcentaje_merma: 0, es_opcional: 0 }
+        ]);
+        // Lote del insumo 10 en GRAMOS: sin conversión VOLUMEN↔PESO definida
+        conLotes([
+            { id: 94, cantidad_actual: 5, fecha_vencimiento: null, costo_unitario: 10, unidad_medida_id: 3, unidad_inventario_id: 3 }
+        ]);
+
+        const res = await RecetaService.descontarStockPedido([{ id_platillo: 7, cantidad: 1 }], null, 55, 3);
+
+        expect(res.success).toBe(true);
+        expect(llamadas.filter(l => l.sql.includes('UPDATE lotes'))).toHaveLength(0);
+        expect(res.advertencias).toHaveLength(1);
+        expect(res.advertencias[0].detalle).toMatch(/Sin factor de conversión/);
+        expect(res.advertencias[0].detalle).toMatch(/sin descontar/);
+        expect(connection.commit).toHaveBeenCalled(); // no hay rollback
+    });
+
+    it('mantiene el descuento 1:1 cuando ni la receta ni el lote declaran unidad', async () => {
+        AlmacenService.resolverAlmacenProduccion.mockResolvedValue(ALMACEN_COCINA);
+        Receta.getIngredientesParaVenta.mockResolvedValue([
+            { producto_id: 10, producto_nombre: 'Camarón', cantidad_requerida: 1, porcentaje_merma: 0, es_opcional: 0 }
+        ]);
+        conLotes([
+            { id: 95, cantidad_actual: 10, fecha_vencimiento: null, costo_unitario: 0, unidad_medida_id: null, unidad_inventario_id: null }
+        ]);
+
+        const res = await RecetaService.descontarStockPedido([{ id_platillo: 7, cantidad: 2 }], null, 55, 3);
+
+        expect(res.success).toBe(true);
+        expect(res.movimientos[0]).toMatchObject({ cantidad: 2 });
+        const updates = llamadas.filter(l => l.sql.includes('UPDATE lotes'));
+        expect(updates[0].params[0]).toBe(8);
+    });
+});
+
 describe('RecetaService.verificarStockParaPedido', () => {
     beforeEach(() => jest.clearAllMocks());
 
