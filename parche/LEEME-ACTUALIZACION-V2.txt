@@ -15,9 +15,12 @@
             visualización y auditoría sin sondeos (polling fuera)
    51c7e5f  Supervisión en vivo: avisos de las acciones del mesero,
             redirección y resumen de cuenta cobrada (escalonado)
-   HEAD     NUEVO — Módulo de KARDEX y CENTRO DE REPORTES (kardex por
-            producto con exportación CSV, salud del inventario, margen
-            real por platillo y explosión de recetas teórico vs real)
+   5b28247  Módulo de KARDEX y CENTRO DE REPORTES (kardex por producto
+            con exportación CSV, salud del inventario, margen real por
+            platillo y explosión de recetas teórico vs real)
+   HEAD     NUEVO — Reporte de VENTAS POR MESERO (cuentas cobradas,
+            ticket promedio y propinas) y exportación CSV de los cuatro
+            reportes nuevos
 
  ESTE PAQUETE ES ACUMULATIVO: incluye todo el contenido del zip anterior
  (restaurante-bahia-actualizacion-2026-08-29.zip) más el update de áreas
@@ -93,6 +96,14 @@ MEJORA 4 DE ESTA VERSIÓN — KARDEX Y CENTRO DE REPORTES
    registró el kardex en cada venta, por turno. Desviación por insumo
    con semáforo (±5% / ±15%): la herramienta para detectar fugas y
    mermas anómalas en cocina y bar.
+ * VENTAS POR MESERO (nuevo): desempeño del personal de salón por
+   período: cuentas cobradas, cortesías, ventas, ticket promedio,
+   propinas y descuentos por mesero, con totales. Control financiero
+   del personal en un vistazo.
+ * EXPORTACIÓN CSV (nuevo): kardex, salud del inventario, margen por
+   platillo, explosión de recetas y ventas por mesero se exportan a
+   CSV (BOM + separador ';' con decimales por coma: Excel los abre
+   directo). Cada exportación queda auditada como EXPORTACION.
  * Todo consulta con los roles de siempre (administración, almacenero,
    jefe de cocina y económico) y queda auditado en el módulo Reportes
    (la exportación del kardex se registra como EXPORTACION).
@@ -140,7 +151,7 @@ CONTENIDO DEL PAQUETE
 Los archivos mantienen la estructura de carpetas del proyecto: se pueden
 extraer directamente sobre la raíz del proyecto (respaldar antes).
 
-1) ARCHIVOS ACTUALIZADOS (50)
+1) ARCHIVOS ACTUALIZADOS (51)
 
    A. Supervisión en vivo + auditoría limpia (9, NUEVO)
 
@@ -169,7 +180,7 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    config/auditoriaCatalogo.test.js .............. Tests actualizados (los
         sondeos se excluyen; las escrituras se auditan).
 
-   B. Kardex y Centro de Reportes (16, NUEVO)
+   B. Kardex y Centro de Reportes (17, NUEVO)
 
    services/kardexService.js (nuevo) ............ Tarjeta de kardex:
         saldo inicial, saldo corrido, totales, descuadre vs lotes y
@@ -202,9 +213,13 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
         el menú lateral (resalta en kardex y reportes).
    config/auditoriaCatalogo.js ................. Reglas de auditoría
         para kardex (lectura y exportación CSV) y reportes.
-   config/auditoriaCatalogo.test.js ............ 3 tests de las reglas
-        nuevas. Se elimina views/reportes/kardex.ejs (vacío, sustituido
-        por views/reportes/explosion.ejs).
+   views/reportes/ventas_mesero.ejs (nuevo) ..... Desempeño por mesero
+        (cuentas, cortesías, ventas, ticket promedio, propinas y
+        descuentos) con exportación CSV e impresión.
+   config/auditoriaCatalogo.test.js ............ Tests de las reglas
+        nuevas (reportes, ventas por mesero y exportaciones). Se elimina
+        views/reportes/kardex.ejs (vacío, sustituido por
+        views/reportes/explosion.ejs).
 
    C. POS mesero — visualización (8)
 
@@ -326,7 +341,7 @@ PASOS DE DESPLIEGUE
 -------------------
  1. Respaldar el proyecto y la base de datos:
       mysqldump restaurante_db > respaldo_antes_actualizacion_v2.sql
- 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 50
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 51
     archivos listados y deja los scripts de migración en scripts/).
  3. Aplicar scripts/migracion_ubicacion_mesa.sql (y los requisitos
     pendientes del punto anterior). POS mesero no requiere migración.
@@ -335,9 +350,9 @@ PASOS DE DESPLIEGUE
       pm2 restart all   (o como tengas configurado el proceso)
  6. Verificación rápida:
       npm test
-    → deben pasar 200 tests. Los avisos esperados son los falsos positivos
+    → deben pasar 207 tests. Los avisos esperados son los falsos positivos
     conocidos (config/environments/test.js y suites que fallan al cargar
-    sin MySQL local): si "Tests: 200 passed" aparece, está bien.
+    sin MySQL local): si "Tests: 207 passed" aparece, está bien.
  7. Verificación funcional:
     - Menú lateral → "POS mesero": aparece la lista de dependientes y
       capitanes activos con sus métricas del turno.
@@ -371,6 +386,10 @@ PASOS DE DESPLIEGUE
       food cost ponderado y el ranking de margen se calculan.
     - Reportes → Explosión de recetas: elegir un turno con ventas
       cobradas; la desviación por insumo muestra teórico vs real.
+    - Reportes → Ventas por mesero: elegir un período con ventas; cada
+      mesero muestra sus cuentas, ticket promedio y propinas.
+    - Botón "Exportar CSV" en cada reporte: descarga un archivo que
+      Excel abre con columnas separadas (también en el kardex).
 
 NOTAS DE COMPORTAMIENTO NUEVO (para el personal)
 ------------------------------------------------

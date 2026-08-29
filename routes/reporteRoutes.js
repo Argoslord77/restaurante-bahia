@@ -22,5 +22,12 @@ router.get('/reportes', ensureAuthenticated, puedeVer, reportesController.viewHu
 router.get('/reportes/salud-inventario', ensureAuthenticated, puedeVer, reportesController.viewSaludInventario);
 router.get('/reportes/margen-platillos', ensureAuthenticated, puedeVer, reportesController.viewMargenPlatillos);
 router.get('/reportes/explosion-recetas', ensureAuthenticated, puedeVer, reportesController.viewExplosionRecetas);
+router.get('/reportes/ventas-mesero', ensureAuthenticated, puedeVer, reportesController.viewVentasMesero);
+
+// ── Exportaciones a CSV (Excel) ─────────────────────────────────────────
+router.get('/reportes/salud-inventario/exportar', ensureAuthenticated, puedeVer, reportesController.exportarSaludInventario);
+router.get('/reportes/margen-platillos/exportar', ensureAuthenticated, puedeVer, reportesController.exportarMargenPlatillos);
+router.get('/reportes/explosion-recetas/exportar', ensureAuthenticated, puedeVer, reportesController.exportarExplosionRecetas);
+router.get('/reportes/ventas-mesero/exportar', ensureAuthenticated, puedeVer, reportesController.exportarVentasMesero);
 
 module.exports = router;

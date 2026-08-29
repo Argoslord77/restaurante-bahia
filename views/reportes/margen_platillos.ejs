@@ -45,7 +45,10 @@
                                 <i class="fa-solid fa-magnifying-glass me-1"></i> Calcular
                             </button>
                         </div>
-                        <div class="col-12 col-md-4 text-md-end">
+                        <div class="col-12 col-md-4 d-flex justify-content-md-end gap-2">
+                            <a href="/admin/reportes/margen-platillos/exportar?desde=<%= rango.desde %>&hasta=<%= rango.hasta %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
+                            </a>
                             <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
                                 <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
                             </button>

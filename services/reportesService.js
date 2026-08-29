@@ -5,6 +5,10 @@
 //  · margenPorPlatillo(): ventas reales del período vs costo estándar de
 //    cada platillo (ficha de costo / receta), margen contribuido y food
 //    cost real ponderado.
+//  · ventasPorMesero(): desempeño del personal de salón por período
+//    (cuentas cobradas, ventas, ticket promedio, propinas y cortesías).
+// Incluye los generadores de CSV (separador ';' + BOM UTF-8) para que el
+// contador siga trabajando en Excel.
 'use strict';
 
 const db = require('../config/db');
@@ -266,4 +270,185 @@ async function margenPorPlatillo(rango) {
     };
 }
 
-module.exports = { saludInventario, margenPorPlatillo, normalizarRango };
+/**
+ * Desempeño del personal de salón en el período: cuentas cobradas,
+ * ventas, ticket promedio, propinas, descuentos y cortesías por mesero.
+ */
+async function ventasPorMesero(rango) {
+    const { desde, hasta } = rango;
+
+    const [filas] = await db.query(`
+        SELECT u.id,
+               CONCAT(u.nombre, ' ', COALESCE(u.apellidos, '')) AS mesero,
+               u.rol,
+               COUNT(p.id) AS cuentas,
+               SUM(CASE WHEN p.estado_pago = 'cortesia' THEN 1 ELSE 0 END) AS cortesias,
+               COALESCE(SUM(p.total), 0) AS ventas,
+               COALESCE(SUM(p.propina), 0) AS propinas,
+               COALESCE(SUM(p.descuento), 0) AS descuentos,
+               COALESCE(AVG(NULLIF(p.total, 0)), 0) AS ticket_promedio
+        FROM usuarios u
+        INNER JOIN pedidos p ON p.id_usuario_mesero = u.id
+            AND p.fecha_cierre IS NOT NULL
+            AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+            AND p.fecha_cierre >= ? AND p.fecha_cierre < DATE_ADD(?, INTERVAL 1 DAY)
+        GROUP BY u.id, u.nombre, u.apellidos, u.rol
+        ORDER BY ventas DESC, cuentas DESC
+    `, [desde, hasta]);
+
+    let totCuentas = 0, totCortesias = 0, totVentas = 0, totPropinas = 0, totDescuentos = 0;
+    const meseros = filas.map(f => {
+        const cuentas = num(f.cuentas);
+        const cortesias = num(f.cortesias);
+        const ventas = num(f.ventas, 2);
+        const propinas = num(f.propinas, 2);
+        const descuentos = num(f.descuentos, 2);
+        totCuentas += cuentas; totCortesias += cortesias;
+        totVentas += ventas; totPropinas += propinas; totDescuentos += descuentos;
+        return {
+            id: f.id,
+            mesero: String(f.mesero || '').trim() || 'Mesero',
+            rol: f.rol,
+            cuentas,
+            cortesias,
+            ventas,
+            propinas,
+            descuentos,
+            ticket_promedio: num(f.ticket_promedio, 2),
+            ticket_promedio_real: cuentas > 0 ? num(ventas / cuentas, 2) : 0
+        };
+    });
+
+    return {
+        desde,
+        hasta,
+        meseros,
+        totales: {
+            meseros: meseros.length,
+            cuentas: num(totCuentas),
+            cortesias: num(totCortesias),
+            ventas: num(totVentas, 2),
+            propinas: num(totPropinas, 2),
+            descuentos: num(totDescuentos, 2),
+            ticket_promedio: totCuentas > 0 ? num(totVentas / totCuentas, 2) : 0
+        }
+    };
+}
+
+// ── Generadores de CSV ───────────────────────────────────────────────────
+// Mismo formato que el kardex: separador ';', decimales con coma y BOM
+// UTF-8 para que Excel lo abra directamente.
+
+const csvNum = (v, dec = 2) => Number(v || 0).toFixed(dec).replace('.', ',');
+const csvTexto = (v) => String(v == null ? '' : v).replace(/[;\r\n]+/g, ' ');
+const csvFecha = (v) => (v instanceof Date
+    ? v.toISOString().slice(0, 16).replace('T', ' ')
+    : String(v || '').slice(0, 16));
+
+/** CSV del reporte de margen por platillo. */
+function margenACSV(reporte) {
+    const filas = [];
+    filas.push(`Margen real por platillo;${reporte.desde};a;${reporte.hasta}`);
+    filas.push('');
+    filas.push('Platillo;Unidades;Ingreso;Costo unit.;Costo total;Margen;Margen por unidad;Food cost %');
+    for (const p of reporte.platillos) {
+        filas.push([
+            csvTexto(p.nombre), csvNum(p.unidades, 0), csvNum(p.ingreso),
+            csvNum(p.costo_unitario, 4), csvNum(p.costo_total), csvNum(p.margen),
+            csvNum(p.margen_unitario), p.food_cost != null ? csvNum(p.food_cost, 1) : ''
+        ].join(';'));
+    }
+    if (reporte.totales) {
+        const t = reporte.totales;
+        filas.push(`TOTALES;${csvNum(t.unidades, 0)};${csvNum(t.ingreso)};;${csvNum(t.costo)};${csvNum(t.margen)};;${csvNum(t.food_cost, 1)}`);
+    }
+    for (const s of reporte.sinReceta) {
+        filas.push(`SIN FICHA TECNICA;${csvTexto(s.nombre)};${csvNum(s.unidades, 0)};${csvNum(s.ingreso)}`);
+    }
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
+/** CSV de la salud del inventario (una sección tras otra). */
+function saludACSV(salud) {
+    const filas = [];
+    filas.push('Salud del inventario');
+    filas.push('');
+    filas.push('SECCION;Producto;Codigo;Detalle;Cantidad;Valor');
+    for (const p of salud.bajoMinimo) {
+        filas.push(`Bajo minimo;${csvTexto(p.nombre)};${csvTexto(p.codigo)};Minimo ${csvNum(p.stock_minimo, 3)} / Faltante ${csvNum(p.faltante, 3)};${csvNum(p.stock_actual, 3)};${csvNum(p.costo_reposicion)}`);
+    }
+    for (const l of salud.vencidos) {
+        filas.push(`Vencido;${csvTexto(l.producto)};${csvTexto(l.codigo)};Lote ${csvTexto(l.numero_lote)} vencio ${csvFecha(l.fecha_vencimiento)};${csvNum(l.cantidad_actual, 3)};${csvNum(l.valor_perdido)}`);
+    }
+    for (const l of salud.porVencer) {
+        filas.push(`Por vencer;${csvTexto(l.producto)};${csvTexto(l.codigo)};Lote ${csvTexto(l.numero_lote)} vence en ${l.dias_restantes} dia(s);${csvNum(l.cantidad_actual, 3)};${csvNum(l.valor_riesgo)}`);
+    }
+    for (const p of salud.sinMovimiento) {
+        filas.push(`Sin rotacion 30 dias;${csvTexto(p.nombre)};${csvTexto(p.codigo)};Sin movimientos;${csvNum(p.stock_actual, 3)};${csvNum(p.valor_detenido)}`);
+    }
+    const t = salud.totales;
+    filas.push('');
+    filas.push(`RESUMEN;Productos bajo minimo;${csvNum(t.bajo_minimo, 0)};Costo de reposicion;${csvNum(t.costo_reposicion)}`);
+    filas.push(`RESUMEN;Lotes vencidos;${csvNum(t.vencidos, 0)};Perdida consumada;${csvNum(t.valor_perdido)}`);
+    filas.push(`RESUMEN;Lotes por vencer;${csvNum(t.por_vencer, 0)};Valor en riesgo;${csvNum(t.valor_riesgo)}`);
+    filas.push(`RESUMEN;Sin rotacion 30 dias;${csvNum(t.sin_movimiento, 0)};Capital detenido;${csvNum(t.valor_detenido)}`);
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
+/** CSV de la explosión de recetas: resumen por insumo + detalle por venta. */
+function explosionACSV({ resumenInsumos = [], filas = [], turnoSeleccionado = null } = {}) {
+    const salida = [];
+    salida.push(`Explosion de recetas (teorico vs real);${turnoSeleccionado ? 'Turno ' + turnoSeleccionado : 'Todos los turnos'}`);
+    salida.push('');
+    salida.push('RESUMEN POR INSUMO');
+    salida.push('Insumo;Codigo;Unidad;Consumo teorico;Consumo real;Desviacion;Desviacion %;Costo teorico');
+    for (const i of resumenInsumos) {
+        salida.push([
+            csvTexto(i.insumo), csvTexto(i.codigo), csvTexto(i.unidad),
+            csvNum(i.teorico, 3), csvNum(i.real, 3), csvNum(i.desviacion, 3),
+            i.desviacion_pct != null ? csvNum(i.desviacion_pct, 1) : '', csvNum(i.costo)
+        ].join(';'));
+    }
+    salida.push('');
+    salida.push('DETALLE POR VENTA');
+    salida.push('Turno;Pedido;Mesa;Platillo;Unid.;Insumo;Teorico;Real;Costo teorico');
+    for (const f of filas) {
+        salida.push([
+            csvTexto(f.turno), csvTexto(f.numero_pedido), csvTexto(f.mesa),
+            csvTexto(f.platillo_vendido), csvNum(f.cantidad_platillos_vendidos, 0),
+            csvTexto(f.insumo_descontado),
+            csvNum(f.consumo_total_teorico, 3), csvNum(f.consumo_real_kardex, 3),
+            csvNum(f.costo_total_insumo)
+        ].join(';'));
+    }
+    return '\uFEFF' + salida.join('\r\n') + '\r\n';
+}
+
+/** CSV del reporte de ventas por mesero. */
+function ventasMeseroACSV(reporte) {
+    const filas = [];
+    filas.push(`Ventas por mesero;${reporte.desde};a;${reporte.hasta}`);
+    filas.push('');
+    filas.push('Mesero;Rol;Cuentas;Cortesias;Ventas;Ticket promedio;Propinas;Descuentos');
+    for (const m of reporte.meseros) {
+        filas.push([
+            csvTexto(m.mesero), csvTexto(m.rol), csvNum(m.cuentas, 0),
+            csvNum(m.cortesias, 0), csvNum(m.ventas), csvNum(m.ticket_promedio),
+            csvNum(m.propinas), csvNum(m.descuentos)
+        ].join(';'));
+    }
+    const t = reporte.totales;
+    filas.push(`TOTALES;;${csvNum(t.cuentas, 0)};${csvNum(t.cortesias, 0)};${csvNum(t.ventas)};${csvNum(t.ticket_promedio)};${csvNum(t.propinas)};${csvNum(t.descuentos)}`);
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
+module.exports = {
+    saludInventario,
+    margenPorPlatillo,
+    ventasPorMesero,
+    normalizarRango,
+    margenACSV,
+    saludACSV,
+    explosionACSV,
+    ventasMeseroACSV
+};

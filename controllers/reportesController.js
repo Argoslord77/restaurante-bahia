@@ -24,7 +24,7 @@ const ENLACES = [
     {
         id: 'explosion',
         titulo: 'Explosión de recetas',
-        descripcion: 'Consumo teórico (ficha técnica) vs consumo real del kardex por venta. Detecta fugas y mermas anómalas.',
+        descripcion: 'Consumo teórico (ficha técnica) vs consumo real del kardex por venta. Detecta fugas y mermas anómalas. Exportable a CSV.',
         icono: 'fa-solid fa-explosion',
         url: '/admin/reportes/explosion-recetas',
         grupo: 'Control físico',
@@ -33,7 +33,7 @@ const ENLACES = [
     {
         id: 'salud',
         titulo: 'Salud del inventario',
-        descripcion: 'Bajo mínimo, lotes vencidos, por vencer y capital detenido sin rotación, con su impacto en dinero.',
+        descripcion: 'Bajo mínimo, lotes vencidos, por vencer y capital detenido sin rotación, con su impacto en dinero. Exportable a CSV.',
         icono: 'fa-solid fa-heart-pulse',
         url: '/admin/reportes/salud-inventario',
         grupo: 'Control físico',
@@ -51,7 +51,7 @@ const ENLACES = [
     {
         id: 'margen',
         titulo: 'Margen real por platillo',
-        descripcion: 'Ventas cobradas del período vs costo estándar: margen contribuido y food cost real ponderado.',
+        descripcion: 'Ventas cobradas del período vs costo estándar: margen contribuido y food cost real ponderado. Exportable a CSV.',
         icono: 'fa-solid fa-chart-line',
         url: '/admin/reportes/margen-platillos',
         grupo: 'Control financiero',
@@ -65,6 +65,15 @@ const ENLACES = [
         url: '/admin/fichas-costo/rentabilidad',
         grupo: 'Control financiero',
         interno: true
+    },
+    {
+        id: 'ventas-mesero',
+        titulo: 'Ventas por mesero',
+        descripcion: 'Desempeño del personal de salón por período: cuentas cobradas, ventas, ticket promedio y propinas.',
+        icono: 'fa-solid fa-user-tie',
+        url: '/admin/reportes/ventas-mesero',
+        grupo: 'Control financiero',
+        badge: 'NUEVO'
     },
     {
         id: 'cierre',
@@ -164,6 +173,86 @@ exports.viewMargenPlatillos = async (req, res) => {
     } catch (error) {
         console.error('Error al cargar el margen por platillo:', error);
         return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.viewVentasMesero = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.ventasPorMesero(rango);
+        return res.render('reportes/ventas_mesero', {
+            title: 'Ventas por Mesero - Restaurante Bahía',
+            view: 'ventas_mesero',
+            rango,
+            reporte,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar las ventas por mesero:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+// ── Exportaciones CSV ─────────────────────────────────────────────────────
+// Todas responden text/csv (BOM + separador ';') para abrir en Excel. La
+// auditoría las registra como EXPORTACION vía el catálogo.
+
+function responderCSV(req, res, nombre, csv, filas) {
+    const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.csv"`);
+    if (filas != null) res.setHeader('X-Reporte-Filas', String(filas));
+    return res.send(csv);
+}
+
+exports.exportarMargenPlatillos = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.margenPorPlatillo(rango);
+        return responderCSV(req, res, 'margen_por_platillo',
+            ReportesService.margenACSV(reporte), reporte.platillos.length);
+    } catch (error) {
+        console.error('Error al exportar el margen por platillo:', error);
+        return res.redirect('/admin/reportes/margen-platillos');
+    }
+};
+
+exports.exportarSaludInventario = async (req, res) => {
+    try {
+        const salud = await ReportesService.saludInventario();
+        const filas = salud.bajoMinimo.length + salud.vencidos.length
+            + salud.porVencer.length + salud.sinMovimiento.length;
+        return responderCSV(req, res, 'salud_inventario',
+            ReportesService.saludACSV(salud), filas);
+    } catch (error) {
+        console.error('Error al exportar la salud del inventario:', error);
+        return res.redirect('/admin/reportes/salud-inventario');
+    }
+};
+
+exports.exportarExplosionRecetas = async (req, res) => {
+    try {
+        const turnoId = parseInt(req.query.turno, 10) || null;
+        const datos = await ReporteModel.getReporteKardexPos(turnoId);
+        const csv = ReportesService.explosionACSV({ filas: datos, turnoSeleccionado: turnoId });
+        return responderCSV(req, res, 'explosion_recetas', csv, datos.length);
+    } catch (error) {
+        console.error('Error al exportar la explosión de recetas:', error);
+        return res.redirect('/admin/reportes/explosion-recetas');
+    }
+};
+
+exports.exportarVentasMesero = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.ventasPorMesero(rango);
+        return responderCSV(req, res, 'ventas_por_mesero',
+            ReportesService.ventasMeseroACSV(reporte), reporte.meseros.length);
+    } catch (error) {
+        console.error('Error al exportar las ventas por mesero:', error);
+        return res.redirect('/admin/reportes/ventas-mesero');
     }
 };
 

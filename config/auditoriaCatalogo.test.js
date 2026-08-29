@@ -147,9 +147,22 @@ describe('Catálogo de auditoría · reportes y kardex', () => {
         expect(describir('GET', '/admin/reportes/salud-inventario').entidad).toBe('Salud del inventario');
         expect(describir('GET', '/admin/reportes/margen-platillos').entidad).toBe('Margen por platillo');
         expect(describir('GET', '/admin/reportes/explosion-recetas').entidad).toBe('Explosión de recetas');
+        expect(describir('GET', '/admin/reportes/ventas-mesero').entidad).toBe('Ventas por mesero');
         expect(describir('GET', '/admin/reportes').entidad).toBe('Centro de reportes');
         // La ruta de exportación es más concreta y gana a la del kardex general
         expect(describir('GET', '/admin/kardex/exportar').entidad).toBe('Kardex');
+    });
+
+    it('clasifica la exportación de cualquier reporte como EXPORTACION', () => {
+        ['/admin/reportes/salud-inventario/exportar',
+         '/admin/reportes/margen-platillos/exportar',
+         '/admin/reportes/explosion-recetas/exportar',
+         '/admin/reportes/ventas-mesero/exportar'
+        ].forEach(ruta => {
+            const d = describir('GET', ruta);
+            expect(d.categoria).toBe('EXPORTACION');
+            expect(d.accion).toContain('CSV');
+        });
     });
 });
 

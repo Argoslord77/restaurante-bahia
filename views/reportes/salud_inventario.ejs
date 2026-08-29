@@ -29,7 +29,10 @@
 
                 <%- include('../includes/header', {encabezado_pagina: 'Salud del Inventario', desc_pagina: 'Radiografía del stock: qué se agota, qué se pierde y qué capital está detenido.', add_btn: false}) %>
 
-                <div class="d-flex justify-content-end mb-3">
+                <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
+                    <a href="/admin/reportes/salud-inventario/exportar" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                        <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
+                    </a>
                     <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
                         <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
                     </button>
