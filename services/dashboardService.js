@@ -71,7 +71,7 @@ class DashboardService {
                 m.id,
                 m.numero,
                 m.capacidad,
-                m.ubicacion,
+                COALESCE(um.nombre, m.ubicacion) AS ubicacion,
                 m.carta,
                 m.estado AS estado_mesa_db,
                 p.id AS pedido_activo_id,
@@ -91,6 +91,7 @@ class DashboardService {
                     ELSE COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.nombre, u.apellidos)), ''), u.usuario)
                 END AS mesero
             FROM mesas m
+            LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
             LEFT JOIN (
                 SELECT
                     p1.id,

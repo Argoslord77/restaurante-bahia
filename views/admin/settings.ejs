@@ -157,16 +157,70 @@
                                     </div>
                                 </div>
 
-                                <!-- PESTAÑA 3: SALONES -->
+                                <!-- PESTAÑA 3: SALONES Y ÁREAS (CRUD) -->
                                 <div class="tab-pane fade" id="salones" role="tabpanel">
-                                    <div class="row">
-                                        <div class="col-12">
-                                            <label class="form-label fw-bold small text-secondary">
-                                                <%= settings.salon_areas ? settings.salon_areas.nombre : 'Áreas y Ubicaciones del Establecimiento' %>
-                                            </label>
-                                            <textarea id="cfg_salon_areas" class="form-control" rows="3" placeholder="Ej: Salon Principal, Terraza, VIP, Barra"><%= settings.salon_areas ? settings.salon_areas.valor : 'Salon Principal, Terraza, Barra' %></textarea>
-                                            <div class="form-text text-muted fs-7">Separa los nombres de las zonas del salón con comas ( , ).</div>
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div>
+                                            <h6 class="fw-bold mb-0">Áreas de Servicio del Establecimiento</h6>
+                                            <small class="text-muted">Define los salones o zonas donde se distribuyen las mesas. Al asignar una mesa a un área, su nombre se toma de este catálogo.</small>
                                         </div>
+                                        <button type="button" class="btn btn-sm btn-primary" id="btnNuevaUbicacion">
+                                            <i class="fa-solid fa-plus me-1"></i> Nueva Área
+                                        </button>
+                                    </div>
+
+                                    <div class="table-responsive border rounded">
+                                        <table class="table table-hover align-middle mb-0" id="tablaUbicaciones">
+                                            <thead class="table-light fs-7 text-uppercase">
+                                                <tr>
+                                                    <th class="ps-3">Área / Salón</th>
+                                                    <th class="text-center">Orden</th>
+                                                    <th class="text-center">Mesas</th>
+                                                    <th class="text-center">Estado</th>
+                                                    <th class="text-end pe-3">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbodyUbicaciones">
+                                                <% if (typeof ubicaciones !== 'undefined' && ubicaciones && ubicaciones.length > 0) { %>
+                                                    <% ubicaciones.forEach(ubi => { %>
+                                                        <tr id="ubi-row-<%= ubi.id %>">
+                                                            <td class="ps-3 fw-bold">
+                                                                <i class="fa-solid fa-location-dot me-1 text-secondary"></i><%= ubi.nombre %>
+                                                                <% if(ubi.descripcion) { %><br><small class="text-muted fw-normal"><%= ubi.descripcion %></small><% } %>
+                                                            </td>
+                                                            <td class="text-center"><%= ubi.orden || 0 %></td>
+                                                            <td class="text-center"><%= ubi.total_mesas || 0 %></td>
+                                                            <td class="text-center">
+                                                                <% if (ubi.activo) { %>
+                                                                    <span class="badge bg-success-subtle text-success border border-success">Activa</span>
+                                                                <% } else { %>
+                                                                    <span class="badge bg-danger-subtle text-danger border border-danger">Inactiva</span>
+                                                                <% } %>
+                                                            </td>
+                                                            <td class="text-end pe-3">
+                                                                <button class="btn btn-sm btn-outline-secondary me-1 btn-editar-ubi" data-ubi='<%- JSON.stringify({ id: ubi.id, nombre: ubi.nombre, descripcion: ubi.descripcion, orden: ubi.orden, activo: ubi.activo ? 1 : 0, total_mesas: ubi.total_mesas || 0 }) %>' title="Editar">
+                                                                    <i class="fa-solid fa-pen-to-square"></i>
+                                                                </button>
+                                                                <button class="btn btn-sm btn-outline-<%= ubi.activo ? 'warning' : 'success' %> me-1 btn-estado-ubi" data-id="<%= ubi.id %>" data-estado="<%= ubi.activo ? 0 : 1 %>" title="<%= ubi.activo ? 'Desactivar' : 'Activar' %>">
+                                                                    <i class="fa-solid fa-<%= ubi.activo ? 'ban' : 'check' %>"></i>
+                                                                </button>
+                                                                <button class="btn btn-sm btn-outline-danger btn-eliminar-ubi" data-id="<%= ubi.id %>" data-nombre="<%= ubi.nombre %>" data-mesas="<%= ubi.total_mesas || 0 %>" title="Eliminar">
+                                                                    <i class="fa-solid fa-trash-can"></i>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    <% }) %>
+                                                <% } else { %>
+                                                    <tr>
+                                                        <td colspan="5" class="text-center text-muted py-4">No hay áreas de servicio registradas. Ejecuta la migración <code>scripts/migracion_ubicacion_mesa.sql</code> o crea la primera área manualmente.</td>
+                                                    </tr>
+                                                <% } %>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="form-text text-muted fs-7 mt-2">
+                                        <i class="fa-solid fa-circle-info me-1"></i>
+                                        Un área con mesas asociadas no puede eliminarse (primero reasigna sus mesas). Las áreas inactivas dejan de aparecer al dar de alta nuevas mesas.
                                     </div>
                                 </div>
 
@@ -400,6 +454,44 @@
         </div>
     </div>
 
+    <!-- MODAL ÁREA DE SERVICIO -->
+    <div class="modal fade" id="modalUbicacion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="modalUbiTitle">Nueva Área de Servicio</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="formUbicacionModal">
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="ubi_id" name="id">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Nombre del Área / Salón <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="ubi_nombre" name="nombre" placeholder="Ej: Salon Principal, Terraza, VIP, Barra" required>
+                            <div class="form-text fs-7">Los nombres deben ser únicos. Si renombras un área, todas sus mesas mostrarán el nuevo nombre.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Descripción (Opcional)</label>
+                            <textarea class="form-control" id="ubi_descripcion" name="descripcion" rows="2" placeholder="Notas sobre esta zona del local..."></textarea>
+                        </div>
+
+                        <div class="mb-0">
+                            <label class="form-label fw-semibold">Orden de despliegue</label>
+                            <input type="number" class="form-control" id="ubi_orden" name="orden" min="0" value="0">
+                            <div class="form-text fs-7">Las áreas se listan de menor a mayor orden (0 primero). Áreas con el mismo orden se ordenan alfabéticamente.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save me-1"></i> Guardar Área</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
     <script>
@@ -491,13 +583,13 @@
         });
 
         const modalCategoriaBs = new bootstrap.Modal(document.getElementById('modalCategoria'));
+        const modalUbicacionBs = new bootstrap.Modal(document.getElementById('modalUbicacion'));
 
         // Guardar ajustes generales del sistema
         document.getElementById('btnGuardarConfig').addEventListener('click', function() {
             const formData = {
                 app_nombre: document.getElementById('cfg_app_nombre').value,
                 app_moneda: document.getElementById('cfg_app_moneda').value,
-                salon_areas: document.getElementById('cfg_salon_areas').value,
                 factura_impuesto: document.getElementById('cfg_factura_impuesto').value,
                 factura_propina: document.getElementById('cfg_factura_propina').value
             };
@@ -744,6 +836,180 @@
                             if(data.success) {
                                 Swal.fire('¡Eliminada!', data.message, 'success');
                                 recargarTablaCategorias();
+                            } else {
+                                Swal.fire('Atención', data.message, 'warning');
+                            }
+                        });
+                }
+            });
+        }
+
+        // ================================================================
+        // CRUD DE ÁREAS DE SERVICIO (ubicacion_mesa) — Pestaña Salón y Áreas
+        // ================================================================
+        document.getElementById('btnNuevaUbicacion').addEventListener('click', abrirModalUbicacion);
+
+        document.getElementById('tbodyUbicaciones').addEventListener('click', function(e) {
+            const btnEditar = e.target.closest('.btn-editar-ubi');
+            if (btnEditar) {
+                const ubiData = JSON.parse(btnEditar.getAttribute('data-ubi'));
+                editarUbicacion(ubiData);
+                return;
+            }
+
+            const btnEstado = e.target.closest('.btn-estado-ubi');
+            if (btnEstado) {
+                toggleEstadoUbicacion(btnEstado.getAttribute('data-id'), btnEstado.getAttribute('data-estado'));
+                return;
+            }
+
+            const btnEliminar = e.target.closest('.btn-eliminar-ubi');
+            if (btnEliminar) {
+                eliminarUbicacion(btnEliminar.getAttribute('data-id'), btnEliminar.getAttribute('data-nombre'), btnEliminar.getAttribute('data-mesas'));
+                return;
+            }
+        });
+
+        function recargarTablaUbicaciones() {
+            fetch('/admin/api/ubicaciones-mesa')
+                .then(r => r.json())
+                .then(res => {
+                    if(!res.success && !Array.isArray(res.data) && !Array.isArray(res)) return;
+                    const items = res.data || (Array.isArray(res) ? res : []);
+                    const tbody = document.getElementById('tbodyUbicaciones');
+                    tbody.innerHTML = '';
+
+                    if(items.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">No hay áreas de servicio registradas.</td></tr>`;
+                        return;
+                    }
+
+                    items.forEach(ubi => {
+                        const tr = document.createElement('tr');
+                        tr.id = `ubi-row-${ubi.id}`;
+                        const ubiJson = JSON.stringify({ id: ubi.id, nombre: ubi.nombre, descripcion: ubi.descripcion, orden: ubi.orden, activo: ubi.activo ? 1 : 0, total_mesas: ubi.total_mesas || 0 }).replace(/'/g, "&#39;");
+                        tr.innerHTML = `
+                            <td class="ps-3 fw-bold">
+                                <i class="fa-solid fa-location-dot me-1 text-secondary"></i>${ubi.nombre}
+                                ${ubi.descripcion ? `<br><small class="text-muted fw-normal">${ubi.descripcion}</small>` : ''}
+                            </td>
+                            <td class="text-center">${ubi.orden || 0}</td>
+                            <td class="text-center">${ubi.total_mesas || 0}</td>
+                            <td class="text-center">
+                                ${ubi.activo
+                                    ? '<span class="badge bg-success-subtle text-success border border-success">Activa</span>'
+                                    : '<span class="badge bg-danger-subtle text-danger border border-danger">Inactiva</span>'}
+                            </td>
+                            <td class="text-end pe-3">
+                                <button class="btn btn-sm btn-outline-secondary me-1 btn-editar-ubi" data-ubi='${ubiJson}' title="Editar">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-${ubi.activo ? 'warning' : 'success'} me-1 btn-estado-ubi" data-id="${ubi.id}" data-estado="${ubi.activo ? 0 : 1}" title="${ubi.activo ? 'Desactivar' : 'Activar'}">
+                                    <i class="fa-solid fa-${ubi.activo ? 'ban' : 'check'}"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger btn-eliminar-ubi" data-id="${ubi.id}" data-nombre="${ubi.nombre}" data-mesas="${ubi.total_mesas || 0}" title="Eliminar">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+
+        function abrirModalUbicacion() {
+            document.getElementById('formUbicacionModal').reset();
+            document.getElementById('ubi_id').value = '';
+            document.getElementById('ubi_orden').value = 0;
+            document.getElementById('modalUbiTitle').textContent = 'Nueva Área de Servicio';
+            modalUbicacionBs.show();
+        }
+
+        function editarUbicacion(ubi) {
+            document.getElementById('ubi_id').value = ubi.id;
+            document.getElementById('ubi_nombre').value = ubi.nombre;
+            document.getElementById('ubi_descripcion').value = ubi.descripcion || '';
+            document.getElementById('ubi_orden').value = ubi.orden || 0;
+            document.getElementById('modalUbiTitle').textContent = 'Editar Área de Servicio';
+            modalUbicacionBs.show();
+        }
+
+        document.getElementById('formUbicacionModal').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const payload = {
+                id: document.getElementById('ubi_id').value,
+                nombre: document.getElementById('ubi_nombre').value,
+                descripcion: document.getElementById('ubi_descripcion').value,
+                orden: document.getElementById('ubi_orden').value
+            };
+
+            Swal.fire({
+                title: 'Guardando área...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            fetch('/admin/api/ubicaciones-mesa/guardar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.success) {
+                    modalUbicacionBs.hide();
+                    Swal.fire({ icon: 'success', title: '¡Guardado!', text: data.message, timer: 1500, showConfirmButton: false });
+                    recargarTablaUbicaciones();
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(() => Swal.fire('Error', 'No se pudo guardar el área de servicio', 'error'));
+        });
+
+        function toggleEstadoUbicacion(id, nuevoEstado) {
+            fetch(`/admin/api/ubicaciones-mesa/${id}/estado`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ activo: nuevoEstado })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.success) {
+                    recargarTablaUbicaciones();
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            });
+        }
+
+        function eliminarUbicacion(id, nombre, mesas) {
+            if (parseInt(mesas, 10) > 0) {
+                Swal.fire(
+                    'Área en uso',
+                    `El área "${nombre}" tiene ${mesas} mesa(s) asociada(s). Reasigna o elimina esas mesas antes de borrar el área.`,
+                    'warning'
+                );
+                return;
+            }
+            Swal.fire({
+                title: '¿Eliminar Área?',
+                text: `¿Deseas eliminar el área de servicio "${nombre}"?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then(res => {
+                if(res.isConfirmed) {
+                    fetch(`/admin/api/ubicaciones-mesa/${id}`, { method: 'DELETE' })
+                        .then(r => r.json())
+                        .then(data => {
+                            if(data.success) {
+                                Swal.fire('¡Eliminada!', data.message, 'success');
+                                recargarTablaUbicaciones();
                             } else {
                                 Swal.fire('Atención', data.message, 'warning');
                             }

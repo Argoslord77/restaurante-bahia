@@ -1,6 +1,7 @@
 // controllers/tableController.js
 const tableService = require('../services/tableService');
 const TurnoService = require('../services/turnoService');
+const UbicacionMesaModel = require('../models/ubicacionMesaModel');
 
 exports.listTables = async (req, res) => {
     try {
@@ -10,6 +11,14 @@ exports.listTables = async (req, res) => {
 
         const tables = await tableService.getAllTables();
         const waiters = await tableService.getActiveWaiters();
+        
+        // Catálogo de áreas de servicio (para los selects de alta/edición)
+        let ubicaciones = [];
+        try {
+            ubicaciones = await UbicacionMesaModel.getAllWithMesas();
+        } catch (ubiErr) {
+            console.warn('Catálogo ubicacion_mesa no disponible:', ubiErr.message);
+        }
         
         // Capturar áreas únicas del mobiliario actual
         const areas = [...new Set(tables.map(t => t.ubicacion || 'Salon Principal'))];
@@ -32,6 +41,7 @@ exports.listTables = async (req, res) => {
             tables,
             waiters,
             areas,
+            ubicaciones,
             distributionToday,
             hayTurnoActivo,
             turnoActivo,
@@ -94,16 +104,23 @@ exports.createTable = async (req, res) => {
     try {
         const numero = req.body.numero ? req.body.numero.trim() : '';
         const carta = req.body.carta ? req.body.carta.trim() : 'CUP';
-        const ubicacion = req.body.ubicacion ? req.body.ubicacion.trim() : 'Salon Principal';
+        const ubicacionId = req.body.ubicacion_id !== undefined && req.body.ubicacion_id !== null && req.body.ubicacion_id !== ''
+            ? parseInt(req.body.ubicacion_id, 10)
+            : null;
+        const ubicacion = req.body.ubicacion ? req.body.ubicacion.trim() : '';
         const { capacidad, estado } = req.body;
 
         if (!numero) {
             return res.status(400).json({ success: false, message: 'El código o número de mesa es obligatorio.' });
         }
+        if (!ubicacionId && !ubicacion) {
+            return res.status(400).json({ success: false, message: 'Debes seleccionar el área de servicio de la mesa.' });
+        }
 
         await tableService.createTable({
             numero,
             carta,
+            ubicacion_id: ubicacionId,
             ubicacion,
             capacidad: parseInt(capacidad, 10) || 2,
             estado: estado || 'libre'
@@ -115,6 +132,9 @@ exports.createTable = async (req, res) => {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, message: 'El código o número de mesa ya está registrado.' });
         }
+        if (error.message && error.message.includes('área de servicio')) {
+            return res.status(400).json({ success: false, message: error.message });
+        }
         return res.status(500).json({ success: false, message: 'Error interno del servidor.' });
     }
 };
@@ -125,16 +145,23 @@ exports.updateTable = async (req, res) => {
         const { id } = req.params;
         const numero = req.body.numero ? req.body.numero.trim() : '';
         const carta = req.body.carta ? req.body.carta.trim() : 'CUP';
-        const ubicacion = req.body.ubicacion ? req.body.ubicacion.trim() : 'Salon Principal';
+        const ubicacionId = req.body.ubicacion_id !== undefined && req.body.ubicacion_id !== null && req.body.ubicacion_id !== ''
+            ? parseInt(req.body.ubicacion_id, 10)
+            : null;
+        const ubicacion = req.body.ubicacion ? req.body.ubicacion.trim() : '';
         const { capacidad, estado } = req.body;
 
         if (!numero) {
             return res.status(400).json({ success: false, message: 'El número de mesa es obligatorio.' });
         }
+        if (!ubicacionId && !ubicacion) {
+            return res.status(400).json({ success: false, message: 'Debes seleccionar el área de servicio de la mesa.' });
+        }
 
         const updateData = {
             numero,
             carta,
+            ubicacion_id: ubicacionId,
             ubicacion,
             capacidad: parseInt(capacidad, 10) || 2,
             estado
@@ -151,6 +178,9 @@ exports.updateTable = async (req, res) => {
         console.error('Error crítico al editar mesa:', error);
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, message: 'No puedes renombrar la mesa a un código que ya existe.' });
+        }
+        if (error.message && error.message.includes('área de servicio')) {
+            return res.status(400).json({ success: false, message: error.message });
         }
         return res.status(500).json({ success: false, message: 'Error al procesar la actualización de la mesa.' });
     }

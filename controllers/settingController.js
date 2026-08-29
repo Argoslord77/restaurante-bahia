@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
+const UbicacionMesaModel = require('../models/ubicacionMesaModel');
 
 module.exports = {
     // Vista de Configuración del Sistema
@@ -8,6 +9,7 @@ module.exports = {
             const settings = await SettingService.getAll();
             let categorias = [];
             let almacenes = [];
+            let ubicaciones = [];
 
             if (pool) {
                 try {
@@ -35,6 +37,20 @@ module.exports = {
                 } catch (almErr) {
                     console.warn('Almacenes no encontrados:', almErr.message);
                 }
+
+                try {
+                    const [ubiRows] = await pool.query(`
+                        SELECT u.id, u.nombre, u.descripcion, u.orden, u.activo,
+                               COUNT(m.id) AS total_mesas
+                        FROM ubicacion_mesa u
+                        LEFT JOIN mesas m ON m.ubicacion_id = u.id
+                        GROUP BY u.id
+                        ORDER BY u.orden ASC, u.nombre ASC
+                    `);
+                    ubicaciones = ubiRows;
+                } catch (ubiErr) {
+                    console.warn('Ubicaciones de mesa no encontradas:', ubiErr.message);
+                }
             }
 
             res.render('admin/settings', {
@@ -43,6 +59,7 @@ module.exports = {
                 settings,
                 categorias,
                 almacenes,
+                ubicaciones,
                 user: req.user || null,
                 success_msg: req.flash ? req.flash('success_msg') : null,
                 error_msg: req.flash ? req.flash('error_msg') : null
@@ -59,7 +76,6 @@ module.exports = {
             const {
                 app_nombre,
                 app_moneda,
-                salon_areas,
                 factura_impuesto,
                 factura_propina,
                 inventario_unidades,
@@ -75,9 +91,9 @@ module.exports = {
                 await SettingService.set('app_moneda', app_moneda, 'Símbolo Monetario Predeterminado', 'identidad', 'string');
             }
 
-            if (salon_areas !== undefined) {
-                await SettingService.set('salon_areas', salon_areas, 'Áreas y Ubicaciones del Establecimiento', 'salon', 'string');
-            }
+            // NOTA: las áreas del salón ya no se guardan como texto libre:
+            // se administran con el CRUD de la pestaña "Salón y Áreas"
+            // (tabla ubicacion_mesa). El ajuste legado "salon_areas" se ignora.
 
             if (factura_impuesto !== undefined) {
                 await SettingService.set('factura_impuesto', factura_impuesto, 'Impuesto General aplicado a Ventas (%)', 'finanzas', 'number');
@@ -244,6 +260,97 @@ module.exports = {
             res.json({ success: true, message: 'Categoría eliminada con éxito' });
         } catch (err) {
             res.status(500).json({ success: false, message: err.message });
+        }
+    },
+    // ================================================================
+    // API: Areas de Servicio / Salones (CRUD - tabla ubicacion_mesa)
+    // ================================================================
+    getUbicacionesMesa: async (req, res) => {
+        try {
+            if (!pool) return res.json({ success: true, data: [] });
+            const rows = await UbicacionMesaModel.getAllWithMesas();
+            res.json({ success: true, data: rows });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    },
+
+    saveUbicacionMesa: async (req, res) => {
+        try {
+            const { id, nombre, descripcion, orden } = req.body;
+            if (!nombre || !nombre.trim()) {
+                return res.status(400).json({ success: false, message: 'El nombre del area es obligatorio' });
+            }
+
+            if (!pool) return res.json({ success: true, message: 'Area de servicio guardada exitosamente' });
+
+            const data = {
+                nombre: nombre.trim(),
+                descripcion: (descripcion || '').toString().trim() || null,
+                orden: orden || 0
+            };
+
+            if (id && id !== '') {
+                const anterior = await UbicacionMesaModel.getById(id);
+                await UbicacionMesaModel.update(id, data);
+                // Propagar el renombrado al espejo legado mesas.ubicacion
+                await UbicacionMesaModel.sincronizarNombreMesas(id, data.nombre);
+                // Y a la distribución de mesas guardada hoy para ese área
+                if (anterior && anterior.nombre && anterior.nombre !== data.nombre) {
+                    await UbicacionMesaModel.sincronizarAsignacionesHoy(anterior.nombre, data.nombre);
+                }
+            } else {
+                await UbicacionMesaModel.create(data);
+            }
+            res.json({ success: true, message: 'Area de servicio guardada correctamente' });
+        } catch (err) {
+            if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(400).json({ success: false, message: 'Ya existe un area de servicio con ese nombre' });
+            }
+            console.error('Error al guardar area de servicio:', err);
+            res.status(500).json({ success: false, message: err.message });
+        }
+    },
+
+    toggleUbicacionMesa: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { activo } = req.body;
+            if (!pool) return res.json({ success: true });
+
+            if (activo !== undefined) {
+                await UbicacionMesaModel.setEstado(id, activo);
+            } else {
+                const actual = await UbicacionMesaModel.getById(id);
+                if (!actual) {
+                    return res.status(404).json({ success: false, message: 'Area de servicio no encontrada' });
+                }
+                await UbicacionMesaModel.setEstado(id, !actual.activo);
+            }
+            res.json({ success: true, message: 'Estado del area actualizado' });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    },
+
+    deleteUbicacionMesa: async (req, res) => {
+        try {
+            const { id } = req.params;
+            if (!pool) return res.json({ success: true });
+
+            // Verificar si tiene mesas asociadas
+            const totalMesas = await UbicacionMesaModel.countMesasAsociadas(id);
+            if (totalMesas > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `No se puede eliminar el area porque contiene ${totalMesas} mesa(s) asociada(s). Reasigna o elimina esas mesas primero.`
+                });
+            }
+
+            await UbicacionMesaModel.delete(id);
+            res.json({ success: true, message: 'Area de servicio eliminada con exito' });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
         }
     }
 };

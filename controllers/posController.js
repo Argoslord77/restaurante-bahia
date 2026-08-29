@@ -20,10 +20,11 @@ module.exports = {
             // en todas las tarjetas del catálogo.
             if (pedidoId) {
                 const [pedidos] = await pool.query(`
-                    SELECT p.*, m.numero AS mesa_numero, m.ubicacion AS mesa_ubicacion,
+                    SELECT p.*, m.numero AS mesa_numero, COALESCE(um.nombre, m.ubicacion) AS mesa_ubicacion,
                            m.carta, u.nombre AS mesero_nombre
                     FROM pedidos p
                     LEFT JOIN mesas m ON p.id_mesa = m.id
+                    LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
                     LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
                     WHERE p.id = ?
                     LIMIT 1

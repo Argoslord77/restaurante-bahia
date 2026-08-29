@@ -1,5 +1,6 @@
 // services/tableService.js
 const TableModel = require('../models/tableModel');
+const UbicacionMesaModel = require('../models/ubicacionMesaModel');
 const db = require('../config/db');
 
 class TableService {
@@ -16,6 +17,7 @@ class TableService {
                 capacidad: row.capacidad,
                 estado: row.estado,
                 ubicacion: row.ubicacion,
+                ubicacion_id: row.ubicacion_id || null,
                 creado_en: row.creado_en,
                 actualizado_en: row.actualizado_en,
                 pedido_id: row.orden_id || null,
@@ -42,14 +44,47 @@ class TableService {
         return await TableModel.getById(id); 
     }
 
+    // Resolver el área de una mesa contra el catálogo ubicacion_mesa.
+    // Acepta el id del área (flujo nuevo) o, como retrocompatibilidad,
+    // el nombre del área (lo busca y lo crea si no existe).
+    // Devuelve { ubicacion_id, ubicacion } con el nombre canónico.
+    async resolverUbicacion(ubicacionId, ubicacionNombre) {
+        const DEFECTO = 'Salon Principal';
+
+        if (ubicacionId !== undefined && ubicacionId !== null && ubicacionId !== '') {
+            const ubicacion = await UbicacionMesaModel.getById(ubicacionId);
+            if (!ubicacion) {
+                throw new Error('El área de servicio seleccionada no existe en el catálogo.');
+            }
+            return { ubicacion_id: ubicacion.id, ubicacion: ubicacion.nombre };
+        }
+
+        const nombre = (ubicacionNombre || '').toString().trim() || DEFECTO;
+        let ubicacion = await UbicacionMesaModel.getByNombre(nombre);
+        if (!ubicacion) {
+            // Retrocompatibilidad: dar de alta el área indicada por nombre
+            await UbicacionMesaModel.create({ nombre });
+            ubicacion = await UbicacionMesaModel.getByNombre(nombre);
+        }
+        return { ubicacion_id: ubicacion ? ubicacion.id : null, ubicacion: nombre };
+    }
+
     // Crear una nueva mesa respetando sus valores por defecto
     async createTable(data) { 
-        return await TableModel.create(data); 
+        const { ubicacion_id, ubicacion } = await this.resolverUbicacion(
+            data.ubicacion_id,
+            data.ubicacion
+        );
+        return await TableModel.create({ ...data, ubicacion_id, ubicacion });
     }
 
     // Actualizar los datos de una mesa (incluyendo ubicación y estado)
     async updateTable(id, data) { 
-        return await TableModel.update(id, data); 
+        const { ubicacion_id, ubicacion } = await this.resolverUbicacion(
+            data.ubicacion_id,
+            data.ubicacion
+        );
+        return await TableModel.update(id, { ...data, ubicacion_id, ubicacion });
     }
 
     // Eliminar físicamente el registro de la mesa

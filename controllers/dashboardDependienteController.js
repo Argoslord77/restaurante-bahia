@@ -40,13 +40,13 @@ const DashboardDependienteController = {
                 // La asignación persiste durante TODO el turno activo (aunque cruce la medianoche),
                 // no durante el día natural. Se toma la fila vigente (máxima) por ubicación del turno.
                 queryMesas = `
-                    SELECT 
+                    SELECT
                         m.id,
                         m.numero,
                         m.numero AS nombre,
                         m.capacidad,
                         m.estado,
-                        m.ubicacion,
+                        COALESCE(um.nombre, m.ubicacion) AS ubicacion,
                         m.carta,
                         p.id AS id_pedido_activo,
                         p.estado_pedido,
@@ -56,6 +56,7 @@ const DashboardDependienteController = {
                         u.usuario AS mesero_asignado,
                         TIMESTAMPDIFF(MINUTE, p.creado_en, NOW()) AS minutos_abiertos
                     FROM mesas m
+                    LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
                     INNER JOIN detalle_asignacion_mesa dam ON m.id = dam.mesa_id
                     INNER JOIN asignaciones_diarias ad ON dam.asignacion_diaria_id = ad.id
                     LEFT JOIN pedidos p 
@@ -78,13 +79,13 @@ const DashboardDependienteController = {
             } else {
                 // Admin, Capitán o Supervisor (Muestra todas las mesas del salón sin duplicados)
                 queryMesas = `
-                    SELECT 
+                    SELECT
                         m.id,
                         m.numero,
                         m.numero AS nombre,
                         m.capacidad,
                         m.estado,
-                        m.ubicacion,
+                        COALESCE(um.nombre, m.ubicacion) AS ubicacion,
                         m.carta,
                         p.id AS id_pedido_activo,
                         p.estado_pedido,
@@ -94,7 +95,8 @@ const DashboardDependienteController = {
                         u.usuario AS mesero_asignado,
                         TIMESTAMPDIFF(MINUTE, p.creado_en, NOW()) AS minutos_abiertos
                     FROM mesas m
-                    LEFT JOIN pedidos p 
+                    LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
+                    LEFT JOIN pedidos p
                         ON m.id = p.id_mesa 
                         AND p.turno_servicio_id = ?
                         AND p.estado_pago = 'pendiente'
