@@ -26,13 +26,15 @@ const SalidaManualController = {
     viewSalidasManuales: async (req, res) => {
         try {
             const filtros = SalidaManualController._leerFiltros(req.query);
+            const UnidadMedidaService = require('../services/unidadMedidaService');
 
-            const [resultado, resumen, almacenes, productos, usuarios] = await Promise.all([
+            const [resultado, resumen, almacenes, productos, usuarios, unidades] = await Promise.all([
                 SalidaManualService.listarFiltrado(filtros),
                 SalidaManualService.resumenFiltrado(filtros),
                 AlmacenModel.getAll(),
                 ProductoModel.getAll(),
-                SalidaManualService.usuariosConSalidas()
+                SalidaManualService.usuariosConSalidas(),
+                UnidadMedidaService.listarUnidades(false)
             ]);
 
             res.render('inventarios/salidas-manuales', {
@@ -43,6 +45,7 @@ const SalidaManualController = {
                 almacenes,
                 productos,
                 usuarios,
+                unidades,
                 tipoFiltro: filtros.tipo || 'todos',
                 almacenFiltro: filtros.almacenId || null,
                 user: req.user,
@@ -83,6 +86,7 @@ const SalidaManualController = {
                 almacen_id: req.body.almacen_id,
                 producto_id: req.body.producto_id,
                 cantidad: req.body.cantidad,
+                unidad_medida_id: req.body.unidad_medida_id || null,
                 tipo: req.body.tipo,
                 motivo: req.body.motivo,
                 notas: req.body.notas,

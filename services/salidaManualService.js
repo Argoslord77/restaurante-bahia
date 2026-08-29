@@ -1,5 +1,6 @@
 // services/salidaManualService.js - Servicio para gestión de salidas manuales de inventario
 const SalidaManual = require('../models/salidaManualModel');
+const UnidadMedidaService = require('./unidadMedidaService');
 const logger = require('../config/logger');
 
 const SalidaManualService = {
@@ -65,15 +66,33 @@ const SalidaManualService = {
                 throw new Error('El usuario es obligatorio');
             }
 
-            // Verificar stock disponible
+            // ── Unidad de medida ─────────────────────────────────────────
+            // La salida se registra en la unidad elegida por el usuario, pero el
+            // descuento de lotes y el kardex operan en la unidad de INVENTARIO
+            // del producto (mismo criterio que las entradas de almacén).
+            // Si no se envía unidad, se asume la unidad de inventario (factor 1).
+            let cantidadInventario = Number(salidaData.cantidad);
+            let infoUnidad = null;
+
+            if (salidaData.unidad_medida_id) {
+                infoUnidad = await UnidadMedidaService.validarUnidadParaEntrada(
+                    salidaData.producto_id,
+                    salidaData.unidad_medida_id
+                );
+                const factor = Number(infoUnidad.factor_a_inventario) || 1;
+                cantidadInventario = cantidadInventario * factor;
+            }
+
+            // Verificar stock disponible (en unidades de inventario)
             const stockDisponible = await SalidaManual.verificarStock(
                 salidaData.almacen_id,
                 salidaData.producto_id,
-                salidaData.cantidad
+                cantidadInventario
             );
 
             if (!stockDisponible) {
-                throw new Error('No hay suficiente stock en el almacén');
+                throw new Error('No hay suficiente stock en el almacén' +
+                    (infoUnidad ? ` para la cantidad indicada en ${infoUnidad.unidad.abreviatura}` : ''));
             }
 
             const connection = await db.getConnection();
@@ -86,7 +105,7 @@ const SalidaManualService = {
                     salidaData.producto_id
                 );
 
-                let cantidadPendiente = salidaData.cantidad;
+                let cantidadPendiente = cantidadInventario;
                 const movimientos = [];
 
                 // Descontar de lotes
@@ -150,7 +169,17 @@ const SalidaManualService = {
 
                 await connection.commit();
                 logger.info(`Salida manual ${salidaId} registrada. Movimientos: ${movimientos.length}`);
-                return { success: true, id: salidaId, movimientos };
+                return {
+                    success: true,
+                    id: salidaId,
+                    movimientos,
+                    unidad: infoUnidad ? {
+                        id: infoUnidad.unidad.id,
+                        abreviatura: infoUnidad.unidad.abreviatura,
+                        factor_a_inventario: Number(infoUnidad.factor_a_inventario) || 1,
+                        cantidad_inventario: cantidadInventario
+                    } : null
+                };
             } catch (error) {
                 await connection.rollback();
                 throw error;
@@ -234,7 +263,7 @@ const SalidaManualService = {
 
             const cabecera = [
                 'ID', 'Documento', 'Fecha', 'Almacen', 'Producto', 'Codigo',
-                'Cantidad', 'Tipo', 'Motivo', 'Notas', 'Usuario', 'Costo impactado'
+                'Cantidad', 'Unidad', 'Tipo', 'Motivo', 'Notas', 'Usuario', 'Costo impactado'
             ].join(';');
 
             const lineas = rows.map(r => [
@@ -245,6 +274,7 @@ const SalidaManualService = {
                 r.producto_nombre,
                 r.producto_codigo || '',
                 r.cantidad,
+                r.unidad_abreviatura || '',
                 r.tipo,
                 r.motivo || '',
                 r.notas || '',

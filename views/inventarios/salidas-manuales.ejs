@@ -445,7 +445,7 @@
                                                     <div class="fw-medium"><%= salida.producto_nombre %></div>
                                                     <div class="text-muted small"><%= salida.producto_codigo || '' %></div>
                                                 </td>
-                                                <td class="fw-bold text-danger text-end"><%= parseFloat(salida.cantidad).toLocaleString('es-ES', { maximumFractionDigits: 3 }) %></td>
+                                                <td class="fw-bold text-danger text-end"><%= parseFloat(salida.cantidad).toLocaleString('es-ES', { maximumFractionDigits: 3 }) %> <%= salida.unidad_abreviatura || '' %></td>
                                                 <td class="text-end <%= Number(salida.costo_total) > 0 ? 'text-dark fw-semibold' : 'text-muted' %>">
                                                     <%= Number(salida.costo_total) > 0 ? '$' + fmt(salida.costo_total, 2) : '—' %>
                                                 </td>
@@ -524,15 +524,31 @@
                                 <select class="form-select select2-busqueda" id="producto" name="producto_id" required>
                                     <option value=""></option>
                                     <% productos.forEach(producto => { %>
-                                        <option value="<%= producto.id %>"><%= producto.nombre %> (<%= producto.codigo || 'N/A' %>)<%= producto.categoria_nombre ? ' — ' + producto.categoria_nombre : '' %></option>
+                                        <option value="<%= producto.id %>"
+                                                data-unidad-inventario-id="<%= producto.unidad_inventario_id || '' %>"
+                                                data-unidad-inventario="<%= producto.unidad_nombre || '' %>"><%= producto.nombre %> (<%= producto.codigo || 'N/A' %>)<%= producto.categoria_nombre ? ' — ' + producto.categoria_nombre : '' %></option>
                                     <% }) %>
                                 </select>
                                 <div id="stockHint" class="form-text small"></div>
                             </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Unidad de medida <span class="text-danger">*</span></label>
+                                <select class="form-select" id="unidad_medida_id" name="unidad_medida_id" required disabled>
+                                    <option value="">Seleccione el producto primero...</option>
+                                    <% (unidades || []).forEach(u => { %>
+                                        <option value="<%= u.id %>" data-tipo="<%= u.tipo %>"><%= u.nombre %> (<%= u.abreviatura %>)</option>
+                                    <% }) %>
+                                </select>
+                                <div id="conversionHint" class="form-text small"></div>
+                            </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Cantidad <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" id="cantidad" name="cantidad" step="0.001" min="0.001" required>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="cantidad" name="cantidad" step="0.001" min="0.001" required>
+                                    <span class="input-group-text bg-light text-muted" id="cantidadUnidad">—</span>
+                                </div>
                             </div>
                             
                             <div class="col-md-6">
@@ -548,14 +564,14 @@
                                 </select>
                             </div>
                             
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <label class="form-label fw-semibold">Motivo</label>
                                 <input type="text" class="form-control" id="motivo" name="motivo" placeholder="Ej: Producto dañado en cocina">
                             </div>
                             
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <label class="form-label fw-semibold">Notas</label>
-                                <textarea class="form-control" id="notas" name="notas" rows="2" placeholder="Información adicional..."></textarea>
+                                <textarea class="form-control" id="notas" name="notas" rows="1" placeholder="Información adicional..."></textarea>
                             </div>
                         </div>
                     </div>
@@ -592,6 +608,96 @@
             width: '100%'
         });
 
+        // ═══════════════ UNIDAD DE MEDIDA DEL FORMULARIO ═══════════════
+        // La salida se expresa en la unidad elegida; el inventario opera en la
+        // unidad canónica del producto. El factor se consulta a la API de
+        // conversiones (misma que usan entradas, POS y transferencias).
+        const $unidadSelect = $('#unidad_medida_id');
+        const cacheFactores = {};
+        let factorActual = 1;         // 1 unidad elegida = factorActual de inventario
+        let unidadInventarioTxt = ''; // abreviatura de la unidad de inventario
+        let conversionDisponible = true;
+
+        function productoSeleccionado() {
+            const $opt = $('#producto').find('option:selected');
+            return ($opt.length && $opt.val()) ? $opt : null;
+        }
+
+        function abrevUnidadSeleccionada() {
+            const texto = $unidadSelect.find('option:selected').text() || '';
+            const m = texto.match(/\(([^)]+)\)\s*$/);
+            return m ? m[1] : '';
+        }
+
+        async function obtenerFactor(productoId, unidadId) {
+            const clave = productoId + ':' + unidadId;
+            if (cacheFactores[clave] !== undefined) return cacheFactores[clave];
+            const $opt = productoSeleccionado();
+            const unidadInvId = $opt ? ($opt.attr('data-unidad-inventario-id') || '') : '';
+            if (!unidadInvId || Number(unidadId) === Number(unidadInvId)) {
+                cacheFactores[clave] = 1;
+                return 1;
+            }
+            try {
+                const resp = await fetch('/admin/api/unidades-medida/convertir?cantidad=1&desde=' + unidadId + '&hasta=' + unidadInvId + '&producto_id=' + productoId);
+                const data = await resp.json();
+                cacheFactores[clave] = data.success ? (Number(data.factor) || 1) : null;
+            } catch (e) {
+                cacheFactores[clave] = null;
+            }
+            return cacheFactores[clave];
+        }
+
+        async function actualizarUnidadUI() {
+            const productoId = $('#producto').val();
+            const $opt = productoSeleccionado();
+            const unidadInvId = $opt ? ($opt.attr('data-unidad-inventario-id') || '') : '';
+            unidadInventarioTxt = $opt ? ($opt.attr('data-unidad-inventario') || '') : '';
+
+            $unidadSelect.prop('disabled', !productoId);
+            if (!productoId) {
+                $unidadSelect.val('');
+            } else if (unidadInvId) {
+                $unidadSelect.val(unidadInvId); // propone la unidad de inventario del producto
+            }
+            await recalcularConversion();
+        }
+
+        async function recalcularConversion() {
+            const productoId = $('#producto').val();
+            const unidadId = $unidadSelect.val();
+            const hint = $('#conversionHint');
+            const abrevSel = unidadId ? abrevUnidadSeleccionada() : '';
+            $('#cantidadUnidad').text(abrevSel || '—');
+
+            factorActual = 1;
+            conversionDisponible = true;
+            if (!productoId || !unidadId) {
+                hint.attr('class', 'form-text small').html('');
+                pintarStockHint();
+                return;
+            }
+
+            const $opt = productoSeleccionado();
+            const unidadInvId = $opt ? ($opt.attr('data-unidad-inventario-id') || '') : '';
+            if (unidadInvId && Number(unidadId) !== Number(unidadInvId)) {
+                const f = await obtenerFactor(productoId, unidadId);
+                if (f === null) {
+                    conversionDisponible = false;
+                    hint.attr('class', 'form-text small text-danger fw-semibold')
+                        .html('<i class="fa-solid fa-triangle-exclamation me-1"></i>No hay factor de conversión activo hacia la unidad de inventario' + (unidadInventarioTxt ? ' (' + unidadInventarioTxt + ')' : '') + '. Configúrelo antes de registrar la salida.');
+                    pintarStockHint();
+                    return;
+                }
+                factorActual = f;
+                hint.attr('class', 'form-text small text-muted')
+                    .html('<i class="fa-solid fa-right-left me-1"></i>1 ' + abrevSel + ' = ' + f + ' ' + (unidadInventarioTxt || 'unidad de inventario'));
+            } else {
+                hint.attr('class', 'form-text small').html('');
+            }
+            pintarStockHint();
+        }
+
         // ═══════════════ STOCK DISPONIBLE (almacén + producto) ═══════════════
         const cacheStock = {};
         async function obtenerStock(almacenId) {
@@ -612,16 +718,28 @@
 
         function pintarStockHint() {
             const hint = $('#stockHint');
-            const stock = parseFloat(hint.attr('data-stock'));
-            if (isNaN(stock)) { hint.attr('class', 'form-text small').html(''); return; }
-            const stockTxt = stock.toLocaleString('es-ES', { maximumFractionDigits: 3 });
+            const stockInv = parseFloat(hint.attr('data-stock')); // stock en unidades de inventario
+            if (isNaN(stockInv)) { hint.attr('class', 'form-text small').html(''); return; }
+            if (!conversionDisponible) {
+                hint.attr('class', 'form-text small').html('');
+                return;
+            }
+
+            const abrevSel = $unidadSelect.val() ? abrevUnidadSeleccionada() : (unidadInventarioTxt || '');
+            const stockEnUnidad = stockInv / (factorActual || 1);
+            const stockSelTxt = stockEnUnidad.toLocaleString('es-ES', { maximumFractionDigits: 3 });
+            const stockInvTxt = stockInv.toLocaleString('es-ES', { maximumFractionDigits: 3 });
+
             const cantidad = parseFloat($('#cantidad').val());
-            if (!isNaN(cantidad) && cantidad > stock) {
+            const cantidadEnInventario = isNaN(cantidad) ? NaN : cantidad * factorActual;
+
+            if (!isNaN(cantidadEnInventario) && cantidadEnInventario > stockInv) {
                 hint.attr('class', 'form-text small text-danger fw-semibold')
-                    .html('<i class="fa-solid fa-triangle-exclamation me-1"></i>La cantidad supera el stock disponible (' + stockTxt + ')');
+                    .html('<i class="fa-solid fa-triangle-exclamation me-1"></i>La cantidad supera el stock disponible (' + stockSelTxt + ' ' + abrevSel + ')');
             } else {
-                hint.attr('class', 'form-text small ' + (stock > 0 ? 'text-success' : 'text-danger'))
-                    .html('<i class="fa-solid fa-boxes-stacked me-1"></i>Stock disponible en este almacén: <strong>' + stockTxt + '</strong>');
+                const equivalencia = factorActual !== 1 ? ' <span class="text-muted">(' + stockInvTxt + ' ' + (unidadInventarioTxt || 'inv.') + ' en inventario)</span>' : '';
+                hint.attr('class', 'form-text small ' + (stockInv > 0 ? 'text-success' : 'text-danger'))
+                    .html('<i class="fa-solid fa-boxes-stacked me-1"></i>Stock disponible: <strong>' + stockSelTxt + ' ' + abrevSel + '</strong>' + equivalencia);
             }
         }
 
@@ -638,7 +756,8 @@
         }
 
         $('#almacen').on('change', actualizarStockHint);
-        $('#producto').on('change', actualizarStockHint);
+        $('#producto').on('change', function() { actualizarUnidadUI(); actualizarStockHint(); });
+        $unidadSelect.on('change', recalcularConversion);
         $('#cantidad').on('input', pintarStockHint);
 
         // ═══════════════ ENVÍO DEL FORMULARIO DE SALIDA ═══════════════
@@ -650,6 +769,7 @@
             const requeridos = [
                 ['almacen_id', 'Seleccione un almacén'],
                 ['producto_id', 'Seleccione un producto'],
+                ['unidad_medida_id', 'Seleccione la unidad de medida'],
                 ['cantidad', 'Indique la cantidad (mayor a 0)'],
                 ['tipo', 'Seleccione el tipo de salida']
             ];
@@ -660,10 +780,17 @@
                 }
             }
 
+            // Sin factor de conversión activo no se puede registrar en otra unidad
+            if (!conversionDisponible) {
+                Swal.fire('Conversión no configurada', 'No existe un factor de conversión activo entre la unidad elegida y la unidad de inventario del producto. Configúrelo en Unidades de Medida o seleccione la unidad de inventario.', 'warning');
+                return;
+            }
+
             // Advertencia temprana si la cantidad supera el stock consultado
             const stockConocido = parseFloat($('#stockHint').attr('data-stock'));
             const cantidad = parseFloat(formData.get('cantidad'));
-            if (!isNaN(stockConocido) && !isNaN(cantidad) && cantidad > stockConocido) {
+            const cantidadEnInventario = cantidad * factorActual;
+            if (!isNaN(stockConocido) && !isNaN(cantidadEnInventario) && cantidadEnInventario > stockConocido) {
                 Swal.fire('Stock insuficiente', 'La cantidad indicada supera el stock disponible en el almacén seleccionado.', 'warning');
                 return;
             }
@@ -672,6 +799,7 @@
                 almacen_id: formData.get('almacen_id'),
                 producto_id: formData.get('producto_id'),
                 cantidad: formData.get('cantidad'),
+                unidad_medida_id: formData.get('unidad_medida_id'),
                 tipo: formData.get('tipo'),
                 motivo: formData.get('motivo'),
                 notas: formData.get('notas')
@@ -708,7 +836,12 @@
         document.getElementById('salidaManualModal').addEventListener('hidden.bs.modal', function() {
             salidaManualForm.reset();
             $('#producto').val(null).trigger('change');
+            $unidadSelect.prop('disabled', true).val('');
+            $('#conversionHint').attr('class', 'form-text small').html('');
+            $('#cantidadUnidad').text('—');
             $('#stockHint').removeAttr('data-stock').attr('class', 'form-text small').html('');
+            factorActual = 1;
+            conversionDisponible = true;
         });
 
         // ═══════════════ PANEL DE ANÁLISIS: FILTROS ═══════════════

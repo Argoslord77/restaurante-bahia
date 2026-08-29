@@ -62,12 +62,16 @@ function construirFiltros(f = {}) {
 /**
  * Fragmento FROM común: joins de nombres + subconsulta del costo impactado
  * (los movimientos de kardex generados por cada salida manual).
+ * `um` es la unidad registrada en la salida; `ui` la unidad de inventario del
+ * producto (usada como respaldo para registros anteriores a la unidad).
  */
 const FROM_COMUN = `
             FROM salidas_manuales sm
             INNER JOIN almacenes a ON sm.almacen_id = a.id
             INNER JOIN productos p ON sm.producto_id = p.id
             LEFT JOIN usuarios u ON sm.usuario_id = u.id
+            LEFT JOIN unidades_medida um ON sm.unidad_medida_id = um.id
+            LEFT JOIN unidades_medida ui ON p.unidad_inventario_id = ui.id
             LEFT JOIN (
                 SELECT referencia_id, SUM(costo_total) AS costo_total
                 FROM movimientos_inventario
@@ -81,8 +85,11 @@ const SELECT_LISTADO = `
                 a.nombre AS almacen_nombre,
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
+                p.unidad_inventario_id,
                 u.nombre AS usuario_nombre,
-                COALESCE(mv.costo_total, 0) AS costo_total`;
+                COALESCE(mv.costo_total, 0) AS costo_total,
+                COALESCE(um.abreviatura, ui.abreviatura) AS unidad_abreviatura,
+                COALESCE(sm.unidad_medida_id, p.unidad_inventario_id) AS unidad_efectiva_id`;
 
 const SalidaManual = {
     // Obtener todas las salidas manuales
@@ -167,13 +174,14 @@ const SalidaManual = {
     create: async (salidaData) => {
         const query = `
             INSERT INTO salidas_manuales 
-            (almacen_id, producto_id, cantidad, tipo, motivo, notas, usuario_id, fecha_registro)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            (almacen_id, producto_id, cantidad, unidad_medida_id, tipo, motivo, notas, usuario_id, fecha_registro)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
         `;
         const [result] = await db.query(query, [
             salidaData.almacen_id,
             salidaData.producto_id,
             salidaData.cantidad,
+            salidaData.unidad_medida_id || null,
             salidaData.tipo,
             salidaData.motivo || null,
             salidaData.notas || null,
