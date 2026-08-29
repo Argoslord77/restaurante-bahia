@@ -148,6 +148,8 @@ describe('Catálogo de auditoría · reportes y kardex', () => {
         expect(describir('GET', '/admin/reportes/margen-platillos').entidad).toBe('Margen por platillo');
         expect(describir('GET', '/admin/reportes/explosion-recetas').entidad).toBe('Explosión de recetas');
         expect(describir('GET', '/admin/reportes/ventas-mesero').entidad).toBe('Ventas por mesero');
+        expect(describir('GET', '/admin/reportes/consumo-insumos').entidad).toBe('Consumo por insumo');
+        expect(describir('GET', '/admin/reportes/ventas-horas').entidad).toBe('Ventas por hora y día');
         expect(describir('GET', '/admin/reportes').entidad).toBe('Centro de reportes');
         // La ruta de exportación es más concreta y gana a la del kardex general
         expect(describir('GET', '/admin/kardex/exportar').entidad).toBe('Kardex');
@@ -157,7 +159,9 @@ describe('Catálogo de auditoría · reportes y kardex', () => {
         ['/admin/reportes/salud-inventario/exportar',
          '/admin/reportes/margen-platillos/exportar',
          '/admin/reportes/explosion-recetas/exportar',
-         '/admin/reportes/ventas-mesero/exportar'
+         '/admin/reportes/ventas-mesero/exportar',
+         '/admin/reportes/consumo-insumos/exportar',
+         '/admin/reportes/ventas-horas/exportar'
         ].forEach(ruta => {
             const d = describir('GET', ruta);
             expect(d.categoria).toBe('EXPORTACION');

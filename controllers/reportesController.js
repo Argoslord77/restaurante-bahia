@@ -40,6 +40,15 @@ const ENLACES = [
         badge: 'NUEVO'
     },
     {
+        id: 'consumo-insumos',
+        titulo: 'Consumo por insumo',
+        descripcion: 'Por período: cuánto entró y salió de cada insumo y a qué se fue (venta, merma, ajuste), con su valor.',
+        icono: 'fa-solid fa-arrows-turn-to-dots',
+        url: '/admin/reportes/consumo-insumos',
+        grupo: 'Control físico',
+        badge: 'NUEVO'
+    },
+    {
         id: 'valorizacion',
         titulo: 'Valorización de inventario',
         descripcion: 'Valor del stock por almacén y lote a costo unitario (Σ cantidad × costo).',
@@ -54,6 +63,15 @@ const ENLACES = [
         descripcion: 'Ventas cobradas del período vs costo estándar: margen contribuido y food cost real ponderado. Exportable a CSV.',
         icono: 'fa-solid fa-chart-line',
         url: '/admin/reportes/margen-platillos',
+        grupo: 'Control financiero',
+        badge: 'NUEVO'
+    },
+    {
+        id: 'ventas-horas',
+        titulo: 'Ventas por hora y día',
+        descripcion: 'Distribución del tráfico por hora y día de la semana: cuándo se vende más, para dimensionar personal y turnos.',
+        icono: 'fa-solid fa-clock',
+        url: '/admin/reportes/ventas-horas',
         grupo: 'Control financiero',
         badge: 'NUEVO'
     },
@@ -253,6 +271,78 @@ exports.exportarVentasMesero = async (req, res) => {
     } catch (error) {
         console.error('Error al exportar las ventas por mesero:', error);
         return res.redirect('/admin/reportes/ventas-mesero');
+    }
+};
+
+exports.exportarConsumoInsumos = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const almacen_id = parseInt(req.query.almacen_id, 10) || null;
+        const reporte = await ReportesService.consumoPorInsumo({ ...rango, almacen_id });
+        return responderCSV(req, res, 'consumo_por_insumo',
+            ReportesService.consumoInsumosACSV(reporte), reporte.insumos.length);
+    } catch (error) {
+        console.error('Error al exportar el consumo por insumo:', error);
+        return res.redirect('/admin/reportes/consumo-insumos');
+    }
+};
+
+exports.exportarVentasHoras = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.ventasPorHoras(rango);
+        return responderCSV(req, res, 'ventas_por_hora_y_dia',
+            ReportesService.ventasHorasACSV(reporte),
+            reporte.horas.length + reporte.dias.length);
+    } catch (error) {
+        console.error('Error al exportar las ventas por hora:', error);
+        return res.redirect('/admin/reportes/ventas-horas');
+    }
+};
+
+exports.viewConsumoInsumos = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const almacen_id = parseInt(req.query.almacen_id, 10) || null;
+        const reporte = await ReportesService.consumoPorInsumo({ ...rango, almacen_id });
+
+        const [almacenes] = await db.query(
+            'SELECT id, nombre FROM almacenes WHERE activo = 1 ORDER BY nombre ASC'
+        ).catch(() => [[]]);
+
+        return res.render('reportes/consumo_insumos', {
+            title: 'Consumo por Insumo - Restaurante Bahía',
+            view: 'consumo_insumos',
+            rango,
+            almacenId: almacen_id,
+            almacenes: almacenes || [],
+            reporte,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar el consumo por insumo:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.viewVentasHoras = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.ventasPorHoras(rango);
+        return res.render('reportes/ventas_horas', {
+            title: 'Ventas por Hora y Día - Restaurante Bahía',
+            view: 'ventas_horas',
+            rango,
+            reporte,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar las ventas por hora:', error);
+        return res.status(500).send('Error interno al generar el reporte');
     }
 };
 

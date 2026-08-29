@@ -82,6 +82,89 @@ describe('reportesService · ventasPorMesero', () => {
     });
 });
 
+describe('reportesService · consumoPorInsumo', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('agrupa entradas y salidas por insumo con el desglose de salidas', async () => {
+        db.query.mockResolvedValueOnce([[
+            { producto_id: 1, codigo: 'P1', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'AJUSTE_POSITIVO', cantidad: 100, valor: 2000 },
+            { producto_id: 1, codigo: 'P1', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'CONSUMO_RECETA', cantidad: 80, valor: 1600 },
+            { producto_id: 1, codigo: 'P1', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'MERMA', cantidad: 5, valor: 100 },
+            { producto_id: 1, codigo: 'P1', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'CONTEO_FISICO', cantidad: 999, valor: 0 }
+        ], []]);
+
+        const reporte = await ReportesService.consumoPorInsumo({ desde: '2026-08-01', hasta: '2026-08-31', almacen_id: null });
+
+        expect(reporte.insumos).toHaveLength(1);
+        const ron = reporte.insumos[0];
+        expect(ron).toMatchObject({
+            nombre: 'Ron', entradas_cantidad: 100, entradas_valor: 2000,
+            salidas_cantidad: 85, salidas_valor: 1700,
+            venta_valor: 1600, merma_valor: 100
+        });
+        // El conteo físico es informativo: no aparece en el desglose
+        expect(ron.detalle_salidas.map(d => d.etiqueta)).toEqual(['Consumo por venta', 'Merma']);
+        expect(reporte.totales).toMatchObject({
+            insumos: 1, entradas_valor: 2000, salidas_valor: 1700,
+            consumo_venta_valor: 1600, merma_valor: 100
+        });
+    });
+
+    it('ordena los insumos por valor de salida', async () => {
+        db.query.mockResolvedValueOnce([[
+            { producto_id: 1, codigo: 'P1', nombre: 'Limón', unidad: 'kg', tipo_movimiento: 'MERMA', cantidad: 1, valor: 2 },
+            { producto_id: 2, codigo: 'P2', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'VENTA', cantidad: 50, valor: 1000 }
+        ], []]);
+
+        const reporte = await ReportesService.consumoPorInsumo({ desde: '2026-08-01', hasta: '2026-08-31', almacen_id: null });
+        expect(reporte.insumos[0].nombre).toBe('Ron');
+        expect(reporte.insumos[1].nombre).toBe('Limón');
+    });
+});
+
+describe('reportesService · ventasPorHoras', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('distribuye por hora y día, e identifica los picos', async () => {
+        // 1a consulta: por hora · 2a: por día
+        db.query
+            .mockResolvedValueOnce([[
+                { hora: 13, cuentas: 5, ventas: 100, propinas: 10 },
+                { hora: 20, cuentas: 8, ventas: 220, propinas: 22 }
+            ], []])
+            .mockResolvedValueOnce([[
+                { dia: 6, cuentas: 6, ventas: 150, propinas: 15 },
+                { dia: 7, cuentas: 7, ventas: 170, propinas: 17 }
+            ], []]);
+
+        const reporte = await ReportesService.ventasPorHoras({ desde: '2026-08-01', hasta: '2026-08-31' });
+
+        expect(reporte.horas).toHaveLength(2);
+        expect(reporte.horas[0]).toMatchObject({ hora: 13, etiqueta: '13:00', cuentas: 5, ventas: 100 });
+        expect(reporte.horas[1]).toMatchObject({ hora: 20, etiqueta: '20:00', cuentas: 8, ventas: 220 });
+        // DAYOFWEEK: 6 = viernes, 7 = sábado
+        expect(reporte.dias.map(d => d.nombre)).toEqual(['Viernes', 'Sábado']);
+        expect(reporte.horaPico).toMatchObject({ hora: 20, ventas: 220 });
+        expect(reporte.diaPico).toMatchObject({ dia: 7, nombre: 'Sábado', ventas: 170 });
+        expect(reporte.totales).toMatchObject({ cuentas: 13, ventas: 320, propinas: 32 });
+        // La consulta filtra cuentas cobradas y usa la apertura de la cuenta
+        const sqlHora = db.query.mock.calls[0][0];
+        expect(sqlHora).toContain('p.creado_en');
+        expect(sqlHora).toContain("estado_pago IN ('pagado', 'facturado', 'cortesia')");
+    });
+
+    it('sin datos devuelve picos nulos y totales en cero', async () => {
+        db.query.mockReset();
+        db.query.mockResolvedValueOnce([[], []]).mockResolvedValueOnce([[], []]);
+        const reporte = await ReportesService.ventasPorHoras({ desde: '2026-08-01', hasta: '2026-08-31' });
+        expect(reporte.horas).toEqual([]);
+        expect(reporte.dias).toEqual([]);
+        expect(reporte.horaPico).toBeNull();
+        expect(reporte.diaPico).toBeNull();
+        expect(reporte.totales.cuentas).toBe(0);
+    });
+});
+
 describe('reportesService · exportaciones CSV', () => {
     it('margenACSV lleva BOM, cabecera, filas y totales', () => {
         const reporte = {
@@ -127,6 +210,41 @@ describe('reportesService · exportaciones CSV', () => {
         expect(csv).toContain('Mesero;Rol;Cuentas;Cortesias;Ventas;Ticket promedio;Propinas;Descuentos');
         expect(csv).toContain('Juan Perez;dependiente;10;1;250,00;25,00;15,00;5,00');
         expect(csv).toContain('TOTALES;;10;1;250,00;25,00;15,00;5,00');
+    });
+
+    it('consumoInsumosACSV lista insumos con su desglose y totales', () => {
+        const reporte = {
+            desde: '2026-08-01', hasta: '2026-08-31', almacen_id: null,
+            insumos: [{
+                nombre: 'Ron', codigo: 'P1', unidad: 'ml',
+                entradas_cantidad: 100, entradas_valor: 2000,
+                salidas_cantidad: 85, salidas_valor: 1700,
+                venta_valor: 1600, merma_valor: 100,
+                detalle_salidas: [{ etiqueta: 'Consumo por venta', cantidad: 80, valor: 1600 }, { etiqueta: 'Merma', cantidad: 5, valor: 100 }]
+            }],
+            totales: { insumos: 1, entradas_valor: 2000, salidas_valor: 1700, consumo_venta_valor: 1600, merma_valor: 100 }
+        };
+        const csv = ReportesService.consumoInsumosACSV(reporte);
+        expect(csv.charCodeAt(0)).toBe(0xFEFF);
+        expect(csv).toContain('Insumo;Codigo;Unidad;Entradas cant;Entradas valor;Salidas cant;Salidas valor;Salidas: venta;Salidas: merma/ajuste;Desglose de salidas');
+        expect(csv).toContain('Ron;P1;ml;100,000;2000,00;85,000;1700,00;1600,00;100,00;Consumo por venta 80,000 ($1600,00) | Merma 5,000 ($100,00)');
+        expect(csv).toContain('TOTALES;;;;2000,00;;1700,00;1600,00;100,00;Insumos: 1');
+    });
+
+    it('ventasHorasACCSV vuelca las dos distribuciones', () => {
+        const reporte = {
+            desde: '2026-08-01', hasta: '2026-08-31',
+            horas: [{ hora: 20, etiqueta: '20:00', cuentas: 8, ventas: 220, propinas: 22 }],
+            dias: [{ dia: 7, nombre: 'Sábado', cuentas: 7, ventas: 170, propinas: 17 }],
+            totales: { cuentas: 15, ventas: 390, propinas: 39, ticket_promedio: 26 }
+        };
+        const csv = ReportesService.ventasHorasACSV(reporte);
+        expect(csv.charCodeAt(0)).toBe(0xFEFF);
+        expect(csv).toContain('POR HORA');
+        expect(csv).toContain('20:00;8;220,00;22,00');
+        expect(csv).toContain('POR DIA DE LA SEMANA');
+        expect(csv).toContain('Sábado;7;170,00;17,00');
+        expect(csv).toContain('TOTALES;;15;390,00;39,00');
     });
 
     it('explosionACCSV separa resumen por insumo y detalle por venta', () => {

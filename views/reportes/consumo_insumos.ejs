@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Consumo por Insumo - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Consumo por Insumo', desc_pagina: 'Cuánto entró y salió de cada insumo en el período y a qué se fue: venta, merma o ajuste.', add_btn: false}) %>
+
+                <!-- Filtro de período -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-4 bg-white">
+                    <form method="get" action="/admin/reportes/consumo-insumos" class="row g-2 align-items-end">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small text-muted fw-semibold mb-1">Desde</label>
+                            <input type="date" name="desde" class="form-control form-control-sm" value="<%= rango.desde %>">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small text-muted fw-semibold mb-1">Hasta</label>
+                            <input type="date" name="hasta" class="form-control form-control-sm" value="<%= rango.hasta %>">
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label small text-muted fw-semibold mb-1">Almacén</label>
+                            <select name="almacen_id" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <% almacenes.forEach(a => { %>
+                                    <option value="<%= a.id %>" <%= almacenId === a.id ? 'selected' : '' %>><%= a.nombre %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3 d-flex justify-content-md-end gap-2">
+                            <button type="submit" class="btn btn-dark btn-sm fw-semibold py-2">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Consultar
+                            </button>
+                            <a href="/admin/reportes/consumo-insumos/exportar?desde=<%= rango.desde %>&hasta=<%= rango.hasta %><%= almacenId ? '&almacen_id=' + almacenId : '' %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-file-csv text-success me-1"></i> CSV
+                            </a>
+                            <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-print text-secondary me-1"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Resumen -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-success border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Entradas del período</h6>
+                            <h3 class="fw-bold mb-0 text-success">$<%= reporte.totales.entradas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted">Compras y ajustes positivos</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-danger border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Salidas totales</h6>
+                            <h3 class="fw-bold mb-0 text-danger">$<%= reporte.totales.salidas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted">Todo lo que salió del stock</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Consumido en ventas</h6>
+                            <h3 class="fw-bold mb-0 text-dark">$<%= reporte.totales.consumo_venta_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted">El que genera ingreso</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Mermas y ajustes</h6>
+                            <h3 class="fw-bold mb-0 text-warning">$<%= reporte.totales.merma_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted">Valor que se fue sin vender</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detalle por insumo -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-arrows-turn-to-dots text-dark"></i>
+                        <h6 class="fw-bold mb-0">Insumos con movimiento (<%= reporte.insumos.length %>)</h6>
+                        <span class="badge text-bg-dark ms-auto">ordenado por valor de salida</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Insumo</th>
+                                    <th class="py-3 text-end">Entradas</th>
+                                    <th class="py-3 text-end">Valor entradas</th>
+                                    <th class="py-3 text-end">Salidas</th>
+                                    <th class="py-3 text-end">Valor salidas</th>
+                                    <th class="py-3 text-end">A la venta</th>
+                                    <th class="py-3 text-end pe-4">Merma / ajuste</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% reporte.insumos.forEach(i => { %>
+                                    <% const mermaPct = i.salidas_valor > 0 ? (i.merma_valor / i.salidas_valor * 100) : 0; %>
+                                <tr>
+                                    <td class="ps-4">
+                                        <span class="fw-semibold"><%= i.nombre %></span>
+                                        <small class="text-muted d-block font-monospace"><%= i.codigo || '—' %> · <%= i.unidad %></small>
+                                        <% if (i.detalle_salidas.length) { %>
+                                            <small class="text-muted d-block">
+                                                <% i.detalle_salidas.slice(0, 4).forEach((d, idx) => { %><%= idx > 0 ? ' · ' : '' %><%= d.etiqueta %> <%= d.cantidad.toLocaleString('es-ES') %><% }) %>
+                                                <% if (i.detalle_salidas.length > 4) { %> <span class="text-muted">(+<%= i.detalle_salidas.length - 4 %>)</span><% } %>
+                                            </small>
+                                        <% } %>
+                                    </td>
+                                    <td class="text-end text-success"><%= i.entradas_cantidad.toLocaleString('es-ES') %></td>
+                                    <td class="text-end text-success">$<%= i.entradas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end fw-semibold"><%= i.salidas_cantidad.toLocaleString('es-ES') %></td>
+                                    <td class="text-end fw-semibold">$<%= i.salidas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end">$<%= i.venta_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end pe-4 <%= i.merma_valor > 0 ? 'text-warning fw-semibold' : 'text-muted' %>" title="<%= mermaPct.toFixed(1) %>% de las salidas">
+                                        $<%= i.merma_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                                <% if (reporte.insumos.length === 0) { %>
+                                <tr><td colspan="7" class="text-center text-muted py-4">Sin movimientos en el período con estos filtros.</td></tr>
+                                <% } %>
+                            </tbody>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td class="ps-4">TOTALES</td>
+                                    <td></td>
+                                    <td class="text-end text-success">$<%= reporte.totales.entradas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td></td>
+                                    <td class="text-end">$<%= reporte.totales.salidas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end">$<%= reporte.totales.consumo_venta_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end pe-4 text-warning">$<%= reporte.totales.merma_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="alert alert-light border shadow-sm rounded py-2 px-3 mb-4 small text-muted" role="note">
+                    <i class="fa-solid fa-lightbulb me-1 text-warning"></i>
+                    La columna <strong>Merma / ajuste</strong> es el valor del insumo que salió sin generar venta (mermas, salidas manuales, devoluciones a proveedor). Compárala con la explosión de recetas para distinguir pérdida normal de fuga.
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>

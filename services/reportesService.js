@@ -13,6 +13,14 @@
 
 const db = require('../config/db');
 const Costeo = require('./costeoService');
+const { TIPOS_ENTRADA, TIPOS_SALIDA, ETIQUETAS_MOVIMIENTO } = require('./kardexService');
+
+/** Signo de un tipo de movimiento: +1 entrada, -1 salida, 0 informativo. */
+const signoMovimiento = (tipo) => {
+    if (TIPOS_ENTRADA.includes(tipo)) return 1;
+    if (TIPOS_SALIDA.includes(tipo)) return -1;
+    return 0;
+};
 
 const num = (v, dec = 0) => {
     const n = Number(v);
@@ -335,6 +343,162 @@ async function ventasPorMesero(rango) {
     };
 }
 
+/**
+ * Movimientos del período agrupados por insumo: cuánto entró, cuánto salió
+ * y a qué se fue cada salida (venta, merma, ajuste...), con su valor.
+ * Es la versión de rango libre del resumen que usa el cierre del día.
+ */
+async function consumoPorInsumo(filtros) {
+    const { desde, hasta, almacen_id } = filtros;
+    const cond = ['mi.fecha_movimiento >= ?', 'mi.fecha_movimiento < DATE_ADD(?, INTERVAL 1 DAY)'];
+    const params = [desde, hasta];
+    if (almacen_id) { cond.push('mi.almacen_id = ?'); params.push(almacen_id); }
+
+    const [filas] = await db.query(`
+        SELECT mi.producto_id, p.codigo, p.nombre,
+               MAX(um.abreviatura) AS unidad,
+               mi.tipo_movimiento,
+               SUM(mi.cantidad) AS cantidad,
+               SUM(COALESCE(NULLIF(mi.costo_total, 0), mi.cantidad * mi.costo_unitario, 0)) AS valor
+        FROM movimientos_inventario mi
+        INNER JOIN productos p ON p.id = mi.producto_id
+        LEFT JOIN unidades_medida um ON um.id = p.unidad_inventario_id
+        WHERE ${cond.join(' AND ')}
+        GROUP BY mi.producto_id, p.codigo, p.nombre, mi.tipo_movimiento
+        ORDER BY p.nombre ASC
+    `, params);
+
+    const porInsumo = new Map();
+    for (const f of filas) {
+        const signo = signoMovimiento(f.tipo_movimiento);
+        if (signo === 0) continue; // conteos físicos: informativos
+        const insumo = porInsumo.get(f.producto_id) || {
+            id: f.producto_id, codigo: f.codigo, nombre: f.nombre, unidad: f.unidad || '',
+            entradas_cantidad: 0, entradas_valor: 0,
+            salidas_cantidad: 0, salidas_valor: 0,
+            detalle_salidas: new Map()
+        };
+        const cantidad = Number(f.cantidad || 0);
+        const valor = Number(f.valor || 0);
+        if (signo > 0) {
+            insumo.entradas_cantidad += cantidad;
+            insumo.entradas_valor += valor;
+        } else {
+            insumo.salidas_cantidad += cantidad;
+            insumo.salidas_valor += valor;
+            const etiqueta = ETIQUETAS_MOVIMIENTO[f.tipo_movimiento] || f.tipo_movimiento;
+            const previo = insumo.detalle_salidas.get(etiqueta) || { cantidad: 0, valor: 0 };
+            previo.cantidad += cantidad;
+            previo.valor += valor;
+            insumo.detalle_salidas.set(etiqueta, previo);
+        }
+        porInsumo.set(f.producto_id, insumo);
+    }
+
+    let totEntV = 0, totSalV = 0, totVentaV = 0, totMermaV = 0;
+    const insumos = [...porInsumo.values()].map(i => {
+        const detalle = [...i.detalle_salidas.entries()]
+            .map(([etiqueta, d]) => ({ etiqueta, cantidad: num(d.cantidad, 3), valor: num(d.valor, 2) }))
+            .sort((a, b) => b.valor - a.valor);
+        // Salidas "normales" (venta/consumo) vs pérdidas (merma/ajuste/devolución)
+        const ventaV = detalle.filter(d => /venta/i.test(d.etiqueta)).reduce((s, d) => s + d.valor, 0);
+        const mermaV = detalle.filter(d => /merma|ajuste|devoluci/i.test(d.etiqueta)).reduce((s, d) => s + d.valor, 0);
+        totEntV += i.entradas_valor; totSalV += i.salidas_valor;
+        totVentaV += ventaV; totMermaV += mermaV;
+        return {
+            id: i.id, codigo: i.codigo, nombre: i.nombre, unidad: i.unidad,
+            entradas_cantidad: num(i.entradas_cantidad, 3),
+            entradas_valor: num(i.entradas_valor, 2),
+            salidas_cantidad: num(i.salidas_cantidad, 3),
+            salidas_valor: num(i.salidas_valor, 2),
+            venta_valor: num(ventaV, 2),
+            merma_valor: num(mermaV, 2),
+            detalle_salidas: detalle
+        };
+    }).sort((a, b) => b.salidas_valor - a.salidas_valor);
+
+    return {
+        desde, hasta, almacen_id,
+        insumos,
+        totales: {
+            insumos: insumos.length,
+            entradas_valor: num(totEntV, 2),
+            salidas_valor: num(totSalV, 2),
+            consumo_venta_valor: num(totVentaV, 2),
+            merma_valor: num(totMermaV, 2)
+        }
+    };
+}
+
+// Días de la semana tal como los devuelve DAYOFWEEK (1 = domingo)
+const NOMBRES_DIA = [null, 'Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+/**
+ * Distribución de las cuentas cobradas del período por hora y por día de
+ * la semana (según la APERTURA de la cuenta): dónde está el tráfico y
+ * cuándo se vende más, para dimensionar personal y turnos.
+ */
+async function ventasPorHoras(rango) {
+    const { desde, hasta } = rango;
+    const cond = `
+        p.fecha_cierre IS NOT NULL
+        AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+        AND p.creado_en >= ? AND p.creado_en < DATE_ADD(?, INTERVAL 1 DAY)
+    `;
+
+    const [porHora] = await db.query(`
+        SELECT HOUR(p.creado_en) AS hora, COUNT(*) AS cuentas,
+               COALESCE(SUM(p.total), 0) AS ventas,
+               COALESCE(SUM(p.propina), 0) AS propinas
+        FROM pedidos p
+        WHERE ${cond}
+        GROUP BY HOUR(p.creado_en)
+        ORDER BY hora ASC
+    `, [desde, hasta]);
+
+    const [porDia] = await db.query(`
+        SELECT DAYOFWEEK(p.creado_en) AS dia, COUNT(*) AS cuentas,
+               COALESCE(SUM(p.total), 0) AS ventas,
+               COALESCE(SUM(p.propina), 0) AS propinas
+        FROM pedidos p
+        WHERE ${cond}
+        GROUP BY DAYOFWEEK(p.creado_en)
+        ORDER BY FIELD(dia, 2, 3, 4, 5, 6, 7, 1)
+    `, [desde, hasta]);
+
+    let totCuentas = 0, totVentas = 0, totPropinas = 0;
+    const horas = porHora.map(h => {
+        const cuentas = num(h.cuentas); const ventas = num(h.ventas, 2);
+        totCuentas += cuentas; totVentas += ventas; totPropinas += num(h.propinas, 2);
+        return { hora: num(h.hora), etiqueta: `${String(h.hora).padStart(2, '0')}:00`, cuentas, ventas, propinas: num(h.propinas, 2) };
+    });
+    // El día pico se mide sobre el orden devuelto (lunes primero)
+    const dias = porDia.map(d => ({
+        dia: num(d.dia), nombre: NOMBRES_DIA[d.dia] || '—',
+        cuentas: num(d.cuentas), ventas: num(d.ventas, 2), propinas: num(d.propinas, 2)
+    }));
+
+    const maxHoraVentas = horas.reduce((m, h) => Math.max(m, h.ventas), 0);
+    const maxDiaVentas = dias.reduce((m, d) => Math.max(m, d.ventas), 0);
+    const horaPico = horas.reduce((a, b) => (b.ventas > (a ? a.ventas : -1) ? b : a), null);
+    const diaPico = dias.reduce((a, b) => (b.ventas > (a ? a.ventas : -1) ? b : a), null);
+
+    return {
+        desde, hasta,
+        horas, dias,
+        maxHoraVentas: num(maxHoraVentas, 2),
+        maxDiaVentas: num(maxDiaVentas, 2),
+        horaPico: horaPico || null,
+        diaPico: diaPico || null,
+        totales: {
+            cuentas: num(totCuentas),
+            ventas: num(totVentas, 2),
+            propinas: num(totPropinas, 2),
+            ticket_promedio: totCuentas > 0 ? num(totVentas / totCuentas, 2) : 0
+        }
+    };
+}
+
 // ── Generadores de CSV ───────────────────────────────────────────────────
 // Mismo formato que el kardex: separador ';', decimales con coma y BOM
 // UTF-8 para que Excel lo abra directamente.
@@ -442,13 +606,59 @@ function ventasMeseroACSV(reporte) {
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
+/** CSV del consumo por insumo con el desglose de salidas. */
+function consumoInsumosACSV(reporte) {
+    const filas = [];
+    filas.push(`Consumo por insumo;${reporte.desde};a;${reporte.hasta}${reporte.almacen_id ? ';Almacen ' + reporte.almacen_id : ''}`);
+    filas.push('');
+    filas.push('Insumo;Codigo;Unidad;Entradas cant;Entradas valor;Salidas cant;Salidas valor;Salidas: venta;Salidas: merma/ajuste;Desglose de salidas');
+    for (const i of reporte.insumos) {
+        const desglose = i.detalle_salidas.map(d => `${d.etiqueta} ${csvNum(d.cantidad, 3)} ($${csvNum(d.valor)})`).join(' | ');
+        filas.push([
+            csvTexto(i.nombre), csvTexto(i.codigo), csvTexto(i.unidad),
+            csvNum(i.entradas_cantidad, 3), csvNum(i.entradas_valor),
+            csvNum(i.salidas_cantidad, 3), csvNum(i.salidas_valor),
+            csvNum(i.venta_valor), csvNum(i.merma_valor), csvTexto(desglose)
+        ].join(';'));
+    }
+    const t = reporte.totales;
+    filas.push(`TOTALES;;;;${csvNum(t.entradas_valor)};;${csvNum(t.salidas_valor)};${csvNum(t.consumo_venta_valor)};${csvNum(t.merma_valor)};Insumos: ${csvNum(t.insumos, 0)}`);
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
+/** CSV de la distribución por hora y día de la semana. */
+function ventasHorasACSV(reporte) {
+    const filas = [];
+    filas.push(`Ventas por hora y dia;${reporte.desde};a;${reporte.hasta}`);
+    filas.push('');
+    filas.push('POR HORA');
+    filas.push('Hora;Cuentas;Ventas;Propinas');
+    for (const h of reporte.horas) {
+        filas.push(`${h.etiqueta};${csvNum(h.cuentas, 0)};${csvNum(h.ventas)};${csvNum(h.propinas)}`);
+    }
+    filas.push('');
+    filas.push('POR DIA DE LA SEMANA');
+    filas.push('Dia;Cuentas;Ventas;Propinas');
+    for (const d of reporte.dias) {
+        filas.push(`${csvTexto(d.nombre)};${csvNum(d.cuentas, 0)};${csvNum(d.ventas)};${csvNum(d.propinas)}`);
+    }
+    const t = reporte.totales;
+    filas.push('');
+    filas.push(`TOTALES;;${csvNum(t.cuentas, 0)};${csvNum(t.ventas)};${csvNum(t.propinas)}`);
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
 module.exports = {
     saludInventario,
     margenPorPlatillo,
     ventasPorMesero,
+    consumoPorInsumo,
+    ventasPorHoras,
     normalizarRango,
     margenACSV,
     saludACSV,
     explosionACSV,
-    ventasMeseroACSV
+    ventasMeseroACSV,
+    consumoInsumosACSV,
+    ventasHorasACSV
 };
