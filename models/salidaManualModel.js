@@ -1,6 +1,89 @@
 // models/salidaManualModel.js - Modelo para gestión de salidas manuales de inventario
 const db = require('../config/db');
 
+// Tipos de salida válidos (espejo del validador)
+const TIPOS_SALIDA = ['merma', 'rotura', 'perdida', 'ajuste_auditoria', 'caducado', 'otro'];
+
+// Whitelist de columnas por las que se permite ordenar el listado
+const COLUMNAS_ORDEN = {
+    fecha:    'sm.fecha_registro',
+    almacen:  'a.nombre',
+    producto: 'p.nombre',
+    cantidad: 'sm.cantidad',
+    costo:    'costo_total',
+    tipo:     'sm.tipo',
+    usuario:  'usuario_nombre'
+};
+
+const POR_PAGINA_VALIDOS = [25, 50, 100, 200];
+
+/**
+ * Construye la cláusula WHERE a partir de los filtros del panel profesional.
+ * Solo se aceptan valores validados (enteros, fechas ISO y tipos conocidos).
+ */
+function construirFiltros(f = {}) {
+    const where = [];
+    const params = [];
+
+    if (f.tipo && TIPOS_SALIDA.includes(f.tipo)) {
+        where.push('sm.tipo = ?');
+        params.push(f.tipo);
+    }
+    if (f.almacenId && /^\d+$/.test(String(f.almacenId))) {
+        where.push('sm.almacen_id = ?');
+        params.push(Number(f.almacenId));
+    }
+    if (f.productoId && /^\d+$/.test(String(f.productoId))) {
+        where.push('sm.producto_id = ?');
+        params.push(Number(f.productoId));
+    }
+    if (f.usuarioId && /^\d+$/.test(String(f.usuarioId))) {
+        where.push('sm.usuario_id = ?');
+        params.push(Number(f.usuarioId));
+    }
+    if (f.desde && /^\d{4}-\d{2}-\d{2}$/.test(String(f.desde))) {
+        where.push('sm.fecha_registro >= ?');
+        params.push(`${f.desde} 00:00:00`);
+    }
+    if (f.hasta && /^\d{4}-\d{2}-\d{2}$/.test(String(f.hasta))) {
+        where.push('sm.fecha_registro <= ?');
+        params.push(`${f.hasta} 23:59:59`);
+    }
+    // Búsqueda libre sobre motivo, notas, nombre y código de producto
+    if (f.buscar && String(f.buscar).trim()) {
+        const termino = `%${String(f.buscar).trim().slice(0, 100)}%`;
+        where.push('(sm.motivo LIKE ? OR sm.notas LIKE ? OR p.nombre LIKE ? OR p.codigo LIKE ?)');
+        params.push(termino, termino, termino, termino);
+    }
+
+    return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+}
+
+/**
+ * Fragmento FROM común: joins de nombres + subconsulta del costo impactado
+ * (los movimientos de kardex generados por cada salida manual).
+ */
+const FROM_COMUN = `
+            FROM salidas_manuales sm
+            INNER JOIN almacenes a ON sm.almacen_id = a.id
+            INNER JOIN productos p ON sm.producto_id = p.id
+            LEFT JOIN usuarios u ON sm.usuario_id = u.id
+            LEFT JOIN (
+                SELECT referencia_id, SUM(costo_total) AS costo_total
+                FROM movimientos_inventario
+                WHERE referencia_tipo = 'salida_manual'
+                GROUP BY referencia_id
+            ) mv ON mv.referencia_id = sm.id`;
+
+const SELECT_LISTADO = `
+            SELECT 
+                sm.*,
+                a.nombre AS almacen_nombre,
+                p.nombre AS producto_nombre,
+                p.codigo AS producto_codigo,
+                u.nombre AS usuario_nombre,
+                COALESCE(mv.costo_total, 0) AS costo_total`;
+
 const SalidaManual = {
     // Obtener todas las salidas manuales
     getAll: async () => {
@@ -167,6 +250,86 @@ const SalidaManual = {
             ORDER BY sm.fecha_registro DESC
         `;
         const [rows] = await db.query(query, [fechaInicio, fechaFin]);
+        return rows;
+    },
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Panel profesional de análisis (kardex): filtros, orden, paginación,
+    // resumen por tipo bajo filtros, usuarios con salidas y exportación.
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Listado filtrado + ordenado + paginado. Devuelve { rows, total, pagina, porPagina, totalPaginas }
+    getFiltrado: async (filtros = {}) => {
+        const { clause, params } = construirFiltros(filtros);
+
+        const columna = COLUMNAS_ORDEN[filtros.orden] || COLUMNAS_ORDEN.fecha;
+        const direccion = String(filtros.dir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+        const pagina = Math.max(1, parseInt(filtros.pagina, 10) || 1);
+        const porPagina = POR_PAGINA_VALIDOS.includes(parseInt(filtros.porPagina, 10))
+            ? parseInt(filtros.porPagina, 10) : 50;
+        const offset = (pagina - 1) * porPagina;
+
+        const [[{ total }]] = await db.query(
+            `SELECT COUNT(*) AS total ${FROM_COMUN} ${clause}`,
+            params
+        );
+
+        const [rows] = await db.query(
+            `${SELECT_LISTADO} ${FROM_COMUN} ${clause}
+             ORDER BY ${columna} ${direccion}, sm.id DESC
+             LIMIT ? OFFSET ?`,
+            [...params, porPagina, offset]
+        );
+
+        return {
+            rows,
+            total,
+            pagina,
+            porPagina,
+            totalPaginas: Math.max(1, Math.ceil(total / porPagina))
+        };
+    },
+
+    // Resumen por tipo aplicando los mismos filtros del panel
+    getResumenFiltrado: async (filtros = {}) => {
+        const { clause, params } = construirFiltros(filtros);
+        const query = `
+            SELECT 
+                sm.tipo,
+                COUNT(*) AS total_salidas,
+                COALESCE(SUM(sm.cantidad), 0) AS total_cantidad,
+                COALESCE(SUM(COALESCE(mv.costo_total, 0)), 0) AS total_costo
+            ${FROM_COMUN}
+            ${clause}
+            GROUP BY sm.tipo
+            ORDER BY total_cantidad DESC
+        `;
+        const [rows] = await db.query(query, params);
+        return rows;
+    },
+
+    // Usuarios que han registrado salidas (para el filtro especializado)
+    getUsuariosConSalidas: async () => {
+        const query = `
+            SELECT DISTINCT u.id, u.nombre, u.apellidos, u.usuario, u.rol
+            FROM salidas_manuales sm
+            INNER JOIN usuarios u ON sm.usuario_id = u.id
+            ORDER BY u.nombre ASC
+        `;
+        const [rows] = await db.query(query);
+        return rows;
+    },
+
+    // Filas completas (sin paginar, con tope) para la exportación a CSV
+    getParaExportar: async (filtros = {}, limite = 20000) => {
+        const { clause, params } = construirFiltros(filtros);
+        const tope = Math.min(50000, Math.max(1, parseInt(limite, 10) || 20000));
+        const [rows] = await db.query(
+            `${SELECT_LISTADO} ${FROM_COMUN} ${clause}
+             ORDER BY sm.fecha_registro DESC, sm.id DESC
+             LIMIT ?`,
+            [...params, tope]
+        );
         return rows;
     }
 };

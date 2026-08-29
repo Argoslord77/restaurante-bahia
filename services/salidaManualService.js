@@ -181,6 +181,83 @@ const SalidaManualService = {
             logger.error('Error al listar salidas por período:', error);
             throw new Error('Error al listar las salidas');
         }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Panel profesional de análisis (kardex)
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Listado filtrado, ordenado y paginado para la vista principal
+    listarFiltrado: async (filtros = {}) => {
+        try {
+            return await SalidaManual.getFiltrado(filtros);
+        } catch (error) {
+            logger.error('Error al listar salidas con filtros:', error);
+            throw new Error('Error al listar las salidas');
+        }
+    },
+
+    // Resumen por tipo con los filtros del panel aplicados
+    resumenFiltrado: async (filtros = {}) => {
+        try {
+            return await SalidaManual.getResumenFiltrado(filtros);
+        } catch (error) {
+            logger.error('Error al obtener resumen filtrado:', error);
+            return [];
+        }
+    },
+
+    // Usuarios que han registrado salidas (filtro especializado)
+    usuariosConSalidas: async () => {
+        try {
+            return await SalidaManual.getUsuariosConSalidas();
+        } catch (error) {
+            logger.error('Error al listar usuarios con salidas:', error);
+            return [];
+        }
+    },
+
+    /**
+     * Exporta a CSV el listado con los filtros aplicados del panel.
+     * Mismas convenciones que la exportación de auditoría: separador ';',
+     * BOM UTF-8 para Excel y todos los campos entrecomillados.
+     */
+    exportarCSV: async (filtros = {}, limite = 20000) => {
+        try {
+            const rows = await SalidaManual.getParaExportar(filtros, limite);
+
+            const escaparCampo = (valor) => {
+                if (valor === null || valor === undefined) return '';
+                const texto = String(valor).replace(/"/g, '""').replace(/\r?\n/g, ' ');
+                return `"${texto}"`;
+            };
+
+            const cabecera = [
+                'ID', 'Documento', 'Fecha', 'Almacen', 'Producto', 'Codigo',
+                'Cantidad', 'Tipo', 'Motivo', 'Notas', 'Usuario', 'Costo impactado'
+            ].join(';');
+
+            const lineas = rows.map(r => [
+                r.id,
+                `SM-${String(r.id).padStart(6, '0')}`,
+                r.fecha_registro ? new Date(r.fecha_registro).toISOString() : '',
+                r.almacen_nombre,
+                r.producto_nombre,
+                r.producto_codigo || '',
+                r.cantidad,
+                r.tipo,
+                r.motivo || '',
+                r.notas || '',
+                r.usuario_nombre || '',
+                Number(r.costo_total || 0).toFixed(2)
+            ].map(escaparCampo).join(';'));
+
+            // BOM para que Excel reconozca el UTF-8 y respete los acentos
+            return { csv: '\ufeff' + [cabecera, ...lineas].join('\r\n'), filas: rows.length };
+        } catch (error) {
+            logger.error('Error al exportar salidas manuales a CSV:', error);
+            throw new Error('Error al exportar las salidas');
+        }
     }
 };
 
