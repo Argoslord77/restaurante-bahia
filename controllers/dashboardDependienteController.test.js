@@ -102,6 +102,91 @@ describe('DashboardDependienteController — POS mesero (visualización)', () =>
             const sqlMesas = db.query.mock.calls[1][0];
             expect(sqlMesas).toContain('dam.dependiente_id = ?');
         });
+
+        it('incluye el resumen de la cuenta pagada indicada en la URL', async () => {
+            turnoService.obtenerTurnoActivo.mockResolvedValue({ id: 7 });
+            const mesero = { id: 5, nombre: 'Juan', apellidos: 'Perez', rol: 'dependiente', activo: 1 };
+            const pedidoCerrado = {
+                id: 15, total: 25.5, propina: 1.5, descuento: 0, impuesto: 2.3,
+                estado_pago: 'pagado', fecha_cierre: new Date('2026-08-29T14:32:00'),
+                mesa_numero: '5', mesero_nombre: 'Juan Perez '
+            };
+            // Orden de llamadas: 1 mesero · 2 pedido · 3 items · 4 pagos · 5 mesas · 6 stats
+            db.query.mockImplementation(async (sql) => {
+                const n = db.query.mock.calls.length;
+                if (n === 1) return [[mesero], []];
+                if (n === 2) return [[pedidoCerrado], []];
+                if (n === 3) return [[{ nombre: 'Mojito', cantidad: 2 }, { nombre: 'Croquetas', cantidad: 1 }], []];
+                if (n === 4) return [[{ metodo_pago: 'efectivo', monto_equivalente_local: 27, moneda_codigo: 'CUP', moneda_simbolo: '$' }], []];
+                if (n === 5) return [[{ id: 1, nombre: '5', id_pedido_activo: null }], []];
+                return [[{ total_mesas: 1, mesas_ocupadas: 0, pedidos_pendientes: 0, en_preparacion: 0, ventas_del_turno: 0 }], []];
+            });
+
+            const { req, res } = crearReqRes({
+                query: { mesero: '5', 'cuenta-pagada': '15' },
+                user: { id: 1, rol: 'administrador', nombre: 'Admin' }
+            });
+            await controller.viewDashboardMesero(req, res);
+
+            expect(res.render).toHaveBeenCalledTimes(1);
+            const datos = res.render.mock.calls[0][1];
+            expect(datos.cuentasPagadas).toHaveLength(1);
+            expect(datos.cuentasPagadas[0]).toMatchObject({
+                id: 15, mesa: '5', mesero: 'Juan Perez', total: 25.5, totalItems: 3, estadoPago: 'pagado'
+            });
+            expect(datos.cuentasPagadas[0].pagos[0].metodo).toBe('efectivo');
+            expect(datos.cuentasPagadas[0].horaCierre).toBe('14:32');
+
+            // Solo se resumen cuentas realmente cerradas
+            const sqlPedido = db.query.mock.calls[1][0];
+            expect(sqlPedido).toContain('fecha_cierre IS NOT NULL');
+        });
+
+        it('varias cuentas pagadas se pasan todas (notificación escalonada)', async () => {
+            turnoService.obtenerTurnoActivo.mockResolvedValue({ id: 7 });
+            const mesero = { id: 5, nombre: 'Juan', apellidos: 'Perez', rol: 'dependiente', activo: 1 };
+            db.query.mockImplementation(async () => {
+                const n = db.query.mock.calls.length;
+                if (n === 1) return [[mesero], []];
+                if (n === 2 || n === 5) return [[{ id: n === 2 ? 15 : 16, total: 10, propina: 0, descuento: 0, impuesto: 0, estado_pago: 'pagado', fecha_cierre: new Date(), mesa_numero: '4', mesero_nombre: 'Juan Perez' }], []];
+                if (n === 3 || n === 6) return [[]];
+                if (n === 4 || n === 7) return [[]];
+                if (n === 8) return [[]];
+                return [[{ total_mesas: 0, mesas_ocupadas: 0, pedidos_pendientes: 0, en_preparacion: 0, ventas_del_turno: 0 }], []];
+            });
+
+            const { req, res } = crearReqRes({
+                query: { mesero: '5', 'cuenta-pagada': '15,16' },
+                user: { id: 1, rol: 'administrador' }
+            });
+            await controller.viewDashboardMesero(req, res);
+
+            const datos = res.render.mock.calls[0][1];
+            expect(datos.cuentasPagadas).toHaveLength(2);
+            expect(datos.cuentasPagadas.map(c => c.id)).toEqual([15, 16]);
+        });
+
+        it('ignora ids inválidos y cuentas que no existen', async () => {
+            turnoService.obtenerTurnoActivo.mockResolvedValue({ id: 7 });
+            const mesero = { id: 5, nombre: 'Juan', apellidos: 'Perez', rol: 'dependiente', activo: 1 };
+            // 1 mesero · 2 pedido (vacío: cuenta inexistente) · 3 mesas · 4 stats
+            db.query.mockImplementation(async () => {
+                const n = db.query.mock.calls.length;
+                if (n === 1) return [[mesero], []];
+                if (n === 2) return [[]];
+                if (n === 3) return [[]];
+                return [[{ total_mesas: 0, mesas_ocupadas: 0, pedidos_pendientes: 0, en_preparacion: 0, ventas_del_turno: 0 }], []];
+            });
+
+            const { req, res } = crearReqRes({
+                query: { mesero: '5', 'cuenta-pagada': 'abc, , 99x' },
+                user: { id: 1, rol: 'administrador' }
+            });
+            await controller.viewDashboardMesero(req, res);
+
+            const datos = res.render.mock.calls[0][1];
+            expect(datos.cuentasPagadas).toEqual([]);
+        });
     });
 
     describe('renderDashboardSalon (compartido)', () => {

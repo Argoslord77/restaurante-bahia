@@ -364,12 +364,92 @@
     <script src="/js/sweetalert2.all.min.js"></script>
     <script src="/js/libs/qrcode.min.js"></script>
     <script>
+        // ============================================================
+        // RESUMEN DE CUENTAS PAGADAS (supervisión POS mesero)
+        // Cuando el mesero cobra una orden que el administrador estaba
+        // vigilando en el POS, se le trae de vuelta a este salón y se le
+        // notifica el resultado del cobro. Los resúmenes se muestran con
+        // SweetAlert2 de forma ESCALONADA (uno tras otro): nunca se pisan
+        // entre sí ni con otras notificaciones.
+        // ============================================================
+        const CUENTAS_PAGADAS_VISTA = <%- JSON.stringify(typeof cuentasPagadas !== 'undefined' && Array.isArray(cuentasPagadas) ? cuentasPagadas : []) %>;
+        const COLA_RESUMENES_CUENTA = CUENTAS_PAGADAS_VISTA.slice();
+        const ETIQUETAS_ESTADO_PAGO = { pagado: 'Pagada', pendiente_pago: 'Pago pendiente', facturado: 'Facturada (crédito)', cortesia: 'Cortesía' };
+        const ETIQUETAS_METODO_PAGO = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia' };
+
+        function escaparHtmlVista(texto) {
+            return String(texto == null ? '' : texto)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function htmlResumenCuenta(cuenta) {
+            const metodoTexto = cuenta.pagos && cuenta.pagos.length
+                ? cuenta.pagos.map(p => {
+                    const etiqueta = ETIQUETAS_METODO_PAGO[p.metodo] || escaparHtmlVista(p.metodo);
+                    const simbolo = p.moneda ? escaparHtmlVista(p.moneda) : '$';
+                    return `${etiqueta} ${simbolo}${Number(p.monto || 0).toFixed(2)}`;
+                }).join(' + ')
+                : '—';
+            const itemsTexto = cuenta.items && cuenta.items.length
+                ? cuenta.items.slice(0, 4).map(i => `${escaparHtmlVista(i.nombre)} ×${i.cantidad}`).join(', ')
+                    + (cuenta.items.length > 4 ? ` <span class="text-muted">(+${cuenta.items.length - 4} más)</span>` : '')
+                : 'Sin consumos';
+            const estadoTexto = ETIQUETAS_ESTADO_PAGO[cuenta.estadoPago] || escaparHtmlVista(cuenta.estadoPago);
+            return `
+                <div class="text-start fs-6">
+                    <p class="mb-2"><i class="fa-solid fa-user text-secondary me-1"></i>
+                        <strong>Mesero:</strong> ${escaparHtmlVista(cuenta.mesero)}</p>
+                    <p class="mb-2"><i class="fa-solid fa-utensils text-secondary me-1"></i>
+                        <strong>Consumo (${cuenta.totalItems} ítems):</strong><br>
+                        <span class="small">${itemsTexto}</span></p>
+                    <p class="mb-2"><i class="fa-solid fa-cash-register text-secondary me-1"></i>
+                        <strong>Pago:</strong> ${metodoTexto}</p>
+                    ${cuenta.propina ? `<p class="mb-2"><strong>Propina:</strong> $${Number(cuenta.propina).toFixed(2)}</p>` : ''}
+                    ${cuenta.descuento ? `<p class="mb-2"><strong>Descuento:</strong> -$${Number(cuenta.descuento).toFixed(2)}</p>` : ''}
+                    <p class="mb-1"><strong>Total:</strong> <span class="fs-5">$${Number(cuenta.total || 0).toFixed(2)}</span>
+                        <span class="badge text-bg-success ms-2">${estadoTexto}</span></p>
+                    ${cuenta.horaCierre ? `<p class="text-muted small mb-0">Cerrada a las ${escaparHtmlVista(cuenta.horaCierre)}</p>` : ''}
+                </div>`;
+        }
+
+        function mostrarSiguienteResumenCuenta() {
+            const siguiente = COLA_RESUMENES_CUENTA.shift();
+            if (!siguiente) return;
+            Swal.fire({
+                icon: 'success',
+                title: `Cuenta cobrada — Mesa ${siguiente.mesa}`,
+                html: htmlResumenCuenta(siguiente),
+                confirmButtonText: 'Entendido',
+                allowOutsideClick: false,
+                allowEscapeKey: false
+            }).then(() => mostrarSiguienteResumenCuenta());
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const MODO_VISUALIZACION = <%= (typeof modoVisualizacion !== 'undefined' && modoVisualizacion) ? 'true' : 'false' %>;
+
+            // Cuentas pagadas pendientes de notificar: llegan por URL tras
+            // la redirección automática desde el POS supervisado. Se
+            // quita el parámetro de la URL para que un refresco manual no
+            // las repita, y se limpian las instantáneas que guardaba la
+            // vista de esa orden (ya no se volverá a supervisar).
+            if (CUENTAS_PAGADAS_VISTA.length > 0) {
+                CUENTAS_PAGADAS_VISTA.forEach(cuenta => {
+                    try { sessionStorage.removeItem('posvista_snap_' + cuenta.id); } catch (_) {}
+                });
+                try {
+                    const urlLimpia = new URL(window.location.href);
+                    urlLimpia.searchParams.delete('cuenta-pagada');
+                    window.history.replaceState({}, '', urlLimpia.toString());
+                } catch (_) { /* sin History API no pasa nada */ }
+                setTimeout(() => mostrarSiguienteResumenCuenta(), 350);
+            }
             // Operación en curso (abrir mesa): el auto-refresco no debe
             // interrumpir una petición que está en vuelo.
             let operacionEnCurso = false;
-            const modalQrEl = document.getElementById('modalQrMesa');            const modalQr = modalQrEl ? new bootstrap.Modal(modalQrEl) : null;
+            const modalQrEl = document.getElementById('modalQrMesa');
+            const modalQr = modalQrEl ? new bootstrap.Modal(modalQrEl) : null;
             const qrCanvas = document.getElementById('qrMesaCanvas');
             const qrUrlInput = document.getElementById('qrMesaUrl');
             const qrDescripcion = document.getElementById('qrMesaDescripcion');
@@ -457,29 +537,33 @@
                 }
             });
         // ============================================================
-        // AUTO-REFRESCO DEL TABLERO
-        // Refresca periódicamente la vista para reflejar los cambios de
-        // estado de las mesas (mesas abiertas o liberadas por otros
-        // meseros, órdenes nuevas) sin intervención del usuario.
+        // AUTO-REFRESCO DEL TABLERO (SOLO EN SUPERVISIÓN)
+        // El administrador que vigila el salón de un mesero (POS mesero)
+        // necesita ver los cambios de estado de las mesas que ese mesero
+        // va provocando. El mesero que opera su propio tablero NO necesita
+        // refrescar: él mismo realiza las acciones.
         // Solo recarga cuando es seguro: pestaña visible, sin modales ni
-        // alertas abiertas y sin una operación en curso. El refresco se
-        // marca con ?autorefresco=1 para que la auditoría no lo registre
-        // como navegación del usuario.
+        // alertas abiertas, sin resúmenes pendientes y sin una operación
+        // en curso. El refresco se marca con ?autorefresco=1 para que la
+        // auditoría no lo registre como navegación del usuario.
         // ============================================================
-        const AUTO_REFRESH_MS = 15000;
-        setInterval(() => {
-            if (document.visibilityState !== 'visible') return;
-            if (operacionEnCurso) return;
-            if (document.querySelector('.modal.show')) return;
-            if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
-            try {
-                const url = new URL(window.location.href);
-                url.searchParams.set('autorefresco', '1');
-                window.location.replace(url.toString());
-            } catch (_) {
-                window.location.reload();
-            }
-        }, AUTO_REFRESH_MS);
+        if (MODO_VISUALIZACION) {
+            const AUTO_REFRESH_MS = 15000;
+            setInterval(() => {
+                if (document.visibilityState !== 'visible') return;
+                if (operacionEnCurso) return;
+                if (document.querySelector('.modal.show')) return;
+                if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
+                if (COLA_RESUMENES_CUENTA.length > 0) return; // resúmenes por mostrar
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('autorefresco', '1');
+                    window.location.replace(url.toString());
+                } catch (_) {
+                    window.location.reload();
+                }
+            }, AUTO_REFRESH_MS);
+        }
         });
 
     </script>

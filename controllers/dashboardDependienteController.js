@@ -48,7 +48,8 @@ const DashboardDependienteController = {
             usuarioId,
             usuarioRol,
             modoVisualizacion = false,
-            meseroVisualizado = null
+            meseroVisualizado = null,
+            cuentasPagadas = []
         } = opciones;
 
         const turnoActivo = await turnoService.obtenerTurnoActivo();
@@ -145,6 +146,7 @@ const DashboardDependienteController = {
                 view: 'dashboard',
                 modoVisualizacion,
                 meseroVisualizado,
+                cuentasPagadas,
                 success_msg: req.flash('success_msg'),
                 error_msg: req.flash('error_msg')
             });
@@ -233,6 +235,13 @@ const DashboardDependienteController = {
                 return res.redirect('/admin/pos-mesero');
             }
 
+            // Resúmenes de cuentas pagadas: llegan por URL cuando el POS
+            // supervisado detecta que el mesero cerró la cuenta. La vista
+            // los notifica con SweetAlert2, escalonados si hay varios.
+            const cuentasPagadas = await DashboardDependienteController.obtenerResumenesCuenta(
+                req.query['cuenta-pagada']
+            );
+
             // Se fuerza rol 'dependiente' para ver exactamente el salón que
             // ve ese mesero (sus mesas asignadas y sus órdenes abiertas).
             return await DashboardDependienteController.renderDashboardSalon(req, res, {
@@ -243,13 +252,97 @@ const DashboardDependienteController = {
                     id: mesero.id,
                     nombre: `${mesero.nombre} ${mesero.apellidos || ''}`.trim(),
                     rol: mesero.rol
-                }
+                },
+                cuentasPagadas
             });
         } catch (error) {
             console.error('Error al visualizar el salón del mesero:', error);
             req.flash('error_msg', 'Error al visualizar el salón del mesero.');
             return res.redirect('/admin/pos-mesero');
         }
+    },
+
+    // Resúmenes de cuentas cobradas para la notificación del administrador
+    // (POS mesero). Acepta uno o varios ids separados por coma; solo se
+    // incluyen cuentas realmente cerradas (fecha_cierre presente).
+    obtenerResumenesCuenta: async (parametroCuentas) => {
+        const ids = String(parametroCuentas || '')
+            .split(',')
+            .map(seg => Number(String(seg).trim()))
+            .filter(n => Number.isInteger(n) && n > 0)
+            .slice(0, 5);
+
+        const resumenes = [];
+        for (const id of ids) {
+            try {
+                const [pedidos] = await db.query(`
+                    SELECT p.id, p.total, p.propina, p.descuento, p.impuesto,
+                           p.estado_pago, p.fecha_cierre,
+                           m.numero AS mesa_numero,
+                           CONCAT(u.nombre, ' ', COALESCE(u.apellidos, '')) AS mesero_nombre
+                    FROM pedidos p
+                    LEFT JOIN mesas m ON p.id_mesa = m.id
+                    LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+                    WHERE p.id = ? AND p.fecha_cierre IS NOT NULL
+                    LIMIT 1
+                `, [id]);
+                if (!pedidos || !pedidos.length) continue;
+                const pedido = pedidos[0];
+
+                const [items] = await db.query(`
+                    SELECT COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre,
+                           SUM(dp.cantidad) AS cantidad
+                    FROM detalles_pedido dp
+                    LEFT JOIN platillos_menu pm
+                      ON dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL)
+                    LEFT JOIN platillos_dia pd
+                      ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
+                    WHERE dp.id_pedido = ? AND dp.estado_item != 'cancelado'
+                    GROUP BY COALESCE(pd.nombre, pm.nombre, 'Platillo')
+                    ORDER BY SUM(dp.cantidad) DESC
+                `, [id]);
+
+                const [pagos] = await db.query(`
+                    SELECT pp.metodo_pago, pp.monto_equivalente_local,
+                           mon.codigo AS moneda_codigo, mon.simbolo AS moneda_simbolo
+                    FROM pagos_pedido pp
+                    LEFT JOIN monedas mon ON pp.moneda_id = mon.id
+                    WHERE pp.pedido_id = ?
+                    ORDER BY pp.id ASC
+                `, [id]);
+
+                const listaItems = (items || []).map(i => ({
+                    nombre: i.nombre,
+                    cantidad: Number(i.cantidad || 0)
+                }));
+                const cierre = pedido.fecha_cierre ? new Date(pedido.fecha_cierre) : null;
+                const horaCierre = cierre && !Number.isNaN(cierre.getTime())
+                    ? `${String(cierre.getHours()).padStart(2, '0')}:${String(cierre.getMinutes()).padStart(2, '0')}`
+                    : '';
+
+                resumenes.push({
+                    id: pedido.id,
+                    mesa: pedido.mesa_numero || '—',
+                    mesero: String(pedido.mesero_nombre || '').trim() || 'Mesero',
+                    total: Number(pedido.total || 0),
+                    propina: Number(pedido.propina || 0),
+                    descuento: Number(pedido.descuento || 0),
+                    impuesto: Number(pedido.impuesto || 0),
+                    estadoPago: pedido.estado_pago || 'pagado',
+                    horaCierre,
+                    items: listaItems,
+                    totalItems: listaItems.reduce((suma, i) => suma + i.cantidad, 0),
+                    pagos: (pagos || []).map(p => ({
+                        metodo: p.metodo_pago || 'efectivo',
+                        monto: Number(p.monto_equivalente_local || 0),
+                        moneda: p.moneda_simbolo || p.moneda_codigo || ''
+                    }))
+                });
+            } catch (error) {
+                console.error(`Error al armar el resumen de la cuenta #${id}:`, error);
+            }
+        }
+        return resumenes;
     },
 
     getDashboardStats: async (turnoId, usuarioId, usuarioRol) => {

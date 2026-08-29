@@ -21,17 +21,28 @@
  el proyecto tal como está.
 ============================================================================
 
-MEJORA 3 DE ESTA VERSIÓN — REFRESCO AUTOMÁTICO Y AUDITORÍA LIMPIA
+MEJORA 3 DE ESTA VERSIÓN — SUPERVISIÓN EN VIVO Y AUDITORÍA LIMPIA
 ----------------------------------------------------------------
- * El tablero del dependiente se refresca solo cada 15 s para mostrar
-   los cambios de estado de las mesas (abiertas o liberadas por otros
-   meseros, órdenes nuevas). Nunca interrumpe: solo recarga si la
-   pestaña está visible, no hay modales ni alertas en pantalla y no
-   hay una operación en curso (p. ej. abriendo una mesa).
- * El POS en modo visualización (POS mesero) se refresca solo cada
-   12 s para ver en vivo lo que hace el mesero en la orden: nuevos
-   productos, cambios de estado y totales. El POS operativo del mesero
-   NO se refresca solo (nunca se pierde una comanda en captura).
+ * REFRESCO AUTOMÁTICO (solo supervisión): el salón del mesero
+   supervisado se refresca solo cada 15 s y el POS en modo
+   visualización cada 12 s, para reflejar en vivo lo que hace el
+   mesero. El tablero operativo del mesero NO se refresca solo: él
+   mismo provoca los cambios y jamás se le interrumpe una captura.
+   Solo recargan cuando es seguro: pestaña visible, sin modales ni
+   alertas en pantalla y sin avisos pendientes por leer.
+ * AVISOS DE LAS ACCIONES DEL MESERO (POS en visualización): al
+   refrescarse, la vista compara la orden contra la última versión
+   conocida y avisa con alertas de Bootstrap —sin SweetAlert2— de lo
+   que hizo el mesero: productos agregados, quitados o cancelados,
+   cambios de cantidad y cambios de estado (en cocina, listo...).
+   Los avisos se autodescartan a los 10 segundos.
+ * CUENTA COBRADA: si el mesero cobra y cierra la cuenta mientras el
+   administrador vigila su POS, el administrador regresa
+   automáticamente al salón del mesero (modo visualización) y recibe
+   con SweetAlert2 un resumen de la cuenta pagada: consumo, método(s)
+   de pago, propina, total y hora de cierre. Si hubiera más de una
+   notificación, se muestran ESCALONADAS (una tras otra), nunca
+   superpuestas.
  * Los refrescos automáticos viajan marcados (?autorefresco=1) y la
    auditoría NO los registra como navegación del usuario.
  * AUDITORÍA LIMPIA: los sondeos periódicos de las vistas (polling)
@@ -87,19 +98,31 @@ CONTENIDO DEL PAQUETE
 Los archivos mantienen la estructura de carpetas del proyecto: se pueden
 extraer directamente sobre la raíz del proyecto (respaldar antes).
 
-1) ARCHIVOS ACTUALIZADOS (36)
+1) ARCHIVOS ACTUALIZADOS (37)
 
-   A. Refresco automático + auditoría limpia (6, NUEVO)
+   A. Supervisión en vivo + auditoría limpia (9, NUEVO)
 
    views/dependiente/dashboard.ejs ................ Auto-refresco cada 15 s
-        con guardas (pestaña visible, sin modales/alertas, sin operación
-        en curso); marca el refresco con ?autorefresco=1.
+        SOLO en modo visualización; notifica las cuentas cobradas con
+        SweetAlert2 escalonado y limpia el parámetro de la URL.
    views/pos.ejs ................................ Auto-refresco cada 12 s
-        SOLO en modo visualización (POS mesero), con las mismas guardas.
+        SOLO en modo visualización (POS mesero) + avisos de Bootstrap con
+        las acciones del mesero (agregados, quitados, cantidades y
+        estados) comparando contra la última instantánea de la orden.
+   controllers/posController.js .................. Si la orden supervisada
+        ya fue cobrada, redirige al salón del mesero con el resumen de
+        la cuenta pagada (?cuenta-pagada=ID).
+   controllers/dashboardDependienteController.js . Consulta los resúmenes
+        de cuentas cobradas (consumo, pagos, propina, total, hora).
    middlewares/auditoria.js ...................... Ignora los sondeos GET
         de las vistas y los refrescos marcados ?autorefresco=1.
    config/auditoriaCatalogo.js ................... Nuevo catálogo
         EXCLUIDAS_SONDEO: los polling no se auditan (antes se agrupaban).
+   controllers/posController.test.js (nuevo) ..... 4 tests de la
+        redirección por cuenta cerrada.
+   controllers/dashboardDependienteController.test.js (actualizado)
+        .......................................... 3 tests de los resúmenes
+        de cuentas pagadas.
    middlewares/auditoria.test.js (nuevo) ......... 4 tests del filtro.
    config/auditoriaCatalogo.test.js .............. Tests actualizados (los
         sondeos se excluyen; las escrituras se auditan).
@@ -224,7 +247,7 @@ PASOS DE DESPLIEGUE
 -------------------
  1. Respaldar el proyecto y la base de datos:
       mysqldump restaurante_db > respaldo_antes_actualizacion_v2.sql
- 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 36
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 37
     archivos listados y deja los scripts de migración en scripts/).
  3. Aplicar scripts/migracion_ubicacion_mesa.sql (y los requisitos
     pendientes del punto anterior). POS mesero no requiere migración.
@@ -233,9 +256,9 @@ PASOS DE DESPLIEGUE
       pm2 restart all   (o como tengas configurado el proceso)
  6. Verificación rápida:
       npm test
-    → deben pasar 177 tests. Los avisos esperados son los falsos positivos
+    → deben pasar 184 tests. Los avisos esperados son los falsos positivos
     conocidos (config/environments/test.js y suites que fallan al cargar
-    sin MySQL local): si "Tests: 177 passed" aparece, está bien.
+    sin MySQL local): si "Tests: 184 passed" aparece, está bien.
  7. Verificación funcional:
     - Menú lateral → "POS mesero": aparece la lista de dependientes y
       capitanes activos con sus métricas del turno.
@@ -247,10 +270,14 @@ PASOS DE DESPLIEGUE
       el aviso "acción deshabilitada". La pre-cuenta sí se puede consultar.
     - Configuración → Salón y Áreas: aparecen las áreas importadas de las
       mesas existentes (columna "Mesas" con el conteo).
-    - Dejar el tablero del dependiente abierto: en ~15 s se recarga solo
-      (si otro usuario cambia una mesa, el cambio aparece).
+    - El tablero PROPIO del mesero ya no se recarga solo (abrir una mesa
+      o dejarlo abierto: no se interrumpe nunca).
     - Vigilar una orden desde POS mesero: los productos que agregue el
-      mesero aparecen solos en ~12 s.
+      mesero aparecen solos en ~12 s, con avisos de Bootstrap ("El
+      mesero agregó...", "Cambios de estado...").
+    - Con la supervisión abierta, pedirle al mesero que cobre la cuenta:
+      el administrador regresa solo al salón del mesero y ve el resumen
+      del pago en un SweetAlert2.
     - Auditoría: los sondeos (alertas, ítems listos, monitor) ya no
       generan registros; la navegación real sí.
 

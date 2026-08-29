@@ -45,6 +45,20 @@ module.exports = {
 
                 if (pedidos.length > 0) {
                     const ped = pedidos[0];
+
+                    // Supervisión (POS mesero): si el mesero cobró y cerró la
+                    // cuenta mientras el administrador vigilaba la orden, ya
+                    // no hay nada que mostrar aquí. Se le devuelve al salón
+                    // del mesero en modo visualización con el resumen de la
+                    // cuenta pagada (la vista lo muestra con SweetAlert2,
+                    // escalonado si llegara más de una).
+                    if (soloVisualizacion && ped.fecha_cierre) {
+                        const meseroDestino = parseInt(req.query.mesero, 10) || ped.id_usuario_mesero || null;
+                        return res.redirect(meseroDestino
+                            ? `/admin/pos-mesero/ver?mesero=${meseroDestino}&cuenta-pagada=${ped.id}&autorefresco=1`
+                            : '/admin/pos-mesero');
+                    }
+
                     idMesa = ped.id_mesa;
                     turnoId = ped.turno_servicio_id;
                     nombreMesa = ped.mesa_numero || nombreMesa;
