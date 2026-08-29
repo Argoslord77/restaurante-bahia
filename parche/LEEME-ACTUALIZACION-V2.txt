@@ -7,17 +7,40 @@
             de inventario en Caja y Cierre del Día (puntos 5 y 6 del TODO)
    795b174  Descuento de inventario por venta: conversión de unidades por
             lote, merma alineada y costo real en el kardex
-   5961803  NUEVO — Catálogo de áreas de servicio (ubicacion_mesa): CRUD en
+   5961803  Catálogo de áreas de servicio (ubicacion_mesa): CRUD en
             Configuración → Salón y Áreas y mesas vinculadas por FK
+   366cc24  NUEVO — POS mesero: visualización del salón y las órdenes de
+            cada mesero (solo consulta) para administradores
 
- ESTE PAQUETE REEMPLAZA AL ANTERIOR (restaurante-bahia-actualizacion-
- 2026-08-29.zip): incluye TODO su contenido más el update de áreas de
- servicio. Si el update anterior quedó sin aplicar, este zip lo trae
- completo: se puede extraer directamente sobre el proyecto tal como está.
+ ESTE PAQUETE ES ACUMULATIVO: incluye todo el contenido del zip anterior
+ (restaurante-bahia-actualizacion-2026-08-29.zip) más el update de áreas
+ de servicio y la herramienta POS mesero. Si un update anterior quedó sin
+ aplicar, este zip lo trae completo: se puede extraer directamente sobre
+ el proyecto tal como está.
 ============================================================================
 
-NOVEDADES DE ESTA VERSIÓN — ÁREAS DE SERVICIO (ubicacion_mesa)
---------------------------------------------------------------
+NOVEDAD 2 DE ESTA VERSIÓN — POS MESERO (visualización y control)
+----------------------------------------------------------------
+ * Nueva entrada "POS mesero" en el menú lateral (visible solo para
+   administradores) → /admin/pos-mesero.
+ * El selector muestra el personal de servicio activo (dependientes y
+   capitanes) con sus mesas asignadas, órdenes abiertas y consumo acumulado
+   del turno vigente. Se elige un mesero y se ve SU salón tal como él lo ve.
+ * El salón del mesero se muestra en modo visualización: banner de
+   supervisión, botones "Abrir Mesa" deshabilitados y sin atención de
+   alertas (el polling de llamadas/pre-pedidos y el "marcar leída"
+   siguen correspondiendo al mesero, no al supervisor).
+ * Desde ahí, cada orden se abre en el POS en modo consulta (?vista=1):
+   - Banner "Modo Visualización" con el mesero que atiende la orden y
+     botón para volver al salón supervisado.
+   - Bloqueadas TODAS las acciones que modifican: agregar productos,
+     enviar a cocina/bar, entregar, cancelar ítems y cobrar.
+   - Se pueden consultar el catálogo, la comanda en curso y la pre-cuenta.
+ * Es una herramienta de supervisión en vivo: útil para auditar cómo
+   trabaja cada mesero sin intervenir en su operación.
+
+NOVEDAD 1 DE ESTA VERSIÓN — ÁREAS DE SERVICIO (ubicacion_mesa)
+----------------------------------------------------------------
  * Nueva tabla `ubicacion_mesa`: catálogo de salones/zonas del local
    (nombre, descripción, orden, activo). Las mesas ahora la referencian
    por `mesas.ubicacion_id` (FK) en vez de texto libre.
@@ -39,15 +62,34 @@ CONTENIDO DEL PAQUETE
 Los archivos mantienen la estructura de carpetas del proyecto: se pueden
 extraer directamente sobre la raíz del proyecto (respaldar antes).
 
-1) ARCHIVOS ACTUALIZADOS (28)
+1) ARCHIVOS ACTUALIZADOS (32)
 
-   A. Update de áreas de servicio (16, NUEVO)
+   A. POS mesero — visualización (8, NUEVO)
+
+   views/includes/sideBarMenu.ejs ................. Entrada "POS mesero" en
+        el menú lateral (solo administradores).
+   views/admin/pos_mesero.ejs (nuevo) ............. Selector del mesero con
+        sus métricas del turno (mesas, órdenes, consumo).
+   controllers/dashboardDependienteController.js .. renderDashboardSalon
+        compartido + selector de mesero + salón en modo visualización.
+   controllers/dashboardDependienteController.test.js (nuevo) — 7 tests.
+   controllers/posController.js ................... viewPOS acepta ?vista=1:
+        pasa el modo visualización, el mesero de la orden y la URL de
+        regreso al POS.
+   routes/adminRoutes.js ......................... Rutas /admin/pos-mesero y
+        /admin/pos-mesero/ver (solo superadministrador/administrador).
+   views/dependiente/dashboard.ejs ................ Banner de supervisión,
+        mesas sin "Abrir Mesa" y enlaces al POS en modo consulta.
+   views/pos.ejs ................................ Banner "Modo Visualización",
+        ocultamiento de acciones y bloqueo por interceptor en fase captura.
+
+   B. Update de áreas de servicio (15)
 
    controllers/settingController.js ................ CRUD de ubicaciones
         (API /admin/api/ubicaciones-mesa) y carga del catálogo en la vista.
    routes/settingRoutes.js ........................ Rutas del CRUD de áreas.
    models/ubicacionMesaModel.js (nuevo) ........... Modelo del catálogo.
-   models/ubicacionMesaModel.test.js (nuevo) ...... 12 tests.
+   models/ubicacionMesaModel.test.js (nuevo) ...... 13 tests.
    controllers/tableController.js ................. Mesas: select de áreas y
         validación del área al crear/editar.
    models/tableModel.js ........................... JOIN a ubicacion_mesa y
@@ -60,13 +102,14 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
         con la tabla CRUD y su modal.
    views/admin/tables.ejs ......................... Modales de mesa con select
         de áreas (con respaldo de texto si no hay catálogo).
-   controllers/dashboardDependienteController.js .. Área de la mesa vía JOIN.
-   controllers/monitorController.js ............... Ídem monitores cocina/bar.
-   controllers/posController.js ................... Ídem POS (incluye ADEMÁS
-        los cambios del update anterior: faltantes formateados).
+   controllers/monitorController.js ............... Área de la mesa vía JOIN.
+   controllers/posController.js ................... Ídem POS (mismo archivo
+        del bloque A).
    services/dashboardService.js ................... Ídem estados de mesa.
+   controllers/dashboardDependienteController.js .. Ídem dashboard (mismo
+        archivo del bloque A).
 
-   B. Update anterior que quedó ausente (12, reincluido completo)
+   C. Update anterior que quedó ausente (12, reincluido completo)
 
    TODO ............................................ Puntos 13/14 marcados [OKOKOK]
    controllers/cierreDiaController.js .............. Punto 6: movimiento de
@@ -81,7 +124,7 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
         costos reales y lotes AGOTADOS. Observación 2: conversión receta→lote
         por lote, merma alineada, lotes bloqueados con FOR UPDATE.
    views/pos.ejs ................................... Punto 5: modal de faltantes
-        con equivalencia de unidad de almacén.
+        con equivalencia de unidad de almacén (mismo archivo del bloque A).
    views/caja/cierre_dia.ejs ....................... Punto 6: tarjeta
         "Movimiento de Inventario del Turno".
    views/caja/turnos.ejs ........................... Punto 6: tarjeta compacta
@@ -94,7 +137,7 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
 2) SCRIPTS DE MIGRACIONES (15, carpeta scripts/)
    Solo se incluyen los scripts de migración; ningún otro script.
 
-   scripts/migracion_ubicacion_mesa.sql   ← NUEVO, REQUERIDO por este update
+   scripts/migracion_ubicacion_mesa.sql   ← REQUERIDO por el update de áreas
    scripts/migracion_asignaciones_por_turno.sql
    scripts/migracion_auditoria_profunda.sql
    scripts/migracion_auditoria_usuarios.sql
@@ -110,9 +153,11 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    scripts/migracion_tokens_hash.sql
    scripts/migracion_unidades_medida.sql
 
+   NOTA: la funcionalidad POS mesero NO requiere migraciones nuevas.
+
 MIGRACIONES — QUÉ APLICAR
 -------------------------
- OBLIGATORIA para este update (solo una vez):
+ OBLIGATORIA para el update de áreas de servicio (solo una vez):
 
    scripts/migracion_ubicacion_mesa.sql
    → Crea la tabla ubicacion_mesa, la siembra con los valores que ya
@@ -139,26 +184,35 @@ PASOS DE DESPLIEGUE
 -------------------
  1. Respaldar el proyecto y la base de datos:
       mysqldump restaurante_db > respaldo_antes_actualizacion_v2.sql
- 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 28
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 32
     archivos listados y deja los scripts de migración en scripts/).
  3. Aplicar scripts/migracion_ubicacion_mesa.sql (y los requisitos
-    pendientes del punto anterior).
+    pendientes del punto anterior). POS mesero no requiere migración.
  4. No hay dependencias nuevas: no hace falta npm install.
  5. Reiniciar el servicio:
       pm2 restart all   (o como tengas configurado el proceso)
  6. Verificación rápida:
       npm test
-    → deben pasar 164 tests. Los avisos esperados son los falsos positivos
+    → deben pasar 171 tests. Los avisos esperados son los falsos positivos
     conocidos (config/environments/test.js y suites que fallan al cargar
-    sin MySQL local): si "Tests: 164 passed" aparece, está bien.
+    sin MySQL local): si "Tests: 171 passed" aparece, está bien.
  7. Verificación funcional:
-    - Configuración → Salón y Áreas: deben aparecer las áreas importadas
-      de las mesas existentes (columna "Mesas" con el conteo).
-    - Admin → Mesas → editar una mesa: el área aparece en un desplegable.
-    - Crear/renombrar un área y comprobar que las mesas la reflejan.
+    - Menú lateral → "POS mesero": aparece la lista de dependientes y
+      capitanes activos con sus métricas del turno.
+    - Elegir un mesero → su salón con el banner amarillo de visualización;
+      las mesas libres no se pueden abrir; las ocupadas muestran
+      "Ver POS de la Orden".
+    - Dentro del POS: banner "Modo Visualización" y los botones de
+      enviar/cobrar/vaciar ocultos; al hacer clic en un platillo aparece
+      el aviso "acción deshabilitada". La pre-cuenta sí se puede consultar.
+    - Configuración → Salón y Áreas: aparecen las áreas importadas de las
+      mesas existentes (columna "Mesas" con el conteo).
 
 NOTAS DE COMPORTAMIENTO NUEVO (para el personal)
 ------------------------------------------------
+ * POS mesero es SOLO para administradores y NO reemplaza la operación del
+   mesero: ninguna acción tomada desde la supervisión modifica órdenes,
+   inventario ni cobros. Para operar, cada quien usa su propio usuario.
  * Las áreas del salón se administran SOLO desde Configuración → Salón y
    Áreas. Para dar de alta una mesa en una zona nueva, primero crea la zona
    allí y luego selecciónala en el desplegable de la mesa.
