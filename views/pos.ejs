@@ -1460,7 +1460,13 @@
                 const areas = f.areas ? ` <span class="text-muted">(${esc(f.areas)})</span>` : '';
                 const req = (f.requerido === null || f.requerido === undefined)
                     ? `<span class="text-danger">${esc(f.error || 'unidad sin conversión definida')}</span>`
-                    : `se requieren <b>${fmtCant(f.requerido)} ${unidad}</b>, disponible <b>${fmtCant(f.disponible)} ${unidad}</b>`;
+                    : `se requieren <b>${fmtCant(f.requerido)} ${unidad}</b>, disponible <b>${fmtCant(f.disponible)} ${unidad}</b>` +
+                      // Equivalencia secundaria en la unidad de almacén/compra
+                      // (útil para reponer), solo si difiere de la de producción.
+                      ((f.unidad_inventario && f.unidad && String(f.unidad_inventario).trim().toLowerCase() !== String(f.unidad).trim().toLowerCase()
+                        && f.requerido_inventario !== null && f.requerido_inventario !== undefined)
+                          ? ` <span class="text-muted">(≈ ${fmtCant(f.requerido_inventario)} ${escapeHtml(f.unidad_inventario)} en almacén)</span>`
+                          : '');
                 return `<li class="mb-1"><b>${esc(f.insumo_nombre)}</b>: ${req}${areas}</li>`;
             }).join('');
             const avisos = advertencias.map(f =>

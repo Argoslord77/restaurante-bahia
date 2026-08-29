@@ -280,10 +280,17 @@ module.exports = {
                     console.error('Error en la verificación de stock de producción (se omite el chequeo):', eStock);
                 }
                 if (stockRonda && !stockRonda.suficiente) {
+                    // Formato numérico legible (máx. 3 decimales, sin ceros sobrantes)
+                    const fmtCant = (n) => {
+                        const v = Number(n);
+                        return Number.isFinite(v) ? v.toLocaleString('es', { maximumFractionDigits: 3 }) : '—';
+                    };
                     const resumen = stockRonda.faltantes.map(f => {
                         const nombrePlatillo = itemsVerificados.find(iv => Number(iv.idPlatillo) === Number(f.platillo_id));
                         const label = nombrePlatillo ? nombrePlatillo.nombre : `platillo #${f.platillo_id}`;
-                        return `«${label}» requiere ${f.insumo_nombre} (${f.requerido} ${f.unidad}) pero solo hay ${f.disponible} ${f.unidad} en ${f.areas}`;
+                        // Las cantidades llegan en la unidad de PRODUCCIÓN/CONSUMO
+                        // (la de la receta): es la que usan cocina/bar.
+                        return `«${label}» requiere ${f.insumo_nombre} (${fmtCant(f.requerido)} ${f.unidad}) pero solo hay ${fmtCant(f.disponible)} ${f.unidad} en ${f.areas}`;
                     });
                     return res.status(400).json({
                         success: false,

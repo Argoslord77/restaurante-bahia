@@ -9,6 +9,49 @@ const ALMACEN_COCINA = 2;
 const ALMACEN_BAR = 5;
 const ALMACEN_CENTRAL = 1;
 
+/**
+ * Etiqueta corta (abreviatura) de la UNIDAD DE PRODUCCIÓN/CONSUMO en la que
+ * está escrita la receta. Los mensajes de stock del POS deben expresar las
+ * cantidades en esta unidad (la que usan cocina/bar), no en la unidad de
+ * almacén/compra.
+ */
+async function etiquetaUnidadProduccion(unidadRecetaRef) {
+    const porDefecto = String(unidadRecetaRef || '').trim() || 'und';
+    try {
+        const u = await UnidadMedidaService.resolverUnidad(unidadRecetaRef);
+        if (!u) return porDefecto;
+        return String(u.abreviatura || u.nombre || porDefecto).trim() || porDefecto;
+    } catch (e) {
+        return porDefecto;
+    }
+}
+
+// Etiquetas legibles de los tipos de movimiento de inventario (kardex).
+const ETIQUETAS_MOVIMIENTO = {
+    'CONSUMO_RECETA': 'Consumo por venta',
+    'VENTA': 'Venta directa',
+    'MERMA': 'Merma',
+    'AJUSTE_NEGATIVO': 'Salida/Ajuste negativo',
+    'AJUSTE_POSITIVO': 'Ajuste positivo',
+    'TRANSFERENCIA_ENTRADA': 'Transferencia (entrada)',
+    'TRANSFERENCIA_SALIDA': 'Transferencia (salida)',
+    'COMPRA': 'Compra',
+    'RECEPCION': 'Recepción',
+    'PRODUCCION_ENTRADA': 'Producción (entrada)',
+    'PRODUCCION_SALIDA': 'Producción (salida)',
+    'DEVOLUCION_PROVEEDOR': 'Devolución a proveedor',
+    'DEVOLUCION_CLIENTE': 'Devolución de cliente',
+    'CONTEO_FISICO': 'Conteo físico'
+};
+
+// Prioridad de orden visual en los resúmenes (venta primero, luego mermas...)
+const PRIORIDAD_MOVIMIENTO = [
+    'CONSUMO_RECETA', 'VENTA', 'MERMA', 'AJUSTE_NEGATIVO', 'DEVOLUCION_PROVEEDOR',
+    'PRODUCCION_SALIDA', 'TRANSFERENCIA_SALIDA', 'TRANSFERENCIA_ENTRADA',
+    'COMPRA', 'RECEPCION', 'PRODUCCION_ENTRADA', 'AJUSTE_POSITIVO',
+    'DEVOLUCION_CLIENTE', 'CONTEO_FISICO'
+];
+
 const InventarioService = {
     /**
      * Descuenta del inventario los insumos correspondientes a un producto vendido
@@ -301,6 +344,10 @@ const InventarioService = {
      * El consumo se acumula DENTRO de la ronda: si dos platillos usan el mismo
      * insumo, el segundo compite con el primero por el mismo stock.
      *
+     * Las cantidades reportadas (`requerido`, `disponible`, `faltante` y
+     * `unidad`) se expresan en la UNIDAD DE PRODUCCIÓN/CONSUMO de la receta;
+     * los equivalentes en unidad de inventario viajan en `*_inventario`.
+     *
      * @param {Array<{platillo_id:number, es_platillo_dia:boolean, cantidad:number}>} items
      * @returns {Promise<{suficiente:boolean, faltantes:Array, advertencias:Array, detalle:Array}>}
      */
@@ -395,6 +442,10 @@ const InventarioService = {
                 cantidadNecesaria = Number.isFinite(cantidadNecesaria) ? cantidadNecesaria : 0;
                 if (cantidadNecesaria <= 0) continue;
 
+                // Cantidad requerida en la UNIDAD DE PRODUCCIÓN/CONSUMO (la de
+                // la receta). Es la que debe verse en el mensaje del POS.
+                const cantidadRequeridaReceta = cantidadNecesaria;
+
                 // Conversión a unidad de inventario (igual que el descuento)
                 const uReceta = (ing.unidad_receta || '').trim().toLowerCase();
                 const uInv = (ing.unidad_inventario || '').trim().toLowerCase();
@@ -405,11 +456,16 @@ const InventarioService = {
                     } catch (e) { factor = null; }
                     if (factor !== null) cantidadNecesaria *= factor;
                 }
+                // Factor inverso (inventario -> receta) para expresar el stock
+                // disponible en la misma unidad de producción/consumo.
+                const factorInvAReceta = (factor !== null && factor > 0) ? (1 / factor) : null;
 
                 await cargarStockParaProducto(ing.insumo_id, uInv);
-                // Etiqueta legible para el mensaje (nombre completo de la
-                // unidad de inventario; la conversión usa uInv/uReceta directo)
+                // Etiquetas legibles: la principal es la de la RECETA
+                // (producción/consumo); se conserva la de inventario como
+                // dato secundario para el almacén.
                 const unidadRef = ing.unidad_inventario_nombre || uInv || uReceta || 'und';
+                const unidadProduccion = await etiquetaUnidadProduccion(ing.unidad_receta);
 
                 // Simular consumo: primero el área preferida, luego la alterna
                 let pendiente = cantidadNecesaria;
@@ -428,20 +484,32 @@ const InventarioService = {
                 }
 
                 const esOpcional = Number(ing.es_opcional) === 1;
+                // Presentación de las cantidades en la unidad de
+                // PRODUCCIÓN/CONSUMO (la de la receta), que es la que maneja
+                // el personal de cocina/bar. Los valores en unidad de
+                // inventario (almacén/compra) se conservan como referencia.
+                const disponibleVista = factorInvAReceta !== null
+                    ? disponibleTotal * factorInvAReceta
+                    : disponibleTotal;
                 const registro = {
                     platillo_id: platilloId,
                     insumo_id: ing.insumo_id,
                     insumo_nombre: ing.insumo_nombre,
-                    requerido: Number(cantidadNecesaria.toFixed(6)),
-                    disponible: Number(disponibleTotal.toFixed(6)),
-                    unidad: unidadRef,
+                    requerido: Number(cantidadRequeridaReceta.toFixed(6)),
+                    disponible: Number(disponibleVista.toFixed(6)),
+                    unidad: unidadProduccion,
+                    requerido_inventario: Number(cantidadNecesaria.toFixed(6)),
+                    disponible_inventario: Number(disponibleTotal.toFixed(6)),
+                    unidad_inventario: unidadRef,
                     areas: `${areas.preferido.nombre} + ${areas.alterno.nombre}`,
                     es_opcional: esOpcional
                 };
                 detalle.push(registro);
 
                 if (pendiente > 0.000001) {
-                    registro.faltante = Number(pendiente.toFixed(6));
+                    registro.faltante = Number(
+                        (factorInvAReceta !== null ? pendiente * factorInvAReceta : pendiente).toFixed(6)
+                    );
                     if (esOpcional) {
                         advertencias.push({ ...registro, detalle: 'Insumo opcional sin stock suficiente' });
                     } else {
@@ -459,6 +527,12 @@ const InventarioService = {
      * modifica stock y aplica la misma conversión que el descuento de venta.
      * Por defecto restringe el stock a las ÁREAS PRODUCTIVAS (preferido +
      * alterno del platillo); si se pasa almacenId explícito se usa ese.
+     *
+     * Las cantidades del resultado (`requerido`, `disponible`, `faltante` y
+     * `unidad`) se expresan en la UNIDAD DE PRODUCCIÓN/CONSUMO de la receta
+     * (la que usan cocina/bar), no en la unidad de almacén/compra. Los
+     * equivalentes en unidad de inventario viajan en `requerido_inventario`,
+     * `disponible_inventario` y `unidad_inventario`.
      */
     verificarStockPlatillo: async (platilloId, cantidad = 1, almacenId = null) => {
         const cantidadVenta = parseFloat(cantidad);
@@ -517,8 +591,13 @@ const InventarioService = {
             const merma = parseFloat(ingrediente.porcentaje_merma || 0);
             if (merma > 0) cantidadNecesaria = (parseFloat(ingrediente.cantidad_receta) / (1 - merma / 100)) * cantidadVenta;
 
+            // Cantidad requerida en la UNIDAD DE PRODUCCIÓN/CONSUMO (la de la
+            // receta): es la que se muestra al usuario en el POS.
+            const cantidadRequeridaReceta = Number.isFinite(cantidadNecesaria) ? cantidadNecesaria : 0;
+
             const uReceta = (ingrediente.unidad_receta || '').trim().toLowerCase();
             const uInv = (ingrediente.unidad_inventario || '').trim().toLowerCase();
+            let factorInvAReceta = null; // factor unidad inventario -> unidad receta
             if (uReceta && uInv && uReceta !== uInv) {
                 let factor = null;
                 try {
@@ -535,6 +614,7 @@ const InventarioService = {
 
                 if (factor !== null) {
                     cantidadNecesaria *= factor;
+                    if (factor > 0) factorInvAReceta = 1 / factor;
                 } else {
                     // Sin factor: si el producto NO tiene stock alguno no hace
                     // falta convertir (comparar requerido contra 0). Solo si
@@ -610,23 +690,208 @@ const InventarioService = {
                 `, params);
                 disponible = parseFloat(stockRows[0]?.disponible || 0);
             }
+            // Presentación de las cantidades en la unidad de
+            // PRODUCCIÓN/CONSUMO (la de la receta), que es la que maneja el
+            // personal de cocina/bar al preparar el plato. Los valores en
+            // unidad de inventario (almacén/compra) se conservan como
+            // referencia secundaria.
+            const disponibleVista = factorInvAReceta !== null
+                ? disponible * factorInvAReceta
+                : disponible;
+            const unidadProduccion = await etiquetaUnidadProduccion(ingrediente.unidad_receta);
             const itemDetalle = {
                 insumo_id: ingrediente.insumo_id,
                 insumo_nombre: ingrediente.insumo_nombre,
-                requerido: Number(cantidadNecesaria.toFixed(6)),
-                disponible: Number(disponible.toFixed(6)),
-                unidad: etiquetaUnidad(ingrediente),
-                unidad_medida: ingrediente.unidad_inventario || ingrediente.unidad_receta,
+                requerido: Number(cantidadRequeridaReceta.toFixed(6)),
+                disponible: Number(disponibleVista.toFixed(6)),
+                unidad: unidadProduccion,
+                unidad_medida: unidadProduccion,
+                requerido_inventario: Number(cantidadNecesaria.toFixed(6)),
+                disponible_inventario: Number(disponible.toFixed(6)),
+                unidad_inventario: etiquetaUnidad(ingrediente),
                 areas: areasLabel,
                 es_opcional: Number(ingrediente.es_opcional || 0) === 1
             };
             detalle.push(itemDetalle);
             if (disponible + 0.000001 < cantidadNecesaria && !ingrediente.es_opcional) {
-                faltantes.push({ ...itemDetalle, faltante: Number((cantidadNecesaria - disponible).toFixed(6)) });
+                faltantes.push({
+                    ...itemDetalle,
+                    faltante: Number(Math.max(0, cantidadRequeridaReceta - disponibleVista).toFixed(6))
+                });
             }
         }
 
         return { suficiente: faltantes.length === 0, sin_receta: false, faltantes, advertencias, detalle };
+    },
+
+    /**
+     * MOVIMIENTO DE INVENTARIO DE UN TURNO DE SERVICIO (kardex del turno).
+     *
+     * Resume, para la ventana temporal del turno (fecha_apertura →
+     * fecha_cierre o "ahora" si sigue abierto), el movimiento de inventario
+     * según:
+     *   - VENTA: consumo de insumos por ventas (CONSUMO_RECETA + VENTA),
+     *     detallado por producto con la cantidad y su costo estimado.
+     *   - MERMAS Y SALIDAS: MERMA, AJUSTE_NEGATIVO y DEVOLUCION_PROVEEDOR
+     *     (salidas manuales del almacén), detallado por producto.
+     *   - Otros tipos (transferencias, compras/recepciones, ajustes...) en el
+     *     resumen agregado por tipo.
+     *
+     * Lo consumen la vista de Caja (turnos/arqueo) y el Cierre del Día
+     * (pantalla y ticket) para que el cuadre del día incluya también el
+     * movimiento físico del almacén, no solo el financiero.
+     *
+     * @param {object} turno  fila del turno (requiere fecha_apertura; usa
+     *                        fecha_cierre si existe).
+     * @returns {Promise<{desde:Date, hasta:Date, resumenTipos:Array,
+     *    consumoVenta:Array, mermas:Array,
+     *    totales:{movimientos:number, productos:number, costo_consumo_venta:number,
+     *             costo_mermas:number, costo_entradas:number}}>}
+     */
+    movimientosPorTurno: async (turno) => {
+        const vacio = () => ({
+            desde: null,
+            hasta: null,
+            resumenTipos: [],
+            consumoVenta: [],
+            mermas: [],
+            totales: { movimientos: 0, productos: 0, costo_consumo_venta: 0, costo_mermas: 0, costo_entradas: 0 }
+        });
+        if (!turno || !turno.fecha_apertura) return vacio();
+
+        const desde = new Date(turno.fecha_apertura);
+        const hasta = turno.fecha_cierre ? new Date(turno.fecha_cierre) : new Date();
+        if (Number.isNaN(desde.getTime()) || Number.isNaN(hasta.getTime())) return vacio();
+        const rango = [desde, hasta];
+
+        const num = (v) => Number(v || 0);
+        // Costo del movimiento: usa el asentado y, si el movimiento no lo
+        // trae (p.ej. el consumo por receta no lo graba), estima con el costo
+        // unitario del lote consumido.
+        const costoExpr = `COALESCE(NULLIF(mi.costo_total, 0), mi.cantidad * l.costo_unitario, 0)`;
+
+        // 1) Resumen agregado por tipo de movimiento
+        const [porTipo] = await db.query(`
+            SELECT mi.tipo_movimiento,
+                   COUNT(*) AS movimientos,
+                   COUNT(DISTINCT mi.producto_id) AS productos,
+                   SUM(${costoExpr}) AS costo_total
+            FROM movimientos_inventario mi
+            LEFT JOIN lotes l ON l.id = mi.lote_id
+            WHERE mi.fecha_movimiento >= ? AND mi.fecha_movimiento <= ?
+            GROUP BY mi.tipo_movimiento
+            ORDER BY costo_total DESC, movimientos DESC
+        `, rango);
+
+        // 2) Totales globales de la ventana
+        const [globales] = await db.query(`
+            SELECT COUNT(*) AS movimientos,
+                   COUNT(DISTINCT mi.producto_id) AS productos
+            FROM movimientos_inventario mi
+            WHERE mi.fecha_movimiento >= ? AND mi.fecha_movimiento <= ?
+        `, rango);
+
+        // 3) Consumo por VENTA detallado por producto (insumos explotados)
+        const [consumo] = await db.query(`
+            SELECT mi.producto_id,
+                   p.codigo AS codigo,
+                   p.nombre AS producto,
+                   SUM(mi.cantidad) AS cantidad_total,
+                   COUNT(*) AS movimientos,
+                   COUNT(DISTINCT mi.referencia_id) AS comandas,
+                   MAX(ui.abreviatura) AS unidad,
+                   SUM(${costoExpr}) AS costo_total
+            FROM movimientos_inventario mi
+            INNER JOIN productos p ON p.id = mi.producto_id
+            LEFT JOIN unidades_medida ui ON ui.id = p.unidad_inventario_id
+            LEFT JOIN lotes l ON l.id = mi.lote_id
+            WHERE mi.tipo_movimiento IN ('CONSUMO_RECETA', 'VENTA')
+              AND mi.fecha_movimiento >= ? AND mi.fecha_movimiento <= ?
+            GROUP BY mi.producto_id, p.codigo, p.nombre
+            ORDER BY costo_total DESC, cantidad_total DESC
+            LIMIT 30
+        `, rango);
+
+        // 4) Mermas y salidas manuales detalladas por producto
+        const [salidas] = await db.query(`
+            SELECT mi.producto_id,
+                   p.nombre AS producto,
+                   mi.tipo_movimiento,
+                   SUM(mi.cantidad) AS cantidad_total,
+                   COUNT(*) AS movimientos,
+                   MAX(ui.abreviatura) AS unidad,
+                   SUM(${costoExpr}) AS costo_total,
+                   MIN(mi.observaciones) AS observacion
+            FROM movimientos_inventario mi
+            INNER JOIN productos p ON p.id = mi.producto_id
+            LEFT JOIN unidades_medida ui ON ui.id = p.unidad_inventario_id
+            LEFT JOIN lotes l ON l.id = mi.lote_id
+            WHERE mi.tipo_movimiento IN ('MERMA', 'AJUSTE_NEGATIVO', 'DEVOLUCION_PROVEEDOR')
+              AND mi.fecha_movimiento >= ? AND mi.fecha_movimiento <= ?
+            GROUP BY mi.producto_id, p.nombre, mi.tipo_movimiento
+            ORDER BY costo_total DESC, cantidad_total DESC
+            LIMIT 30
+        `, rango);
+
+        const prioridadDe = (t) => {
+            const i = PRIORIDAD_MOVIMIENTO.indexOf(t);
+            return i === -1 ? PRIORIDAD_MOVIMIENTO.length : i;
+        };
+
+        const resumenTipos = porTipo.map(r => ({
+            tipo_movimiento: r.tipo_movimiento,
+            etiqueta: ETIQUETAS_MOVIMIENTO[r.tipo_movimiento] || r.tipo_movimiento,
+            movimientos: num(r.movimientos),
+            productos: num(r.productos),
+            costo_total: num(r.costo_total)
+        })).sort((a, b) => (prioridadDe(a.tipo_movimiento) - prioridadDe(b.tipo_movimiento)) || (b.costo_total - a.costo_total));
+
+        const consumoVenta = consumo.map(r => ({
+            producto_id: r.producto_id,
+            codigo: r.codigo || null,
+            producto: r.producto,
+            cantidad_total: num(r.cantidad_total),
+            unidad: r.unidad || '',
+            movimientos: num(r.movimientos),
+            comandas: num(r.comandas),
+            costo_total: num(r.costo_total)
+        }));
+
+        const mermas = salidas.map(r => ({
+            producto_id: r.producto_id,
+            producto: r.producto,
+            tipo_movimiento: r.tipo_movimiento,
+            etiqueta: ETIQUETAS_MOVIMIENTO[r.tipo_movimiento] || r.tipo_movimiento,
+            cantidad_total: num(r.cantidad_total),
+            unidad: r.unidad || '',
+            movimientos: num(r.movimientos),
+            costo_total: num(r.costo_total),
+            observacion: r.observacion || ''
+        }));
+
+        const esDeVenta = (t) => t === 'CONSUMO_RECETA' || t === 'VENTA';
+        const esMermaSalida = (t) => t === 'MERMA' || t === 'AJUSTE_NEGATIVO' || t === 'DEVOLUCION_PROVEEDOR';
+        const esEntrada = (t) => ['COMPRA', 'RECEPCION', 'TRANSFERENCIA_ENTRADA', 'AJUSTE_POSITIVO',
+            'PRODUCCION_ENTRADA', 'DEVOLUCION_CLIENTE', 'CONTEO_FISICO'].includes(t);
+
+        const sumarCosto = (filtro) => resumenTipos
+            .filter(t => filtro(t.tipo_movimiento))
+            .reduce((s, t) => s + t.costo_total, 0);
+
+        return {
+            desde,
+            hasta,
+            resumenTipos,
+            consumoVenta,
+            mermas,
+            totales: {
+                movimientos: num(globales[0]?.movimientos),
+                productos: num(globales[0]?.productos),
+                costo_consumo_venta: sumarCosto(esDeVenta),
+                costo_mermas: sumarCosto(esMermaSalida),
+                costo_entradas: sumarCosto(esEntrada)
+            }
+        };
     },
 
     /**

@@ -194,6 +194,156 @@
                         <% } %>
 
 
+                        <!-- MOVIMIENTO DE INVENTARIO DEL TURNO (VENTAS, MERMAS, ETC.) -->
+                        <% if (typeof movimientosInventario !== 'undefined' && movimientosInventario) {
+                               const mInv = movimientosInventario;
+                               const hayResumen = mInv.resumenTipos && mInv.resumenTipos.length > 0;
+                               const hayConsumo = mInv.consumoVenta && mInv.consumoVenta.length > 0;
+                               const hayMermas = mInv.mermas && mInv.mermas.length > 0;
+                               const fmtCantInv = (n) => Number(n).toLocaleString('es', { maximumFractionDigits: 2 });
+                        %>
+                        <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
+                            <div class="card-header bg-white py-3 px-4 border-0 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <h5 class="fw-bold text-dark mb-0 fs-6 d-flex align-items-center gap-2">
+                                    <i class="fa-solid fa-boxes-stacked text-secondary"></i> Movimiento de Inventario del Turno
+                                </h5>
+                                <span class="badge bg-light text-dark border px-2.5 py-1 rounded-pill small">
+                                    <i class="fa-solid fa-arrow-right-arrow-left me-1 text-secondary"></i>
+                                    <%= mInv.totales.movimientos %> movimiento(s) &middot; <%= mInv.totales.productos %> producto(s) distinto(s)
+                                </span>
+                            </div>
+                            <div class="card-body p-4">
+                                <% if (!hayResumen) { %>
+                                    <p class="text-muted small mb-0">
+                                        <i class="fa-solid fa-inbox me-1"></i> No se registraron movimientos de inventario durante el turno.
+                                    </p>
+                                <% } else { %>
+                                    <!-- Resumen por tipo de movimiento -->
+                                    <div class="d-flex flex-wrap gap-2 mb-4">
+                                        <% mInv.resumenTipos.forEach(t => { %>
+                                            <span class="badge bg-white border px-3 py-2 rounded-pill small text-dark">
+                                                <b><%= t.etiqueta %></b>
+                                                &middot; <%= t.movimientos %> mov. &middot; <%= t.productos %> prod.
+                                                <% if (t.costo_total > 0) { %>
+                                                    &middot; <span class="font-monospace">$<%= t.costo_total.toFixed(2) %></span>
+                                                <% } %>
+                                            </span>
+                                        <% }) %>
+                                    </div>
+
+                                    <div class="row g-4">
+                                        <!-- Consumo por ventas -->
+                                        <div class="col-lg-7">
+                                            <h6 class="fw-bold text-dark small text-uppercase mb-2 d-flex align-items-center gap-2">
+                                                <i class="fa-solid fa-utensils text-success"></i> Consumo por Ventas
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill fw-semibold">
+                                                    Costo: $<%= mInv.totales.costo_consumo_venta.toFixed(2) %>
+                                                </span>
+                                            </h6>
+                                            <div class="table-responsive border rounded">
+                                                <table class="table table-sm align-middle mb-0">
+                                                    <thead class="table-light fs-7 text-uppercase">
+                                                        <tr>
+                                                            <th class="ps-3 py-2">Insumo</th>
+                                                            <th class="py-2">Cantidad</th>
+                                                            <th class="text-center py-2">Comandas</th>
+                                                            <th class="text-end pe-3 py-2">Costo Est.</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <% if (!hayConsumo) { %>
+                                                            <tr>
+                                                                <td colspan="4" class="text-center text-muted small py-3">
+                                                                    Sin consumo por ventas registrado en el turno.
+                                                                </td>
+                                                            </tr>
+                                                        <% } else { %>
+                                                            <% mInv.consumoVenta.forEach(c => { %>
+                                                                <tr>
+                                                                    <td class="ps-3 py-2">
+                                                                        <span class="fw-semibold text-dark small"><%= c.producto %></span>
+                                                                        <% if (c.codigo) { %>
+                                                                            <span class="text-muted fs-8 font-monospace ms-1"><%= c.codigo %></span>
+                                                                        <% } %>
+                                                                    </td>
+                                                                    <td class="font-monospace small py-2">
+                                                                        <%= fmtCantInv(c.cantidad_total) %> <span class="text-muted"><%= c.unidad %></span>
+                                                                    </td>
+                                                                    <td class="text-center small py-2"><%= c.comandas %></td>
+                                                                    <td class="text-end pe-3 font-monospace small py-2">$<%= c.costo_total.toFixed(2) %></td>
+                                                                </tr>
+                                                            <% }) %>
+                                                        <% } %>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <!-- Mermas y salidas -->
+                                        <div class="col-lg-5">
+                                            <h6 class="fw-bold text-dark small text-uppercase mb-2 d-flex align-items-center gap-2">
+                                                <i class="fa-solid fa-trash-can text-danger"></i> Mermas y Salidas
+                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill fw-semibold">
+                                                    Costo: $<%= mInv.totales.costo_mermas.toFixed(2) %>
+                                                </span>
+                                            </h6>
+                                            <div class="table-responsive border rounded">
+                                                <table class="table table-sm align-middle mb-0">
+                                                    <thead class="table-light fs-7 text-uppercase">
+                                                        <tr>
+                                                            <th class="ps-3 py-2">Producto</th>
+                                                            <th class="py-2">Tipo</th>
+                                                            <th class="py-2">Cantidad</th>
+                                                            <th class="text-end pe-3 py-2">Costo</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <% if (!hayMermas) { %>
+                                                            <tr>
+                                                                <td colspan="4" class="text-center text-muted small py-3">
+                                                                    Sin mermas ni salidas registradas en el turno.
+                                                                </td>
+                                                            </tr>
+                                                        <% } else { %>
+                                                            <% mInv.mermas.forEach(m => { %>
+                                                                <tr title="<%= m.observacion || '' %>">
+                                                                    <td class="ps-3 py-2"><span class="fw-semibold text-dark small"><%= m.producto %></span></td>
+                                                                    <td class="py-2">
+                                                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill fs-8"><%= m.etiqueta %></span>
+                                                                    </td>
+                                                                    <td class="font-monospace small py-2">
+                                                                        <%= fmtCantInv(m.cantidad_total) %> <span class="text-muted"><%= m.unidad %></span>
+                                                                    </td>
+                                                                    <td class="text-end pe-3 font-monospace small py-2">$<%= m.costo_total.toFixed(2) %></td>
+                                                                </tr>
+                                                            <% }) %>
+                                                        <% } %>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <p class="text-muted fs-8 mt-3 mb-0">
+                                        <i class="fa-solid fa-circle-info me-1"></i>
+                                        Cantidades en la unidad de registro de cada movimiento; costos estimados a partir del costo del lote afectado.
+                                        Ventana consultada: desde la apertura del turno
+                                        <% if (mInv.desde) { %>
+                                            (<%= new Date(mInv.desde).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) %>)
+                                        <% } %>
+                                        hasta
+                                        <% if (mInv.hasta && turnoActivo.fecha_cierre) { %>
+                                            el cierre (<%= new Date(mInv.hasta).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) %>)
+                                        <% } else { %>
+                                            el momento de la consulta
+                                        <% } %>
+                                        .
+                                    </p>
+                                <% } %>
+                            </div>
+                        </div>
+                        <% } %>
+
                         <!-- TABLA DE AUDITORÍA Y LISTA DE CUENTAS -->
                         <div class="card card-custom shadow-sm border-0 overflow-hidden mb-4">
                             <div class="card-header bg-white py-3 px-4 border-0 d-flex align-items-center justify-content-between flex-wrap gap-2">
