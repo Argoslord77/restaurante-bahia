@@ -128,6 +128,31 @@ describe('Catálogo de auditoría · seguridad y sistema', () => {
     });
 });
 
+describe('Catálogo de auditoría · reportes y kardex', () => {
+    it('audita la consulta del kardex como lectura con aviso', () => {
+        const d = describir('GET', '/admin/kardex');
+        expect(d.entidad).toBe('Kardex');
+        expect(d.categoria).toBe('LECTURA');
+        expect(d.severidad).toBe('AVISO');
+        expect(describir('GET', '/admin/kardex?producto=7').entidad).toBe('Kardex');
+    });
+
+    it('clasifica la exportación del kardex como EXPORTACION', () => {
+        const d = describir('GET', '/admin/kardex/exportar');
+        expect(d.categoria).toBe('EXPORTACION');
+        expect(d.accion).toContain('CSV');
+    });
+
+    it('describe cada reporte nuevo con su entidad propia', () => {
+        expect(describir('GET', '/admin/reportes/salud-inventario').entidad).toBe('Salud del inventario');
+        expect(describir('GET', '/admin/reportes/margen-platillos').entidad).toBe('Margen por platillo');
+        expect(describir('GET', '/admin/reportes/explosion-recetas').entidad).toBe('Explosión de recetas');
+        expect(describir('GET', '/admin/reportes').entidad).toBe('Centro de reportes');
+        // La ruta de exportación es más concreta y gana a la del kardex general
+        expect(describir('GET', '/admin/kardex/exportar').entidad).toBe('Kardex');
+    });
+});
+
 describe('Catálogo de auditoría · control de ruido', () => {
     it('excluye por completo los sondeos GET de las vistas (polling)', () => {
         // El tablero del mesero comprobando alertas, el POS consultando

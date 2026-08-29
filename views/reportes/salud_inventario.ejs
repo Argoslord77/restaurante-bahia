@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Salud del Inventario - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Salud del Inventario', desc_pagina: 'Radiografía del stock: qué se agota, qué se pierde y qué capital está detenido.', add_btn: false}) %>
+
+                <div class="d-flex justify-content-end mb-3">
+                    <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                        <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                    </button>
+                </div>
+
+                <!-- Resumen -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-4 col-xl-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Bajo mínimo</h6>
+                            <h3 class="fw-bold mb-0 text-warning"><%= salud.totales.bajo_minimo %></h3>
+                            <small class="text-muted">Reponer: $<%= salud.totales.costo_reposicion.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-4 col-xl-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-danger border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Lotes vencidos</h6>
+                            <h3 class="fw-bold mb-0 text-danger"><%= salud.totales.vencidos %></h3>
+                            <small class="text-muted">Perdido: $<%= salud.totales.valor_perdido.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-4 col-xl-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-info border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Vencen ≤ 7 días</h6>
+                            <h3 class="fw-bold mb-0 text-info"><%= salud.totales.por_vencer %></h3>
+                            <small class="text-muted">En riesgo: $<%= salud.totales.valor_riesgo.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-4 col-xl-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-secondary border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Sin rotación 30 días</h6>
+                            <h3 class="fw-bold mb-0 text-secondary"><%= salud.totales.sin_movimiento %></h3>
+                            <small class="text-muted">Detenido: $<%= salud.totales.valor_detenido.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1) Bajo mínimo -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation text-warning"></i>
+                        <h6 class="fw-bold mb-0">Productos en o por debajo del mínimo</h6>
+                        <span class="badge text-bg-warning text-dark ms-auto"><%= salud.bajoMinimo.length %></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Producto</th>
+                                    <th class="py-3 text-end">Existencia</th>
+                                    <th class="py-3 text-end">Mínimo</th>
+                                    <th class="py-3 text-end">Faltante</th>
+                                    <th class="py-3 text-end">Costo prom.</th>
+                                    <th class="py-3 text-end pe-4">Reposición estimada</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% salud.bajoMinimo.forEach(p => { %>
+                                <tr class="<%= p.stock_actual <= 0 ? 'table-danger' : '' %>">
+                                    <td class="ps-4">
+                                        <span class="fw-semibold"><%= p.nombre %></span>
+                                        <small class="text-muted d-block font-monospace"><%= p.codigo || '—' %></small>
+                                    </td>
+                                    <td class="text-end fw-semibold <%= p.stock_actual <= 0 ? 'text-danger' : '' %>"><%= p.stock_actual.toLocaleString('es-ES') %> <%= p.unidad %></td>
+                                    <td class="text-end"><%= p.stock_minimo.toLocaleString('es-ES') %></td>
+                                    <td class="text-end text-danger fw-semibold"><%= p.faltante.toLocaleString('es-ES') %></td>
+                                    <td class="text-end">$<%= p.costo_promedio.toLocaleString('es-ES', { minimumFractionDigits: 4 }) %></td>
+                                    <td class="text-end pe-4 fw-semibold">$<%= p.costo_reposicion.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                </tr>
+                                <% }) %>
+                                <% if (salud.bajoMinimo.length === 0) { %>
+                                <tr><td colspan="6" class="text-center text-muted py-4">Ningún producto por debajo de su mínimo. ✓</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 2) Vencidos y 3) por vencer -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-xl-6">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-skull-crossbones text-danger"></i>
+                                <h6 class="fw-bold mb-0">Lotes vencidos con existencia</h6>
+                                <span class="badge text-bg-danger ms-auto">$<%= salud.totales.valor_perdido.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Producto / Lote</th>
+                                            <th class="py-3 text-end">Cantidad</th>
+                                            <th class="py-3 text-center">Venció</th>
+                                            <th class="py-3 text-end pe-4">Valor perdido</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% salud.vencidos.forEach(l => { %>
+                                        <tr class="table-danger">
+                                            <td class="ps-4">
+                                                <span class="fw-semibold"><%= l.producto %></span>
+                                                <small class="text-muted d-block font-monospace"><%= l.numero_lote %> · <%= l.almacen || '—' %></small>
+                                            </td>
+                                            <td class="text-end"><%= l.cantidad_actual.toLocaleString('es-ES') %></td>
+                                            <td class="text-center"><%= new Date(l.fecha_vencimiento).toLocaleDateString('es-ES') %></td>
+                                            <td class="text-end pe-4 fw-semibold">$<%= l.valor_perdido.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                        </tr>
+                                        <% }) %>
+                                        <% if (salud.vencidos.length === 0) { %>
+                                        <tr><td colspan="4" class="text-center text-muted py-4">Sin lotes vencidos. ✓</td></tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-xl-6">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-hourglass-half text-info"></i>
+                                <h6 class="fw-bold mb-0">Vencen en los próximos 7 días</h6>
+                                <span class="badge text-bg-info ms-auto">$<%= salud.totales.valor_riesgo.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Producto / Lote</th>
+                                            <th class="py-3 text-end">Cantidad</th>
+                                            <th class="py-3 text-center">Vence</th>
+                                            <th class="py-3 text-end pe-4">Valor en riesgo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% salud.porVencer.forEach(l => { %>
+                                        <tr class="<%= l.dias_restantes <= 2 ? 'table-warning' : '' %>">
+                                            <td class="ps-4">
+                                                <span class="fw-semibold"><%= l.producto %></span>
+                                                <small class="text-muted d-block font-monospace"><%= l.numero_lote %> · <%= l.almacen || '—' %></small>
+                                            </td>
+                                            <td class="text-end"><%= l.cantidad_actual.toLocaleString('es-ES') %></td>
+                                            <td class="text-center"><%= new Date(l.fecha_vencimiento).toLocaleDateString('es-ES') %> <span class="badge text-bg-light text-secondary border"><%= l.dias_restantes %>d</span></td>
+                                            <td class="text-end pe-4 fw-semibold">$<%= l.valor_riesgo.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                        </tr>
+                                        <% }) %>
+                                        <% if (salud.porVencer.length === 0) { %>
+                                        <tr><td colspan="4" class="text-center text-muted py-4">Nada próximo a vencer. ✓</td></tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4) Capital detenido -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-snowflake text-secondary"></i>
+                        <h6 class="fw-bold mb-0">Capital detenido (sin movimiento en 30 días)</h6>
+                        <span class="badge text-bg-secondary ms-auto">$<%= salud.totales.valor_detenido.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Producto</th>
+                                    <th class="py-3 text-end">Existencia</th>
+                                    <th class="py-3 text-end pe-4">Valor detenido</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% salud.sinMovimiento.forEach(p => { %>
+                                <tr>
+                                    <td class="ps-4">
+                                        <span class="fw-semibold"><%= p.nombre %></span>
+                                        <small class="text-muted d-block font-monospace"><%= p.codigo || '—' %></small>
+                                    </td>
+                                    <td class="text-end"><%= p.stock_actual.toLocaleString('es-ES') %> <%= p.unidad %></td>
+                                    <td class="text-end pe-4 fw-semibold">$<%= p.valor_detenido.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                </tr>
+                                <% }) %>
+                                <% if (salud.sinMovimiento.length === 0) { %>
+                                <tr><td colspan="3" class="text-center text-muted py-4">Todo el stock rota. ✓</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Explosión de Recetas - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Explosión de Recetas (Teórico vs Real)', desc_pagina: 'Consumo teórico de la ficha técnica contra el consumo real registrado por el kardex en cada venta. Detecta fugas y mermas anómalas.', add_btn: false}) %>
+
+                <!-- Filtro por turno -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-4 bg-white">
+                    <form method="get" action="/admin/reportes/explosion-recetas" class="row g-2 align-items-end">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small text-muted fw-semibold mb-1">Turno de servicio</label>
+                            <select name="turno" class="form-select form-select-sm">
+                                <option value="">Todos los turnos</option>
+                                <% turnos.forEach(t => { %>
+                                    <option value="<%= t.id %>" <%= turnoSeleccionado === t.id ? 'selected' : '' %>>
+                                        #<%= t.id %> · <%= t.nombre %><%= t.fecha_inicio ? ' (' + new Date(t.fecha_inicio).toLocaleDateString('es-ES') + ')' : '' %>
+                                    </option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2 d-grid">
+                            <button type="submit" class="btn btn-dark btn-sm fw-semibold py-2">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Filtrar
+                            </button>
+                        </div>
+                        <div class="col-12 col-md-6 text-md-end">
+                            <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Resumen por insumo -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-magnifying-glass-chart text-dark"></i>
+                        <h6 class="fw-bold mb-0">Desviación por insumo (real − teórico)</h6>
+                        <span class="badge text-bg-dark ms-auto"><%= resumenInsumos.length %> insumos</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Insumo</th>
+                                    <th class="py-3 text-end">Consumo teórico</th>
+                                    <th class="py-3 text-end">Consumo real (kardex)</th>
+                                    <th class="py-3 text-end">Desviación</th>
+                                    <th class="py-3 text-center pe-4">Desviación %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% resumenInsumos.forEach(i => { %>
+                                    <% const fc = i.desviacion_pct; const clase = fc == null ? 'secondary' : (Math.abs(fc) <= 5 ? 'success' : (Math.abs(fc) <= 15 ? 'warning' : 'danger')); %>
+                                <tr>
+                                    <td class="ps-4">
+                                        <span class="fw-semibold"><%= i.insumo %></span>
+                                        <small class="text-muted d-block font-monospace"><%= i.codigo || '—' %> · <%= i.unidad || '' %></small>
+                                    </td>
+                                    <td class="text-end"><%= i.teorico.toLocaleString('es-ES', { maximumFractionDigits: 3 }) %></td>
+                                    <td class="text-end"><%= i.real.toLocaleString('es-ES', { maximumFractionDigits: 3 }) %></td>
+                                    <td class="text-end fw-semibold <%= i.desviacion > 0 ? 'text-danger' : (i.desviacion < 0 ? 'text-success' : 'text-muted') %>">
+                                        <%= i.desviacion > 0 ? '+' : '' %><%= i.desviacion.toLocaleString('es-ES', { maximumFractionDigits: 3 }) %>
+                                    </td>
+                                    <td class="text-center pe-4">
+                                        <span class="badge text-bg-<%= clase %>"><%= fc != null ? (fc > 0 ? '+' : '') + fc + '%' : '—' %></span>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                                <% if (resumenInsumos.length === 0) { %>
+                                <tr><td colspan="5" class="text-center text-muted py-4">Sin datos para el filtro seleccionado.</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Detalle por venta -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-receipt text-dark"></i>
+                        <h6 class="fw-bold mb-0">Detalle por venta</h6>
+                        <span class="badge text-bg-dark ms-auto"><%= filas.length %> líneas</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Turno / Pedido</th>
+                                    <th class="py-3">Mesa / Platillo</th>
+                                    <th class="py-3">Insumo</th>
+                                    <th class="py-3 text-end">Vendido</th>
+                                    <th class="py-3 text-end">Teórico</th>
+                                    <th class="py-3 text-end">Real</th>
+                                    <th class="py-3 text-end pe-4">Costo teórico</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% filas.slice(0, 200).forEach(f => { %>
+                                    <% const dif = Number(f.consumo_real_kardex || 0) - Number(f.consumo_total_teorico || 0); %>
+                                <tr>
+                                    <td class="ps-4">
+                                        <small class="text-muted d-block"><%= f.turno %></small>
+                                        <span class="fw-semibold">#<%= f.numero_pedido %></span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted d-block">Mesa <%= f.mesa %></small>
+                                        <span class="fw-semibold"><%= f.platillo_vendido %></span> × <%= f.cantidad_platillos_vendidos %>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold"><%= f.insumo_descontado %></span>
+                                        <small class="text-muted d-block font-monospace"><%= f.codigo_insumo || '—' %></small>
+                                    </td>
+                                    <td class="text-end"><%= f.cantidad_platillos_vendidos %></td>
+                                    <td class="text-end"><%= Number(f.consumo_total_teorico).toLocaleString('es-ES', { maximumFractionDigits: 3 }) %></td>
+                                    <td class="text-end fw-semibold <%= dif > 0.0001 ? 'text-danger' : (dif < -0.0001 ? 'text-success' : '') %>">
+                                        <%= Number(f.consumo_real_kardex).toLocaleString('es-ES', { maximumFractionDigits: 3 }) %>
+                                    </td>
+                                    <td class="text-end pe-4">$<%= Number(f.costo_total_insumo).toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                </tr>
+                                <% }) %>
+                                <% if (filas.length === 0) { %>
+                                <tr><td colspan="7" class="text-center text-muted py-4">Sin ventas con explosión de receta para el filtro.</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <% if (filas.length > 200) { %>
+                    <div class="card-footer bg-white border-0 text-muted small px-4 pb-3">
+                        Mostrando las primeras 200 líneas de <%= filas.length %>. Usa el filtro por turno para acotar.
+                    </div>
+                    <% } %>
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>

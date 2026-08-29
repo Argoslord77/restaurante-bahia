@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Centro de Reportes - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Centro de Reportes', desc_pagina: 'Punto único de entrada a la información de control físico y financiero del negocio.', add_btn: false}) %>
+
+                <!-- Indicadores rápidos -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-success border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Valor del inventario</h6>
+                            <h3 class="fw-bold mb-0 text-success">
+                                <%= indicadores.valor_inventario != null ? '$' + indicadores.valor_inventario.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' %>
+                            </h3>
+                            <small class="text-muted">A costo de lote</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Productos bajo mínimo</h6>
+                            <h3 class="fw-bold mb-0 text-warning"><%= indicadores.bajo_minimo != null ? indicadores.bajo_minimo : '—' %></h3>
+                            <small class="text-muted">Requieren reposición</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-danger border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Lotes vencidos</h6>
+                            <h3 class="fw-bold mb-0 text-danger"><%= indicadores.vencidos != null ? indicadores.vencidos : '—' %></h3>
+                            <small class="text-muted">Pérdida consumada</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-info border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Vencen en 7 días</h6>
+                            <h3 class="fw-bold mb-0 text-info"><%= indicadores.por_vencer != null ? indicadores.por_vencer : '—' %></h3>
+                            <small class="text-muted">Valor en riesgo</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grupos de reportes -->
+                <% ['Control físico', 'Control financiero', 'Registros'].forEach(grupo => { %>
+                    <% const enlacesGrupo = enlaces.filter(e => e.grupo === grupo); %>
+                    <% if (enlacesGrupo.length) { %>
+                        <h6 class="text-uppercase text-muted fw-bold small mb-3 mt-2">
+                            <i class="fa-solid <%= grupo === 'Control físico' ? 'fa-boxes-stacked' : (grupo === 'Control financiero' ? 'fa-sack-dollar' : 'fa-clipboard-list') %> me-2"></i><%= grupo %>
+                        </h6>
+                        <div class="row g-3 mb-4">
+                            <% enlacesGrupo.forEach(e => { %>
+                                <div class="col-12 col-sm-6 col-xl-4">
+                                    <a href="<%= e.url %>" class="text-decoration-none">
+                                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white kardex-hub-card">
+                                            <div class="d-flex align-items-start gap-3">
+                                                <div class="bg-dark-subtle text-dark p-3 rounded-circle flex-shrink-0">
+                                                    <i class="<%= e.icono %> fs-5"></i>
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                        <h6 class="fw-bold mb-1 text-dark"><%= e.titulo %></h6>
+                                                        <% if (e.badge) { %>
+                                                            <span class="badge text-bg-success" style="font-size:.6rem"><%= e.badge %></span>
+                                                        <% } else if (e.interno) { %>
+                                                            <span class="badge text-bg-light text-secondary border" style="font-size:.6rem">existente</span>
+                                                        <% } %>
+                                                    </div>
+                                                    <p class="text-muted small mb-0"><%= e.descripcion %></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                <% }) %>
+
+                <div class="alert alert-light border shadow-sm rounded py-2 px-3 mb-4 small text-muted" role="note">
+                    <i class="fa-solid fa-lightbulb me-1 text-warning"></i>
+                    Los reportes marcados como <strong>NUEVO</strong> forman parte de esta actualización; el resto son módulos ya existentes que quedan agrupados aquí como punto de entrada único.
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>

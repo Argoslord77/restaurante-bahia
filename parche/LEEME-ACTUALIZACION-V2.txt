@@ -11,8 +11,13 @@
             Configuración → Salón y Áreas y mesas vinculadas por FK
    366cc24  POS mesero: visualización del salón y las órdenes de cada
             mesero (solo consulta) para administradores
-   HEAD     NUEVO — Refresco automático de las vistas supervisadas y
-            limpieza de la auditoría (fuera los sondeos/polling)
+   415eabe  Supervisión en vivo: refresco automático solo en modo
+            visualización y auditoría sin sondeos (polling fuera)
+   51c7e5f  Supervisión en vivo: avisos de las acciones del mesero,
+            redirección y resumen de cuenta cobrada (escalonado)
+   HEAD     NUEVO — Módulo de KARDEX y CENTRO DE REPORTES (kardex por
+            producto con exportación CSV, salud del inventario, margen
+            real por platillo y explosión de recetas teórico vs real)
 
  ESTE PAQUETE ES ACUMULATIVO: incluye todo el contenido del zip anterior
  (restaurante-bahia-actualizacion-2026-08-29.zip) más el update de áreas
@@ -54,6 +59,43 @@ MEJORA 3 DE ESTA VERSIÓN — SUPERVISIÓN EN VIVO Y AUDITORÍA LIMPIA
    - /admin/turno/estado-actual y /admin/api/dashboard/metrics
    Las ESCRITURAS sobre esas rutas (p. ej. descartar pre-pedidos o
    marcar notificaciones leídas) SIGUEN auditándose.
+
+MEJORA 4 DE ESTA VERSIÓN — KARDEX Y CENTRO DE REPORTES
+----------------------------------------------------------------
+ * KARDEX DE INVENTARIO (/admin/kardex): el libro mayor físico-financiero
+   de cada producto. Índice con existencia, valor del stock y entradas/
+   salidas del período; al elegir un producto, su tarjeta completa:
+   saldo inicial, cada movimiento con entrada/salida (cantidad, costo
+   unitario y valor) y SALDO CORRIDO en unidades y dinero, con totales.
+   - Detecta y avisa del DESCUADRE entre el saldo del kardex y la
+     existencia real de lotes (historial incompleto o ajustes directos).
+   - Exportación a CSV (Excel) e impresión.
+   - Filtros: producto, rango de fechas, almacén y tipo de movimiento.
+ * CENTRO DE REPORTES (/admin/reportes): nueva entrada "Reportes" en el
+   menú lateral, punto único de entrada a la información de control,
+   con indicadores rápidos (valor del inventario, bajo mínimo, lotes
+   vencidos y por vencer) y tres grupos:
+   - Control físico: Kardex, Explosión de recetas, Salud del
+     inventario y Valorización (ya existente).
+   - Control financiero: Margen real por platillo, Rentabilidad de la
+     carta (ya existente), Cierre del día y Turnos.
+   - Registros: Auditoría del sistema.
+ * SALUD DEL INVENTARIO (nuevo): productos en/bajo el mínimo con costo
+   de reposición, lotes vencidos (pérdida consumada), lotes que vencen
+   en 7 días (valor en riesgo) y capital detenido (stock sin rotación
+   en 30 días), todo cuantificado en dinero.
+ * MARGEN REAL POR PLATILLO (nuevo): ventas cobradas del período vs
+   costo estándar (ficha de costo / receta): unidades, ingreso, costo,
+   margen contribuido, margen por unidad y FOOD COST real ponderado.
+   Avisa de los platillos vendidos sin ficha técnica activa.
+ * EXPLOSIÓN DE RECETAS (nuevo, monta el reporte que estaba huérfano):
+   consumo teórico de la ficha técnica contra el consumo real que
+   registró el kardex en cada venta, por turno. Desviación por insumo
+   con semáforo (±5% / ±15%): la herramienta para detectar fugas y
+   mermas anómalas en cocina y bar.
+ * Todo consulta con los roles de siempre (administración, almacenero,
+   jefe de cocina y económico) y queda auditado en el módulo Reportes
+   (la exportación del kardex se registra como EXPORTACION).
 
 NOVEDAD 2 — POS MESERO (visualización y control)
 ----------------------------------------------------------------
@@ -98,7 +140,7 @@ CONTENIDO DEL PAQUETE
 Los archivos mantienen la estructura de carpetas del proyecto: se pueden
 extraer directamente sobre la raíz del proyecto (respaldar antes).
 
-1) ARCHIVOS ACTUALIZADOS (37)
+1) ARCHIVOS ACTUALIZADOS (50)
 
    A. Supervisión en vivo + auditoría limpia (9, NUEVO)
 
@@ -127,7 +169,44 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    config/auditoriaCatalogo.test.js .............. Tests actualizados (los
         sondeos se excluyen; las escrituras se auditan).
 
-   B. POS mesero — visualización (8)
+   B. Kardex y Centro de Reportes (16, NUEVO)
+
+   services/kardexService.js (nuevo) ............ Tarjeta de kardex:
+        saldo inicial, saldo corrido, totales, descuadre vs lotes y
+        exportación CSV. Filtros normalizados (fechas/almacén/tipo).
+   services/kardexService.test.js (nuevo) ....... 8 tests de la lógica.
+   controllers/kardexController.js (nuevo) ...... Vistas del kardex
+        (índice y tarjeta) + descarga CSV con nombre seguro.
+   views/inventarios/kardex.ejs (nuevo) .......... Índice de productos
+        con paginación y tarjeta completa (entrada/salida/saldo).
+   services/reportesService.js (nuevo) .......... Salud del inventario
+        (4 secciones con impacto económico) y margen real por platillo
+        (ventas cobradas × costo estándar, food cost ponderado).
+   services/reportesService.test.js (nuevo) ..... 9 tests de ambos
+        reportes.
+   controllers/reportesController.js (nuevo) .... Hub con indicadores,
+        salud, margen y explosión de recetas (reusa reporteModel).
+   views/reportes/hub.ejs (nuevo) ................ Centro de reportes
+        con tarjetas agrupadas por control físico/financiero/registros.
+   views/reportes/salud_inventario.ejs (nuevo) .. Bajo mínimo, vencidos,
+        por vencer y capital detenido.
+   views/reportes/margen_platillos.ejs (nuevo) .. Ranking de margen con
+        barras de food cost y aviso de platillos sin ficha.
+   views/reportes/explosion.ejs (nuevo) .......... Desviación por insumo
+        (teórico vs real) + detalle por venta, filtrable por turno.
+   routes/reporteRoutes.js (nuevo) .............. Rutas /admin/kardex y
+        /admin/reportes/* con roles (admin, almacenero, jefe-cocina,
+        económico).
+   app.js ....................................... Monta reporteRoutes.
+   views/includes/sideBarMenu.ejs ............... Enlace "Reportes" en
+        el menú lateral (resalta en kardex y reportes).
+   config/auditoriaCatalogo.js ................. Reglas de auditoría
+        para kardex (lectura y exportación CSV) y reportes.
+   config/auditoriaCatalogo.test.js ............ 3 tests de las reglas
+        nuevas. Se elimina views/reportes/kardex.ejs (vacío, sustituido
+        por views/reportes/explosion.ejs).
+
+   C. POS mesero — visualización (8)
 
    views/includes/sideBarMenu.ejs ................. Entrada "POS mesero" en
         el menú lateral (solo administradores).
@@ -146,7 +225,7 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    views/pos.ejs ................................ Banner "Modo Visualización",
         ocultamiento de acciones y bloqueo por interceptor en fase captura.
 
-   C. Update de áreas de servicio (15)
+   D. Update de áreas de servicio (15)
 
    controllers/settingController.js ................ CRUD de ubicaciones
         (API /admin/api/ubicaciones-mesa) y carga del catálogo en la vista.
@@ -172,7 +251,7 @@ extraer directamente sobre la raíz del proyecto (respaldar antes).
    controllers/dashboardDependienteController.js .. Ídem dashboard (mismo
         archivo del bloque A).
 
-   D. Update anterior que quedó ausente (12, reincluido completo)
+   E. Update anterior que quedó ausente (12, reincluido completo)
 
    TODO ............................................ Puntos 13/14 marcados [OKOKOK]
    controllers/cierreDiaController.js .............. Punto 6: movimiento de
@@ -247,7 +326,7 @@ PASOS DE DESPLIEGUE
 -------------------
  1. Respaldar el proyecto y la base de datos:
       mysqldump restaurante_db > respaldo_antes_actualizacion_v2.sql
- 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 37
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los 50
     archivos listados y deja los scripts de migración en scripts/).
  3. Aplicar scripts/migracion_ubicacion_mesa.sql (y los requisitos
     pendientes del punto anterior). POS mesero no requiere migración.
@@ -256,9 +335,9 @@ PASOS DE DESPLIEGUE
       pm2 restart all   (o como tengas configurado el proceso)
  6. Verificación rápida:
       npm test
-    → deben pasar 184 tests. Los avisos esperados son los falsos positivos
+    → deben pasar 200 tests. Los avisos esperados son los falsos positivos
     conocidos (config/environments/test.js y suites que fallan al cargar
-    sin MySQL local): si "Tests: 184 passed" aparece, está bien.
+    sin MySQL local): si "Tests: 200 passed" aparece, está bien.
  7. Verificación funcional:
     - Menú lateral → "POS mesero": aparece la lista de dependientes y
       capitanes activos con sus métricas del turno.
@@ -280,12 +359,26 @@ PASOS DE DESPLIEGUE
       del pago en un SweetAlert2.
     - Auditoría: los sondeos (alertas, ítems listos, monitor) ya no
       generan registros; la navegación real sí.
+    - Menú lateral → "Reportes": abre el centro con el valor del
+      inventario y las alertas; los enlaces "existente" (valorización,
+      rentabilidad, cierre, turnos, auditoría) siguen funcionando.
+    - Kardex: buscar un producto con movimientos y abrir su tarjeta;
+      el saldo corrido cuadra con los totales; "Exportar CSV" descarga
+      un archivo que Excel abre con columnas separadas.
+    - Reportes → Salud del inventario: aparecen las cuatro secciones
+      con sus totales en dinero (aunque estén vacías si todo está bien).
+    - Reportes → Margen por platillo: elegir un período con ventas; el
+      food cost ponderado y el ranking de margen se calculan.
+    - Reportes → Explosión de recetas: elegir un turno con ventas
+      cobradas; la desviación por insumo muestra teórico vs real.
 
 NOTAS DE COMPORTAMIENTO NUEVO (para el personal)
 ------------------------------------------------
  * POS mesero es SOLO para administradores y NO reemplaza la operación del
    mesero: ninguna acción tomada desde la supervisión modifica órdenes,
    inventario ni cobros. Para operar, cada quien usa su propio usuario.
+ * El kardex y los reportes son de CONSULTA: no modifican inventario ni
+   pedidos. La exportación a CSV queda registrada en la auditoría.
  * Las áreas del salón se administran SOLO desde Configuración → Salón y
    Áreas. Para dar de alta una mesa en una zona nueva, primero crea la zona
    allí y luego selecciónala en el desplegable de la mesa.
