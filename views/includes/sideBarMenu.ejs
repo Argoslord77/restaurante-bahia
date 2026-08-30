@@ -1,3 +1,7 @@
+<%# Estado del colapso del sidebar: aplicarlo antes de pintar evita parpadeos %>
+<script>
+try { if (localStorage.getItem('bahia_sidebar_oculta') === '1') document.body.classList.add('sidebar-oculta'); } catch (e) {}
+</script>
 <nav id="sidebarMenu" class="col-md-3 col-lg-2 offcanvas-md offcanvas-start sidebar p-3 position-fixed" tabindex="-1" aria-labelledby="sidebarMenuLabel">
     <div class="d-flex d-md-none align-items-center justify-content-between mb-4 px-2">
         <div class="d-flex align-items-center gap-2">
@@ -153,6 +157,43 @@
         </a>
     </div>
 </nav>
+
+<!-- Botón flotante para reabrir el menú lateral (solo escritorio, con menú oculto) -->
+<!-- Pestaña en el borde del menú lateral para ocultarlo (solo escritorio) -->
+<button type="button" id="btnOcultarSidebar" title="Ocultar menú lateral (Ctrl+/)" aria-label="Ocultar menú lateral">
+    <i class="fa-solid fa-angles-left"></i>
+</button>
+<button type="button" id="btnMostrarSidebar" title="Mostrar menú lateral (Ctrl+/)" aria-label="Mostrar menú lateral">
+    <i class="fa-solid fa-angles-right"></i>
+</button>
+
+<script>
+(function () {
+    var CLAVE = 'bahia_sidebar_oculta';
+    function guardar(valor) { try { localStorage.setItem(CLAVE, valor); } catch (e) {} }
+    function ocultar() { document.body.classList.add('sidebar-oculta'); guardar('1'); }
+    function mostrar() { document.body.classList.remove('sidebar-oculta'); guardar('0'); }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var bOcultar = document.getElementById('btnOcultarSidebar');
+        var bMostrar = document.getElementById('btnMostrarSidebar');
+        if (bOcultar) bOcultar.addEventListener('click', ocultar);
+        if (bMostrar) bMostrar.addEventListener('click', mostrar);
+    });
+
+    // Atajo de teclado: Ctrl+/ (evita chocar con la barra de marcadores, que usa Ctrl+B)
+    document.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.code === 'Slash')) {
+            e.preventDefault();
+            var t = (e.target && e.target.tagName) || '';
+            if (t === 'INPUT' || t === 'TEXTAREA' || e.target.isContentEditable) return;
+            var oculto = document.body.classList.toggle('sidebar-oculta');
+            guardar(oculto ? '1' : '0');
+        }
+    });
+})();
+</script>
+
 
 <!-- Modal con el codigo QR del enlace de acceso a la app con direccion IP del server actualizada -->
 <% if(typeof locals.server_ip !== 'undefined' && locals.server_ip){ %>

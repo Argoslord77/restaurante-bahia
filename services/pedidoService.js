@@ -106,7 +106,7 @@ const pedidoService = {
     },
 
     // Iniciar el servicio e indicar que la mesa está ocupada
-    crearNuevoPedido: async (id_mesa, id_usuario_mesero, turno_servicio_id) => {
+    crearNuevoPedido: async (id_mesa, id_usuario_mesero, turno_servicio_id, comensales = null) => {
         if (!id_usuario_mesero) {
             throw new Error('Se requiere un usuario mesero válido (sesión activa) para abrir la mesa.');
         }
@@ -126,7 +126,7 @@ const pedidoService = {
             // (id_mesa, id_usuario_mesero, turno_servicio_id, creado_en) según el
             // esquema real de la tabla `pedidos`. El INSERT manual anterior usaba
             // una columna 'fecha_apertura' inexistente y omitía dos campos NOT NULL.
-            const nuevoId = await PedidoModel.create(id_mesa, id_usuario_mesero, turno_servicio_id, connection);
+            const nuevoId = await PedidoModel.create(id_mesa, id_usuario_mesero, turno_servicio_id, connection, comensales);
             await PedidoModel.actualizarEstadoMesa(id_mesa, STATUS.MESA.OCUPADA, connection);
             await connection.commit();
             return nuevoId;
@@ -243,6 +243,225 @@ const pedidoService = {
         } finally {
             connection.release();
         }
+
+    },
+
+    /**
+     * Reporte de Pedidos/Ventas por rango de fechas (vista profesional).
+     * Devuelve pedidos enriquecidos + desglose de ítems (con tiempos de entrega
+     * y elaborador) + desglose de pagos por moneda + KPIs + turnos del rango.
+     */
+    obtenerPedidosPorRango: async (desde, hasta) => {
+        const [pedidos] = await db.query(`
+            SELECT 
+                p.id, p.id_mesa, m.numero AS mesa_numero,
+                p.cliente_nombre, p.comensales,
+                p.estado_pedido, p.estado_pago,
+                p.subtotal, p.descuento, p.impuesto, p.total, p.propina,
+                p.creado_en, p.fecha_cierre,
+                p.turno_servicio_id, ts.estado AS turno_estado,
+                CONCAT(um.nombre, ' ', um.apellidos) AS mesero,
+                CONCAT(uc.nombre, ' ', uc.apellidos) AS cajero,
+                CONCAT(uco.nombre, ' ', uco.apellidos) AS cocinero_turno,
+                TIMESTAMPDIFF(SECOND, p.creado_en, COALESCE(p.fecha_cierre, NOW())) AS duracion_seg,
+                (SELECT COUNT(*) FROM detalles_pedido d WHERE d.id_pedido = p.id) AS items_total,
+                (SELECT COUNT(*) FROM detalles_pedido d WHERE d.id_pedido = p.id AND d.estado_item = 'entregado') AS items_entregados,
+                (SELECT COUNT(*) FROM detalles_pedido d WHERE d.id_pedido = p.id AND d.estado_item = 'cancelado') AS items_cancelados
+            FROM pedidos p
+            LEFT JOIN mesas m ON p.id_mesa = m.id
+            LEFT JOIN usuarios um ON p.id_usuario_mesero = um.id
+            LEFT JOIN usuarios uc ON p.id_usuario_cajero = uc.id
+            LEFT JOIN turnos_servicio ts ON p.turno_servicio_id = ts.id
+            LEFT JOIN usuarios uco ON ts.cocinero_id = uco.id
+            WHERE DATE(p.creado_en) BETWEEN ? AND ?
+            ORDER BY p.creado_en DESC
+        `, [desde, hasta]);
+
+        const ids = pedidos.map(p => p.id);
+        let itemsPorPedido = {};
+        let pagosPorPedido = {};
+
+        if (ids.length > 0) {
+            const [items] = await db.query(`
+                SELECT 
+                    d.id_pedido, d.cantidad, d.precio_unitario, d.estado_item,
+                    d.notas_especiales, d.creado_en, d.entregado_en,
+                    TIMESTAMPDIFF(SECOND, d.creado_en, d.entregado_en) AS entrega_seg,
+                    COALESCE(pd.nombre, pm.nombre, 'Ítem') AS nombre,
+                    CONCAT(ue.nombre, ' ', ue.apellidos) AS cocinero
+                FROM detalles_pedido d
+                LEFT JOIN platillos_menu pm ON (d.es_platillo_dia = 0 OR d.es_platillo_dia IS NULL) AND pm.id = d.id_platillo
+                LEFT JOIN platillos_dia pd ON d.es_platillo_dia = 1 AND pd.id = d.id_platillo
+                LEFT JOIN usuarios ue ON d.usuario_elaboro_id = ue.id
+                WHERE d.id_pedido IN (?)
+                ORDER BY d.id_pedido, d.id ASC
+            `, [ids]);
+            itemsPorPedido = items.reduce((acc, it) => { (acc[it.id_pedido] = acc[it.id_pedido] || []).push(it); return acc; }, {});
+
+        const [pagos] = await db.query(`
+                SELECT pp.pedido_id, mo.codigo, mo.simbolo,
+                       SUM(pp.monto_moneda_origen) AS monto,
+                       GROUP_CONCAT(DISTINCT pp.metodo_pago SEPARATOR '+') AS metodos
+                FROM pagos_pedido pp
+                LEFT JOIN monedas mo ON pp.moneda_id = mo.id
+                WHERE pp.pedido_id IN (?)
+                GROUP BY pp.pedido_id, mo.codigo, mo.simbolo
+            `, [ids]);
+            // «Elaboró» = cocinero del turno (fallback al estampado)
+            const cocineroPorPedido = {};
+            pedidos.forEach(p => { cocineroPorPedido[p.id] = p.cocinero_turno || null; });
+            Object.keys(itemsPorPedido).forEach(pid => {
+                if (!cocineroPorPedido[pid]) return;
+                itemsPorPedido[pid].forEach(it => { it.cocinero = cocineroPorPedido[pid]; });
+            });
+            
+            pagosPorPedido = pagos.reduce((acc, pg) => { (acc[pg.pedido_id] = acc[pg.pedido_id] || []).push(pg); return acc; }, {});
+        }
+
+        const kpis = pedidos.reduce((acc, p) => {
+            acc.total++;
+            const total = parseFloat(p.total || 0);
+            if (p.estado_pedido === 'cancelado') { acc.cancelados++; return acc; }
+            if (['pagado', 'facturado', 'cortesia', 'pendiente_pago'].includes(p.estado_pago)) {
+                acc.cobrados++;
+                acc.ventas += (p.estado_pago === 'cortesia' ? 0 : total);
+                acc.propinas += parseFloat(p.propina || 0);
+            } else {
+                acc.en_curso++;
+                acc.en_curso_importe += total;
+            }
+            return acc;
+        }, { total: 0, cobrados: 0, en_curso: 0, cancelados: 0, ventas: 0, propinas: 0, en_curso_importe: 0 });
+
+        kpis.ticket_promedio = kpis.cobrados > 0 ? kpis.ventas / kpis.cobrados : 0;
+
+        const [turnos] = await db.query(`
+            SELECT id, estado, fecha_apertura, fecha_cierre
+            FROM turnos_servicio
+            WHERE DATE(fecha_apertura) <= ?
+              AND DATE(COALESCE(fecha_cierre, NOW())) >= ?
+            ORDER BY id DESC
+        `, [hasta, desde]);
+
+        return { pedidos, itemsPorPedido, pagosPorPedido, kpis, turnos };
+    },
+
+    /**
+     * Reporte completo de un pedido (vista de detalle/reporte independiente
+     * del estado: en captura, en curso, entregado o pagado).
+     */
+    obtenerReportePedido: async (id) => {
+        // La tabla ubicacion_mesa es opcional (migracion_ubicacion_mesa)
+        let selUbic = 'm.ubicacion';
+        let joinUbic = '';
+        try {
+            const [tablas] = await db.query("SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'ubicacion_mesa'");
+            if (tablas[0].n > 0) {
+                selUbic = 'COALESCE(um.nombre, m.ubicacion)';
+                joinUbic = 'LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id';
+            }
+        } catch (e) { /*queda el fallback*/ }
+
+        const [pedidos] = await db.query(`
+            SELECT 
+                p.id, p.id_mesa, m.numero AS mesa_numero, m.capacidad AS mesa_capacidad,
+                ${selUbic} AS mesa_ubicacion,
+                p.cliente_nombre, p.comensales,
+                p.estado_pedido, p.estado_pago,
+                p.subtotal, p.descuento, p.impuesto, p.total, p.propina,
+                p.creado_en, p.fecha_cierre, p.fecha_precuenta,
+                p.impresiones_precuenta, p.actualizado_en,
+                p.turno_servicio_id, ts.estado AS turno_estado,
+                ts.fecha_apertura AS turno_apertura, ts.fecha_cierre AS turno_cierre,
+                CONCAT(um2.nombre, ' ', um2.apellidos) AS mesero,
+                CONCAT(uc.nombre, ' ', uc.apellidos) AS cajero,
+                CONCAT(uco.nombre, ' ', uco.apellidos) AS cocinero_turno,
+                TIMESTAMPDIFF(SECOND, p.creado_en, COALESCE(p.fecha_cierre, NOW())) AS duracion_seg
+            FROM pedidos p
+            LEFT JOIN mesas m ON p.id_mesa = m.id
+            LEFT JOIN turnos_servicio ts ON p.turno_servicio_id = ts.id
+            LEFT JOIN usuarios um2 ON p.id_usuario_mesero = um2.id
+            LEFT JOIN usuarios uc ON p.id_usuario_cajero = uc.id
+            LEFT JOIN usuarios uco ON ts.cocinero_id = uco.id
+            ${joinUbic}
+            WHERE p.id = ?
+            LIMIT 1
+        `, [id]);
+        if (pedidos.length === 0) return null;
+        const pedido = pedidos[0];
+
+        const [items] = await db.query(`
+            SELECT 
+                d.id, d.cantidad, d.precio_unitario, d.estado_item, d.notas_especiales,
+                d.es_platillo_dia, d.afecta_inventario, d.creado_en, d.entregado_en,
+                TIMESTAMPDIFF(SECOND, d.creado_en, d.entregado_en) AS entrega_seg,
+                COALESCE(pd.nombre, pm.nombre, 'Ítem') AS nombre,
+                CONCAT(ue.nombre, ' ', ue.apellidos) AS cocinero,
+                (SELECT GROUP_CONCAT(mm.nombre SEPARATOR ', ')
+                   FROM detalles_pedido_modificadores dpm
+                   LEFT JOIN modificadores_menu mm ON dpm.modificador_id = mm.id
+                  WHERE dpm.detalle_pedido_id = d.id) AS modificadores
+            FROM detalles_pedido d
+            LEFT JOIN platillos_menu pm ON (d.es_platillo_dia = 0 OR d.es_platillo_dia IS NULL) AND pm.id = d.id_platillo
+            LEFT JOIN platillos_dia pd ON d.es_platillo_dia = 1 AND pd.id = d.id_platillo
+            LEFT JOIN usuarios ue ON d.usuario_elaboro_id = ue.id
+            WHERE d.id_pedido = ?
+            ORDER BY d.id ASC
+        `, [id]);
+        // «Elaboró» = cocinero activo del turno (no quien marcó la entrega).
+        // Fallback al estampado para turnos antiguos sin cocinero asignado.
+        if (pedido.cocinero_turno) {
+            items.forEach(it => { it.cocinero = pedido.cocinero_turno; });
+        }
+
+        const [pagos] = await db.query(`
+            SELECT pp.id, pp.metodo_pago, pp.monto_moneda_origen, pp.monto_equivalente_local,
+                   pp.factor_cambio_aplicado, pp.referencia_transaccion, pp.creado_en,
+                   mo.codigo AS moneda_codigo, mo.simbolo AS moneda_simbolo, mo.nombre AS moneda_nombre
+            FROM pagos_pedido pp
+            LEFT JOIN monedas mo ON pp.moneda_id = mo.id
+            WHERE pp.pedido_id = ?
+            ORDER BY pp.id ASC
+        `, [id]);
+
+        // KPIs del pedido
+        const entregados = items.filter(i => i.estado_item === 'entregado');
+        const cancelados = items.filter(i => i.estado_item === 'cancelado');
+        const enProceso  = items.filter(i => !['entregado','cancelado'].includes(i.estado_item));
+        const tiemposEntrega = entregados.map(i => Number(i.entrega_seg)).filter(t => t !== null && !isNaN(t) && t >= 0);
+        const kpis = {
+            items_total: items.length,
+            entregados: entregados.length,
+            cancelados: cancelados.length,
+            en_proceso: enProceso.length,
+            importe_cancelado: cancelados.reduce((a, i) => a + parseFloat(i.precio_unitario) * i.cantidad, 0),
+            entrega_media_seg: tiemposEntrega.length ? Math.round(tiemposEntrega.reduce((a, b) => a + b, 0) / tiemposEntrega.length) : null,
+            entrega_max_seg: tiemposEntrega.length ? Math.max(...tiemposEntrega) : null
+        };
+
+        // Línea de tiempo (eventos con fecha conocida)
+        const eventos = [];
+        eventos.push({ t: pedido.creado_en, titulo: 'Apertura del servicio', detalle: 'Mesa ' + (pedido.mesa_numero || pedido.id_mesa) + ' · Turno #' + (pedido.turno_servicio_id || '—') });
+        const rondas = {};
+        items.forEach(i => {
+            if (!i.creado_en) return;
+            const k = new Date(i.creado_en).toISOString().slice(0, 16);
+            rondas[k] = (rondas[k] || 0) + 1;
+        });
+        Object.keys(rondas).sort().forEach(k => {
+            eventos.push({ t: new Date(k + ':00'), titulo: 'Ronda agregada a la comanda', detalle: rondas[k] + ' ítem(s)' });
+        });
+        if (entregados.length > 0) {
+            const fechas = entregados.map(i => new Date(i.entregado_en)).filter(d => !isNaN(d)).sort((a, b) => a - b);
+            if (fechas.length > 0) eventos.push({ t: fechas[0], titulo: 'Primera entrega en mesa', detalle: '' });
+            if (fechas.length > 1) eventos.push({ t: fechas[fechas.length - 1], titulo: 'Última entrega en mesa', detalle: '' });
+        }
+        if (pedido.fecha_precuenta) eventos.push({ t: pedido.fecha_precuenta, titulo: 'Pre-cuenta impresa', detalle: 'Impresiones: ' + (pedido.impresiones_precuenta || 0) });
+        if (pagos.length > 0) eventos.push({ t: pagos[0].creado_en, titulo: 'Primer pago registrado', detalle: (pagos[0].metodo_pago || '') + ' ' + (pagos[0].moneda_codigo || '') });
+        if (pedido.fecha_cierre) eventos.push({ t: pedido.fecha_cierre, titulo: 'Cierre de la cuenta', detalle: 'Estado de pago: ' + pedido.estado_pago });
+        eventos.sort((a, b) => new Date(a.t) - new Date(b.t));
+
+        return { pedido, items, pagos, kpis, eventos };
     }
 };
 

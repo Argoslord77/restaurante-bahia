@@ -8,7 +8,7 @@ const { asegurarTurnoActivo } = require('../middlewares/verificarTurno');
 
 // Rutas de renderizado administrativo
 router.get('/pedidos', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), pedidoController.listarPedidos);
-router.get('/pedido/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), pedidoController.obtenerDetallePedido);
+router.get('/pedido/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), pedidoController.obtenerReportePedido);
 
 // Rutas de acciones operativas
 router.post('/pedido/nuevo', asegurarTurnoActivo, pedidoValidationRules.create, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), pedidoController.crearPedido);

@@ -295,3 +295,83 @@ body { background-color: #f3f4f6; }
 .category-btn:active {
     box-shadow: none !important;
 }
+/* ===== Colapso del menú lateral en escritorio (≥768px) ===== */
+/* Pestaña ocultar: pegada al borde derecho del sidebar (como la de reabrir) */
+#btnOcultarSidebar {
+    display: none;
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1035;
+    width: 26px;
+    height: 88px;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #1f2937, #0f172a);
+    color: #f9fafb;
+    border: none;
+    border-radius: 0 0.8rem 0.8rem 0;
+    box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    transition: width 0.2s ease, box-shadow 0.2s ease;
+}
+#btnOcultarSidebar:hover {
+    width: 34px;
+    box-shadow: 2px 2px 16px rgba(0, 0, 0, 0.4);
+}
+#btnMostrarSidebar {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    z-index: 1035;
+    width: 26px;
+    height: 88px;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #1f2937, #0f172a);
+    color: #f9fafb;
+    border: none;
+    border-radius: 0 0.8rem 0.8rem 0;
+    box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    transition: width 0.2s ease, box-shadow 0.2s ease;
+}
+#btnMostrarSidebar:hover {
+    width: 34px;
+    box-shadow: 2px 2px 16px rgba(0, 0, 0, 0.4);
+}
+#btnOcultarSidebar i,
+
+/* Posición de la pestaña según el ancho del sidebar (25% en md, 16.67% en lg) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    #btnOcultarSidebar { left: calc(25% - 13px); }
+}
+@media (min-width: 992px) {
+    #btnOcultarSidebar { left: calc(16.6667% - 13px); }
+}
+@media (min-width: 768px) {
+    #sidebarMenu {
+        transition: transform 0.3s ease;
+    }
+    body.sidebar-oculta #sidebarMenu {
+        transform: translateX(-105%);
+    }
+
+    main.ms-md-auto {
+        transition: width 0.3s ease, max-width 0.3s ease, margin-left 0.3s ease;
+    }
+    body.sidebar-oculta main.ms-md-auto {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    body:not(.sidebar-oculta) #btnOcultarSidebar {
+        display: flex;
+    }
+    body.sidebar-oculta #btnMostrarSidebar {
+        display: flex;
+    }
+}

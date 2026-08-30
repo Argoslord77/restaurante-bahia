@@ -59,6 +59,8 @@ router.put('/pos/cancelar-item/:id_detalle', ensureAuthenticated, asegurarTurnoA
 
 // Endpoint de polling para consultar ítems en estado 'listo' de un pedido
 router.get('/api/pos/items-listos/:id_pedido', posController.getItemsListos);
+// Estado de una orden para refresco asíncrono en modo supervisión (sin recargar la página)
+router.get('/api/pos/estado-orden/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), posController.apiEstadoOrden);
 
 // Obtener monedas y tasas vigentes del turno activo para el modal de cobro POS
 router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'dependiente']), turnoController.obtenerMonedasTurnoActivo);

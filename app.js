@@ -204,7 +204,13 @@ const sslOptions = {
   cert: fs.readFileSync(path.join(__dirname, 'certs', 'cert.pem'))
 };
 
-// 2. Crear el servidor HTTPS en lugar del HTTP normal
-https.createServer(sslOptions, app).listen(PORT, () => {
-  console.log(`Servidor HTTPS corriendo en: https://localhost:${PORT}`);
-});
+// 2. Crear el servidor HTTPS (o HTTP si SERVER_HTTP=1, p. ej. detrás de un proxy/preview)
+if (process.env.SERVER_HTTP === '1') {
+  require('http').createServer(app).listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor HTTP corriendo en: http://localhost:${PORT} (SERVER_HTTP=1)`);
+  });
+} else {
+  https.createServer(sslOptions, app).listen(PORT, () => {
+    console.log(`Servidor HTTPS corriendo en: https://localhost:${PORT}`);
+  });
+}

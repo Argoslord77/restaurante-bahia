@@ -26,6 +26,8 @@ module.exports = {
             let idMesa = req.query.id_mesa || null;
             let turnoId = null;
             let nombreMesa = 'Mesa Activa';
+            let mesaCapacidad = null;
+            let comensalesActuales = 0;
             let detallesActuales = [];
             let meseroDeLaOrden = null;
 
@@ -62,6 +64,9 @@ module.exports = {
                     idMesa = ped.id_mesa;
                     turnoId = ped.turno_servicio_id;
                     nombreMesa = ped.mesa_numero || nombreMesa;
+                    comensalesActuales = parseInt(ped.comensales) || 0;
+                    const [mesaCap] = await pool.query('SELECT capacidad FROM mesas WHERE id = ? LIMIT 1', [idMesa]);
+                    mesaCapacidad = mesaCap.length ? mesaCap[0].capacidad : null;
                     meseroDeLaOrden = ped.mesero_nombre || null;
 
                     const [detalles] = await pool.query(`
@@ -125,6 +130,8 @@ module.exports = {
                 id_pedido: pedidoId || 0,
                 id_mesa: idMesa,
                 nombre_mesa: nombreMesa,
+                mesa_capacidad: mesaCapacidad,
+                comensales_actuales: comensalesActuales,
                 carta: pricingContext.carta,
                 pricingContext,
                 // Se pasa el array como está: la vista lo serializa una sola
@@ -337,11 +344,18 @@ module.exports = {
 
             if (!pedidoExistente) {
                 const [nuevo] = await pool.query(`
-                    INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
-                    VALUES (?, ?, ?, 'pendiente', 'pendiente')
-                `, [idMesa, meseroId, turnoId]);
+                    INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago, comensales)
+                    VALUES (?, ?, ?, 'pendiente', 'pendiente', COALESCE(?, 1))
+                `, [idMesa, meseroId, turnoId, parseInt(req.body.comensales, 10) || null]);
                 currentPedidoId = nuevo.insertId;
                 await pool.query("UPDATE mesas SET estado = 'ocupada' WHERE id = ?", [idMesa]);
+            }
+
+            // Nº de personas: se guarda también en pedidos ya abiertos (el mesero
+            // puede ajustar los comensales en cualquier ronda posterior).
+            const comensalesReq = parseInt(req.body.comensales, 10) || null;
+            if (pedidoExistente && comensalesReq) {
+                await pool.query('UPDATE pedidos SET comensales = ? WHERE id = ?', [comensalesReq, currentPedidoId]);
             }
 
             const insertedItems = [];
@@ -400,7 +414,16 @@ module.exports = {
 
             if (!pool) return res.json({ success: true });
 
-            await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [nuevo_estado, id_detalle]);
+            // Al marcar como entregado se estampa la hora y el elaborador (cocinero/bartender)
+const esEntrega = nuevo_estado === 'entregado';
+await pool.query(
+    `UPDATE detalles_pedido
+     SET estado_item = ?,
+         entregado_en = CASE WHEN ? THEN COALESCE(entregado_en, NOW()) ELSE entregado_en END,
+         usuario_elaboro_id = CASE WHEN ? THEN COALESCE(usuario_elaboro_id, ?) ELSE usuario_elaboro_id END
+     WHERE id = ?`,
+    [nuevo_estado, esEntrega, esEntrega, req.user ? req.user.id : null, id_detalle]
+);
 
             // Comprobar si todos los ítems fueron entregados
             const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [id_detalle]);
@@ -441,9 +464,11 @@ module.exports = {
 
             await pool.query(`
                 UPDATE detalles_pedido 
-                SET estado_item = 'entregado' 
+                SET estado_item = 'entregado',
+                    entregado_en = COALESCE(entregado_en, NOW()),
+                    usuario_elaboro_id = COALESCE(usuario_elaboro_id, ?)
                 WHERE id_pedido = ? AND estado_item NOT IN ('entregado', 'cancelado')
-            `, [pedidoId]);
+            `, [req.user ? req.user.id : null, pedidoId]);
 
             await pool.query("UPDATE pedidos SET estado_pedido = 'entregado' WHERE id = ?", [pedidoId]);
 
@@ -652,9 +677,11 @@ module.exports = {
                 WHERE id = ?
             `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
             await connection.query(`
-                UPDATE detalles_pedido SET estado_item = 'entregado'
+                UPDATE detalles_pedido SET estado_item = 'entregado',
+                    entregado_en = COALESCE(entregado_en, NOW()),
+                    usuario_elaboro_id = COALESCE(usuario_elaboro_id, ?)
                 WHERE id_pedido = ? AND estado_item != 'cancelado'
-            `, [pedidoId]);
+            `, [cajeroId, pedidoId]);
 
             for (const pago of pagosNormalizados) {
                 await connection.query(`
@@ -740,9 +767,9 @@ module.exports = {
                 const meseroId = req.user ? req.user.id : 1;
 
                 const [nuevo] = await pool.query(`
-                    INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
-                    VALUES (?, ?, ?, 'pendiente', 'pendiente')
-                `, [idMesa, meseroId, turnoId]);
+                    INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago, comensales)
+                    VALUES (?, ?, ?, 'pendiente', 'pendiente', COALESCE(?, 1))
+                `, [idMesa, meseroId, turnoId, parseInt(req.query.pax, 10) || null]);
 
                 await pool.query("UPDATE mesas SET estado = 'ocupada' WHERE id = ?", [idMesa]);
                 return res.redirect(`/pos/${nuevo.insertId}${prePedidoQuery}`);
@@ -791,9 +818,9 @@ module.exports = {
                 pedidoId = existentes[0].id;
             } else {
                 const [nuevo] = await pool.query(`
-                    INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
-                    VALUES (?, ?, ?, 'pendiente', 'pendiente')
-                `, [id_mesa, meseroId, turnoId]);
+                    INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago, comensales)
+                    VALUES (?, ?, ?, 'pendiente', 'pendiente', COALESCE(?, 1))
+                `, [id_mesa, meseroId, turnoId, parseInt(req.body && req.body.comensales, 10) || null]);
 
                 pedidoId = nuevo.insertId;
                 await pool.query("UPDATE mesas SET estado = 'ocupada' WHERE id = ?", [id_mesa]);
@@ -837,9 +864,9 @@ module.exports = {
                 pedidoId = existentes[0].id;
             } else {
                 const [nuevo] = await pool.query(`
-                    INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
-                    VALUES (?, ?, ?, 'pendiente', 'pendiente')
-                `, [idMesa, meseroId, turnoId]);
+                    INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago, comensales)
+                    VALUES (?, ?, ?, 'pendiente', 'pendiente', COALESCE(?, 1))
+                `, [idMesa, meseroId, turnoId, parseInt(req.query && req.query.pax, 10) || null]);
 
                 pedidoId = nuevo.insertId;
                 await pool.query("UPDATE mesas SET estado = 'ocupada' WHERE id = ?", [idMesa]);
@@ -1016,6 +1043,7 @@ module.exports = {
             `, [pedidoId]);
 
             res.render('precuenta', {
+                retorno: req.query.retorno || null,
                 id_pedido: pedidos[0].id,
                 nombre_mesa: pedidos[0].mesa_numero || `Mesa ${pedidos[0].id_mesa || '-'}`,
                 atendio: pedidos[0].mesero_nombre || null,
@@ -1028,6 +1056,47 @@ module.exports = {
         } catch (err) {
             console.error('Error en viewPrecuenta:', err);
             res.status(500).send('Error al generar precuenta');
+        }
+    },
+
+    /**
+     * Estado de una orden para refresco asíncrono (modo supervisión del POS).
+     * GET /api/pos/estado-orden/:id_pedido — no recarga la página del admin.
+     */
+    apiEstadoOrden: async (req, res) => {
+        try {
+            const pedidoId = req.params.id_pedido;
+            if (!pool) return res.status(503).json({ success: false });
+
+            const [peds] = await pool.query(`
+                SELECT id, estado_pedido, estado_pago, subtotal, descuento, impuesto, total,
+                       propina, comensales, creado_en, fecha_cierre, fecha_precuenta, turno_servicio_id
+                FROM pedidos WHERE id = ? LIMIT 1
+            `, [pedidoId]);
+            if (peds.length === 0) return res.status(404).json({ success: false, message: 'Pedido no encontrado' });
+
+            const [detalles] = await pool.query(`
+                SELECT dp.id AS id_detalle,
+                       dp.id_platillo,
+                       dp.es_platillo_dia,
+                       dp.cantidad,
+                       dp.precio_unitario AS precio,
+                       dp.notas_especiales AS notas,
+                       dp.estado_item AS estado,
+                       COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre
+                FROM detalles_pedido dp
+                LEFT JOIN platillos_menu pm
+                  ON dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL)
+                LEFT JOIN platillos_dia pd
+                  ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
+                WHERE dp.id_pedido = ?
+                ORDER BY dp.id ASC
+            `, [pedidoId]);
+
+            return res.json({ success: true, pedido: peds[0], detalles });
+        } catch (err) {
+            console.error('Error en apiEstadoOrden:', err);
+            return res.status(500).json({ success: false });
         }
     }
 };

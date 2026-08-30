@@ -226,7 +226,7 @@
             </div>
         <% } %>
 
-        <div class="row g-4">
+        <div class="row g-4" id="tableroStats">
             <!-- Sección Salón de Mesas (Ocupa el 100% del ancho) -->
             <div class="col-12">
                 <div class="card panel-container border-0 mb-4">
@@ -248,7 +248,7 @@
                     </div>
                     
                     <div class="card-body px-4 pb-4 pt-0">
-                        <div class="monitor-grid-container">
+                        <div class="monitor-grid-container" id="tableroMesas">
                             <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-4 g-3">
                                 <% if (locals.mesas && mesas.length > 0) { %>
                                     <% mesas.forEach(mesa => { 
@@ -549,18 +549,37 @@
         // ============================================================
         if (MODO_VISUALIZACION) {
             const AUTO_REFRESH_MS = 15000;
-            setInterval(() => {
+            // Refresco ASÍNCRONO: se re-pide el HTML del tablero por fetch y
+            // se sustituyen solo los contenedores de estadísticas y mesas.
+            // Sin location.reload → la página no parpadea ni se "desconecta".
+            let tableroRefrescando = false;
+            setInterval(async () => {
+                if (tableroRefrescando) return;
                 if (document.visibilityState !== 'visible') return;
                 if (operacionEnCurso) return;
                 if (document.querySelector('.modal.show')) return;
                 if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
                 if (COLA_RESUMENES_CUENTA.length > 0) return; // resúmenes por mostrar
+                tableroRefrescando = true;
                 try {
                     const url = new URL(window.location.href);
                     url.searchParams.set('autorefresco', '1');
-                    window.location.replace(url.toString());
+                    const res = await fetch(url.toString(), { headers: { 'X-Requested-With': 'tablero-fetch' } });
+                    if (!res.ok) return;
+                    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+                    const statsNuevas = doc.getElementById('tableroStats');
+                    const mesasNuevas = doc.getElementById('tableroMesas');
+                    // Solo se reemplaza el contenido si llegó consistente (evita parpadeos)
+                    if (mesasNuevas && document.getElementById('tableroMesas')) {
+                        document.getElementById('tableroMesas').innerHTML = mesasNuevas.innerHTML;
+                    }
+                    if (statsNuevas && document.getElementById('tableroStats')) {
+                        document.getElementById('tableroStats').innerHTML = statsNuevas.innerHTML;
+                    }
                 } catch (_) {
-                    window.location.reload();
+                    // fallo de red puntual: se reintenta en el próximo ciclo
+                } finally {
+                    tableroRefrescando = false;
                 }
             }, AUTO_REFRESH_MS);
         }

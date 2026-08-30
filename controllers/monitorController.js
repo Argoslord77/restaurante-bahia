@@ -187,7 +187,15 @@ module.exports = {
 
             if (!pool) return res.json({ success: true, message: 'Estado actualizado' });
 
-            await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [targetEstado, targetId]);
+            const esEntregaMon = targetEstado === 'entregado';
+await pool.query(
+    `UPDATE detalles_pedido
+     SET estado_item = ?,
+         entregado_en = CASE WHEN ? THEN COALESCE(entregado_en, NOW()) ELSE entregado_en END,
+         usuario_elaboro_id = CASE WHEN ? THEN COALESCE(usuario_elaboro_id, ?) ELSE usuario_elaboro_id END
+     WHERE id = ?`,
+    [targetEstado, esEntregaMon, esEntregaMon, req.user ? req.user.id : null, targetId]
+);
 
             // Actualizar estado general del pedido si aplica
             const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [targetId]);

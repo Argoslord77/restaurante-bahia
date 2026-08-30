@@ -15,17 +15,17 @@ class TurnoModel {
     /**
      * Inserta un nuevo registro de apertura de turno y congela las monedas seleccionadas (Transaccional)
      */
-    static async createAperturaConMonedas(usuarioId, montoApertura, observaciones, monedasTurno = []) {
+    static async createAperturaConMonedas(usuarioId, montoApertura, observaciones, monedasTurno = [], cocineroId = null) {
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction();
 
             const queryTurno = `
                 INSERT INTO turnos_servicio 
-                (usuario_apertura_id, monto_apertura, observaciones, estado, fecha_apertura) 
-                VALUES (?, ?, ?, 'abierto', NOW())
+                (usuario_apertura_id, cocinero_id, monto_apertura, observaciones, estado, fecha_apertura) 
+                VALUES (?, ?, ?, ?, 'abierto', NOW())
             `;
-            const [result] = await connection.query(queryTurno, [usuarioId, montoApertura, observaciones || null]);
+            const [result] = await connection.query(queryTurno, [usuarioId, cocineroId || null, montoApertura, observaciones || null]);
             const turnoId = result.insertId;
 
             // Registrar snapshot de monedas para el turno activo.

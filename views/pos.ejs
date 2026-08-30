@@ -711,7 +711,7 @@
         @media (max-width: 767.98px) {
             .pos-container { height: calc(100vh - 64px); }
             .menu-section { padding-bottom: 90px !important; }
-            .mobile-cart-badge { display: flex; align-items: center; gap: 8px; }
+            .mobile-cart-badge { display: flex; align-items: center; gap: 8px; left: 50%; right: auto; transform: translateX(-50%); }
             .btn-scroll-top {
                 bottom: 84px;
                 right: 18px;
@@ -981,6 +981,13 @@
                     <span class="mesa-pill">
                         <i class="fa-solid fa-table text-info"></i> <%= textoMesa %>
                     </span>
+
+                    <span class="mesa-pill d-inline-flex align-items-center" title="Número de personas en la mesa (se guarda con cada ronda)">
+                        <i class="fa-solid fa-user-group text-warning"></i>
+                        <input type="number" id="pos_comensales" min="1" max="50"
+                               value="<%= (typeof comensales_actuales !== 'undefined' && comensales_actuales > 0) ? comensales_actuales : ((typeof mesa_capacidad !== 'undefined' && mesa_capacidad) || 1) %>"
+                               class="form-control form-control-sm mx-1" style="width:62px;height:26px;padding:0 4px;text-align:center;" />
+                    </span>
                     <div class="d-flex align-items-center gap-1">
                         <% if (!monitoresHabilitados) { %>
                             <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2 py-0.5 font-bold" style="font-size: 10px;">
@@ -1143,29 +1150,58 @@
                 }
             }, true);
 
-            // Auto-refresco de la orden supervisada: recarga periódica
-            // para ver los cambios que va haciendo el mesero (nuevos
-            // productos, estados, totales) sin intervenir. Solo recarga
-            // cuando es seguro: pestaña visible y sin modales abiertos.
-            // El refresco se marca con ?autorefresco=1 para que la
-            // auditoría no lo registre como navegación del usuario.
+            // Auto-refresco ASÍNCRONO de la orden supervisada: se consulta el
+            // estado por API y se actualiza el DOM en caliente (historial,
+            // contadores y avisos) SIN recargar la página, para no cortar la
+            // experiencia visual. Solo actúa cuando es seguro: pestaña
+            // visible, sin modales y sin avisos pendientes de lectura.
             const POS_VISTA_REFRESH_MS = 12000;
-            setInterval(() => {
+            let posVistaRefrescando = false;
+            async function posVistaRefrescarOrden() {
+                if (!POS_VISTA_PEDIDO_ID || posVistaRefrescando) return;
                 if (document.visibilityState !== 'visible') return;
                 if (document.querySelector('.modal.show')) return;
                 if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
-                // No interrumpir la lectura de los avisos de acciones:
-                // se autodescartan solos y el próximo ciclo refresca.
                 const avisosEnPantalla = document.getElementById('pos-vista-avisos');
                 if (avisosEnPantalla && avisosEnPantalla.children.length > 0) return;
+                posVistaRefrescando = true;
                 try {
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('autorefresco', '1');
-                    window.location.replace(url.toString());
+                    const res = await fetch(`/api/pos/estado-orden/${POS_VISTA_PEDIDO_ID}`, { headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (!data || !data.success) return;
+
+                    // Si la cuenta se cerró mientras se supervisaba: mismo
+                    // destino que tendría al cargar la página en modo vista.
+                    if (data.pedido && data.pedido.fecha_cierre) {
+                        const params = new URLSearchParams(window.location.search);
+                        const meseroVista = params.get('mesero');
+                        window.location.replace(meseroVista
+                            ? `/admin/pos-mesero/ver?mesero=${meseroVista}&cuenta-pagada=${POS_VISTA_PEDIDO_ID}&autorefresco=1`
+                            : '/admin/pos-mesero');
+                        return;
+                    }
+
+                    if (Array.isArray(data.detalles)) {
+                        historicoDetalles = data.detalles.map(d => ({
+                            id_detalle: d.id_detalle,
+                            id_platillo: d.id_platillo,
+                            nombre: d.nombre,
+                            precio: parseFloat(d.precio) || 0,
+                            cantidad: parseInt(d.cantidad, 10) || 0,
+                            estado: d.estado || 'en_espera',
+                            notas: d.notas || ''
+                        }));
+                        try { renderHistory(); } catch (_) { /* primer render aún no listo */ }
+                        posVistaNotificarCambios(historicoDetalles);
+                    }
                 } catch (_) {
-                    window.location.reload();
+                    // fallo de red puntual: se reintenta en el próximo ciclo
+                } finally {
+                    posVistaRefrescando = false;
                 }
-            }, POS_VISTA_REFRESH_MS);
+            }
+            setInterval(posVistaRefrescarOrden, POS_VISTA_REFRESH_MS);
 
             // ============================================================
             // AVISOS DE LAS ACCIONES DEL MESERO (solo supervisión)
@@ -1234,13 +1270,14 @@
                 setTimeout(() => posVistaRemoverAviso(aviso), POS_VISTA_AVISO_MS);
             }
 
-            (function posVistaNotificarCambios() {
+            function posVistaNotificarCambios(fuenteItems) {
                 if (!POS_VISTA_PEDIDO_ID) return;
                 const clave = 'posvista_snap_' + POS_VISTA_PEDIDO_ID;
                 let anterior = null;
                 try { anterior = JSON.parse(sessionStorage.getItem(clave) || 'null'); } catch (_) { anterior = null; }
 
-                const actuales = POS_VISTA_ITEMS
+                const origenItems = Array.isArray(fuenteItems) ? fuenteItems : POS_VISTA_ITEMS;
+                const actuales = origenItems
                     .filter(d => d && (d.id_detalle || d.id))
                     .map(d => ({ id: String(d.id_detalle || d.id), nombre: d.nombre || 'Platillo', cantidad: parseInt(d.cantidad, 10) || 0, estado: d.estado || d.estado_item || '' }));
 
@@ -1285,7 +1322,8 @@
                 if (eliminados.length) posVistaAgregarAviso('El mesero quitó de la orden', posVistaListaCorta(eliminados), 'warning');
                 if (cantidades.length) posVistaAgregarAviso('Cantidades actualizadas', posVistaListaCorta(cantidades), 'info');
                 if (estados.length) posVistaAgregarAviso('Cambios de estado', posVistaListaCorta(estados), 'secondary');
-            })();
+            }
+            posVistaNotificarCambios(); // comparación inicial contra la instantánea previa
 
             // Los ítems que ya estaban listos al cargar no deben volver a
             // notificarse como nuevos en cada refresco: solo se avisa de
@@ -2247,6 +2285,7 @@
                         body: JSON.stringify({
                             id_pedido,
                             id_mesa: parseInt(document.getElementById('pos_id_mesa').value) || null,
+                            comensales: parseInt(document.getElementById('pos_comensales').value) || null,
                             items: carrito
                         })
                     })

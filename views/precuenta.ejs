@@ -144,9 +144,11 @@
 <body>
 
     <!-- Botón Flotante de Navegación Tactil (Oculto) -->
+    <% const desdeReporte = typeof retorno !== 'undefined' && retorno === 'pedido'; %>
     <button id="btn-nav-pos">
-        &#8592; Volver al POS (#<%= id_pedido %>)
+        &#8592; Volver al <%= desdeReporte ? 'reporte del pedido' : 'POS' %> (#<%= id_pedido %>)
     </button>
+
 
     <div class="ticket-container">
         <!-- Encabezado -->
@@ -248,7 +250,10 @@
             // Acción al presionar el botón de regresar
             btnNav.addEventListener('click', (e) => {
                 e.stopPropagation(); // Evita que el evento se propague al body
-                window.location.href = `/pos/${idPedido}`;
+                // Desde el reporte de pedido se vuelve al reporte; desde el POS, al POS
+                window.location.href = (typeof desdeReporte !== 'undefined' && desdeReporte)
+                    ? `/admin/pedido/${idPedido}`
+                    : `/pos/${idPedido}`;
             });
 
             // Lógica de Toggle en cualquier parte de la pantalla/página
