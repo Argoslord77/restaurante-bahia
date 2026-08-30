@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Mesero - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                <%- include('../includes/header', {encabezado_pagina: 'Control / POS Mesero', desc_pagina: 'Visualización del salón y las órdenes de cada mesero (solo consulta)'}) %>
+
+                <% if (locals.success_msg && success_msg.length > 0) { %>
+                    <div class="alert alert-success border-0 shadow-sm rounded-3 p-3 mb-4 d-flex align-items-center" role="alert">
+                        <i class="fa-solid fa-circle-check fs-5 me-3 text-success"></i>
+                        <div class="fw-medium text-success-emphasis"><%= success_msg %></div>
+                        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <% } %>
+                <% if (locals.error_msg && error_msg.length > 0) { %>
+                    <div class="alert alert-danger border-0 shadow-sm rounded-3 p-3 mb-4 d-flex align-items-center" role="alert">
+                        <i class="fa-solid fa-circle-exclamation fs-5 me-3 text-danger"></i>
+                        <div class="fw-medium text-danger-emphasis"><%= error_msg %></div>
+                        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <% } %>
+
+                <!-- Aviso de modo visualización -->
+                <div class="alert alert-warning border-0 shadow-sm rounded-3 p-3 mb-4 d-flex align-items-center gap-3" role="alert">
+                    <i class="fa-solid fa-eye fs-4 text-warning"></i>
+                    <div>
+                        <div class="fw-bold text-warning-emphasis">Herramienta de visualización y control</div>
+                        <small class="text-muted d-block">
+                            Eliges un mesero y verás <strong>su salón de mesas y su POS tal como él los ve</strong>.
+                            El modo es de solo consulta: no se pueden abrir mesas, agregar platillos, enviar órdenes
+                            a producción ni cobrar.
+                        </small>
+                    </div>
+                </div>
+
+                <% if (!turnoActivo) { %>
+                    <div class="alert alert-secondary border-0 shadow-sm rounded-3 p-3 mb-4 d-flex align-items-center gap-3">
+                        <i class="fa-solid fa-hourglass-half fs-5"></i>
+                        <div class="fw-medium">
+                            No hay un turno de servicio abierto: los salones se mostrarán sin mesas asignadas.
+                        </div>
+                    </div>
+                <% } %>
+
+                <div class="row g-3">
+                    <% if (meseros && meseros.length > 0) { %>
+                        <% meseros.forEach(mesero => { %>
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden">
+                                    <div class="card-body p-4 d-flex flex-column">
+                                        <div class="d-flex align-items-center gap-3 mb-3">
+                                            <div class="rounded-circle bg-dark text-white d-flex align-items-center justify-content-center flex-shrink-0" style="width: 52px; height: 52px;">
+                                                <i class="fa-solid fa-user fs-5"></i>
+                                            </div>
+                                            <div class="text-truncate">
+                                                <h6 class="fw-bold text-dark mb-0 text-truncate"><%= mesero.nombre_completo || mesero.nombre %></h6>
+                                                <span class="badge <%= mesero.rol === 'capitan' ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' %> mt-1 text-capitalize">
+                                                    <%= mesero.rol === 'capitan' ? 'Capitán' : 'Dependiente' %>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div class="row text-center g-2 mb-3">
+                                            <div class="col-4">
+                                                <div class="border rounded-3 py-2">
+                                                    <div class="fs-5 fw-bold text-dark"><%= mesero.mesas_asignadas || 0 %></div>
+                                                    <small class="text-muted" style="font-size: 11px;">Mesas</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="border rounded-3 py-2">
+                                                    <div class="fs-5 fw-bold text-warning-emphasis"><%= mesero.ordenes_abiertas || 0 %></div>
+                                                    <small class="text-muted" style="font-size: 11px;">Órdenes</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="border rounded-3 py-2">
+                                                    <div class="fs-5 fw-bold text-success"><%= parseFloat(mesero.consumo_abierto || 0).toFixed(2) %></div>
+                                                    <small class="text-muted" style="font-size: 11px;">Consumo $</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <a href="/admin/pos-mesero/ver?mesero=<%= mesero.id %>"
+                                           class="btn btn-dark w-100 rounded-pill py-2 fw-bold mt-auto d-flex align-items-center justify-content-center gap-2">
+                                            <i class="fa-solid fa-eye"></i> Ver su Salón y POS
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    <% } else { %>
+                        <div class="col-12">
+                            <div class="card border-0 shadow-sm rounded-4 p-5 text-center">
+                                <i class="fa-solid fa-user-slash fa-3x text-muted mb-3"></i>
+                                <h5 class="fw-bold text-dark">No hay personal de servicio activo</h5>
+                                <p class="text-muted mb-0">
+                                    No se encontraron dependientes ni capitanes activos en el sistema.
+                                    Activa el personal desde <strong>Personal / Usuarios</strong> para usar esta herramienta.
+                                </p>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

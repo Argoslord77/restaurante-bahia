@@ -34,6 +34,9 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
             scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            // helmet trae script-src-attr 'none' por defecto y bloqueaba TODOS los
+            // onclick inline (botones de impresion, acciones de tablas, etc.)
+            scriptSrcAttr: ["'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
             connectSrc: ["'self'"],
             fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
@@ -146,6 +149,7 @@ const salidaManualRoutes = require('./routes/salidaManualRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const entradaRoutes = require('./routes/entradaRoutes');
 const inventarioRoutes = require('./routes/inventarioRoutes');
+const reporteRoutes = require('./routes/reporteRoutes');
 const turnoRoutes = require('./routes/turnoRoutes');
 const monedaRoutes = require('./routes/monedaRoutes');
 const cierreDiaRoutes = require('./routes/cierreDiaRoutes');
@@ -168,6 +172,7 @@ app.use('/admin', settingRoutes);
 app.use('/admin', transferenciaRoutes);
 app.use('/admin', entradaRoutes);
 app.use('/admin', inventarioRoutes);
+app.use('/admin', reporteRoutes);
 app.use('/admin', turnoRoutes);
 app.use('/admin', monedaRoutes);
 app.use('/admin', cierreDiaRoutes);

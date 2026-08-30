@@ -5,7 +5,7 @@
 // impresión y cierres.
 
 const Catalogo = require('./auditoriaCatalogo');
-const { CATEGORIAS, SEVERIDADES, describir, estaExcluida } = Catalogo;
+const { CATEGORIAS, SEVERIDADES, describir, estaExcluida, esSondeoExcluido } = Catalogo;
 
 describe('Catálogo de auditoría · exclusiones', () => {
     it('deja fuera los recursos estáticos para no ahogar el registro', () => {
@@ -128,11 +128,74 @@ describe('Catálogo de auditoría · seguridad y sistema', () => {
     });
 });
 
+describe('Catálogo de auditoría · reportes y kardex', () => {
+    it('audita la consulta del kardex como lectura con aviso', () => {
+        const d = describir('GET', '/admin/kardex');
+        expect(d.entidad).toBe('Kardex');
+        expect(d.categoria).toBe('LECTURA');
+        expect(d.severidad).toBe('AVISO');
+        expect(describir('GET', '/admin/kardex?producto=7').entidad).toBe('Kardex');
+    });
+
+    it('clasifica la exportación del kardex como EXPORTACION', () => {
+        const d = describir('GET', '/admin/kardex/exportar');
+        expect(d.categoria).toBe('EXPORTACION');
+        expect(d.accion).toContain('CSV');
+    });
+
+    it('describe cada reporte nuevo con su entidad propia', () => {
+        expect(describir('GET', '/admin/reportes/salud-inventario').entidad).toBe('Salud del inventario');
+        expect(describir('GET', '/admin/reportes/margen-platillos').entidad).toBe('Margen por platillo');
+        expect(describir('GET', '/admin/reportes/explosion-recetas').entidad).toBe('Explosión de recetas');
+        expect(describir('GET', '/admin/reportes/ventas-mesero').entidad).toBe('Ventas por mesero');
+        expect(describir('GET', '/admin/reportes/consumo-insumos').entidad).toBe('Consumo por insumo');
+        expect(describir('GET', '/admin/reportes/ventas-horas').entidad).toBe('Ventas por hora y día');
+        expect(describir('GET', '/admin/reportes').entidad).toBe('Centro de reportes');
+        // La ruta de exportación es más concreta y gana a la del kardex general
+        expect(describir('GET', '/admin/kardex/exportar').entidad).toBe('Kardex');
+    });
+
+    it('clasifica la exportación de cualquier reporte como EXPORTACION', () => {
+        ['/admin/reportes/salud-inventario/exportar',
+         '/admin/reportes/margen-platillos/exportar',
+         '/admin/reportes/explosion-recetas/exportar',
+         '/admin/reportes/ventas-mesero/exportar',
+         '/admin/reportes/consumo-insumos/exportar',
+         '/admin/reportes/ventas-horas/exportar'
+        ].forEach(ruta => {
+            const d = describir('GET', ruta);
+            expect(d.categoria).toBe('EXPORTACION');
+            expect(d.accion).toContain('CSV');
+        });
+    });
+});
+
 describe('Catálogo de auditoría · control de ruido', () => {
-    it('agrupa los endpoints de sondeo que refrescan solos', () => {
+    it('excluye por completo los sondeos GET de las vistas (polling)', () => {
+        // El tablero del mesero comprobando alertas, el POS consultando
+        // ítems listos, el monitor de producción, el estado del turno y las
+        // métricas del dashboard no son actividad del usuario.
         ['/api/monitor/comandas', '/pos/alertas-pendientes',
-         '/admin/turno/estado-actual', '/admin/api/dashboard/metrics'].forEach(ruta => {
-            expect(describir('GET', ruta).agregarSegundos).toBeGreaterThan(0);
+         '/api/pos/items-listos/15', '/pos/mesas/3/pre-pedidos',
+         '/admin/turno/estado-actual', '/admin/api/dashboard/metrics'
+        ].forEach(ruta => {
+            expect(esSondeoExcluido('GET', ruta)).toBe(true);
+        });
+    });
+
+    it('sigue auditando las escrituras sobre las rutas de sondeo', () => {
+        // Descartar los pre-pedidos de una mesa es una acción real
+        expect(esSondeoExcluido('DELETE', '/pos/mesas/3/pre-pedidos')).toBe(false);
+        expect(esSondeoExcluido('POST', '/pos/alertas-pendientes')).toBe(false);
+        expect(esSondeoExcluido('PUT', '/api/monitor/comandas')).toBe(false);
+    });
+
+    it('las rutas de sondeo ya no generan reglas de agrupación', () => {
+        ['/pos/alertas-pendientes', '/api/pos/items-listos/15',
+         '/api/monitor/comandas', '/admin/turno/estado-actual',
+         '/admin/api/dashboard/metrics'
+        ].forEach(ruta => {
+            expect(describir('GET', ruta).agregarSegundos).toBe(0);
         });
     });
 

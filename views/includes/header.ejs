@@ -1,8 +1,8 @@
 <div class="d-flex flex-column flex-sm-row justify-content-sm-between align-items-start align-items-sm-center gap-3 mb-4 pb-3 border-bottom content-header-responsive">
     
     <!-- CAMBIO: se quitó el botón hamburguesa raw-sidebar-toggle, ya que la barra superior sticky ya cubre esa función en móvil -->
-    <div class="header-title-block text-truncate w-100 w-sm-auto">
-        <h1 class="h3 md-h2 fw-bold text-dark m-0 text-truncate">
+    <div class="header-title-block w-100 w-sm-auto">
+        <h1 class="h3 md-h2 fw-bold text-dark m-0">
             <% if(typeof encabezado_pagina !== 'undefined' && encabezado_pagina !== null){%><%- encabezado_pagina %><%}%>
         </h1>
         <p class="text-muted small mb-0">
@@ -243,3 +243,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 </script>
+<!-- Icono de vaciado (x) para las cajas de busqueda (todas las vistas admin) -->
+<script src="/js/limpiar-busqueda.js" defer></script>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Ventas por Mesero - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Ventas por Mesero', desc_pagina: 'Desempeño del personal de salón en el período: cuentas cobradas, ventas, ticket promedio y propinas.', add_btn: false}) %>
+
+                <!-- Filtro de período -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-4 bg-white">
+                    <form method="get" action="/admin/reportes/ventas-mesero" class="row g-2 align-items-end">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small text-muted fw-semibold mb-1">Desde</label>
+                            <input type="date" name="desde" class="form-control form-control-sm" value="<%= rango.desde %>">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small text-muted fw-semibold mb-1">Hasta</label>
+                            <input type="date" name="hasta" class="form-control form-control-sm" value="<%= rango.hasta %>">
+                        </div>
+                        <div class="col-12 col-md-2 d-grid">
+                            <button type="submit" class="btn btn-dark btn-sm fw-semibold py-2">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Consultar
+                            </button>
+                        </div>
+                        <div class="col-12 col-md-4 d-flex justify-content-md-end gap-2">
+                            <a href="/admin/reportes/ventas-mesero/exportar?desde=<%= rango.desde %>&hasta=<%= rango.hasta %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
+                            </a>
+                            <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Resumen del período -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Ventas del período</h6>
+                            <h3 class="fw-bold mb-0 text-dark">$<%= reporte.totales.ventas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted"><%= reporte.totales.cuentas %> cuentas cobradas</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-primary border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Ticket promedio</h6>
+                            <h3 class="fw-bold mb-0 text-primary">$<%= reporte.totales.ticket_promedio.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted">Por cuenta cobrada</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-success border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Propinas</h6>
+                            <h3 class="fw-bold mb-0 text-success">$<%= reporte.totales.propinas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted">Acumuladas en el período</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Cortesías / Descuentos</h6>
+                            <h3 class="fw-bold mb-0 text-warning"><%= reporte.totales.cortesias %> / $<%= reporte.totales.descuentos.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted">A revisar en conjunto</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detalle por mesero -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">#</th>
+                                    <th class="py-3">Mesero</th>
+                                    <th class="py-3 text-end">Cuentas</th>
+                                    <th class="py-3 text-end">Cortesías</th>
+                                    <th class="py-3 text-end">Ventas</th>
+                                    <th class="py-3 text-end">Ticket promedio</th>
+                                    <th class="py-3 text-end">Propinas</th>
+                                    <th class="py-3 text-end pe-4">Descuentos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% reporte.meseros.forEach((m, i) => { %>
+                                <tr>
+                                    <td class="ps-4 text-muted"><%= i + 1 %></td>
+                                    <td>
+                                        <span class="fw-semibold"><%= m.mesero %></span>
+                                        <% if (m.rol) { %><small class="text-muted d-block"><%= m.rol %></small><% } %>
+                                    </td>
+                                    <td class="text-end fw-semibold"><%= m.cuentas %></td>
+                                    <td class="text-end <%= m.cortesias > 0 ? 'text-warning fw-semibold' : 'text-muted' %>"><%= m.cortesias %></td>
+                                    <td class="text-end fw-semibold">$<%= m.ventas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end">$<%= m.ticket_promedio_real.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end text-success">$<%= m.propinas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end pe-4">$<%= m.descuentos.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                </tr>
+                                <% }) %>
+                                <% if (reporte.meseros.length === 0) { %>
+                                <tr><td colspan="8" class="text-center text-muted py-4">Sin cuentas cobradas en el período.</td></tr>
+                                <% } %>
+                            </tbody>
+                            <% if (reporte.meseros.length) { %>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td colspan="2" class="ps-4">TOTAL (<%= reporte.totales.meseros %> meseros)</td>
+                                    <td class="text-end"><%= reporte.totales.cuentas %></td>
+                                    <td class="text-end"><%= reporte.totales.cortesias %></td>
+                                    <td class="text-end">$<%= reporte.totales.ventas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end">$<%= reporte.totales.ticket_promedio.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end text-success">$<%= reporte.totales.propinas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end pe-4">$<%= reporte.totales.descuentos.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                </tr>
+                            </tfoot>
+                            <% } %>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="alert alert-light border shadow-sm rounded py-2 px-3 mb-4 small text-muted" role="note">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    Sólo cuentan las cuentas <strong>cobradas</strong> del período (pagadas, facturadas a crédito y cortesías). Las cortesías facturan $0 y se listan aparte para su revisión.
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>

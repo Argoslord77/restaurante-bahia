@@ -182,7 +182,11 @@
                         </div>
                         <div class="col-md-6">
                             <label for="cantidad" class="form-label fw-semibold text-secondary small">Cantidad Ingresada</label>
-                            <input type="number" step="0.001" id="cantidad" class="form-control shadow-sm" required min="0.001" placeholder="0.000">
+                            <div class="input-group">
+                                <input type="number" step="0.001" id="cantidad" class="form-control shadow-sm" required min="0.001" placeholder="0.000">
+                                <span class="input-group-text bg-light text-muted" id="cantidadUnidad">—</span>
+                            </div>
+                            <div id="conversionHint" class="form-text small"></div>
                         </div>
                         <div class="col-md-6">
                             <label for="costo_unitario" class="form-label fw-semibold text-secondary small">Costo Unitario ($)</label>
@@ -258,6 +262,65 @@
             }
         });
 
+        // ── Unidad de medida: abreviatura junto a la cantidad + equivalencia ──
+        const cacheFactores = {};
+        let unidadInventarioTxt = '';
+
+        function abrevUnidadSeleccionada() {
+            const texto = $unidadSelect.find('option:selected').text() || '';
+            const m = texto.match(/\(([^)]+)\)\s*$/);
+            return m ? m[1] : '';
+        }
+
+        async function actualizarUnidadUI() {
+            const option = $productoSelect[0] ? $productoSelect[0].options[$productoSelect[0].selectedIndex] : null;
+            const unidadInventarioId = option ? (option.getAttribute('data-unidad-inventario-id') || '') : '';
+            unidadInventarioTxt = option ? (option.getAttribute('data-unidad-inventario') || '') : '';
+
+            const productoId = $productoSelect.val();
+            const unidadId = $unidadSelect.val();
+            const abrevSel = unidadId ? abrevUnidadSeleccionada() : '';
+            $('#cantidadUnidad').text(abrevSel || '—');
+
+            const hint = $('#conversionHint');
+            if (!productoId || !unidadId) {
+                hint.attr('class', 'form-text small').html('');
+                return;
+            }
+
+            // Si la unidad elegida difiere de la unidad de inventario, muestra la
+            // equivalencia de la cantidad capturada (factor por producto, global
+            // o vía unidad base, según la configuración de conversiones).
+            if (unidadInventarioId && Number(unidadId) !== Number(unidadInventarioId)) {
+                const clave = productoId + ':' + unidadId;
+                let factor = cacheFactores[clave];
+                if (factor === undefined) {
+                    try {
+                        const resp = await fetch('/admin/api/unidades-medida/convertir?cantidad=1&desde=' + unidadId + '&hasta=' + unidadInventarioId + '&producto_id=' + productoId);
+                        const data = await resp.json();
+                        factor = data.success ? (Number(data.factor) || 1) : null;
+                    } catch (e) {
+                        factor = null;
+                    }
+                    cacheFactores[clave] = factor;
+                }
+                if (factor === null) {
+                    hint.attr('class', 'form-text small text-danger fw-semibold')
+                        .html('<i class="fa-solid fa-triangle-exclamation me-1"></i>No hay factor de conversión activo hacia la unidad de inventario' + (unidadInventarioTxt ? ' (' + unidadInventarioTxt + ')' : '') + '.');
+                    return;
+                }
+                const cantidad = parseFloat($('#cantidad').val());
+                hint.attr('class', 'form-text small text-muted')
+                    .html('<i class="fa-solid fa-right-left me-1"></i>1 ' + abrevSel + ' = ' + factor + ' ' + (unidadInventarioTxt || 'unidad de inventario') +
+                          (!isNaN(cantidad) ? ' · Equivale a: <strong>' + (cantidad * factor).toLocaleString('es-ES', { maximumFractionDigits: 3 }) + ' ' + (unidadInventarioTxt || '') + '</strong>' : ''));
+            } else {
+                hint.attr('class', 'form-text small').html('');
+            }
+        }
+
+        $unidadSelect.on('change', actualizarUnidadUI);
+        $('#cantidad').on('input', actualizarUnidadUI);
+
         // El producto propone su unidad canónica de inventario, pero la
         // entrada permite cualquier unidad activa con factor configurado.
         $productoSelect.on('change', function() {
@@ -265,6 +328,7 @@
             const unidadInventarioId = option ? option.getAttribute('data-unidad-inventario-id') : '';
             $unidadSelect.prop('disabled', !this.value);
             $unidadSelect.val(unidadInventarioId || '');
+            actualizarUnidadUI();
         });
 
         // Manejo dinámico para abrir el modal desde el Header
@@ -282,6 +346,8 @@
             $productoSelect.val('').trigger('change.select2');
             $productoSelect.prop('disabled', true);
             $unidadSelect.val('').prop('disabled', true);
+            $('#cantidadUnidad').text('—');
+            $('#conversionHint').attr('class', 'form-text small').html('');
             fechaIngresoInput.value = new Date().toISOString().split('T')[0];
             actualizarMinimoVencimiento();
         });

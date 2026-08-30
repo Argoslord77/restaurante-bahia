@@ -11,10 +11,23 @@ module.exports = {
             const habilitarMonitores = await SettingService.get('habilitar_monitores_elaboracion', true);
             const facturaImpuesto = parseFloat(await SettingService.get('factura_impuesto', 0) || 0);
 
+            // Modo visualización (herramienta "POS mesero"): el administrador
+            // consulta la orden sin poder modificarla. La vista deshabilita
+            // agregar/enviar/entregar/cancelar/cobrar.
+            const soloVisualizacion = req.query.vista === '1';
+            let posVolverUrl = null;
+            if (soloVisualizacion) {
+                const meseroVistaId = parseInt(req.query.mesero, 10);
+                posVolverUrl = (meseroVistaId && Number.isFinite(meseroVistaId))
+                    ? `/admin/pos-mesero/ver?mesero=${meseroVistaId}`
+                    : '/admin/pos-mesero';
+            }
+
             let idMesa = req.query.id_mesa || null;
             let turnoId = null;
             let nombreMesa = 'Mesa Activa';
             let detallesActuales = [];
+            let meseroDeLaOrden = null;
 
             // Resolver primero la mesa/pedido para saber qué carta debe usarse
             // en todas las tarjetas del catálogo.
@@ -32,9 +45,24 @@ module.exports = {
 
                 if (pedidos.length > 0) {
                     const ped = pedidos[0];
+
+                    // Supervisión (POS mesero): si el mesero cobró y cerró la
+                    // cuenta mientras el administrador vigilaba la orden, ya
+                    // no hay nada que mostrar aquí. Se le devuelve al salón
+                    // del mesero en modo visualización con el resumen de la
+                    // cuenta pagada (la vista lo muestra con SweetAlert2,
+                    // escalonado si llegara más de una).
+                    if (soloVisualizacion && ped.fecha_cierre) {
+                        const meseroDestino = parseInt(req.query.mesero, 10) || ped.id_usuario_mesero || null;
+                        return res.redirect(meseroDestino
+                            ? `/admin/pos-mesero/ver?mesero=${meseroDestino}&cuenta-pagada=${ped.id}&autorefresco=1`
+                            : '/admin/pos-mesero');
+                    }
+
                     idMesa = ped.id_mesa;
                     turnoId = ped.turno_servicio_id;
                     nombreMesa = ped.mesa_numero || nombreMesa;
+                    meseroDeLaOrden = ped.mesero_nombre || null;
 
                     const [detalles] = await pool.query(`
                         SELECT dp.id AS id_detalle,
@@ -91,7 +119,9 @@ module.exports = {
             );
 
             return res.render('pos', {
-                pageTitle: `Terminal POS • Orden #${pedidoId || 'Nueva'}`,
+                pageTitle: soloVisualizacion
+                    ? `POS (Visualización) • Orden #${pedidoId || 'Nueva'}`
+                    : `Terminal POS • Orden #${pedidoId || 'Nueva'}`,
                 id_pedido: pedidoId || 0,
                 id_mesa: idMesa,
                 nombre_mesa: nombreMesa,
@@ -106,6 +136,9 @@ module.exports = {
                 categorias,
                 habilitarMonitores,
                 facturaImpuesto,
+                soloVisualizacion,
+                posVolverUrl,
+                meseroDeLaOrden,
                 user: req.user || null
             });
         } catch (err) {

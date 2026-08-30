@@ -734,9 +734,33 @@
                 display: flex !important;
             }
         }
+        /* ===== Modo Visualización (POS mesero) ===== */
+        .pos-vista-banner {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 18px;
+            background: linear-gradient(90deg, #fef3c7, #fde68a);
+            color: #78350f;
+            border-bottom: 1px solid #f59e0b;
+            font-size: 13px;
+        }
+        .pos-vista-banner i.fa-eye { font-size: 20px; }
+        .pos-vista-banner small { display: block; opacity: .8; }
+        body.pos-vista #btn-save-order,
+        body.pos-vista #btn-checkout-order,
+        body.pos-vista #btn-clear-cart,
+        body.pos-vista #btn-deliver-all-direct,
+        body.pos-vista .btn-deliver-item,
+        body.pos-vista .btn-cancel-item { display: none !important; }
+        body.pos-vista .dish-card { cursor: not-allowed; }
+        body.pos-vista .update-qty,
+        body.pos-vista .remove-item,
+        body.pos-vista .clear-note-btn,
+        body.pos-vista .add-notes { opacity: .45; }
     </style>
 </head>
-<body>
+<body<% if (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) { %> class="pos-vista"<% } %>>
     <input type="hidden" id="pos_id_pedido" value="<%= id_pedido %>">
     <input type="hidden" id="pos_id_mesa" value="<%= typeof id_mesa !== 'undefined' ? id_mesa : '' %>">
 
@@ -749,9 +773,14 @@
         // dependiente y capitán no tienen acceso a /admin/dashboard (el intento
         // caía en una cadena /login -> /dependiente/dashboard).
         const POS_ROLES_SERVICIO = ['dependiente', 'capitan'];
-        const posDashboardUrl = (typeof user !== 'undefined' && user && POS_ROLES_SERVICIO.includes(user.rol))
-            ? '/dependiente/dashboard'
-            : '/admin/dashboard';
+        // En modo visualización (POS mesero) el regreso es al salón del mesero
+        // supervisado, no al dashboard propio.
+        const esVistaSupervision = (typeof soloVisualizacion !== 'undefined' && soloVisualizacion);
+        const posDashboardUrl = (esVistaSupervision && typeof posVolverUrl !== 'undefined' && posVolverUrl)
+            ? posVolverUrl
+            : ((typeof user !== 'undefined' && user && POS_ROLES_SERVICIO.includes(user.rol))
+                ? '/dependiente/dashboard'
+                : '/admin/dashboard');
     %>
     <!-- Header Principal -->
     <header class="pos-header position-relative">
@@ -808,6 +837,20 @@
         </div>
     </header>
 
+    <% if (esVistaSupervision) { %>
+    <div class="pos-vista-banner">
+        <i class="fa-solid fa-eye"></i>
+        <div class="flex-grow-1">
+            <strong>Modo Visualización</strong> — Orden atendida por
+            <strong><%= (typeof meseroDeLaOrden !== 'undefined' && meseroDeLaOrden) ? meseroDeLaOrden : 'el mesero asignado' %></strong>.
+            <small>Solo consulta: agregar productos, enviar a producción, entregar, cancelar y cobrar están deshabilitados.</small>
+        </div>
+        <a href="<%= posVolverUrl || '/admin/pos-mesero' %>" class="btn btn-sm btn-dark rounded-pill px-3 flex-shrink-0">
+            <i class="fa-solid fa-arrow-left me-1"></i> Volver al salón del mesero
+        </a>
+    </div>
+    <% } %>
+
     <div class="container-fluid pos-container">
         <div class="row h-100">
             <!-- Panel Izquierdo: Catálogo de Platillos -->
@@ -838,7 +881,7 @@
                         <div class="search-wrapper">
                             <i class="fa-solid fa-magnifying-glass text-muted position-absolute" style="left: 12px; top: 12px; font-size: 13px;"></i>
                             <input type="text" 
-                                   id="dish-search-input" 
+                                   id="dish-search-input" data-limpiar="no" 
                                    class="search-input" 
                                    placeholder="Buscar por nombre de platillo o bebida..." 
                                    autocomplete="off">
@@ -1056,11 +1099,205 @@
 
     <script>
         const MONITORES_HABILITADOS = <%= monitoresHabilitados ? 'true' : 'false' %>;
+        const SOLO_VISUALIZACION = <%= (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) ? 'true' : 'false' %>;
         const POS_DASHBOARD_URL = '<%= posDashboardUrl %>';
         const FACTURA_IMPUESTO = <%= parseFloat(typeof facturaImpuesto !== 'undefined' ? facturaImpuesto : 0) || 0 %>;
         let carrito = []; 
         let historicoDetalles = []; 
         let activeCategory = 'todos';
+
+        // Modo Visualización (POS mesero): bloqueo en fase de captura de todas
+        // las acciones que modifican la orden. El interceptor vive en document
+        // (fase captura) y detiene la propagación ANTES de que los manejadores
+        // normales (fase burbuja) puedan ejecutarse.
+        if (SOLO_VISUALIZACION) {
+            const SELECTORES_BLOQUEADOS_VISTA = [
+                '#btn-save-order',          // enviar a cocina / guardar
+                '#btn-checkout-order',       // cobrar
+                '#btn-clear-cart',           // vaciar captura
+                '#btn-deliver-all-direct',   // entregar todo
+                '#btn-add-pago',             // agregar pago (modal cobro)
+                '.btn-deliver-item',         // entregar ítem
+                '.btn-cancel-item',          // cancelar ítem
+                '.update-qty',               // cantidades en captura
+                '.remove-item',              // quitar ítem de captura
+                '.clear-note-btn',           // limpiar nota
+                '.add-notes',                // editar nota
+                '.cart-item-note',           // nota del ítem
+                '#dishes-grid .dish-card'    // agregar platillo al hacer clic
+            ].join(',');
+            document.addEventListener('click', (e) => {
+                const objetivo = e.target.closest(SELECTORES_BLOQUEADOS_VISTA);
+                if (!objetivo) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'info',
+                        title: 'Modo visualización: acción deshabilitada',
+                        showConfirmButton: false,
+                        timer: 1800
+                    });
+                }
+            }, true);
+
+            // Auto-refresco de la orden supervisada: recarga periódica
+            // para ver los cambios que va haciendo el mesero (nuevos
+            // productos, estados, totales) sin intervenir. Solo recarga
+            // cuando es seguro: pestaña visible y sin modales abiertos.
+            // El refresco se marca con ?autorefresco=1 para que la
+            // auditoría no lo registre como navegación del usuario.
+            const POS_VISTA_REFRESH_MS = 12000;
+            setInterval(() => {
+                if (document.visibilityState !== 'visible') return;
+                if (document.querySelector('.modal.show')) return;
+                if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
+                // No interrumpir la lectura de los avisos de acciones:
+                // se autodescartan solos y el próximo ciclo refresca.
+                const avisosEnPantalla = document.getElementById('pos-vista-avisos');
+                if (avisosEnPantalla && avisosEnPantalla.children.length > 0) return;
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('autorefresco', '1');
+                    window.location.replace(url.toString());
+                } catch (_) {
+                    window.location.reload();
+                }
+            }, POS_VISTA_REFRESH_MS);
+
+            // ============================================================
+            // AVISOS DE LAS ACCIONES DEL MESERO (solo supervisión)
+            // Cada carga guarda una instantánea de la orden en
+            // sessionStorage; al refrescar se compara contra la anterior
+            // y se avisa con alertas de Bootstrap (nada de SweetAlert2
+            // aquí) de lo que hizo el mesero: productos agregados o
+            // quitados, cantidades y cambios de estado.
+            // ============================================================
+            const POS_VISTA_AVISO_MS = 10000;
+            const POS_VISTA_ESTADOS = { en_espera: 'En espera', en_cocina: 'En cocina', en_bar: 'En barra', listo: 'Listo', entregado: 'Entregado', cancelado: 'Cancelado' };
+            const POS_VISTA_PEDIDO_ID = <%= typeof id_pedido !== 'undefined' ? Number(id_pedido) || 0 : 0 %>;
+            const POS_VISTA_ITEMS = <%- JSON.stringify(typeof detallesActuales !== 'undefined' && Array.isArray(detallesActuales) ? detallesActuales : []).replace(/</g, '\\u003c') %>;
+
+            function posVistaEscapar(texto) {
+                return String(texto == null ? '' : texto)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+
+            function posVistaListaCorta(textos) {
+                const visibles = textos.slice(0, 4);
+                let html = visibles.map(posVistaEscapar).join(' · ');
+                if (textos.length > 4) html += ` <span class="text-muted">(+${textos.length - 4} más)</span>`;
+                return html;
+            }
+
+            function posVistaRemoverAviso(aviso) {
+                if (!aviso || !aviso.parentNode) return;
+                aviso.classList.remove('show');
+                setTimeout(() => { if (aviso.parentNode) aviso.parentNode.removeChild(aviso); }, 200);
+            }
+
+            // Sonido de exito al detectar que el mesero agrego items a la orden
+            // (/sounds/success.mp3). Si el navegador bloquea el autoplay (sin
+            // interaccion previa del usuario), queda en silencio y solo se
+            // muestra el aviso visual.
+            function posVistaSonidoAgregado() {
+                try {
+                    const audio = new Audio('/sounds/success.mp3');
+                    audio.currentTime = 0;
+                    audio.volume = 0.85;
+                    audio.play().catch(err => {
+                        console.warn('Autoplay bloqueado por el navegador. Requiere una interaccion previa del usuario:', err);
+                    });
+                } catch (_) { /* sin audio disponible: el aviso visual basta */ }
+            }
+
+            function posVistaAgregarAviso(titulo, detalle, tipo) {
+                let contenedor = document.getElementById('pos-vista-avisos');
+                if (!contenedor) {
+                    contenedor = document.createElement('div');
+                    contenedor.id = 'pos-vista-avisos';
+                    contenedor.setAttribute('aria-live', 'polite');
+                    contenedor.style.cssText = 'position:fixed;top:88px;right:16px;width:min(360px,calc(100vw - 32px));z-index:1050;pointer-events:none;';
+                    document.body.appendChild(contenedor);
+                }
+                const aviso = document.createElement('div');
+                aviso.className = `alert alert-${tipo} alert-dismissible fade show shadow-sm mb-2`;
+                aviso.setAttribute('role', 'alert');
+                aviso.style.pointerEvents = 'auto';
+                aviso.innerHTML = `<div><strong>${posVistaEscapar(titulo)}</strong><div class="small mt-1">${detalle}</div></div>` +
+                    '<button type="button" class="btn-close" aria-label="Cerrar"></button>';
+                aviso.querySelector('.btn-close').addEventListener('click', () => posVistaRemoverAviso(aviso));
+                contenedor.appendChild(aviso);
+                setTimeout(() => posVistaRemoverAviso(aviso), POS_VISTA_AVISO_MS);
+            }
+
+            (function posVistaNotificarCambios() {
+                if (!POS_VISTA_PEDIDO_ID) return;
+                const clave = 'posvista_snap_' + POS_VISTA_PEDIDO_ID;
+                let anterior = null;
+                try { anterior = JSON.parse(sessionStorage.getItem(clave) || 'null'); } catch (_) { anterior = null; }
+
+                const actuales = POS_VISTA_ITEMS
+                    .filter(d => d && (d.id_detalle || d.id))
+                    .map(d => ({ id: String(d.id_detalle || d.id), nombre: d.nombre || 'Platillo', cantidad: parseInt(d.cantidad, 10) || 0, estado: d.estado || d.estado_item || '' }));
+
+                // Guardar la instantánea actual para el próximo refresco
+                try { sessionStorage.setItem(clave, JSON.stringify({ t: Date.now(), items: actuales })); } catch (_) {}
+
+                if (!anterior || !Array.isArray(anterior.items)) return; // primera vista: sin avisos
+
+                const previos = new Map(anterior.items.map(i => [String(i.id), i]));
+                const actualesIds = new Set(actuales.map(i => i.id));
+                const agregados = [], cancelados = [], eliminados = [], cantidades = [], estados = [];
+
+                actuales.forEach(item => {
+                    const previo = previos.get(item.id);
+                    if (!previo) {
+                        if (item.estado !== 'cancelado') agregados.push(`${item.cantidad}× ${item.nombre}`);
+                        return;
+                    }
+                    if (item.estado === 'cancelado' && previo.estado !== 'cancelado') {
+                        cancelados.push(`${item.cantidad}× ${item.nombre}`);
+                        return;
+                    }
+                    if (item.estado !== 'cancelado' && item.cantidad !== previo.cantidad) {
+                        cantidades.push(`${item.nombre}: ${previo.cantidad} → ${item.cantidad}`);
+                    }
+                    if (item.estado !== previo.estado) {
+                        const de = POS_VISTA_ESTADOS[previo.estado] || previo.estado || '—';
+                        const a = POS_VISTA_ESTADOS[item.estado] || item.estado || '—';
+                        estados.push(`${item.nombre}: ${de} → ${a}`);
+                    }
+                });
+
+                anterior.items.forEach(item => {
+                    if (!actualesIds.has(String(item.id))) eliminados.push(`${item.cantidad}× ${item.nombre}`);
+                });
+
+                if (agregados.length) {
+                    posVistaSonidoAgregado();
+                    posVistaAgregarAviso('El mesero agregó', posVistaListaCorta(agregados), 'success');
+                }
+                if (cancelados.length) posVistaAgregarAviso('El mesero canceló', posVistaListaCorta(cancelados), 'danger');
+                if (eliminados.length) posVistaAgregarAviso('El mesero quitó de la orden', posVistaListaCorta(eliminados), 'warning');
+                if (cantidades.length) posVistaAgregarAviso('Cantidades actualizadas', posVistaListaCorta(cantidades), 'info');
+                if (estados.length) posVistaAgregarAviso('Cambios de estado', posVistaListaCorta(estados), 'secondary');
+            })();
+
+            // Los ítems que ya estaban listos al cargar no deben volver a
+            // notificarse como nuevos en cada refresco: solo se avisa de
+            // las transiciones que ocurren a partir de ahora.
+            document.addEventListener('DOMContentLoaded', () => {
+                historicoDetalles.forEach(detalle => {
+                    if (detalle && detalle.estado === 'listo' && detalle.id_detalle) {
+                        itemsListosAnteriores.add(detalle.id_detalle);
+                    }
+                });
+            });
+        }
 
         function procesarPrePedidoDesdeURL() {
             const urlParams = new URLSearchParams(window.location.search);
