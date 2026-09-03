@@ -527,3 +527,103 @@ describe('reportesService · CSV del turno', () => {
         expect(csv).toContain('Mojito Bahía');
     });
 });
+
+// ── Tendencias de venta ──────────────────────────────────────────────────
+describe('reportesService · tendencias', () => {
+    beforeEach(() => jest.resetAllMocks());
+
+    it('compara contra el período anterior de igual duración y clasifica productos', async () => {
+        db.query
+            .mockResolvedValueOnce([[ // serie diaria (actual 08-05..08-08, anterior 08-01..08-04)
+                { dia: '2026-08-01', cuentas: 5, venta: 100 },
+                { dia: '2026-08-02', cuentas: 8, venta: 200 },
+                { dia: '2026-08-03', cuentas: 0, venta: 0 },
+                { dia: '2026-08-04', cuentas: 10, venta: 300 },
+                { dia: '2026-08-05', cuentas: 6, venta: 150 },
+                { dia: '2026-08-06', cuentas: 6, venta: 150 },
+                { dia: '2026-08-07', cuentas: 0, venta: 0 },
+                { dia: '2026-08-08', cuentas: 12, venta: 400 }
+            ], []])
+            .mockResolvedValueOnce([[ // productos cur vs prev
+                { id_platillo: 1, es_platillo_dia: 0, nombre: 'Nuevo', tipo: 'BEBIDAS', categoria: 'Cócteles', unidades_cur: 6, unidades_prev: 0, venta_cur: 60, venta_prev: 0 },
+                { id_platillo: 2, es_platillo_dia: 0, nombre: 'Mojito', tipo: 'BEBIDAS', categoria: 'Cócteles', unidades_cur: 10, unidades_prev: 5, venta_cur: 95, venta_prev: 47.5 },
+                { id_platillo: 3, es_platillo_dia: 0, nombre: 'Estable', tipo: 'COMESTIBLES', categoria: 'Fuertes', unidades_cur: 5, unidades_prev: 5, venta_cur: 80, venta_prev: 80 },
+                { id_platillo: 4, es_platillo_dia: 0, nombre: 'Filete', tipo: 'COMESTIBLES', categoria: 'Fuertes', unidades_cur: 4, unidades_prev: 8, venta_cur: 152, venta_prev: 304 },
+                { id_platillo: 5, es_platillo_dia: 1, nombre: 'Ceviche del día', tipo: 'COMESTIBLES', categoria: null, unidades_cur: 0, unidades_prev: 3, venta_cur: 0, venta_prev: 84 }
+            ], []])
+            .mockResolvedValueOnce([[ // categorías
+                { tipo: 'BEBIDAS', categoria: 'Cócteles', unidades_cur: 16, unidades_prev: 5, venta_cur: 155, venta_prev: 47.5 },
+                { tipo: 'COMESTIBLES', categoria: 'Fuertes', unidades_cur: 9, unidades_prev: 13, venta_cur: 232, venta_prev: 384 }
+            ], []]);
+
+        const reporte = await ReportesService.tendencias({ desde: '2026-08-05', hasta: '2026-08-08' });
+
+        // Período anterior equivalente: 4 días inmediatamente previos
+        expect(reporte.prevDesde).toBe('2026-08-01');
+        expect(reporte.prevHasta).toBe('2026-08-04');
+        expect(reporte.agrupacion).toBe('diaria');
+        expect(reporte.serie).toHaveLength(4);
+
+        // Totales de caja actuales vs anteriores
+        expect(reporte.totales).toMatchObject({
+            venta: 700, venta_prev: 600, venta_delta_pct: 16.7,
+            cuentas: 24, cuentas_prev: 23,
+            ticket: 29.17, ticket_prev: 26.09
+        });
+
+        // Ritmo: media 2.ª mitad (200) vs 1.ª mitad (150) → +33.3 acelerando
+        expect(reporte.ritmo).toEqual({ delta_pct: 33.3, direccion: 'acelerando' });
+
+        // Clasificación de tendencias por producto
+        const porNombre = Object.fromEntries(reporte.platillos.map(p => [p.nombre, p]));
+        expect(porNombre['Nuevo'].estado).toBe('nuevo');
+        expect(porNombre['Mojito'].estado).toBe('sube');
+        expect(porNombre['Mojito'].unidades_delta_pct).toBe(100);
+        expect(porNombre['Estable'].estado).toBe('estable');
+        expect(porNombre['Filete'].estado).toBe('baja');
+        expect(porNombre['Ceviche del día'].estado).toBe('sin-ventas');
+
+        // Topes: primero los nuevos, luego por % de crecimiento
+        expect(reporte.alza.map(p => p.nombre)).toEqual(['Nuevo', 'Mojito']);
+        expect(reporte.baja.map(p => p.nombre)).toEqual(['Ceviche del día', 'Filete']);
+
+        // Corte por tipo agregando categorías
+        const tragos = reporte.tipos.find(t => t.etiqueta === 'Tragos');
+        expect(tragos).toMatchObject({ unidades_cur: 16, unidades_prev: 5, estado: 'sube' });
+    });
+
+    it('agrupa por semanas cuando el alcance es largo', async () => {
+        db.query
+            .mockResolvedValueOnce([[{ dia: '2026-06-01', cuentas: 2, venta: 50 }, { dia: '2026-08-01', cuentas: 3, venta: 90 }], []])
+            .mockResolvedValueOnce([[], []])
+            .mockResolvedValueOnce([[], []]);
+
+        const reporte = await ReportesService.tendencias({ desde: '2026-06-01', hasta: '2026-08-03' });
+
+        expect(reporte.agrupacion).toBe('semanal');
+        expect(reporte.serie.length).toBeGreaterThan(5);
+        expect(reporte.serie[0].etiqueta).toMatch(/^Semana del 01\/06/);
+        // Todas las ventas caen en su semana correspondiente
+        const totalSerie = reporte.serie.reduce((s, d) => s + d.venta, 0);
+        expect(totalSerie).toBe(140);
+    });
+
+    it('el CSV incluye resumen, serie, segmentos y productos', async () => {
+        db.query
+            .mockResolvedValueOnce([[{ dia: '2026-08-05', cuentas: 6, venta: 150 }, { dia: '2026-08-04', cuentas: 10, venta: 300 }], []])
+            .mockResolvedValueOnce([[{ id_platillo: 2, es_platillo_dia: 0, nombre: 'Mojito', tipo: 'BEBIDAS', categoria: 'Cócteles', unidades_cur: 10, unidades_prev: 5, venta_cur: 95, venta_prev: 47.5 }], []])
+            .mockResolvedValueOnce([[{ tipo: 'BEBIDAS', categoria: 'Cócteles', unidades_cur: 10, unidades_prev: 5, venta_cur: 95, venta_prev: 47.5 }], []]);
+
+        const reporte = await ReportesService.tendencias({ desde: '2026-08-05', hasta: '2026-08-05' });
+        const csv = ReportesService.tendenciasACSV(reporte);
+
+        expect(csv.startsWith('\uFEFF')).toBe(true);
+        expect(csv).toContain('Tendencias de venta;2026-08-05;a;2026-08-05;comparado con;2026-08-04;a;2026-08-04');
+        expect(csv).toContain('RESUMEN');
+        expect(csv).toContain('SERIE DIARIA');
+        expect(csv).toContain('POR TIPO Y CATEGORIA');
+        expect(csv).toContain('PRODUCTOS');
+        expect(csv).toContain('Mojito');
+        expect(csv).toContain('A la alza');
+    });
+});

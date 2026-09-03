@@ -68,6 +68,15 @@ const ENLACES = [
         badge: 'NUEVO'
     },
     {
+        id: 'tendencias',
+        titulo: 'Tendencias',
+        descripcion: 'Hacia dónde va la venta: serie diaria/semanal, comparación contra el período anterior y tragos/platillos a la alza o baja. Exportable a CSV.',
+        icono: 'fa-solid fa-arrow-trend-up',
+        url: '/admin/reportes/tendencias',
+        grupo: 'Control financiero',
+        badge: 'NUEVO'
+    },
+    {
         id: 'ventas-turno',
         titulo: 'Ventas y consumo del turno',
         descripcion: 'Tragos y platillos vendidos en el turno con el movimiento de inventario que generaron (según licencia). Con detalle por trago/platillo. Exportable a CSV.',
@@ -478,6 +487,44 @@ exports.viewVentasHoras = async (req, res) => {
     } catch (error) {
         console.error('Error al cargar las ventas por hora:', error);
         return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+// ── Tendencias de venta ───────────────────────────────────────────────────
+// Evolución del negocio en el tiempo: serie diaria/semanal de cuentas
+// cobradas, comparación contra el período anterior de igual duración y qué
+// tragos/platillos suben o bajan. Información financiera de venta: no toca
+// el kardex, por lo que no depende de funciones de la licencia.
+
+exports.viewTendencias = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.tendencias(rango);
+        return res.render('reportes/tendencias', {
+            title: 'Tendencias de Venta - Restaurante Bahía',
+            view: 'tendencias',
+            rango,
+            reporte,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar las tendencias de venta:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.exportarTendencias = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.tendencias(rango);
+        return responderCSV(req, res, 'tendencias_venta',
+            ReportesService.tendenciasACSV(reporte),
+            reporte.serie.length + reporte.tipos.length + reporte.categorias.length + reporte.platillos.length);
+    } catch (error) {
+        console.error('Error al exportar las tendencias de venta:', error);
+        return res.redirect('/admin/reportes/tendencias');
     }
 };
 

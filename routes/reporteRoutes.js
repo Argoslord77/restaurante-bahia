@@ -26,6 +26,12 @@ router.get('/reportes/ventas-mesero', ensureAuthenticated, puedeVer, reportesCon
 router.get('/reportes/consumo-insumos', ensureAuthenticated, puedeVer, reportesController.viewConsumoInsumos);
 router.get('/reportes/ventas-horas', ensureAuthenticated, puedeVer, reportesController.viewVentasHoras);
 
+// ── Tendencias de venta ─────────────────────────────────────────────────
+// Evolución en el tiempo: serie diaria/semanal, comparación contra el
+// período anterior equivalente y productos a la alza/baja.
+router.get('/reportes/tendencias', ensureAuthenticated, puedeVer, reportesController.viewTendencias);
+router.get('/reportes/tendencias/exportar', ensureAuthenticated, puedeVer, reportesController.exportarTendencias);
+
 // ── Ventas y movimiento de inventario del turno ─────────────────────────
 // Tragos y platillos vendidos en un turno con el descuento de kardex que
 // generaron; con detalle por trago/platillo. El desglose de inventario solo

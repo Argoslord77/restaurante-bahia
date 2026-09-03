@@ -501,7 +501,385 @@ async function ventasPorHoras(rango) {
     };
 }
 
-// ── Ventas y movimiento de inventario del turno ──────────────────────────
+// ── Tendencias de venta ──────────────────────────────────────────────────
+// Hacia dónde va el negocio: evolución diaria (o semanal) de las cuentas
+// cobradas, comparación contra el período anterior de igual duración y qué
+// tragos/platillos suben o bajan. Es información financiera de venta (caja
+// y carta), no de inventario: no depende de funciones de la licencia.
+//
+// Criterios compartidos con los demás reportes financieros:
+//  · "Venta cobrada" = pedidos con fecha_cierre y estado pagado, facturado
+//    o cortesía, por p.total (igual que ventas por mesero y por hora).
+//  · "Venta en carta" por producto = Σ cantidad × precio_unitario de líneas
+//    no canceladas (igual que margen por platillo), por eso puede diferir
+//    de la venta cobrada (impuestos, descuentos, modificadores).
+
+const DIA_MS = 86400000;
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/** '2026-09-03' → ms UTC del día (evita desplazamientos de zona horaria). */
+const utcDia = (s) => {
+    const [y, m, d] = String(s).split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+};
+const isoDeUtc = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+/** Cambio porcentual cur vs prev; null si no hay base de comparación. */
+const pctDelta = (cur, prev) => (Number(prev) > 0 ? num(((Number(cur) - Number(prev)) / Number(prev)) * 100, 1) : null);
+
+/** Clasificación de la tendencia de un producto entre dos períodos. */
+function estadoTendencia(cur, prev) {
+    if (cur > 0 && prev <= 0) return 'nuevo';
+    if (cur <= 0 && prev > 0) return 'sin-ventas';
+    const d = pctDelta(cur, prev);
+    if (d == null) return 'estable';
+    if (d >= 10) return 'sube';
+    if (d <= -10) return 'baja';
+    return 'estable';
+}
+
+const ETIQUETA_TENDENCIA = {
+    'sube': 'A la alza',
+    'baja': 'A la baja',
+    'nuevo': 'Nuevo en el período',
+    'sin-ventas': 'Sin ventas actuales',
+    'estable': 'Estable'
+};
+
+/**
+ * Reporte de tendencias: serie temporal de ventas, comparativa contra el
+ * período anterior equivalente y tendencia por producto/categoría.
+ *
+ * @param {object} rango { desde, hasta } normalizado con normalizarRango().
+ */
+async function tendencias(rango) {
+    const { desde, hasta } = rango;
+    const dias = Math.max(1, Math.round((utcDia(hasta) - utcDia(desde)) / DIA_MS) + 1);
+
+    // Período anterior de la MISMA duración, inmediatamente previo.
+    const prevHasta = isoDeUtc(utcDia(desde) - DIA_MS);
+    const prevDesde = isoDeUtc(utcDia(desde) - dias * DIA_MS);
+
+    // 1) Serie diaria de cuentas cobradas: período actual + anterior en una
+    //    sola pasada; la serie del actual se rellena día por día (los días
+    //    sin venta también cuentan).
+    const [filasDia] = await db.query(`
+        SELECT DATE_FORMAT(p.fecha_cierre, '%Y-%m-%d') AS dia,
+               COUNT(*) AS cuentas,
+               COALESCE(SUM(p.total), 0) AS venta
+        FROM pedidos p
+        WHERE p.fecha_cierre IS NOT NULL
+          AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+          AND p.fecha_cierre >= ? AND p.fecha_cierre < DATE_ADD(?, INTERVAL 1 DAY)
+        GROUP BY DATE_FORMAT(p.fecha_cierre, '%Y-%m-%d')
+    `, [prevDesde, hasta]);
+
+    const porDia = new Map(filasDia.map(f => [f.dia, f]));
+    const serieCruda = [];
+    for (let i = 0; i < dias; i++) {
+        const dia = isoDeUtc(utcDia(desde) + i * DIA_MS);
+        const f = porDia.get(dia);
+        serieCruda.push({
+            dia,
+            dia_semana: DIAS_SEMANA[new Date(`${dia}T00:00:00Z`).getUTCDay()],
+            cuentas: num(f ? f.cuentas : 0),
+            venta: num(f ? f.venta : 0, 2)
+        });
+    }
+    const serieAnterior = [];
+    for (let i = 0; i < dias; i++) {
+        const dia = isoDeUtc(utcDia(prevDesde) + i * DIA_MS);
+        const f = porDia.get(dia);
+        serieAnterior.push({
+            dia,
+            cuentas: num(f ? f.cuentas : 0),
+            venta: num(f ? f.venta : 0, 2)
+        });
+    }
+
+    // 2) Productos vendidos: actual vs anterior con agregación condicional
+    const [filasProd] = await db.query(`
+        SELECT dp.id_platillo, dp.es_platillo_dia,
+               COALESCE(pm.nombre, pd.nombre, 'Platillo eliminado') AS nombre,
+               CASE WHEN dp.es_platillo_dia = 1
+                    THEN COALESCE(pd.tipo, 'COMESTIBLES')
+                    ELSE COALESCE(cp.tipo, 'COMESTIBLES') END AS tipo,
+               cp.nombre AS categoria,
+               SUM(CASE WHEN p.fecha_cierre >= ? THEN dp.cantidad ELSE 0 END) AS unidades_cur,
+               SUM(CASE WHEN p.fecha_cierre >= ? THEN dp.cantidad * dp.precio_unitario ELSE 0 END) AS venta_cur,
+               SUM(CASE WHEN p.fecha_cierre < ? THEN dp.cantidad ELSE 0 END) AS unidades_prev,
+               SUM(CASE WHEN p.fecha_cierre < ? THEN dp.cantidad * dp.precio_unitario ELSE 0 END) AS venta_prev
+        FROM detalles_pedido dp
+        INNER JOIN pedidos p ON p.id = dp.id_pedido
+        LEFT JOIN platillos_menu pm
+            ON (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL) AND pm.id = dp.id_platillo
+        LEFT JOIN platillos_dia pd ON dp.es_platillo_dia = 1 AND pd.id = dp.id_platillo
+        LEFT JOIN categorias_platillos cp ON cp.id = pm.categoria
+        WHERE p.fecha_cierre IS NOT NULL
+          AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+          AND dp.estado_item != 'cancelado'
+          AND p.fecha_cierre >= ? AND p.fecha_cierre < DATE_ADD(?, INTERVAL 1 DAY)
+        GROUP BY dp.id_platillo, dp.es_platillo_dia,
+                 COALESCE(pm.nombre, pd.nombre, 'Platillo eliminado'),
+                 CASE WHEN dp.es_platillo_dia = 1
+                      THEN COALESCE(pd.tipo, 'COMESTIBLES')
+                      ELSE COALESCE(cp.tipo, 'COMESTIBLES') END,
+                 cp.nombre
+        ORDER BY venta_cur DESC, venta_prev DESC
+        LIMIT 300
+    `, [desde, desde, desde, desde, prevDesde, hasta]);
+
+    // 3) Categorías (y el corte tragos vs comestibles)
+    const [filasCat] = await db.query(`
+        SELECT CASE WHEN dp.es_platillo_dia = 1
+                    THEN COALESCE(pd.tipo, 'COMESTIBLES')
+                    ELSE COALESCE(cp.tipo, 'COMESTIBLES') END AS tipo,
+               cp.nombre AS categoria,
+               SUM(CASE WHEN p.fecha_cierre >= ? THEN dp.cantidad ELSE 0 END) AS unidades_cur,
+               SUM(CASE WHEN p.fecha_cierre >= ? THEN dp.cantidad * dp.precio_unitario ELSE 0 END) AS venta_cur,
+               SUM(CASE WHEN p.fecha_cierre < ? THEN dp.cantidad ELSE 0 END) AS unidades_prev,
+               SUM(CASE WHEN p.fecha_cierre < ? THEN dp.cantidad * dp.precio_unitario ELSE 0 END) AS venta_prev
+        FROM detalles_pedido dp
+        INNER JOIN pedidos p ON p.id = dp.id_pedido
+        LEFT JOIN platillos_menu pm
+            ON (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL) AND pm.id = dp.id_platillo
+        LEFT JOIN platillos_dia pd ON dp.es_platillo_dia = 1 AND pd.id = dp.id_platillo
+        LEFT JOIN categorias_platillos cp ON cp.id = pm.categoria
+        WHERE p.fecha_cierre IS NOT NULL
+          AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+          AND dp.estado_item != 'cancelado'
+          AND p.fecha_cierre >= ? AND p.fecha_cierre < DATE_ADD(?, INTERVAL 1 DAY)
+        GROUP BY CASE WHEN dp.es_platillo_dia = 1
+                      THEN COALESCE(pd.tipo, 'COMESTIBLES')
+                      ELSE COALESCE(cp.tipo, 'COMESTIBLES') END,
+                 cp.nombre
+    `, [desde, desde, desde, desde, prevDesde, hasta]);
+
+    // ── Serie mostrada: diaria si el alcance es corto, semanal si es largo ──
+    const agrupacion = dias > 45 ? 'semanal' : 'diaria';
+    let serie;
+    if (agrupacion === 'diaria') {
+        let ventaAnteriorDia = null;
+        serie = serieCruda.map(d => {
+            const fila = {
+                ...d,
+                etiqueta: `${d.dia_semana.charAt(0).toUpperCase() + d.dia_semana.slice(1)} ${d.dia.slice(8, 10)}/${d.dia.slice(5, 7)}`,
+                delta_pct: ventaAnteriorDia != null && ventaAnteriorDia > 0
+                    ? num(((d.venta - ventaAnteriorDia) / ventaAnteriorDia) * 100, 1) : null,
+                es_max: false
+            };
+            ventaAnteriorDia = d.venta;
+            return fila;
+        });
+    } else {
+        // Semanas ISO (lunes a domingo) dentro del alcance
+        const porSemana = new Map();
+        const orden = [];
+        for (const d of serieCruda) {
+            const lunes = isoDeUtc(utcDia(d.dia) - ((new Date(`${d.dia}T00:00:00Z`).getUTCDay() + 6) % 7) * DIA_MS);
+            if (!porSemana.has(lunes)) {
+                porSemana.set(lunes, { lunes, cuentas: 0, venta: 0 });
+                orden.push(lunes);
+            }
+            const acc = porSemana.get(lunes);
+            acc.cuentas += d.cuentas;
+            acc.venta += d.venta;
+        }
+        let ventaAnteriorSemana = null;
+        serie = orden.map(lunes => {
+            const acc = porSemana.get(lunes);
+            const fin = isoDeUtc(utcDia(lunes) + 6 * DIA_MS);
+            const fila = {
+                dia: lunes,
+                etiqueta: `Semana del ${lunes.slice(8, 10)}/${lunes.slice(5, 7)}${fin <= hasta ? ` al ${fin.slice(8, 10)}/${fin.slice(5, 7)}` : ''}`,
+                dia_semana: 'semana',
+                cuentas: num(acc.cuentas),
+                venta: num(acc.venta, 2),
+                delta_pct: ventaAnteriorSemana != null && ventaAnteriorSemana > 0
+                    ? num(((acc.venta - ventaAnteriorSemana) / ventaAnteriorSemana) * 100, 1) : null,
+                es_max: false
+            };
+            ventaAnteriorSemana = acc.venta;
+            return fila;
+        });
+    }
+    const maxVentaSerie = serie.reduce((m, d) => Math.max(m, d.venta), 0);
+    for (const d of serie) d.es_max = d.venta > 0 && d.venta === maxVentaSerie;
+
+    // ── Totales de caja: actual vs período anterior ──
+    const ventaCur = num(serieCruda.reduce((s, d) => s + d.venta, 0), 2);
+    const ventaPrev = num(serieAnterior.reduce((s, d) => s + d.venta, 0), 2);
+    const cuentasCur = num(serieCruda.reduce((s, d) => s + d.cuentas, 0));
+    const cuentasPrev = num(serieAnterior.reduce((s, d) => s + d.cuentas, 0));
+    const ticketCur = cuentasCur > 0 ? num(ventaCur / cuentasCur, 2) : 0;
+    const ticketPrev = cuentasPrev > 0 ? num(ventaPrev / cuentasPrev, 2) : 0;
+
+    // Ritmo del período: promedio diario de la 2.ª mitad vs 1.ª mitad
+    const mitad = Math.ceil(serieCruda.length / 2);
+    const prom = (arr) => arr.length ? arr.reduce((s, d) => s + d.venta, 0) / arr.length : 0;
+    const ritmoDelta = pctDelta(prom(serieCruda.slice(mitad)), prom(serieCruda.slice(0, mitad)));
+    const ritmo = {
+        delta_pct: ritmoDelta,
+        direccion: ritmoDelta == null ? 'sin-datos' : (ritmoDelta >= 5 ? 'acelerando' : (ritmoDelta <= -5 ? 'frenando' : 'estable'))
+    };
+
+    // ── Productos ──
+    const platillos = filasProd.map(f => {
+        const unidadesCur = num(f.unidades_cur, 0);
+        const unidadesPrev = num(f.unidades_prev, 0);
+        const ventaCurP = num(f.venta_cur, 2);
+        const ventaPrevP = num(f.venta_prev, 2);
+        const estado = estadoTendencia(unidadesCur, unidadesPrev);
+        return {
+            id: f.id_platillo,
+            es_dia: Number(f.es_platillo_dia) === 1,
+            nombre: f.nombre,
+            etiqueta: etiquetaTipo(f.tipo),
+            categoria: f.categoria || 'Sin categoría',
+            unidades_cur: unidadesCur,
+            unidades_prev: unidadesPrev,
+            venta_cur: ventaCurP,
+            venta_prev: ventaPrevP,
+            unidades_delta_pct: pctDelta(unidadesCur, unidadesPrev),
+            venta_delta_pct: pctDelta(ventaCurP, ventaPrevP),
+            estado,
+            tendencia: ETIQUETA_TENDENCIA[estado]
+        };
+    });
+
+    const ordenAlza = (a, b) => {
+        if (a.estado === 'nuevo' && b.estado !== 'nuevo') return -1;
+        if (b.estado === 'nuevo' && a.estado !== 'nuevo') return 1;
+        if (a.estado === 'nuevo' && b.estado === 'nuevo') return b.unidades_cur - a.unidades_cur;
+        return (b.unidades_delta_pct ?? -Infinity) - (a.unidades_delta_pct ?? -Infinity);
+    };
+    const ordenBaja = (a, b) => {
+        if (a.estado === 'sin-ventas' && b.estado !== 'sin-ventas') return -1;
+        if (b.estado === 'sin-ventas' && a.estado !== 'sin-ventas') return 1;
+        if (a.estado === 'sin-ventas' && b.estado === 'sin-ventas') return b.venta_prev - a.venta_prev;
+        return (a.unidades_delta_pct ?? -Infinity) - (b.unidades_delta_pct ?? -Infinity);
+    };
+
+    const alza = platillos.filter(p => p.estado === 'sube' || p.estado === 'nuevo').sort(ordenAlza).slice(0, 5);
+    const baja = platillos.filter(p => p.estado === 'baja' || p.estado === 'sin-ventas').sort(ordenBaja).slice(0, 5);
+
+    // ── Categorías y corte por tipo ──
+    const categorias = filasCat
+        .filter(f => f.categoria)
+        .map(f => {
+            const unidadesCur = num(f.unidades_cur, 0);
+            const unidadesPrev = num(f.unidades_prev, 0);
+            return {
+                etiqueta: f.categoria,
+                tipo: etiquetaTipo(f.tipo),
+                unidades_cur: unidadesCur,
+                unidades_prev: unidadesPrev,
+                venta_cur: num(f.venta_cur, 2),
+                venta_prev: num(f.venta_prev, 2),
+                unidades_delta_pct: pctDelta(unidadesCur, unidadesPrev),
+                estado: estadoTendencia(unidadesCur, unidadesPrev)
+            };
+        })
+        .sort((a, b) => (b.venta_cur + b.venta_prev) - (a.venta_cur + a.venta_prev))
+        .slice(0, 12);
+
+    const tipos = ['BEBIDAS', 'COMESTIBLES'].map(t => {
+        const filas = filasCat.filter(f => String(f.tipo || '').toUpperCase() === t);
+        const unidadesCur = num(filas.reduce((s, f) => s + Number(f.unidades_cur || 0), 0), 0);
+        const unidadesPrev = num(filas.reduce((s, f) => s + Number(f.unidades_prev || 0), 0), 0);
+        return {
+            etiqueta: t === 'BEBIDAS' ? 'Tragos' : 'Platillos',
+            unidades_cur: unidadesCur,
+            unidades_prev: unidadesPrev,
+            venta_cur: num(filas.reduce((s, f) => s + Number(f.venta_cur || 0), 0), 2),
+            venta_prev: num(filas.reduce((s, f) => s + Number(f.venta_prev || 0), 0), 2),
+            unidades_delta_pct: pctDelta(unidadesCur, unidadesPrev),
+            estado: estadoTendencia(unidadesCur, unidadesPrev)
+        };
+    }).filter(t => t.unidades_cur > 0 || t.unidades_prev > 0);
+
+    return {
+        desde,
+        hasta,
+        prevDesde,
+        prevHasta,
+        dias,
+        agrupacion,
+        serie,
+        serieMax: num(maxVentaSerie, 2),
+        platillos,
+        alza,
+        baja,
+        categorias,
+        tipos,
+        ritmo,
+        totales: {
+            venta: ventaCur,
+            venta_prev: ventaPrev,
+            venta_delta_pct: pctDelta(ventaCur, ventaPrev),
+            cuentas: cuentasCur,
+            cuentas_prev: cuentasPrev,
+            cuentas_delta_pct: pctDelta(cuentasCur, cuentasPrev),
+            ticket: ticketCur,
+            ticket_prev: ticketPrev,
+            ticket_delta_pct: pctDelta(ticketCur, ticketPrev),
+            unidades: num(platillos.reduce((s, p) => s + p.unidades_cur, 0), 0),
+            unidades_prev: num(platillos.reduce((s, p) => s + p.unidades_prev, 0), 0),
+            productos: platillos.length,
+            alza: platillos.filter(p => p.estado === 'sube' || p.estado === 'nuevo').length,
+            baja: platillos.filter(p => p.estado === 'baja' || p.estado === 'sin-ventas').length
+        }
+    };
+}
+
+/** CSV del reporte de tendencias: resumen, serie, tipos/categorías y productos. */
+function tendenciasACSV(reporte) {
+    const filas = [];
+    filas.push(`Tendencias de venta;${reporte.desde};a;${reporte.hasta};comparado con;${reporte.prevDesde};a;${reporte.prevHasta}`);
+    filas.push(`Granularidad;${reporte.agrupacion === 'semanal' ? 'Semanal' : 'Diaria'};Dias del periodo;${reporte.dias}`);
+    filas.push('');
+    filas.push('RESUMEN');
+    filas.push('Concepto;Actual;Anterior;Cambio %');
+    const t = reporte.totales;
+    filas.push(`Venta cobrada;${csvNum(t.venta)};${csvNum(t.venta_prev)};${t.venta_delta_pct != null ? csvNum(t.venta_delta_pct, 1) : ''}`);
+    filas.push(`Cuentas cobradas;${csvNum(t.cuentas, 0)};${csvNum(t.cuentas_prev, 0)};${t.cuentas_delta_pct != null ? csvNum(t.cuentas_delta_pct, 1) : ''}`);
+    filas.push(`Ticket promedio;${csvNum(t.ticket)};${csvNum(t.ticket_prev)};${t.ticket_delta_pct != null ? csvNum(t.ticket_delta_pct, 1) : ''}`);
+    filas.push(`Unidades vendidas;${csvNum(t.unidades, 0)};${csvNum(t.unidades_prev, 0)};`);
+    filas.push('');
+    filas.push(`SERIE ${reporte.agrupacion === 'semanal' ? 'SEMANAL' : 'DIARIA'}`);
+    filas.push('Periodo;Cuentas;Venta;Cambio % vs anterior');
+    for (const d of reporte.serie) {
+        filas.push([csvTexto(d.etiqueta), csvNum(d.cuentas, 0), csvNum(d.venta), d.delta_pct != null ? csvNum(d.delta_pct, 1) : ''].join(';'));
+    }
+    filas.push('');
+    filas.push('POR TIPO Y CATEGORIA');
+    filas.push('Nivel;Nombre;Unid. act.;Unid. ant.;Venta act.;Venta ant.;Cambio unidades %;Tendencia');
+    for (const tp of reporte.tipos) {
+        filas.push([csvTexto('Tipo'), csvTexto(tp.etiqueta), csvNum(tp.unidades_cur, 0), csvNum(tp.unidades_prev, 0),
+            csvNum(tp.venta_cur), csvNum(tp.venta_prev),
+            tp.unidades_delta_pct != null ? csvNum(tp.unidades_delta_pct, 1) : '', csvTexto(tp.tendencia || '')].join(';'));
+    }
+    for (const c of reporte.categorias) {
+        filas.push([csvTexto('Categoria'), csvTexto(c.etiqueta), csvNum(c.unidades_cur, 0), csvNum(c.unidades_prev, 0),
+            csvNum(c.venta_cur), csvNum(c.venta_prev),
+            c.unidades_delta_pct != null ? csvNum(c.unidades_delta_pct, 1) : '', csvTexto(ETIQUETA_TENDENCIA[c.estado] || '')].join(';'));
+    }
+    filas.push('');
+    filas.push('PRODUCTOS');
+    filas.push('Producto;Tipo;Categoria;Unid. act.;Unid. ant.;Venta act.;Venta ant.;Cambio unidades %;Tendencia');
+    for (const p of reporte.platillos) {
+        filas.push([
+            csvTexto(p.nombre), csvTexto(p.etiqueta), csvTexto(p.categoria),
+            csvNum(p.unidades_cur, 0), csvNum(p.unidades_prev, 0),
+            csvNum(p.venta_cur), csvNum(p.venta_prev),
+            p.unidades_delta_pct != null ? csvNum(p.unidades_delta_pct, 1) : '',
+            csvTexto(p.tendencia)
+        ].join(';'));
+    }
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
+// ── Generadores de CSV ───────────────────────────────────────────────────
 // Qué tragos y platillos se vendieron en un turno de servicio y qué
 // movimiento de inventario generaron (kardex por comanda cobrada).
 //
@@ -1138,6 +1516,7 @@ module.exports = {
     ventasPorHoras,
     ventasTurno,
     detallePlatilloTurno,
+    tendencias,
     normalizarRango,
     margenACSV,
     saludACSV,
@@ -1146,5 +1525,6 @@ module.exports = {
     consumoInsumosACSV,
     ventasHorasACSV,
     ventasTurnoACSV,
-    platilloTurnoACSV
+    platilloTurnoACSV,
+    tendenciasACSV
 };
