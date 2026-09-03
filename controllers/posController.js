@@ -429,7 +429,13 @@ module.exports = {
         }
     },
 
-    // Entregar todos los ítems de un pedido (Modo Servicio Directo)
+    // Entregar ítems de un pedido en lote.
+    //  · solo_listos = false (Servicio Directo): entrega TODO lo pendiente,
+    //    porque no hay monitores que validen la producción.
+    //  · solo_listos = true (monitores habilitados): entrega únicamente los
+    //    ítems que cocina/bar dejaron en 'listo'; lo que sigue en cola de
+    //    producción NO se toca. El pedido pasa a 'entregado' solo si no
+    //    quedan pendientes.
     apiEntregarTodos: async (req, res) => {
         try {
             const pedidoId = req.params.id_pedido || req.body.id_pedido;
@@ -439,18 +445,45 @@ module.exports = {
 
             if (!pool) return res.json({ success: true });
 
-            await pool.query(`
-                UPDATE detalles_pedido 
-                SET estado_item = 'entregado' 
+            const bruto = req.body ? req.body.solo_listos : false;
+            const soloListos = bruto === true || bruto === 'true' || bruto === 1 || bruto === '1';
+
+            const condicion = soloListos
+                ? "AND estado_item = 'listo'"
+                : "AND estado_item NOT IN ('entregado', 'cancelado')";
+
+            const [porEntregar] = await pool.query(
+                `SELECT id FROM detalles_pedido WHERE id_pedido = ? ${condicion}`,
+                [pedidoId]
+            );
+            const idsEntregados = porEntregar.map(f => f.id);
+
+            if (idsEntregados.length > 0) {
+                await pool.query(
+                    `UPDATE detalles_pedido SET estado_item = 'entregado' WHERE id IN (?)`,
+                    [idsEntregados]
+                );
+            }
+
+            // El estado del pedido solo avanza a 'entregado' cuando ya no
+            // queda nada pendiente de servir.
+            const [pendientes] = await pool.query(`
+                SELECT COUNT(*) AS total FROM detalles_pedido
                 WHERE id_pedido = ? AND estado_item NOT IN ('entregado', 'cancelado')
             `, [pedidoId]);
-
-            await pool.query("UPDATE pedidos SET estado_pedido = 'entregado' WHERE id = ?", [pedidoId]);
+            if (Number(pendientes[0]?.total || 0) === 0) {
+                await pool.query("UPDATE pedidos SET estado_pedido = 'entregado' WHERE id = ?", [pedidoId]);
+            }
 
             res.json({
                 success: true,
                 pedido_id: pedidoId,
-                message: 'Todos los productos han sido marcados como entregados.'
+                solo_listos: soloListos,
+                entregados: idsEntregados.length,
+                ids_entregados: idsEntregados,
+                message: soloListos
+                    ? `${idsEntregados.length} producto(s) listo(s) marcados como entregados.`
+                    : 'Todos los productos han sido marcados como entregados.'
             });
         } catch (err) {
             console.error('Error en apiEntregarTodos:', err);
@@ -1031,3 +1064,4 @@ module.exports = {
         }
     }
 };
+

@@ -4,6 +4,26 @@ const platilloDiaModel = require('../models/platilloDiaModel');
 const turnoService = require('../services/turnoService');
 const PrecioService = require('../services/precioService');
 const db = require('../config/db');
+const crypto = require('crypto');
+
+// ── Anti-duplicados de pre-pedidos ──────────────────────────────────────────
+// Hash estable del contenido de una solicitud y registro de las cargas
+// recibidas en los últimos segundos, para ignorar reenvíos idénticos.
+const hashSolicitud = (idMesa, items) => {
+  const normalizada = items
+    .map(i => `${i.esDia}|${i.idPlatillo}|${i.cantidad}|${String(i.notas || '').trim().toLowerCase()}`)
+    .sort()
+    .join('~');
+  return crypto.createHash('sha256').update(`${idMesa}#${normalizada}`).digest('hex').slice(0, 32);
+};
+const SOLICITUDES_RECIENTES = new Map(); // 'mesa:hash' → marca de tiempo
+const VENTANA_DEDUPE_MS = 20000;
+setInterval(() => {
+  const limite = Date.now() - VENTANA_DEDUPE_MS;
+  for (const [clave, ts] of SOLICITUDES_RECIENTES) {
+    if (ts < limite) SOLICITUDES_RECIENTES.delete(clave);
+  }
+}, 60000).unref();
 
 const ClienteController = {
   /**
@@ -107,6 +127,16 @@ const ClienteController = {
 
   /**
    * Guarda los ítems seleccionados en la tabla temporal 'pre_pedidos' vinculada a la mesa
+   *
+   * Anti-duplicados (en móvil es fácil tocar dos veces):
+   *  1. Ítems repetidos DENTRO de la misma solicitud se fusionan sumando
+   *     cantidad (mismo platillo, día y notas).
+   *  2. Ventana de idempotencia: si la MISMA carga (hash idéntico de la
+   *     lista completa) llega otra vez para la misma mesa dentro de 20 s,
+   *     se responde éxito sin volver a insertar. Cubre el doble toque en
+   *     "Confirmar" y los reintentos de red, sin bloquear pedidos
+   *     legítimos: un pedido nuevo se compone con otro contenido y su hash
+   *     es distinto.
    */
   async agregarAPreorden(req, res) {
     try {
@@ -119,13 +149,8 @@ const ClienteController = {
         return res.status(400).json({ success: false, message: 'No se enviaron ítems para procesar.' });
       }
 
-      const turnoActivo = await turnoService.obtenerTurnoActivo();
-      const pricingContext = await PrecioService.obtenerContextoCobro({
-        idMesa: id_mesa,
-        turnoId: turnoActivo ? turnoActivo.id : null
-      });
-      const values = [];
-
+      // 1) Fusionar ítems idénticos dentro de la misma solicitud
+      const fusion = new Map();
       for (const item of items) {
         const idPlatillo = item.id_platillo || item.id;
         const cantidad = parseInt(item.cantidad || 1, 10);
@@ -133,6 +158,37 @@ const ClienteController = {
         if (!idPlatillo || !Number.isInteger(cantidad) || cantidad <= 0) {
           return res.status(400).json({ success: false, message: 'Cada ítem debe tener un platillo y cantidad válidos.' });
         }
+        const notas = String(item.notas_especiales || item.notas || '').trim();
+        const clave = `${idPlatillo}|${esDia}|${notas.toLowerCase()}`;
+        const previo = fusion.get(clave);
+        if (previo) {
+          previo.cantidad += cantidad;
+        } else {
+          fusion.set(clave, { idPlatillo, cantidad, esDia, notas });
+        }
+      }
+
+      // 2) Ventana de idempotencia: la misma carga repetida no se inserta
+      const hash = hashSolicitud(id_mesa, [...fusion.values()]);
+      const claveDedupe = `${id_mesa}:${hash}`;
+      if (SOLICITUDES_RECIENTES.has(claveDedupe)) {
+        return res.json({
+          success: true,
+          duplicado: true,
+          message: 'El pre-pedido ya había sido recibido. No se duplicó nada.'
+        });
+      }
+
+      const turnoActivo = await turnoService.obtenerTurnoActivo();
+      const pricingContext = await PrecioService.obtenerContextoCobro({
+        idMesa: id_mesa,
+        turnoId: turnoActivo ? turnoActivo.id : null
+      });
+      const values = [];
+      const fusionados = [...fusion.values()];
+
+      for (const item of fusionados) {
+        const { idPlatillo, cantidad, esDia, notas } = item;
 
         let platillo;
         if (esDia) {
@@ -155,14 +211,15 @@ const ClienteController = {
         }
         if (!platillo) return res.status(400).json({ success: false, message: `El platillo ${idPlatillo} no está disponible.` });
         PrecioService.validarPrecioConfigurado(platillo, pricingContext);
-        values.push(id_mesa, idPlatillo, esDia, cantidad, item.notas_especiales || item.notas || null);
+        values.push(id_mesa, idPlatillo, esDia, cantidad, notas || null);
       }
 
-      const placeholders = items.map(() => '(?, ?, ?, ?, ?)').join(', ');
+      const placeholders = fusionados.map(() => '(?, ?, ?, ?, ?)').join(', ');
       await db.query(
         `INSERT INTO pre_pedidos (id_mesa, id_platillo, es_platillo_dia, cantidad, notas_especiales) VALUES ${placeholders}`,
         values
       );
+      SOLICITUDES_RECIENTES.set(claveDedupe, Date.now());
 
       return res.json({
         success: true,

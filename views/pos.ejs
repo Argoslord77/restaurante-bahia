@@ -386,21 +386,109 @@
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
         }
 
-        /* Botón de Notas del Ítem */
+        /* ── Operación táctil del carrito ─────────────────────────────
+           Los botones se operan mayormente en móvil: áreas de toque de
+           38-40 px (guía WCAG/Apple ≈ 44 px) y nombres controlados con
+           truncado para que nunca rompan la caja contenedora. */
+        .min-w-0 { min-width: 0 !important; }
+
+        .cart-row-nombre {
+            flex: 1 1 auto;
+            min-width: 0;          /* permite que el truncado funcione en flex */
+            overflow: hidden;
+        }
+        .cart-row-nombre .text-truncate {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+        .history-row-nombre {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .history-row-nombre .text-truncate {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+        .cart-row-acciones {
+            flex-shrink: 0;        /* los controles nunca se comprimen */
+        }
+        .cart-row-acciones .cart-item-total {
+            min-width: 52px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Botón de Notas del Ítem (38 px, área táctil) */
         .btn-cart-note {
-            width: 26px;
-            height: 26px;
-            border-radius: 6px;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
             background-color: #f1f5f9;
             border: 1px solid #e2e8f0;
-            color: #94a3b8;
+            color: #64748b;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
+            font-size: 15px;
             cursor: pointer;
             transition: all 0.15s ease;
             padding: 0;
+            flex-shrink: 0;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .cart-qty-group .cart-qty-btn {
+            min-width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #475569;
+            padding: 0;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .cart-qty-group .cart-qty-btn i { font-size: 13px; }
+        .cart-qty-group .cart-qty-btn:active { background-color: #f1f5f9; }
+        .cart-qty-group .cart-qty-val {
+            min-width: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            background-color: #fff;
+            padding: 0 2px;
+        }
+        .btn-remove-item {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            border: 1px solid transparent;
+            background-color: transparent;
+            color: #e11d48;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            cursor: pointer;
+            padding: 0;
+            flex-shrink: 0;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .btn-remove-item:hover {
+            background-color: #fff1f2;
+            border-color: #fecdd3;
+        }
+        #btn-deliver-all-direct { touch-action: manipulation; }
+        .btn-deliver-item {
+            font-size: 12.5px !important;
+            padding: 7px 16px !important;
+            touch-action: manipulation;
         }
         .btn-cart-note:hover {
             background-color: #e0f2fe;
@@ -581,20 +669,22 @@
 
         /* Botón de Cancelar Ítem en Historial */
         .btn-cancel-item {
-            width: 24px;
-            height: 24px;
-            border-radius: 6px;
+            width: 34px;
+            height: 34px;
+            border-radius: 9px;
             background-color: #fff1f2;
             border: 1px solid #fecdd3;
             color: #e11d48;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 14px;
             cursor: pointer;
             transition: all 0.15s ease;
             margin-right: 8px;
             padding: 0;
+            flex-shrink: 0;
+            touch-action: manipulation;
         }
         .btn-cancel-item:hover {
             background-color: #e11d48;
@@ -1024,14 +1114,17 @@
                     </button>
                     
                     <div id="history-collapse" class="p-2.5 bg-white border-top custom-scrollbar overflow-y-auto" style="display: none; max-height: 220px;">
-                        <% if (!monitoresHabilitados) { %>
-                            <div class="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom">
-                                <small class="text-muted font-bold" style="font-size: 11px;">Entregas de Servicio Directo</small>
-                                <button type="button" id="btn-deliver-all-direct" class="btn btn-xs btn-outline-success py-0 px-2 rounded-pill fw-bold" style="font-size: 10px;">
-                                    <i class="fa-solid fa-check-double me-1"></i> Entregar Todo
-                                </button>
-                            </div>
-                        <% } %>
+                        <% /* El botón masivo existe en ambos modos: con monitores entrega
+                              solo los ítems 'listo' que llegan de cocina/bar; en
+                              Servicio Directo entrega todo lo pendiente. */ %>
+                        <div class="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom">
+                            <small class="text-muted font-bold" style="font-size: 11px;" id="deliver-all-caption">
+                                <%= monitoresHabilitados ? 'Producción (Cocina / Bar)' : 'Entregas de Servicio Directo' %>
+                            </small>
+                            <button type="button" id="btn-deliver-all-direct" class="btn btn-xs btn-outline-success py-1 px-3 rounded-pill fw-bold" style="font-size: 12px; display: none;">
+                                <i class="fa-solid fa-check-double me-1"></i> <span id="lbl-deliver-all">Entregar</span>
+                            </button>
+                        </div>
                         <div id="history-wrapper"></div>
                     </div>
                 </div>
@@ -1964,22 +2057,22 @@
                     const row = document.createElement('div');
                     row.className = 'cart-item-row';
                     row.innerHTML = `
-                        <div class="d-flex align-items-center justify-content-between w-100">
-                            <div style="max-width: 48%;">
+                        <div class="d-flex align-items-center justify-content-between gap-2 w-100">
+                            <div class="cart-row-nombre">
                                 <span class="font-heading font-bold text-dark d-block text-truncate small">${escapeHtml(prod.nombre)}</span>
                                 <small class="text-muted font-digits font-bold">$${prod.precio.toFixed(2)}</small>
                             </div>
-                            <div class="d-flex align-items-center gap-1.5">
+                            <div class="d-flex align-items-center gap-1 cart-row-acciones">
                                 <button type="button" class="btn-cart-note ${prod.notas ? 'has-note' : ''} add-notes" data-id="${prod.id}" title="${prod.notas ? 'Modificar observaciones' : 'Agregar observaciones a cocina/barra'}">
                                     <i class="fa-solid ${prod.notas ? 'fa-pen-to-square' : 'fa-comment-medical'}"></i>
                                 </button>
-                                <div class="btn-group btn-group-sm border rounded bg-white shadow-xs">
-                                    <button class="btn btn-white border-0 px-2 text-secondary update-qty" data-id="${prod.id}" data-delta="-1"><i class="fa-solid fa-minus" style="font-size: 9px;"></i></button>
-                                    <span class="px-2 font-digits font-bold text-dark d-flex align-items-center bg-white" style="min-width:20px; justify-content:center;">${prod.cantidad}</span>
-                                    <button class="btn btn-white border-0 px-2 text-secondary update-qty" data-id="${prod.id}" data-delta="1"><i class="fa-solid fa-plus" style="font-size: 9px;"></i></button>
+                                <div class="btn-group cart-qty-group border rounded bg-white shadow-xs">
+                                    <button type="button" class="btn btn-white border-0 cart-qty-btn update-qty" data-id="${prod.id}" data-delta="-1" aria-label="Quitar uno"><i class="fa-solid fa-minus"></i></button>
+                                    <span class="cart-qty-val font-digits font-bold text-dark">${prod.cantidad}</span>
+                                    <button type="button" class="btn btn-white border-0 cart-qty-btn update-qty" data-id="${prod.id}" data-delta="1" aria-label="Agregar uno"><i class="fa-solid fa-plus"></i></button>
                                 </div>
-                                <span class="font-digits font-bold text-dark ms-1 small" style="min-width: 50px; text-align: right;">$${itemTotal.toFixed(2)}</span>
-                                <button class="btn btn-sm text-danger border-0 p-1 ms-0.5 remove-item" data-id="${prod.id}"><i class="fa-solid fa-trash-can"></i></button>
+                                <span class="font-digits font-bold text-dark small cart-item-total">$${itemTotal.toFixed(2)}</span>
+                                <button type="button" class="btn-remove-item remove-item" data-id="${prod.id}" aria-label="Quitar del carrito"><i class="fa-solid fa-trash-can"></i></button>
                             </div>
                         </div>
                         ${prod.notas ? `
@@ -2016,6 +2109,27 @@
             document.getElementById('history-servidos-count').textContent = totalServidos;
             document.getElementById('history-pendientes-count').textContent = totalPendientes;
 
+            // Botón masivo "Entregar": visible en ambos modos. Con monitores de
+            // producción entrega únicamente los ítems que cocina/bar marcó
+            // 'listo'; en Servicio Directo entrega todo lo pendiente.
+            const entregables = historicoDetalles.filter(item => {
+                const e = (item.estado || '').toLowerCase().trim();
+                if (e === 'cancelado' || e === 'entregado') return false;
+                return MONITORES_HABILITADOS ? e === 'listo' : true;
+            });
+            const btnDeliverAll = document.getElementById('btn-deliver-all-direct');
+            if (btnDeliverAll) {
+                const etiqueta = document.getElementById('lbl-deliver-all');
+                if (entregables.length > 0) {
+                    btnDeliverAll.style.display = '';
+                    if (etiqueta) {
+                        etiqueta.textContent = `${MONITORES_HABILITADOS ? 'Entregar listos' : 'Entregar Todo'} (${entregables.length})`;
+                    }
+                } else {
+                    btnDeliverAll.style.display = 'none';
+                }
+            }
+
             if (historicoDetalles.length === 0) {
                 wrapper.innerHTML = `
                     <div class="text-center py-2 text-muted small">
@@ -2043,7 +2157,7 @@
                     botonAccion = `
                         <button type="button" 
                                 data-id="${item.id_detalle}" 
-                                class="btn btn-sm btn-success py-0 px-2 fw-bold btn-deliver-item rounded-pill" style="font-size: 11px;">
+                                class="btn btn-success fw-bold btn-deliver-item rounded-pill">
                             <i class="fa-solid fa-check me-1"></i> Entregar
                         </button>
                     `;
@@ -2068,12 +2182,12 @@
                 const row = document.createElement('div');
                 row.className = `p-2 mb-1.5 border rounded bg-white ${estadoLimpio === 'cancelado' ? 'opacity-50' : ''}`;
                 row.innerHTML = `
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div class="pe-2" style="max-width: 62%;">
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <div class="history-row-nombre pe-1">
                             <span class="font-heading font-bold text-dark small d-block text-truncate ${estadoLimpio === 'cancelado' ? 'text-decoration-line-through' : ''}">${escapeHtml(item.nombre)}</span>
                             <small class="text-muted font-digits">x${item.cantidad} ($${item.precio.toFixed(2)})</small>
                         </div>
-                        <div class="text-end">
+                        <div class="text-end flex-shrink-0">
                             <div class="d-flex align-items-center justify-content-end mb-1">
                                 ${btnCancelar}
                                 <span class="font-digits font-bold text-dark small ${estadoLimpio === 'cancelado' ? 'text-decoration-line-through' : ''}">$${itemTotal.toFixed(2)}</span>
@@ -2112,25 +2226,41 @@
             const idPedido = document.getElementById('pos_id_pedido').value;
             if (!idPedido || idPedido == 0) return;
 
+            // Con monitores de producción solo se entregan los ítems que
+            // cocina/bar ya dejaron 'listo'; en Servicio Directo, todo lo
+            // pendiente (comportamiento histórico del botón).
+            const soloListos = MONITORES_HABILITADOS;
+
             try {
                 const response = await fetch(`/api/pos/entregar-todos/${idPedido}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ solo_listos: soloListos })
                 });
                 const data = await response.json();
 
                 if (data.success) {
+                    const idsEntregados = Array.isArray(data.ids_entregados) ? data.ids_entregados.map(Number) : null;
+                    let afectados = 0;
                     historicoDetalles.forEach(it => {
-                        if (it.estado !== 'cancelado') it.estado = 'entregado';
+                        const e = (it.estado || '').toLowerCase().trim();
+                        if (e === 'cancelado') return;
+                        const aplica = soloListos ? e === 'listo' : (e !== 'entregado');
+                        if (!aplica) return;
+                        if (idsEntregados && !idsEntregados.includes(Number(it.id_detalle))) return;
+                        it.estado = 'entregado';
+                        afectados++;
                     });
                     renderHistory();
-                    Swal.fire({
+                    const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1800 });
+                    Toast.fire({
                         icon: 'success',
-                        title: '¡Todos entregados!',
-                        text: 'Todos los productos han sido marcados como servidos.',
-                        timer: 1500,
-                        showConfirmButton: false
+                        title: soloListos
+                            ? `${data.entregados != null ? data.entregados : afectados} producto(s) listo(s) entregado(s)`
+                            : 'Todos los productos fueron entregados'
                     });
+                } else {
+                    Swal.fire('Error', data.message || 'No se pudo completar la entrega.', 'error');
                 }
             } catch (err) {
                 Swal.fire('Error de red', 'No se pudo completar la entrega.', 'error');
@@ -2707,5 +2837,15 @@
         iniciarPollingItemsListos();
         window.addEventListener('beforeunload', detenerPollingItemsListos);
     </script>
+
+    <% /* Alertas de salón (pre-pedidos, llamadas y cierres) también dentro del
+          POS: el dependiente no puede perder avisos por estar capturando una
+          comanda. En modo visualización las atiende el mesero supervisado. */ %>
+    <% if (!(typeof soloVisualizacion !== 'undefined' && soloVisualizacion)) { %>
+    <script src="/js/alertas-clientes.js"></script>
+    <script>
+        if (window.AlertasClientes) AlertasClientes.init();
+    </script>
+    <% } %>
 </body>
 </html>

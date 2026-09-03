@@ -946,7 +946,13 @@
 
     const btnConfirm = document.getElementById('btnConfirmOrder');
     if (btnConfirm) {
+      // Candado anti doble envío: en móvil un segundo toque llega mientras
+      // la primera petición sigue en vuelo. El servidor además aplica su
+      // propia ventana de idempotencia (mismo contenido = no se duplica).
+      let enviandoPrepedido = false;
       btnConfirm.addEventListener('click', async () => {
+        if (enviandoPrepedido) return;
+
         const ids = Object.keys(cart);
         if (ids.length === 0) {
           showToast('Selecciona al menos un ítem');
@@ -959,6 +965,8 @@
           notas_especiales: ''
         }));
 
+        enviandoPrepedido = true;
+        btnConfirm.disabled = true;
         try {
           if (typeof Swal !== 'undefined') {
             Swal.fire({
@@ -994,6 +1002,9 @@
         } catch (err) {
           console.error(err);
           showToast('Error de conexión al enviar la orden');
+        } finally {
+          enviandoPrepedido = false;
+          btnConfirm.disabled = false;
         }
       });
     }

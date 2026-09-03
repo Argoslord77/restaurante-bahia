@@ -63,7 +63,10 @@ router.get('/api/pos/items-listos/:id_pedido', posController.getItemsListos);
 // Obtener monedas y tasas vigentes del turno activo para el modal de cobro POS
 router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'dependiente']), turnoController.obtenerMonedasTurnoActivo);
 
-router.get('/pos/alertas-pendientes', asegurarTurnoActivo, posController.obtenerAlertasPendientes);
+// Sondeo de alertas de salón (pre-pedidos, llamadas y cierres): protegido
+// por sesión y limitado al personal de servicio; lo consumen el panel del
+// dependiente y el POS.
+router.get('/pos/alertas-pendientes', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'dependiente', 'capitan']), asegurarTurnoActivo, posController.obtenerAlertasPendientes);
 
 router.post('/pos/notificaciones/:id/leer', asegurarTurnoActivo, posController.marcarNotificacionLeida);
 
