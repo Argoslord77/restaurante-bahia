@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Ventas y Consumo del Turno - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Ventas y Consumo del Turno', desc_pagina: 'Tragos y platillos vendidos en el turno de servicio y el movimiento de inventario que generaron al cobrarse. Use el detalle de cada trago/platillo para ver sus comandas, receta y kardex.', add_btn: false}) %>
+
+                <% const fmtMoneda = (v) => (v == null ? '—' : '$' + Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); %>
+                <% const fmtNum = (v, dec = 0) => (v == null ? '—' : Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec })); %>
+                <% const fmtFecha = (f) => (f ? new Date(f).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'); %>
+                <% const qsTurno = reporte.turnoSeleccionado ? '&turno=' + reporte.turnoSeleccionado : ''; %>
+
+                <!-- Filtro por turno -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-4 bg-white">
+                    <form method="get" action="/admin/reportes/ventas-turno" class="row g-2 align-items-end">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small text-muted fw-semibold mb-1">Turno de servicio</label>
+                            <select name="turno" class="form-select form-select-sm">
+                                <option value="">Todos los turnos recientes</option>
+                                <% reporte.turnos.forEach(t => { %>
+                                    <option value="<%= t.id %>" <%= reporte.turnoSeleccionado === t.id ? 'selected' : '' %>>
+                                        #<%= t.id %> · <%= t.nombre %> (<%= fmtFecha(t.fecha_apertura) %><%= t.fecha_cierre ? ' → ' + fmtFecha(t.fecha_cierre) : ', en curso' %>)
+                                    </option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2 d-grid">
+                            <button type="submit" class="btn btn-dark btn-sm fw-semibold py-2">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Filtrar
+                            </button>
+                        </div>
+                        <div class="col-12 col-md-6 d-flex justify-content-md-end gap-2">
+                            <a href="/admin/reportes/ventas-turno/exportar?<%= reporte.turnoSeleccionado ? 'turno=' + reporte.turnoSeleccionado : '' %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
+                            </a>
+                            <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                            </button>
+                        </div>
+                    </form>
+                    <% if (reporte.turno) { %>
+                        <div class="mt-2 small text-muted">
+                            <i class="fa-solid fa-circle-info me-1"></i>
+                            Turno <strong>#<%= reporte.turno.id %></strong> abierto por <%= reporte.turno.nombre %> el <%= fmtFecha(reporte.turno.fecha_apertura) %>.
+                            <% if (reporte.turno.fecha_cierre) { %>
+                                Cerrado el <%= fmtFecha(reporte.turno.fecha_cierre) %>.
+                            <% } else { %>
+                                <span class="badge text-bg-success ms-1">en curso</span>
+                            <% } %>
+                        </div>
+                    <% } %>
+                </div>
+
+                <% if (!reporte.incluirInventario) { %>
+                    <div class="alert alert-warning border shadow-sm rounded py-2 px-3 small d-flex align-items-center gap-2" role="note">
+                        <i class="fa-solid fa-lock text-warning"></i>
+                        <span>
+                            <strong>Movimiento de inventario no disponible:</strong> la licencia de esta instalación no incluye la función <code>inventario</code>.
+                            Se muestran las ventas y el costo teórico de recetas; el consumo real del kardex requiere esa función.
+                        </span>
+                    </div>
+                <% } %>
+
+                <!-- Indicadores del alcance -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-dark border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Venta del alcance</h6>
+                            <h3 class="fw-bold mb-0"><%= fmtMoneda(reporte.totales.venta) %></h3>
+                            <small class="text-muted"><%= fmtNum(reporte.totales.cuentas) %> cuentas cobradas</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-info border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Tragos vendidos</h6>
+                            <h3 class="fw-bold mb-0 text-info"><%= fmtNum(reporte.totales.tragos) %></h3>
+                            <small class="text-muted">bebidas del turno</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-success border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Platillos vendidos</h6>
+                            <h3 class="fw-bold mb-0 text-success"><%= fmtNum(reporte.totales.platillos_comestibles) %></h3>
+                            <small class="text-muted">comestibles del turno</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start <%= reporte.incluirInventario ? 'border-warning' : 'border-secondary' %> border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Costo de inventario</h6>
+                            <% if (reporte.incluirInventario) { %>
+                                <h3 class="fw-bold mb-0 text-warning"><%= fmtMoneda(reporte.totales.costo_real) %></h3>
+                                <small class="text-muted">
+                                    real del kardex · teórico <%= fmtMoneda(reporte.totales.costo_teorico) %>
+                                </small>
+                            <% } else { %>
+                                <h3 class="fw-bold mb-0 text-secondary"><%= fmtMoneda(reporte.totales.costo_teorico) %></h3>
+                                <small class="text-muted">teórico según recetas</small>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tragos y platillos vendidos -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2 flex-wrap">
+                        <i class="fa-solid fa-utensils text-dark"></i>
+                        <h6 class="fw-bold mb-0">Tragos y platillos vendidos</h6>
+                        <span class="badge text-bg-dark ms-auto"><%= reporte.platillos.length %> productos</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Trago / Platillo</th>
+                                    <th class="py-3 text-end">Unid.</th>
+                                    <th class="py-3 text-end">Cuentas</th>
+                                    <th class="py-3 text-end">Venta</th>
+                                    <th class="py-3 text-end">Insumos (receta)</th>
+                                    <th class="py-3 text-end">Costo teórico</th>
+                                    <% if (reporte.incluirInventario) { %>
+                                        <th class="py-3 text-end">Consumo real (kardex)</th>
+                                        <th class="py-3 text-center">Desviación</th>
+                                    <% } %>
+                                    <th class="py-3 text-end pe-4"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% reporte.platillos.forEach(p => { %>
+                                    <% const desvPct = (p.desviacion != null && p.costo_teorico > 0) ? Math.round((p.desviacion / p.costo_teorico) * 1000) / 10 : null;
+                                       const claseDesv = desvPct == null ? 'secondary' : (Math.abs(desvPct) <= 5 ? 'success' : (Math.abs(desvPct) <= 15 ? 'warning' : 'danger')); %>
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge text-bg-<%= p.etiqueta === 'Trago' ? 'info' : 'secondary' %>" style="font-size:.6rem"><%= p.etiqueta %></span>
+                                                <span class="fw-semibold"><%= p.nombre %></span>
+                                            </div>
+                                            <small class="text-muted d-block"><%= p.categoria %></small>
+                                        </td>
+                                        <td class="text-end fw-semibold"><%= fmtNum(p.unidades) %></td>
+                                        <td class="text-end"><%= fmtNum(p.cuentas) %></td>
+                                        <td class="text-end fw-semibold"><%= fmtMoneda(p.venta) %></td>
+                                        <td class="text-end">
+                                            <% if (p.tiene_receta) { %>
+                                                <%= fmtNum(p.insumos_teoricos) %> <small class="text-muted">insumos</small>
+                                            <% } else { %>
+                                                <span class="badge text-bg-light text-secondary border" style="font-size:.6rem">sin receta · no descuenta</span>
+                                            <% } %>
+                                        </td>
+                                        <td class="text-end"><%= fmtMoneda(p.costo_teorico) %></td>
+                                        <% if (reporte.incluirInventario) { %>
+                                            <td class="text-end"><%= fmtMoneda(p.costo_real) %></td>
+                                            <td class="text-center">
+                                                <span class="badge text-bg-<%= claseDesv %>"><%= p.desviacion != null ? (p.desviacion > 0 ? '+' : '') + fmtMoneda(p.desviacion) : '—' %></span>
+                                            </td>
+                                        <% } %>
+                                        <td class="text-end pe-4">
+                                            <a class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark"
+                                               href="/admin/reportes/ventas-turno/platillo/<%= p.id %>?origen=<%= p.es_dia ? 'dia' : 'menu' %><%= qsTurno %>">
+                                                <i class="fa-solid fa-magnifying-glass-chart me-1"></i> Detalle
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                                <% if (reporte.platillos.length === 0) { %>
+                                    <tr><td colspan="<%= reporte.incluirInventario ? 9 : 7 %>" class="text-center text-muted py-4">Sin ventas cobradas para el filtro seleccionado.</td></tr>
+                                <% } %>
+                            </tbody>
+                            <% if (reporte.platillos.length > 0) { %>
+                            <tfoot class="table-light fw-semibold">
+                                <tr>
+                                    <td class="ps-4 py-2">TOTALES</td>
+                                    <td class="text-end py-2"><%= fmtNum(reporte.totales.unidades) %></td>
+                                    <td class="text-end py-2"><%= fmtNum(reporte.totales.cuentas) %></td>
+                                    <td class="text-end py-2"><%= fmtMoneda(reporte.totales.venta) %></td>
+                                    <td></td>
+                                    <td class="text-end py-2"><%= fmtMoneda(reporte.totales.costo_teorico) %></td>
+                                    <% if (reporte.incluirInventario) { %>
+                                        <td class="text-end py-2"><%= fmtMoneda(reporte.totales.costo_real) %></td>
+                                        <td class="text-center py-2">
+                                            <span class="badge text-bg-<%= Math.abs(reporte.totales.desviacion) <= (reporte.totales.costo_teorico * 0.15) ? 'success' : 'danger' %>"><%= (reporte.totales.desviacion > 0 ? '+' : '') + fmtMoneda(reporte.totales.desviacion) %></span>
+                                        </td>
+                                    <% } %>
+                                    <td class="pe-4"></td>
+                                </tr>
+                            </tfoot>
+                            <% } %>
+                        </table>
+                    </div>
+                    <% if (reporte.incluirInventario && reporte.platillos.length > 0) { %>
+                        <div class="px-4 pb-3 pt-1">
+                            <small class="text-muted">
+                                <i class="fa-solid fa-circle-info me-1"></i>
+                                El kardex registra el consumo por comanda: el consumo real atribuido a cada platillo suma los descuentos de las cuentas que lo incluyeron, que pueden traer otros productos también.
+                            </small>
+                        </div>
+                    <% } %>
+                </div>
+
+                <% if (reporte.incluirInventario) { %>
+                <!-- Movimiento de inventario -->
+                <div class="row g-3 mb-4">
+                    <% if (reporte.movimientosTurno) { %>
+                        <div class="col-12 col-xl-6">
+                            <div class="card border-0 shadow-sm rounded bg-white h-100">
+                                <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                    <i class="fa-solid fa-arrows-turn-to-dots text-dark"></i>
+                                    <h6 class="fw-bold mb-0">Movimiento de inventario del turno</h6>
+                                    <span class="badge text-bg-dark ms-auto"><%= reporte.movimientosTurno.totales.movimientos %> movs.</span>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="ps-4 py-3">Tipo de movimiento</th>
+                                                <th class="py-3 text-end">Movs.</th>
+                                                <th class="py-3 text-end">Productos</th>
+                                                <th class="py-3 text-end pe-4">Costo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <% reporte.movimientosTurno.resumenTipos.forEach(m => { %>
+                                                <tr>
+                                                    <td class="ps-4"><%= m.etiqueta %></td>
+                                                    <td class="text-end"><%= fmtNum(m.movimientos) %></td>
+                                                    <td class="text-end"><%= fmtNum(m.productos) %></td>
+                                                    <td class="text-end pe-4 fw-semibold"><%= fmtMoneda(m.costo_total) %></td>
+                                                </tr>
+                                            <% }) %>
+                                            <% if (reporte.movimientosTurno.resumenTipos.length === 0) { %>
+                                                <tr><td colspan="4" class="text-center text-muted py-4">Sin movimientos en la ventana del turno.</td></tr>
+                                            <% } %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="px-4 pb-3 pt-1 small text-muted">
+                                    Ventana del turno: <%= fmtFecha(reporte.movimientosTurno.desde) %> → <%= reporte.movimientosTurno.hasta && reporte.turno && reporte.turno.fecha_cierre ? fmtFecha(reporte.movimientosTurno.hasta) : 'ahora' %>.
+                                    Incluye ventas, mermas, transferencias y demás movimiento físico del almacén en el período.
+                                </div>
+                            </div>
+                        </div>
+                    <% } %>
+                    <div class="col-12 <%= reporte.movimientosTurno ? 'col-xl-6' : '' %>">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-boxes-packing text-dark"></i>
+                                <h6 class="fw-bold mb-0">Consumo real por insumo (kardex de ventas)</h6>
+                                <span class="badge text-bg-dark ms-auto"><%= reporte.insumos.length %> insumos</span>
+                            </div>
+                            <div class="table-responsive" style="max-height: 420px;">
+                                <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Insumo</th>
+                                            <th class="py-3 text-end">Cantidad</th>
+                                            <th class="py-3 text-end">Movs.</th>
+                                            <th class="py-3 text-end">Comandas</th>
+                                            <th class="py-3 text-end pe-4">Costo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% reporte.insumos.slice(0, 100).forEach(i => { %>
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <span class="fw-semibold"><%= i.insumo %></span>
+                                                    <small class="text-muted d-block font-monospace"><%= i.codigo || '—' %> · <%= i.unidad || '' %></small>
+                                                </td>
+                                                <td class="text-end"><%= fmtNum(i.cantidad, 3) %></td>
+                                                <td class="text-end"><%= fmtNum(i.movimientos) %></td>
+                                                <td class="text-end"><%= fmtNum(i.comandas) %></td>
+                                                <td class="text-end pe-4 fw-semibold"><%= fmtMoneda(i.costo) %></td>
+                                            </tr>
+                                        <% }) %>
+                                        <% if (reporte.insumos.length === 0) { %>
+                                            <tr><td colspan="5" class="text-center text-muted py-4">Sin consumo de inventario registrado.</td></tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <% } %>
+
+                <!-- Cuentas del turno -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-receipt text-dark"></i>
+                        <h6 class="fw-bold mb-0">Cuentas cobradas y su movimiento</h6>
+                        <span class="badge text-bg-dark ms-auto"><%= reporte.cuentas.length %> cuentas</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Pedido</th>
+                                    <th class="py-3">Mesa</th>
+                                    <th class="py-3">Mesero</th>
+                                    <th class="py-3">Cobrada</th>
+                                    <th class="py-3">Estado</th>
+                                    <th class="py-3 text-end">Unid.</th>
+                                    <th class="py-3 text-end">Venta</th>
+                                    <% if (reporte.incluirInventario) { %>
+                                        <th class="py-3 text-end">Movs. inventario</th>
+                                        <th class="py-3 text-end pe-4">Costo descontado</th>
+                                    <% } %>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% reporte.cuentas.slice(0, 200).forEach(c => { %>
+                                    <tr>
+                                        <td class="ps-4 fw-semibold">#<%= c.id %></td>
+                                        <td>Mesa <%= c.mesa %></td>
+                                        <td><%= c.mesero %></td>
+                                        <td><%= fmtFecha(c.fecha_cierre || c.creado_en) %></td>
+                                        <td>
+                                            <span class="badge text-bg-<%= c.estado_pago === 'pagado' ? 'success' : (c.estado_pago === 'cortesia' ? 'warning' : 'primary') %>" style="font-size:.6rem"><%= c.estado_pago %></span>
+                                        </td>
+                                        <td class="text-end"><%= fmtNum(c.unidades) %></td>
+                                        <td class="text-end fw-semibold"><%= fmtMoneda(c.venta) %></td>
+                                        <% if (reporte.incluirInventario) { %>
+                                            <td class="text-end">
+                                                <%= c.movimientos != null ? fmtNum(c.movimientos) : '—' %>
+                                                <% if (c.movimientos === 0) { %><i class="fa-solid fa-triangle-exclamation text-warning ms-1" title="La cuenta no generó descuentos de inventario"></i><% } %>
+                                            </td>
+                                            <td class="text-end pe-4"><%= fmtMoneda(c.costo_descontado) %></td>
+                                        <% } %>
+                                    </tr>
+                                <% }) %>
+                                <% if (reporte.cuentas.length === 0) { %>
+                                    <tr><td colspan="<%= reporte.incluirInventario ? 9 : 7 %>" class="text-center text-muted py-4">Sin cuentas cobradas para el filtro seleccionado.</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>

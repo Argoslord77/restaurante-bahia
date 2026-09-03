@@ -106,3 +106,27 @@ describe('Huella del equipo · comparación ponderada', () => {
         expect(Huella.comparar(h, 70).coincide).toBe(true);
     });
 });
+
+describe('Licencia · funciones contratadas', () => {
+    const { tieneFuncion } = require('./licenciaService');
+
+    it('sin sistema de licencias (instalación dormida) no restringe nada', () => {
+        expect(tieneFuncion(null, 'inventario')).toBe(true);
+        expect(tieneFuncion({ estado: 'NO_CONFIGURADA', licencia: null }, 'inventario')).toBe(true);
+    });
+
+    it('una licencia sin lista de funciones no restringe nada', () => {
+        expect(tieneFuncion({ licencia: { id: 'LIC-1', funciones: [] } }, 'inventario')).toBe(true);
+        expect(tieneFuncion({ licencia: { id: 'LIC-1' } }, 'inventario')).toBe(true);
+    });
+
+    it('con lista declarada, la función debe venir incluida', () => {
+        const evaluacion = { licencia: { id: 'LIC-1', funciones: ['pos', 'inventario', 'costeo'] } };
+        expect(tieneFuncion(evaluacion, 'inventario')).toBe(true);
+        expect(tieneFuncion(evaluacion, 'auditoria')).toBe(false);
+    });
+
+    it('la comparación no distingue mayúsculas', () => {
+        expect(tieneFuncion({ licencia: { funciones: ['POS', 'Inventario'] } }, 'INVENTARIO')).toBe(true);
+    });
+});

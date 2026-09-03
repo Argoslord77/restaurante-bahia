@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Detalle de venta - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Detalle de ' + detalle.platillo.etiqueta.toLowerCase() + ': ' + detalle.platillo.nombre, desc_pagina: 'Ventas del trago/platillo en el turno y el movimiento de inventario correspondiente: receta, consumo real del kardex y comandas que lo generaron.', add_btn: false}) %>
+
+                <% const fmtMoneda = (v) => (v == null ? '—' : '$' + Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); %>
+                <% const fmtNum = (v, dec = 0) => (v == null ? '—' : Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec })); %>
+                <% const fmtFecha = (f) => (f ? new Date(f).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'); %>
+                <% const qsTurno = detalle.turnoSeleccionado ? '&turno=' + detalle.turnoSeleccionado : ''; %>
+
+                <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+                    <a href="/admin/reportes/ventas-turno<%= detalle.turnoSeleccionado ? '?turno=' + detalle.turnoSeleccionado : '' %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                        <i class="fa-solid fa-arrow-left me-1"></i> Volver al reporte del turno
+                    </a>
+                    <a href="/admin/reportes/ventas-turno/platillo/<%= detalle.platillo.id %>/exportar?origen=<%= detalle.platillo.es_platillo_dia ? 'dia' : 'menu' %><%= qsTurno %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                        <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
+                    </a>
+                </div>
+
+                <!-- Filtro por turno -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-4 bg-white">
+                    <form method="get" action="/admin/reportes/ventas-turno/platillo/<%= detalle.platillo.id %>" class="row g-2 align-items-end">
+                        <input type="hidden" name="origen" value="<%= detalle.platillo.es_platillo_dia ? 'dia' : 'menu' %>">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small text-muted fw-semibold mb-1">Turno de servicio</label>
+                            <select name="turno" class="form-select form-select-sm">
+                                <option value="">Todos los turnos recientes</option>
+                                <% detalle.turnos.forEach(t => { %>
+                                    <option value="<%= t.id %>" <%= detalle.turnoSeleccionado === t.id ? 'selected' : '' %>>
+                                        #<%= t.id %> · <%= t.nombre %> (<%= fmtFecha(t.fecha_apertura) %><%= t.fecha_cierre ? ' → ' + fmtFecha(t.fecha_cierre) : ', en curso' %>)
+                                    </option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2 d-grid">
+                            <button type="submit" class="btn btn-dark btn-sm fw-semibold py-2">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Filtrar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <% if (!detalle.incluirInventario) { %>
+                    <div class="alert alert-warning border shadow-sm rounded py-2 px-3 small d-flex align-items-center gap-2" role="note">
+                        <i class="fa-solid fa-lock text-warning"></i>
+                        <span>
+                            <strong>Movimiento de inventario no disponible:</strong> la licencia de esta instalación no incluye la función <code>inventario</code>.
+                            Se muestran las ventas y el consumo teórico de la receta; el kardex real requiere esa función.
+                        </span>
+                    </div>
+                <% } %>
+
+                <!-- Ficha del platillo -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-body p-4 d-flex align-items-center gap-3 flex-wrap">
+                        <div class="bg-dark-subtle text-dark p-3 rounded-circle flex-shrink-0">
+                            <i class="fa-solid fa-<%= detalle.platillo.etiqueta === 'Trago' ? 'martini-glass-citrus' : 'bowl-food' %> fs-4"></i>
+                        </div>
+                        <div class="me-auto">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <h5 class="fw-bold mb-0 text-dark"><%= detalle.platillo.nombre %></h5>
+                                <span class="badge text-bg-<%= detalle.platillo.etiqueta === 'Trago' ? 'info' : 'secondary' %>" style="font-size:.65rem"><%= detalle.platillo.etiqueta %></span>
+                                <% if (detalle.platillo.es_platillo_dia) { %>
+                                    <span class="badge text-bg-warning" style="font-size:.65rem">platillo del día</span>
+                                <% } %>
+                            </div>
+                            <small class="text-muted">
+                                <%= detalle.platillo.categoria %> · precio actual <%= fmtMoneda(detalle.platillo.precio) %>
+                                · <%= detalle.tiene_receta ? 'con receta activa' : 'sin receta activa (no descuenta inventario)' %>
+                            </small>
+                        </div>
+                        <div class="text-md-end">
+                            <small class="text-muted d-block fs-7">Alcance</small>
+                            <strong><%= detalle.turno ? 'Turno #' + detalle.turno.id : 'Todos los turnos recientes' %></strong>
+                            <% if (detalle.turno) { %>
+                                <small class="text-muted d-block"><%= fmtFecha(detalle.turno.fecha_apertura) %> → <%= detalle.turno.fecha_cierre ? fmtFecha(detalle.turno.fecha_cierre) : 'en curso' %></small>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicadores -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-dark border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Unidades vendidas</h6>
+                            <h3 class="fw-bold mb-0"><%= fmtNum(detalle.unidades) %></h3>
+                            <small class="text-muted"><%= fmtNum(detalle.totales.lineas) %> líneas de venta</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-success border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Venta</h6>
+                            <h3 class="fw-bold mb-0 text-success"><%= fmtMoneda(detalle.venta) %></h3>
+                            <small class="text-muted">cuentas cobradas</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-info border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Consumo teórico</h6>
+                            <h3 class="fw-bold mb-0 text-info"><%= fmtMoneda(detalle.totales.costo_teorico) %></h3>
+                            <small class="text-muted">receta × unidades vendidas</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start <%= detalle.incluirInventario ? 'border-warning' : 'border-secondary' %> border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Consumo real (kardex)</h6>
+                            <% if (detalle.incluirInventario) { %>
+                                <h3 class="fw-bold mb-0 text-warning"><%= fmtMoneda(detalle.totales.costo_real) %></h3>
+                                <small class="text-muted">
+                                    desviación <%= (detalle.totales.desviacion > 0 ? '+' : '') + fmtMoneda(detalle.totales.desviacion) %>
+                                </small>
+                            <% } else { %>
+                                <h3 class="fw-bold mb-0 text-secondary">—</h3>
+                                <small class="text-muted">requiere función <code>inventario</code></small>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ventas por comanda -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-receipt text-dark"></i>
+                        <h6 class="fw-bold mb-0">Ventas por comanda</h6>
+                        <span class="badge text-bg-dark ms-auto"><%= detalle.lineas.length %> líneas</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Pedido</th>
+                                    <th class="py-3">Mesa</th>
+                                    <th class="py-3">Mesero</th>
+                                    <th class="py-3">Cobrada</th>
+                                    <th class="py-3 text-end">Cantidad</th>
+                                    <th class="py-3 text-end">Precio unit.</th>
+                                    <th class="py-3 text-end">Importe</th>
+                                    <th class="py-3 pe-4">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% detalle.lineas.forEach(l => { %>
+                                    <tr>
+                                        <td class="ps-4 fw-semibold">#<%= l.pedido_id %></td>
+                                        <td>Mesa <%= l.mesa %></td>
+                                        <td><%= l.mesero %><% if (l.notas_especiales) { %><small class="text-muted d-block"><i class="fa-solid fa-comment-dots me-1"></i><%= l.notas_especiales %></small><% } %></td>
+                                        <td><%= fmtFecha(l.fecha_cierre || l.creado_en) %></td>
+                                        <td class="text-end fw-semibold"><%= fmtNum(l.cantidad) %></td>
+                                        <td class="text-end"><%= fmtMoneda(l.precio_unitario) %></td>
+                                        <td class="text-end fw-semibold"><%= fmtMoneda(l.importe) %></td>
+                                        <td class="pe-4">
+                                            <span class="badge text-bg-<%= l.estado_pago === 'pagado' ? 'success' : (l.estado_pago === 'cortesia' ? 'warning' : 'primary') %>" style="font-size:.6rem"><%= l.estado_pago %></span>
+                                            <% if (l.estado_item !== 'entregado') { %>
+                                                <span class="badge text-bg-light text-secondary border" style="font-size:.6rem"><%= l.estado_item %></span>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                                <% if (detalle.lineas.length === 0) { %>
+                                    <tr><td colspan="8" class="text-center text-muted py-4">Sin ventas de este platillo en el alcance seleccionado.</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Consumo teórico -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-clipboard-list text-dark"></i>
+                        <h6 class="fw-bold mb-0">Consumo teórico (receta × unidades vendidas)</h6>
+                        <span class="badge text-bg-dark ms-auto"><%= detalle.teorico.length %> insumos</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Insumo</th>
+                                    <th class="py-3 text-end">Cant. unitaria</th>
+                                    <th class="py-3 text-center">Merma</th>
+                                    <th class="py-3 text-end">Bruta unitaria</th>
+                                    <th class="py-3 text-end">Total teórico</th>
+                                    <th class="py-3 text-end pe-4">Costo est.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% detalle.teorico.forEach(t => { %>
+                                    <tr>
+                                        <td class="ps-4">
+                                            <span class="fw-semibold"><%= t.insumo %></span>
+                                            <small class="text-muted d-block font-monospace"><%= t.codigo || '—' %></small>
+                                        </td>
+                                        <td class="text-end"><%= fmtNum(t.cantidad_unitaria, 3) %> <small class="text-muted"><%= t.unidad %></small></td>
+                                        <td class="text-center"><%= t.merma_pct > 0 ? '+' + fmtNum(t.merma_pct, 1) + '%' : '—' %></td>
+                                        <td class="text-end"><%= fmtNum(t.bruta_unitaria, 3) %></td>
+                                        <td class="text-end fw-semibold"><%= fmtNum(t.total, 3) %> <small class="text-muted"><%= t.unidad %></small></td>
+                                        <td class="text-end pe-4"><%= fmtMoneda(t.costo_total) %></td>
+                                    </tr>
+                                <% }) %>
+                                <% if (detalle.teorico.length === 0) { %>
+                                    <tr><td colspan="6" class="text-center text-muted py-4">
+                                        Sin receta activa: el platillo no descuenta inventario (platillo del día o producto sin ficha técnica).
+                                    </td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <% if (detalle.incluirInventario && detalle.real) { %>
+                <!-- Consumo real por insumo -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2 flex-wrap">
+                        <i class="fa-solid fa-boxes-packing text-dark"></i>
+                        <h6 class="fw-bold mb-0">Consumo real del kardex</h6>
+                        <span class="badge text-bg-dark ms-auto"><%= detalle.real.totales.movimientos %> movimientos · <%= detalle.real.totales.costo ? fmtMoneda(detalle.real.totales.costo) : '$0,00' %></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Insumo</th>
+                                    <th class="py-3 text-end">Real descontado</th>
+                                    <th class="py-3 text-end">Teórico</th>
+                                    <th class="py-3 text-center">Desviación</th>
+                                    <th class="py-3 text-end">Movs.</th>
+                                    <th class="py-3 text-end pe-4">Costo real</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% detalle.real.porInsumo.forEach(i => { %>
+                                    <% const desvPct = (i.desviacion != null && i.teorico_total > 0) ? Math.round((i.desviacion / i.teorico_total) * 1000) / 10 : null;
+                                       const claseDesv = desvPct == null ? 'secondary' : (Math.abs(desvPct) <= 5 ? 'success' : (Math.abs(desvPct) <= 15 ? 'warning' : 'danger')); %>
+                                    <tr>
+                                        <td class="ps-4">
+                                            <span class="fw-semibold"><%= i.insumo %></span>
+                                            <small class="text-muted d-block font-monospace"><%= i.codigo || '—' %> · <%= i.unidad || '' %></small>
+                                        </td>
+                                        <td class="text-end fw-semibold"><%= fmtNum(i.cantidad, 3) %> <small class="text-muted"><%= i.unidad %></small></td>
+                                        <td class="text-end">
+                                            <% if (i.en_receta) { %><%= fmtNum(i.teorico_total, 3) %><% } else { %><span class="badge text-bg-light text-secondary border" style="font-size:.6rem">no está en la receta</span><% } %>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge text-bg-<%= claseDesv %>"><%= i.desviacion != null ? (i.desviacion > 0 ? '+' : '') + fmtNum(i.desviacion, 3) : '—' %></span>
+                                        </td>
+                                        <td class="text-end"><%= fmtNum(i.movimientos) %></td>
+                                        <td class="text-end pe-4 fw-semibold"><%= fmtMoneda(i.costo) %></td>
+                                    </tr>
+                                <% }) %>
+                                <% if (detalle.real.porInsumo.length === 0) { %>
+                                    <tr><td colspan="6" class="text-center text-muted py-4">Las comandas de este platillo no generaron descuentos de inventario.</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="px-4 pb-3 pt-1">
+                        <small class="text-muted">
+                            <i class="fa-solid fa-circle-info me-1"></i>
+                            El kardex descuenta por comanda cobrada: aquí aparecen todos los insumos descontados en las cuentas que incluyeron este <%= detalle.platillo.etiqueta.toLowerCase() %>, incluso los de otros platillos de la misma cuenta (p. ej. acompañamientos o ingredientes compartidos).
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Movimientos del kardex -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-arrow-down-long text-dark"></i>
+                        <h6 class="fw-bold mb-0">Movimientos de inventario generados</h6>
+                        <span class="badge text-bg-dark ms-auto"><%= detalle.real.filas.length %> movimientos</span>
+                    </div>
+                    <div class="table-responsive" style="max-height: 480px;">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Fecha</th>
+                                    <th class="py-3">Comanda</th>
+                                    <th class="py-3">Insumo</th>
+                                    <th class="py-3">Lote / Almacén</th>
+                                    <th class="py-3 text-end">Cantidad</th>
+                                    <th class="py-3 text-end">Stock resultante</th>
+                                    <th class="py-3 text-end pe-4">Costo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% detalle.real.filas.slice(0, 300).forEach(f => { %>
+                                    <tr>
+                                        <td class="ps-4"><%= fmtFecha(f.fecha_movimiento) %></td>
+                                        <td>
+                                            <span class="fw-semibold">#<%= f.pedido_id %></span>
+                                            <small class="text-muted d-block font-monospace"><%= f.documento_numero || '—' %></small>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold"><%= f.insumo %></span>
+                                            <small class="text-muted d-block"><%= f.tipo_movimiento === 'VENTA' ? 'Venta directa' : 'Consumo por receta' %></small>
+                                        </td>
+                                        <td>
+                                            <%= f.numero_lote || '—' %>
+                                            <small class="text-muted d-block"><%= f.almacen %></small>
+                                        </td>
+                                        <td class="text-end fw-semibold">−<%= fmtNum(f.cantidad, 3) %> <small class="text-muted"><%= f.unidad %></small></td>
+                                        <td class="text-end"><%= fmtNum(f.stock_nuevo, 3) %></td>
+                                        <td class="text-end pe-4"><%= fmtMoneda(f.costo_total != null && f.costo_total !== 0 ? f.costo_total : (Number(f.cantidad || 0) * Number(f.costo_unitario || 0))) %></td>
+                                    </tr>
+                                <% }) %>
+                                <% if (detalle.real.filas.length === 0) { %>
+                                    <tr><td colspan="7" class="text-center text-muted py-4">Sin movimientos de inventario para el alcance seleccionado.</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <% } %>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>

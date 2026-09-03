@@ -26,6 +26,15 @@ router.get('/reportes/ventas-mesero', ensureAuthenticated, puedeVer, reportesCon
 router.get('/reportes/consumo-insumos', ensureAuthenticated, puedeVer, reportesController.viewConsumoInsumos);
 router.get('/reportes/ventas-horas', ensureAuthenticated, puedeVer, reportesController.viewVentasHoras);
 
+// ── Ventas y movimiento de inventario del turno ─────────────────────────
+// Tragos y platillos vendidos en un turno con el descuento de kardex que
+// generaron; con detalle por trago/platillo. El desglose de inventario solo
+// se muestra si la licencia incluye la función 'inventario'.
+router.get('/reportes/ventas-turno', ensureAuthenticated, puedeVer, reportesController.viewVentasTurno);
+router.get('/reportes/ventas-turno/exportar', ensureAuthenticated, puedeVer, reportesController.exportarVentasTurno);
+router.get('/reportes/ventas-turno/platillo/:platilloId/exportar', ensureAuthenticated, puedeVer, reportesController.exportarVentasTurnoPlatillo);
+router.get('/reportes/ventas-turno/platillo/:platilloId', ensureAuthenticated, puedeVer, reportesController.viewVentasTurnoPlatillo);
+
 // ── Exportaciones a CSV (Excel) ─────────────────────────────────────────
 router.get('/reportes/salud-inventario/exportar', ensureAuthenticated, puedeVer, reportesController.exportarSaludInventario);
 router.get('/reportes/margen-platillos/exportar', ensureAuthenticated, puedeVer, reportesController.exportarMargenPlatillos);

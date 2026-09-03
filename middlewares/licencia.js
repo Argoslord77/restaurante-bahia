@@ -63,12 +63,16 @@ function exigirLicencia(opciones = {}) {
         }
 
         // Disponible para las vistas: el aviso del periodo de gracia
+        // (funciones/plan expuestos para que los módulos puedan ocultar lo que
+        // la licencia no cubre, p. ej. el movimiento de inventario).
         res.locals.licencia = {
             estado: evaluacion.estado,
             operativa: evaluacion.operativa,
             gracia: evaluacion.gracia,
             problemas: evaluacion.problemas,
-            avisos: evaluacion.avisos
+            avisos: evaluacion.avisos,
+            plan: evaluacion.licencia ? evaluacion.licencia.plan : null,
+            funciones: evaluacion.licencia ? (evaluacion.licencia.funciones || []) : null
         };
         req.licencia = evaluacion;
 

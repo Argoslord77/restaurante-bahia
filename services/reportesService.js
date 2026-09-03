@@ -13,6 +13,8 @@
 
 const db = require('../config/db');
 const Costeo = require('./costeoService');
+const ReporteModel = require('../models/reporteModel');
+const InventarioService = require('./inventarioService');
 const { TIPOS_ENTRADA, TIPOS_SALIDA, ETIQUETAS_MOVIMIENTO } = require('./kardexService');
 
 /** Signo de un tipo de movimiento: +1 entrada, -1 salida, 0 informativo. */
@@ -499,6 +501,349 @@ async function ventasPorHoras(rango) {
     };
 }
 
+// ── Ventas y movimiento de inventario del turno ──────────────────────────
+// Qué tragos y platillos se vendieron en un turno de servicio y qué
+// movimiento de inventario generaron (kardex por comanda cobrada).
+//
+// El desglose de inventario (consumo real, movimientos) es información de
+// control físico: solo se calcula cuando la licencia de la instalación
+// incluye la función 'inventario'. El controlador decide `incluirInventario`
+// con licenciaService.tieneFuncion(); el servicio simplemente obedece.
+
+const CLAVE_PLATILLO = (id, esDia) => `${id}|${Number(esDia) === 1 ? 1 : 0}`;
+
+/** Fórmula del motor de descuento: cantidad bruta por merma operativa. */
+const cantidadBruta = (cantidad, mermaPct) => {
+    const m = Number(mermaPct || 0);
+    const bruta = (m > 0 && m < 100)
+        ? Number(cantidad) / (1 - (m / 100))
+        : Number(cantidad);
+    return Number.isFinite(bruta) ? Number(bruta.toFixed(6)) : 0;
+};
+
+/** Etiqueta corta del tipo de platillo para filtros y tablas. */
+const etiquetaTipo = (tipo) => (String(tipo || '').toUpperCase() === 'BEBIDAS' ? 'Trago' : 'Platillo');
+
+/**
+ * Reporte del turno: tragos y platillos vendidos con su costo teórico de
+ * receta y, si la licencia lo permite, el consumo real descontado del
+ * kardex y el resumen de movimientos de la ventana del turno.
+ *
+ * @param {object} opciones { turnoId (null = todos los turnos recientes),
+ *                            incluirInventario (gate de licencia),
+ *                            porDefectoAlUltimo (sin filtro explícito usa el
+ *                            turno más reciente, que es el caso de uso natural) }
+ */
+async function ventasTurno({ turnoId = null, incluirInventario = true, porDefectoAlUltimo = false } = {}) {
+    const turnos = await ReporteModel.getTurnosRecientes(30);
+    let turnoSel = turnoId ? turnos.find(t => t.id === Number(turnoId)) || null : null;
+    if (!turnoSel && porDefectoAlUltimo && turnos.length) turnoSel = turnos[0];
+    const filtroTurno = turnoSel ? turnoSel.id : null;
+
+    const [ventas, platillosPorPedido, teoricoFilas, cuentas] = await Promise.all([
+        ReporteModel.getVentasTurno(filtroTurno),
+        ReporteModel.getPlatillosPorPedido(filtroTurno),
+        ReporteModel.getTeoricoPorPlatillo(filtroTurno),
+        ReporteModel.getCuentasTurno(filtroTurno)
+    ]);
+
+    // Comandas que contienen cada platillo (para atribuirle el kardex)
+    const pedidosDePlatillo = new Map();
+    for (const f of platillosPorPedido) {
+        const clave = CLAVE_PLATILLO(f.id_platillo, f.es_platillo_dia);
+        if (!pedidosDePlatillo.has(clave)) pedidosDePlatillo.set(clave, new Set());
+        pedidosDePlatillo.get(clave).add(Number(f.pedido_id));
+    }
+
+    // Consumo teórico por platillo (receta activa × unidades vendidas)
+    const teoricoPorPlatillo = new Map();
+    for (const f of teoricoFilas) {
+        const clave = CLAVE_PLATILLO(f.id_platillo, f.es_platillo_dia);
+        if (!teoricoPorPlatillo.has(clave)) {
+            teoricoPorPlatillo.set(clave, { insumos: new Set(), costo: 0 });
+        }
+        const acc = teoricoPorPlatillo.get(clave);
+        acc.insumos.add(Number(f.insumo_id));
+        acc.costo += Number(f.costo_teorico || 0);
+    }
+
+    // Consumo real del kardex: por comanda → insumo, y resumen por insumo
+    let realPorPedido = new Map();
+    let insumos = [];
+    let movimientosPorCuenta = new Map();
+    let movimientosTurno = null;
+
+    if (incluirInventario) {
+        const [realFilas, cuentasMov] = await Promise.all([
+            ReporteModel.getRealPorPedido(filtroTurno),
+            ReporteModel.getMovimientosPorCuenta(filtroTurno)
+        ]);
+
+        for (const f of realFilas) {
+            const pid = Number(f.pedido_id);
+            if (!realPorPedido.has(pid)) realPorPedido.set(pid, new Map());
+            realPorPedido.get(pid).set(Number(f.insumo_id), {
+                nombre: f.insumo,
+                codigo: f.codigo_insumo,
+                unidad: f.unidad,
+                cantidad: Number(f.consumo_real || 0),
+                costo: Number(f.costo_real || 0),
+                movimientos: Number(f.movimientos || 0)
+            });
+        }
+
+        movimientosPorCuenta = new Map(cuentasMov.map(f => [Number(f.pedido_id), {
+            movimientos: Number(f.movimientos || 0),
+            insumos: Number(f.insumos || 0),
+            cantidad_descontada: Number(f.cantidad_descontada || 0),
+            costo_descontado: Number(f.costo_descontado || 0)
+        }]));
+
+        // Resumen del kardex en la ventana del turno (mismo criterio que Caja)
+        if (turnoSel) {
+            try {
+                movimientosTurno = await InventarioService.movimientosPorTurno(turnoSel);
+            } catch (_) {
+                movimientosTurno = null; // la sección simplemente no se muestra
+            }
+        }
+
+        // Agregado de consumo real por insumo (todas las comandas del alcance)
+        const porInsumo = new Map();
+        for (const [, insumosPedido] of realPorPedido) {
+            for (const [iid, v] of insumosPedido) {
+                if (!porInsumo.has(iid)) {
+                    porInsumo.set(iid, {
+                        id: iid, insumo: v.nombre, codigo: v.codigo, unidad: v.unidad,
+                        cantidad: 0, costo: 0, movimientos: 0, comandas: 0
+                    });
+                }
+                const acc = porInsumo.get(iid);
+                acc.cantidad += v.cantidad;
+                acc.costo += v.costo;
+                acc.movimientos += v.movimientos;
+                acc.comandas += 1;
+            }
+        }
+        insumos = [...porInsumo.values()].map(i => ({
+            ...i,
+            cantidad: num(i.cantidad, 3),
+            costo: num(i.costo, 2),
+            movimientos: num(i.movimientos, 0),
+            comandas: num(i.comandas, 0)
+        })).sort((a, b) => b.costo - a.costo);
+    }
+
+    // Fila por platillo vendido
+    const platillos = ventas.map(v => {
+        const esDia = Number(v.es_platillo_dia) === 1;
+        const clave = CLAVE_PLATILLO(v.id_platillo, v.es_platillo_dia);
+        const teo = teoricoPorPlatillo.get(clave) || null;
+
+        let costoReal = null;
+        let insumosReales = 0;
+        if (incluirInventario) {
+            costoReal = 0;
+            const pedidos = pedidosDePlatillo.get(clave) || new Set();
+            for (const pid of pedidos) {
+                const insumosPedido = realPorPedido.get(pid);
+                if (!insumosPedido) continue;
+                for (const [, dato] of insumosPedido) {
+                    costoReal += dato.costo;
+                    insumosReales += dato.movimientos;
+                }
+            }
+        }
+
+        const tieneReceta = Boolean(teo);
+        const costoTeorico = tieneReceta ? num(teo.costo, 2) : null;
+
+        return {
+            id: v.id_platillo,
+            es_dia: esDia,
+            nombre: v.nombre,
+            tipo: v.tipo,
+            etiqueta: etiquetaTipo(v.tipo),
+            categoria: v.categoria || 'Sin categoría',
+            cuentas: num(v.cuentas, 0),
+            unidades: num(v.unidades, 0),
+            venta: num(v.venta, 2),
+            tiene_receta: tieneReceta,
+            insumos_teoricos: teo ? teo.insumos.size : 0,
+            costo_teorico: costoTeorico,
+            costo_real: costoReal == null ? null : num(costoReal, 2),
+            insumos_reales: num(insumosReales, 0),
+            desviacion: (costoTeorico != null && costoReal != null)
+                ? num(costoReal - costoTeorico, 2) : null
+        };
+    });
+
+    // Cuentas con su movimiento de inventario fusionado
+    const cuentasConMov = cuentas.map(c => {
+        const mov = incluirInventario ? movimientosPorCuenta.get(Number(c.id)) : null;
+        return {
+            ...c,
+            venta: num(c.venta, 2),
+            total: num(c.total, 2),
+            lineas: num(c.lineas, 0),
+            unidades: num(c.unidades, 0),
+            movimientos: mov ? mov.movimientos : null,
+            costo_descontado: mov ? num(mov.costo_descontado, 2) : null
+        };
+    });
+
+    const totales = {
+        platillos: platillos.length,
+        cuentas: cuentasConMov.length,
+        unidades: num(platillos.reduce((s, p) => s + p.unidades, 0), 0),
+        tragos: num(platillos.filter(p => p.etiqueta === 'Trago').reduce((s, p) => s + p.unidades, 0), 0),
+        platillos_comestibles: num(platillos.filter(p => p.etiqueta === 'Platillo').reduce((s, p) => s + p.unidades, 0), 0),
+        venta: num(platillos.reduce((s, p) => s + p.venta, 0), 2),
+        costo_teorico: num(platillos.reduce((s, p) => s + (p.costo_teorico || 0), 0), 2),
+        costo_real: incluirInventario
+            ? num(platillos.reduce((s, p) => s + (p.costo_real || 0), 0), 2)
+            : null,
+        costo_descontado: incluirInventario
+            ? num(cuentasConMov.reduce((s, c) => s + (c.costo_descontado || 0), 0), 2)
+            : null
+    };
+    totales.desviacion = incluirInventario ? num(totales.costo_real - totales.costo_teorico, 2) : null;
+
+    return {
+        turnos,
+        turnoSeleccionado: turnoSel ? turnoSel.id : null,
+        turno: turnoSel,
+        incluirInventario: Boolean(incluirInventario),
+        platillos,
+        cuentas: cuentasConMov,
+        insumos,
+        movimientosTurno,
+        totales
+    };
+}
+
+/**
+ * Detalle de UN trago/platillo dentro del alcance del turno: sus líneas de
+ * venta por comanda, el consumo teórico de su receta escalado a lo vendido
+ * y, si la licencia lo permite, los movimientos reales del kardex de las
+ * comandas que lo incluyeron.
+ */
+async function detallePlatilloTurno({ turnoId = null, platilloId, esDia = 0, incluirInventario = true, porDefectoAlUltimo = false } = {}) {
+    const platillo = await ReporteModel.getPlatilloInfo(platilloId, esDia);
+    if (!platillo) return null;
+
+    const turnos = await ReporteModel.getTurnosRecientes(30);
+    let turnoSel = turnoId ? turnos.find(t => t.id === Number(turnoId)) || null : null;
+    if (!turnoSel && porDefectoAlUltimo && turnos.length) turnoSel = turnos[0];
+    const filtroTurno = turnoSel ? turnoSel.id : null;
+
+    const lineas = await ReporteModel.getVentasPlatillo(filtroTurno, platilloId, esDia);
+    const unidades = num(lineas.reduce((s, l) => s + Number(l.cantidad || 0), 0), 0);
+    const venta = num(lineas.reduce((s, l) => s + Number(l.importe || 0), 0), 2);
+
+    // Receta unitaria (los platillos del día no tienen: no descuentan inventario)
+    const recetaUnitaria = Number(esDia) === 1 ? [] : await ReporteModel.getRecetaPlatillo(platilloId);
+
+    // Teórico escalado a las unidades vendidas del alcance
+    const teorico = recetaUnitaria.map(r => {
+        const brutaUnitaria = cantidadBruta(r.cantidad_unitaria, r.porcentaje_merma);
+        const total = Number((brutaUnitaria * unidades).toFixed(6));
+        return {
+            insumo_id: r.insumo_id,
+            insumo: r.insumo,
+            codigo: r.codigo_insumo,
+            unidad: r.unidad,
+            cantidad_unitaria: num(r.cantidad_unitaria, 4),
+            merma_pct: num(r.porcentaje_merma || 0, 2),
+            bruta_unitaria: num(brutaUnitaria, 4),
+            total: num(total, 3),
+            costo_unitario: num(r.costo_estimado, 4),
+            costo_total: num(total * Number(r.costo_estimado || 0), 2)
+        };
+    });
+
+    // Real: movimientos de kardex de las comandas que incluyeron el platillo.
+    // El kardex se registra por COMANDA: si la cuenta trajo más platillos,
+    // sus descuentos aparecen aquí también (se aclara en la vista).
+    let real = null;
+    if (incluirInventario) {
+        const pedidoIds = [...new Set(lineas.map(l => Number(l.pedido_id)))];
+        const filas = await ReporteModel.getMovimientosDeCuentas(pedidoIds);
+
+        const porInsumo = new Map();
+        for (const f of filas) {
+            const iid = Number(f.insumo_id);
+            if (!porInsumo.has(iid)) {
+                porInsumo.set(iid, {
+                    insumo_id: iid, insumo: f.insumo, codigo: f.codigo_insumo, unidad: f.unidad,
+                    cantidad: 0, costo: 0, movimientos: 0
+                });
+            }
+            const acc = porInsumo.get(iid);
+            acc.cantidad += Number(f.cantidad || 0);
+            acc.costo += Number(f.costo_total || 0);
+            acc.movimientos += 1;
+        }
+
+        const teoricoPorId = new Map(teorico.map(t => [t.insumo_id, t]));
+        const porInsumoArr = [...porInsumo.values()].map(i => {
+            const teo = teoricoPorId.get(i.insumo_id) || null;
+            const total = num(i.cantidad, 3);
+            return {
+                ...i,
+                cantidad: total,
+                costo: num(i.costo, 2),
+                movimientos: num(i.movimientos, 0),
+                teorico_total: teo ? teo.total : null,
+                desviacion: teo ? num(total - teo.total, 3) : null,
+                en_receta: Boolean(teo)
+            };
+        }).sort((a, b) => Math.abs(b.desviacion || 0) - Math.abs(a.desviacion || 0) || b.costo - a.costo);
+
+        real = {
+            filas,
+            porInsumo: porInsumoArr,
+            totales: {
+                movimientos: filas.length,
+                insumos: porInsumoArr.length,
+                cantidad: num(filas.reduce((s, f) => s + Number(f.cantidad || 0), 0), 3),
+                costo: num(filas.reduce((s, f) => s + Number(f.costo_total || 0), 0), 2)
+            }
+        };
+    }
+
+    const costoTeorico = num(teorico.reduce((s, t) => s + t.costo_total, 0), 2);
+    return {
+        platillo: {
+            ...platillo,
+            etiqueta: etiquetaTipo(platillo.tipo)
+        },
+        turnos,
+        turnoSeleccionado: turnoSel ? turnoSel.id : null,
+        turno: turnoSel,
+        incluirInventario: Boolean(incluirInventario),
+        tiene_receta: recetaUnitaria.length > 0,
+        lineas: lineas.map(l => ({
+            ...l,
+            importe: num(l.importe, 2),
+            precio_unitario: num(l.precio_unitario, 2),
+            cantidad: num(l.cantidad, 0)
+        })),
+        unidades,
+        venta,
+        teorico,
+        real,
+        totales: {
+            lineas: lineas.length,
+            unidades,
+            venta,
+            costo_teorico: costoTeorico,
+            costo_real: real ? real.totales.costo : null,
+            desviacion: real ? num(real.totales.costo - costoTeorico, 2) : null
+        }
+    };
+}
+
 // ── Generadores de CSV ───────────────────────────────────────────────────
 // Mismo formato que el kardex: separador ';', decimales con coma y BOM
 // UTF-8 para que Excel lo abra directamente.
@@ -648,17 +993,158 @@ function ventasHorasACSV(reporte) {
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
+/** Etiqueta legible del alcance del reporte de turno. */
+const etiquetaAlcanceTurno = (reporte) => (reporte.turno
+    ? `Turno #${reporte.turno.id} (${reporte.turno.nombre})`
+    : 'Todos los turnos');
+
+/** CSV del reporte de ventas y consumo del turno. */
+function ventasTurnoACSV(reporte) {
+    const filas = [];
+    filas.push(`Ventas y consumo del turno;${etiquetaAlcanceTurno(reporte)}`);
+    if (reporte.turno) {
+        filas.push(`Apertura;${csvFecha(reporte.turno.fecha_apertura)};Cierre;${reporte.turno.fecha_cierre ? csvFecha(reporte.turno.fecha_cierre) : 'Turno abierto'};Estado;${reporte.turno.estado}`);
+    }
+    filas.push('');
+    filas.push('RESUMEN');
+    const t = reporte.totales;
+    filas.push(`Cuentas cobradas;${csvNum(t.cuentas, 0)}`);
+    filas.push(`Tragos vendidos (unid.);${csvNum(t.tragos, 0)}`);
+    filas.push(`Platillos vendidos (unid.);${csvNum(t.platillos_comestibles, 0)}`);
+    filas.push(`Venta;${csvNum(t.venta)}`);
+    filas.push(`Costo teorico (recetas);${csvNum(t.costo_teorico)}`);
+    if (reporte.incluirInventario) {
+        filas.push(`Consumo real (kardex);${csvNum(t.costo_real)}`);
+        filas.push(`Desviacion (real - teorico);${csvNum(t.desviacion)}`);
+    } else {
+        filas.push('Consumo real (kardex);Requiere licencia con la funcion inventario');
+    }
+    filas.push('');
+    filas.push('TRAGOS Y PLATILLOS VENDIDOS');
+    filas.push('Tipo;Platillo;Categoria;Unidades;Cuentas;Venta;Insumos de receta;Costo teorico;'
+        + (reporte.incluirInventario ? 'Consumo real (kardex);Desviacion' : ''));
+    for (const p of reporte.platillos) {
+        filas.push([
+            csvTexto(p.etiqueta), csvTexto(p.nombre), csvTexto(p.categoria),
+            csvNum(p.unidades, 0), csvNum(p.cuentas, 0), csvNum(p.venta),
+            p.tiene_receta ? csvNum(p.insumos_teoricos, 0) : 'sin receta',
+            p.costo_teorico != null ? csvNum(p.costo_teorico) : '',
+            reporte.incluirInventario ? (p.costo_real != null ? csvNum(p.costo_real) : '') : '',
+            (reporte.incluirInventario && p.desviacion != null) ? csvNum(p.desviacion) : ''
+        ].join(';'));
+    }
+    if (reporte.incluirInventario) {
+        filas.push('');
+        filas.push('CONSUMO REAL POR INSUMO (KARDEX)');
+        filas.push('Insumo;Codigo;Unidad;Cantidad;Movimientos;Comandas;Costo');
+        for (const i of reporte.insumos) {
+            filas.push([
+                csvTexto(i.insumo), csvTexto(i.codigo), csvTexto(i.unidad),
+                csvNum(i.cantidad, 3), csvNum(i.movimientos, 0), csvNum(i.comandas, 0), csvNum(i.costo)
+            ].join(';'));
+        }
+        if (reporte.movimientosTurno) {
+            filas.push('');
+            filas.push('MOVIMIENTO DE INVENTARIO DEL TURNO (POR TIPO)');
+            filas.push('Tipo de movimiento;Movimientos;Productos;Costo');
+            for (const m of reporte.movimientosTurno.resumenTipos) {
+                filas.push([csvTexto(m.etiqueta), csvNum(m.movimientos, 0), csvNum(m.productos, 0), csvNum(m.costo_total)].join(';'));
+            }
+        }
+    }
+    filas.push('');
+    filas.push('CUENTAS DEL ALCANCE');
+    filas.push('Pedido;Mesa;Mesero;Apertura;Cierre;Estado de pago;Lineas;Unidades;Venta;'
+        + (reporte.incluirInventario ? 'Movimientos de inventario;Costo descontado' : ''));
+    for (const c of reporte.cuentas) {
+        filas.push([
+            csvTexto(c.id), csvTexto(c.mesa), csvTexto(c.mesero),
+            csvFecha(c.creado_en), c.fecha_cierre ? csvFecha(c.fecha_cierre) : '',
+            csvTexto(c.estado_pago), csvNum(c.lineas, 0), csvNum(c.unidades, 0), csvNum(c.venta),
+            reporte.incluirInventario
+                ? `${c.movimientos != null ? csvNum(c.movimientos, 0) : ''};${c.costo_descontado != null ? csvNum(c.costo_descontado) : ''}`
+                : ''
+        ].join(';'));
+    }
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
+/** CSV del detalle de un trago/platillo en el alcance del turno. */
+function platilloTurnoACSV(detalle) {
+    const filas = [];
+    const p = detalle.platillo;
+    filas.push(`Detalle de ${csvTexto(p.etiqueta.toLowerCase())};${csvTexto(p.nombre)};${etiquetaAlcanceTurno(detalle)}`);
+    filas.push(`Categoria;${csvTexto(p.categoria)};Precio actual;${csvNum(p.precio)}`);
+    filas.push(`Unidades vendidas;${csvNum(detalle.unidades, 0)};Venta;${csvNum(detalle.venta)}`);
+    filas.push('');
+    filas.push('VENTAS POR COMANDA');
+    filas.push('Pedido;Mesa;Mesero;Cantidad;Precio unitario;Importe;Estado item;Estado de pago;Apertura cuenta');
+    for (const l of detalle.lineas) {
+        filas.push([
+            csvTexto(l.pedido_id), csvTexto(l.mesa), csvTexto(l.mesero),
+            csvNum(l.cantidad, 0), csvNum(l.precio_unitario), csvNum(l.importe),
+            csvTexto(l.estado_item), csvTexto(l.estado_pago), csvFecha(l.creado_en)
+        ].join(';'));
+    }
+    filas.push('');
+    filas.push('CONSUMO TEORICO (RECETA × UNIDADES VENDIDAS)');
+    filas.push(detalle.tiene_receta
+        ? 'Insumo;Codigo;Unidad;Cantidad unitaria;Merma %;Cantidad bruta unitaria;Total teorico;Costo unitario est.;Costo total'
+        : 'Sin receta activa: el platillo no descuenta inventario');
+    for (const t of detalle.teorico) {
+        filas.push([
+            csvTexto(t.insumo), csvTexto(t.codigo), csvTexto(t.unidad),
+            csvNum(t.cantidad_unitaria, 4), csvNum(t.merma_pct, 2), csvNum(t.bruta_unitaria, 4),
+            csvNum(t.total, 3), csvNum(t.costo_unitario, 4), csvNum(t.costo_total)
+        ].join(';'));
+    }
+    if (detalle.real) {
+        filas.push('');
+        filas.push('CONSUMO REAL (KARDEX) DE LAS COMANDAS QUE INCLUYEN EL PLATILLO');
+        filas.push('Insumo;Codigo;Unidad;Cantidad real;Teorico;Desviacion;Movimientos;Costo real');
+        for (const i of detalle.real.porInsumo) {
+            filas.push([
+                csvTexto(i.insumo), csvTexto(i.codigo), csvTexto(i.unidad),
+                csvNum(i.cantidad, 3),
+                i.teorico_total != null ? csvNum(i.teorico_total, 3) : 'no esta en la receta',
+                i.desviacion != null ? csvNum(i.desviacion, 3) : '',
+                csvNum(i.movimientos, 0), csvNum(i.costo)
+            ].join(';'));
+        }
+        filas.push('');
+        filas.push('MOVIMIENTOS DE INVENTARIO');
+        filas.push('Fecha;Pedido;Documento;Tipo;Insumo;Lote;Almacen;Cantidad;Stock resultante;Costo');
+        for (const f of detalle.real.filas) {
+            filas.push([
+                csvFecha(f.fecha_movimiento), csvTexto(f.pedido_id), csvTexto(f.documento_numero),
+                csvTexto(ETIQUETAS_MOVIMIENTO[f.tipo_movimiento] || f.tipo_movimiento),
+                csvTexto(f.insumo), csvTexto(f.numero_lote || ''), csvTexto(f.almacen),
+                csvNum(f.cantidad, 3), csvNum(f.stock_nuevo, 3),
+                csvNum(f.costo_total || (Number(f.cantidad || 0) * Number(f.costo_unitario || 0)))
+            ].join(';'));
+        }
+    } else {
+        filas.push('');
+        filas.push('CONSUMO REAL (KARDEX);Requiere licencia con la funcion inventario');
+    }
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
 module.exports = {
     saludInventario,
     margenPorPlatillo,
     ventasPorMesero,
     consumoPorInsumo,
     ventasPorHoras,
+    ventasTurno,
+    detallePlatilloTurno,
     normalizarRango,
     margenACSV,
     saludACSV,
     explosionACSV,
     ventasMeseroACSV,
     consumoInsumosACSV,
-    ventasHorasACSV
+    ventasHorasACSV,
+    ventasTurnoACSV,
+    platilloTurnoACSV
 };

@@ -7,6 +7,7 @@
 
 const ReportesService = require('../services/reportesService');
 const ReporteModel = require('../models/reporteModel');
+const Licencia = require('../services/licencia/licenciaService');
 const db = require('../config/db');
 
 // Enlaces del hub: qué es, qué controla y a dónde lleva.
@@ -63,6 +64,15 @@ const ENLACES = [
         descripcion: 'Ventas cobradas del período vs costo estándar: margen contribuido y food cost real ponderado. Exportable a CSV.',
         icono: 'fa-solid fa-chart-line',
         url: '/admin/reportes/margen-platillos',
+        grupo: 'Control financiero',
+        badge: 'NUEVO'
+    },
+    {
+        id: 'ventas-turno',
+        titulo: 'Ventas y consumo del turno',
+        descripcion: 'Tragos y platillos vendidos en el turno con el movimiento de inventario que generaron (según licencia). Con detalle por trago/platillo. Exportable a CSV.',
+        icono: 'fa-solid fa-utensils',
+        url: '/admin/reportes/ventas-turno',
         grupo: 'Control financiero',
         badge: 'NUEVO'
     },
@@ -210,6 +220,131 @@ exports.viewVentasMesero = async (req, res) => {
     } catch (error) {
         console.error('Error al cargar las ventas por mesero:', error);
         return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+// ── Ventas y movimiento de inventario del turno ───────────────────────────
+// Qué tragos y platillos se vendieron en un turno y qué descontó el kardex
+// por cada comanda cobrada. El desglose de inventario es información de
+// control físico: solo se muestra si la licencia de la instalación incluye
+// la función 'inventario'; sin ella el reporte sigue siendo útil en su
+// mitad financiera (ventas y costo teórico de recetas).
+
+/**
+ * ¿Permite la licencia ver el movimiento de inventario? Un fallo del propio
+ * sistema de licencias nunca debe bloquear una consulta (mismo criterio que
+ * el middleware).
+ */
+async function permiteMovimientoInventario(req) {
+    try {
+        const evaluacion = req.licencia || await Licencia.evaluar();
+        return Licencia.tieneFuncion(evaluacion, 'inventario');
+    } catch (_) {
+        return true;
+    }
+}
+
+/** Parseo del filtro de turno: '' explícito = todos; ausente = el último. */
+function leerFiltroTurno(req) {
+    const bruto = req.query.turno;
+    if (bruto === undefined) return { turnoId: null, porDefectoAlUltimo: true };
+    const id = parseInt(bruto, 10);
+    return { turnoId: Number.isFinite(id) && id > 0 ? id : null, porDefectoAlUltimo: false };
+}
+
+exports.viewVentasTurno = async (req, res) => {
+    try {
+        const { turnoId, porDefectoAlUltimo } = leerFiltroTurno(req);
+        const incluirInventario = await permiteMovimientoInventario(req);
+        const reporte = await ReportesService.ventasTurno({
+            turnoId, incluirInventario, porDefectoAlUltimo
+        });
+        return res.render('reportes/ventas_turno', {
+            title: 'Ventas y Consumo del Turno - Restaurante Bahía',
+            view: 'ventas_turno',
+            reporte,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar las ventas del turno:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.exportarVentasTurno = async (req, res) => {
+    try {
+        const { turnoId, porDefectoAlUltimo } = leerFiltroTurno(req);
+        const incluirInventario = await permiteMovimientoInventario(req);
+        const reporte = await ReportesService.ventasTurno({
+            turnoId, incluirInventario, porDefectoAlUltimo
+        });
+        return responderCSV(req, res, 'ventas_y_consumo_turno',
+            ReportesService.ventasTurnoACSV(reporte),
+            reporte.platillos.length + reporte.cuentas.length);
+    } catch (error) {
+        console.error('Error al exportar las ventas del turno:', error);
+        return res.redirect('/admin/reportes/ventas-turno');
+    }
+};
+
+exports.viewVentasTurnoPlatillo = async (req, res) => {
+    try {
+        const platilloId = parseInt(req.params.platilloId, 10);
+        if (!Number.isFinite(platilloId) || platilloId <= 0) {
+            return res.redirect('/admin/reportes/ventas-turno');
+        }
+        const esDia = String(req.query.origen || '') === 'dia' ? 1 : 0;
+        const { turnoId, porDefectoAlUltimo } = leerFiltroTurno(req);
+        const incluirInventario = await permiteMovimientoInventario(req);
+
+        const detalle = await ReportesService.detallePlatilloTurno({
+            turnoId, platilloId, esDia, incluirInventario, porDefectoAlUltimo
+        });
+        if (!detalle) {
+            if ((req.headers.accept || '').includes('application/json')) {
+                return res.status(404).json({ success: false, message: 'Platillo no encontrado' });
+            }
+            req.flash && req.flash('error_msg', 'El platillo solicitado no existe.');
+            return res.redirect('/admin/reportes/ventas-turno');
+        }
+        return res.render('reportes/ventas_turno_platillo', {
+            title: `Detalle de ${detalle.platillo.nombre} - Restaurante Bahía`,
+            view: 'ventas_turno',
+            detalle,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar el detalle del platillo:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.exportarVentasTurnoPlatillo = async (req, res) => {
+    try {
+        const platilloId = parseInt(req.params.platilloId, 10);
+        if (!Number.isFinite(platilloId) || platilloId <= 0) {
+            return res.redirect('/admin/reportes/ventas-turno');
+        }
+        const esDia = String(req.query.origen || '') === 'dia' ? 1 : 0;
+        const { turnoId, porDefectoAlUltimo } = leerFiltroTurno(req);
+        const incluirInventario = await permiteMovimientoInventario(req);
+        const detalle = await ReportesService.detallePlatilloTurno({
+            turnoId, platilloId, esDia, incluirInventario, porDefectoAlUltimo
+        });
+        if (!detalle) return res.redirect('/admin/reportes/ventas-turno');
+        const slug = String(detalle.platillo.nombre || 'platillo')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'platillo';
+        return responderCSV(req, res, `venta_${slug}`,
+            ReportesService.platilloTurnoACSV(detalle),
+            detalle.lineas.length + detalle.teorico.length + (detalle.real ? detalle.real.filas.length : 0));
+    } catch (error) {
+        console.error('Error al exportar el detalle del platillo:', error);
+        return res.redirect('/admin/reportes/ventas-turno');
     }
 };
 

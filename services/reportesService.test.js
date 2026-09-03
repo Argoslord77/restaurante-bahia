@@ -320,3 +320,210 @@ describe('reportesService · margenPorPlatillo', () => {
         expect(def.desde).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 });
+
+// ── Ventas y movimiento de inventario del turno ──────────────────────────
+// Escenario: turno #4 con tres productos vendidos (un trago, un platillo
+// de carta y un platillo del día sin receta), tres cuentas cobradas y
+// descuentos de kardex en dos de ellas.
+function programarTurno() {
+    db.query
+        .mockResolvedValueOnce([[ // turnos
+            { id: 4, fecha_apertura: new Date('2026-09-03T10:00:00'), fecha_cierre: null, estado: 'abierto', nombre: 'Juan Perez' }
+        ], []])
+        .mockResolvedValueOnce([[ // ventas por platillo
+            { id_platillo: 12, es_platillo_dia: 0, nombre: 'Mojito Bahía', tipo: 'BEBIDAS', categoria: 'Cócteles', cuentas: 2, unidades: 5, venta: 47.5 },
+            { id_platillo: 31, es_platillo_dia: 0, nombre: 'Filete de pescado', tipo: 'COMESTIBLES', categoria: 'Fuertes', cuentas: 2, unidades: 2, venta: 34 },
+            { id_platillo: 2, es_platillo_dia: 1, nombre: 'Ceviche del día', tipo: 'COMESTIBLES', categoria: null, cuentas: 1, unidades: 1, venta: 12 }
+        ], []])
+        .mockResolvedValueOnce([[ // comandas que contienen cada platillo
+            { pedido_id: 21, id_platillo: 12, es_platillo_dia: 0, cantidad: 3 },
+            { pedido_id: 22, id_platillo: 12, es_platillo_dia: 0, cantidad: 2 },
+            { pedido_id: 21, id_platillo: 31, es_platillo_dia: 0, cantidad: 1 },
+            { pedido_id: 23, id_platillo: 31, es_platillo_dia: 0, cantidad: 1 },
+            { pedido_id: 23, id_platillo: 2, es_platillo_dia: 1, cantidad: 1 }
+        ], []])
+        .mockResolvedValueOnce([[ // teórico por platillo (receta activa)
+            { id_platillo: 12, es_platillo_dia: 0, insumo_id: 7, codigo_insumo: 'RON-BL', insumo: 'Ron blanco', unidad: 'ml', cantidad_unitaria: 60, porcentaje_merma: 0, costo_estimado: 0.02, unidades_vendidas: 5, consumo_teorico: 300, costo_teorico: 6 },
+            { id_platillo: 31, es_platillo_dia: 0, insumo_id: 9, codigo_insumo: 'PESC', insumo: 'Pescado', unidad: 'kg', cantidad_unitaria: 0.25, porcentaje_merma: 10, costo_estimado: 40, unidades_vendidas: 2, consumo_teorico: 0.5556, costo_teorico: 22.2222 }
+        ], []])
+        .mockResolvedValueOnce([[ // cuentas cobradas
+            { id: 21, mesa: 4, mesero: 'Juan Perez', estado_pago: 'pagado', creado_en: new Date('2026-09-03T12:10:00'), fecha_cierre: new Date('2026-09-03T12:40:00'), total: 28.5, lineas: 2, unidades: 4, venta: 28.5 },
+            { id: 22, mesa: 2, mesero: 'Ana Gomez', estado_pago: 'cortesia', creado_en: new Date('2026-09-03T13:00:00'), fecha_cierre: new Date('2026-09-03T13:30:00'), total: 19, lineas: 1, unidades: 2, venta: 19 },
+            { id: 23, mesa: 7, mesero: 'Juan Perez', estado_pago: 'pagado', creado_en: new Date('2026-09-03T14:00:00'), fecha_cierre: null, total: 46, lineas: 2, unidades: 2, venta: 46 }
+        ], []])
+        .mockResolvedValueOnce([[ // consumo real por comanda e insumo
+            { pedido_id: 21, insumo_id: 7, codigo_insumo: 'RON-BL', insumo: 'Ron blanco', unidad: 'ml', movimientos: 2, consumo_real: 180, costo_real: 3.6 },
+            { pedido_id: 22, insumo_id: 7, codigo_insumo: 'RON-BL', insumo: 'Ron blanco', unidad: 'ml', movimientos: 1, consumo_real: 120, costo_real: 2.4 },
+            { pedido_id: 21, insumo_id: 9, codigo_insumo: 'PESC', insumo: 'Pescado', unidad: 'kg', movimientos: 1, consumo_real: 0.28, costo_real: 11.2 }
+        ], []])
+        .mockResolvedValueOnce([[ // movimientos por cuenta
+            { pedido_id: 21, movimientos: 3, insumos: 2, cantidad_descontada: 180.28, costo_descontado: 14.8 },
+            { pedido_id: 22, movimientos: 1, insumos: 1, cantidad_descontada: 120, costo_descontado: 2.4 }
+        ], []]);
+    InventarioService.movimientosPorTurno.mockResolvedValue({
+        desde: new Date('2026-09-03T10:00:00'), hasta: new Date('2026-09-03T14:00:00'),
+        resumenTipos: [{ tipo_movimiento: 'CONSUMO_RECETA', etiqueta: 'Consumo por venta', movimientos: 4, productos: 2, costo_total: 17.2 }],
+        consumoVenta: [], mermas: [],
+        totales: { movimientos: 4, productos: 2, costo_consumo_venta: 17.2, costo_mermas: 0, costo_entradas: 0 }
+    });
+}
+
+
+jest.mock('./inventarioService', () => ({ movimientosTurno: null, movimientosPorTurno: jest.fn() }));
+const InventarioService = require('./inventarioService');
+
+describe('reportesService · ventasTurno', () => {
+    beforeEach(() => jest.resetAllMocks());
+
+    it('agrega ventas, teórico y real por platillo, y fusiona el kardex por cuenta', async () => {
+        programarTurno();
+        const reporte = await ReportesService.ventasTurno({ turnoId: 4, incluirInventario: true });
+
+        expect(reporte.turnoSeleccionado).toBe(4);
+        expect(reporte.incluirInventario).toBe(true);
+
+        const mojito = reporte.platillos[0];
+        expect(mojito).toMatchObject({ nombre: 'Mojito Bahía', etiqueta: 'Trago', unidades: 5, venta: 47.5, costo_teorico: 6 });
+        // El real atribuye al mojito TODO el kardex de sus comandas (21 y 22),
+        // incluido el pescado descontado en la comanda 21 que también trajo filete.
+        expect(mojito.costo_real).toBe(17.2);
+        expect(mojito.desviacion).toBe(11.2);
+
+        const filete = reporte.platillos[1];
+        expect(filete.costo_teorico).toBe(22.22);
+        expect(filete.costo_real).toBe(14.8);
+
+        const ceviche = reporte.platillos[2];
+        expect(ceviche.es_dia).toBe(true);
+        expect(ceviche.tiene_receta).toBe(false);
+        expect(ceviche.costo_teorico).toBeNull();
+        expect(ceviche.costo_real).toBe(0);
+        expect(ceviche.desviacion).toBeNull();
+
+        expect(reporte.totales).toMatchObject({
+            cuentas: 3, unidades: 8, tragos: 5, platillos_comestibles: 3,
+            venta: 93.5, costo_teorico: 28.22, costo_real: 32, desviacion: 3.78
+        });
+        expect(reporte.cuentas.find(c => c.id === 21)).toMatchObject({ movimientos: 3, costo_descontado: 14.8 });
+        expect(reporte.cuentas.find(c => c.id === 23)).toMatchObject({ movimientos: null, costo_descontado: null });
+        // Resumen de kardex por insumo
+        const ron = reporte.insumos.find(i => i.insumo === 'Ron blanco');
+        expect(ron).toMatchObject({ cantidad: 300, costo: 6, movimientos: 3, comandas: 2 });
+        // La sección de movimiento del turno viene del servicio de inventario
+        expect(InventarioService.movimientosPorTurno).toHaveBeenCalledTimes(1);
+        expect(reporte.movimientosTurno.totales.movimientos).toBe(4);
+    });
+
+    it('sin licencia de inventario no consulta el kardex y deja el real en null', async () => {
+        db.query
+            .mockResolvedValueOnce([[{ id: 4, fecha_apertura: new Date(), fecha_cierre: null, estado: 'abierto', nombre: 'X' }], []])
+            .mockResolvedValueOnce([[{ id_platillo: 12, es_platillo_dia: 0, nombre: 'Mojito Bahía', tipo: 'BEBIDAS', categoria: null, cuentas: 1, unidades: 2, venta: 19 }], []])
+            .mockResolvedValueOnce([[{ pedido_id: 21, id_platillo: 12, es_platillo_dia: 0, cantidad: 2 }], []])
+            .mockResolvedValueOnce([[{ id_platillo: 12, es_platillo_dia: 0, insumo_id: 7, codigo_insumo: 'RON-BL', insumo: 'Ron blanco', unidad: 'ml', cantidad_unitaria: 60, porcentaje_merma: 0, costo_estimado: 0.02, unidades_vendidas: 2, consumo_teorico: 120, costo_teorico: 2.4 }], []])
+            .mockResolvedValueOnce([[{ id: 21, mesa: 1, mesero: 'X', estado_pago: 'pagado', creado_en: new Date(), fecha_cierre: null, total: 19, lineas: 1, unidades: 2, venta: 19 }], []]);
+
+        const reporte = await ReportesService.ventasTurno({ turnoId: 4, incluirInventario: false });
+
+        expect(db.query).toHaveBeenCalledTimes(5); // turnos + ventas + comandas + teórico + cuentas
+        expect(reporte.totales.costo_real).toBeNull();
+        expect(reporte.totales.desviacion).toBeNull();
+        expect(reporte.insumos).toEqual([]);
+        expect(reporte.movimientosTurno).toBeNull();
+        expect(reporte.platillos[0].costo_real).toBeNull();
+        expect(InventarioService.movimientosPorTurno).not.toHaveBeenCalled();
+    });
+
+    it('sin filtro explícito cae al turno más reciente (porDefectoAlUltimo)', async () => {
+        programarTurno();
+        const reporte = await ReportesService.ventasTurno({ turnoId: null, incluirInventario: true, porDefectoAlUltimo: true });
+        expect(reporte.turnoSeleccionado).toBe(4);
+    });
+});
+
+describe('reportesService · detallePlatilloTurno', () => {
+    beforeEach(() => jest.resetAllMocks());
+
+    it('escala la receta a las unidades vendidas y compara contra el kardex real', async () => {
+        db.query
+            .mockResolvedValueOnce([[ // ficha del platillo
+                { id: 12, nombre: 'Mojito Bahía', precio: 9.5, foto: null, categoria: 'Cócteles', tipo: 'BEBIDAS', es_platillo_dia: 0 }
+            ], []])
+            .mockResolvedValueOnce([[{ id: 4, fecha_apertura: new Date(), fecha_cierre: null, estado: 'abierto', nombre: 'X' }], []]) // turnos
+            .mockResolvedValueOnce([[ // líneas de venta
+                { pedido_id: 21, mesa: 4, mesero: 'Juan', cantidad: 3, precio_unitario: 9.5, importe: 28.5, estado_item: 'entregado', notas_especiales: null, estado_pago: 'pagado', creado_en: new Date(), fecha_cierre: new Date() },
+                { pedido_id: 22, mesa: 2, mesero: 'Ana', cantidad: 2, precio_unitario: 9.5, importe: 19, estado_item: 'entregado', notas_especiales: null, estado_pago: 'pagado', creado_en: new Date(), fecha_cierre: new Date() }
+            ], []])
+            .mockResolvedValueOnce([[ // receta unitaria
+                { insumo_id: 7, codigo_insumo: 'RON-BL', insumo: 'Ron blanco', unidad: 'ml', cantidad_unitaria: 60, porcentaje_merma: 0, costo_estimado: 0.02 },
+                { insumo_id: 11, codigo_insumo: 'HIER-B', insumo: 'Hierbabuena', unidad: 'g', cantidad_unitaria: 10, porcentaje_merma: 5, costo_estimado: 0.05 }
+            ], []])
+            .mockResolvedValueOnce([[ // movimientos de las comandas
+                { id: 1, fecha_movimiento: new Date(), tipo_movimiento: 'VENTA', cantidad: 180, costo_unitario: 0.02, costo_total: 3.6, stock_anterior: 5000, stock_nuevo: 4820, documento_numero: 'PED-000021', observaciones: '', pedido_id: 21, insumo_id: 7, codigo_insumo: 'RON-BL', insumo: 'Ron blanco', unidad: 'ml', almacen: 'Bar', numero_lote: 'L-104' },
+                { id: 2, fecha_movimiento: new Date(), tipo_movimiento: 'VENTA', cantidad: 40, costo_unitario: 0.05, costo_total: 2, stock_anterior: 500, stock_nuevo: 460, documento_numero: 'PED-000021', observaciones: '', pedido_id: 21, insumo_id: 11, codigo_insumo: 'HIER-B', insumo: 'Hierbabuena', unidad: 'g', almacen: 'Bar', numero_lote: 'L-105' }
+            ], []]);
+
+        const detalle = await ReportesService.detallePlatilloTurno({ turnoId: 4, platilloId: 12, esDia: 0, incluirInventario: true });
+
+        expect(detalle.platillo).toMatchObject({ nombre: 'Mojito Bahía', etiqueta: 'Trago' });
+        expect(detalle.unidades).toBe(5);
+        expect(detalle.venta).toBe(47.5);
+
+        // Teórico escalado: 60 ml × 5 = 300; hierbabuena con 5 % de merma
+        // usa la fórmula del motor de descuento: 10 / 0.95 × 5 = 52.632
+        expect(detalle.teorico[0]).toMatchObject({ insumo: 'Ron blanco', total: 300, costo_total: 6 });
+        expect(detalle.teorico[1].total).toBeCloseTo(52.632, 2);
+
+        const ron = detalle.real.porInsumo.find(i => i.insumo === 'Ron blanco');
+        expect(ron).toMatchObject({ cantidad: 180, teorico_total: 300, desviacion: -120, movimientos: 1 });
+        const hierba = detalle.real.porInsumo.find(i => i.insumo === 'Hierbabuena');
+        expect(hierba.desviacion).toBeCloseTo(-12.632, 2);
+
+        expect(detalle.totales).toMatchObject({ lineas: 2, unidades: 5, venta: 47.5, costo_teorico: 8.63, costo_real: 5.6 });
+        expect(detalle.real.totales.movimientos).toBe(2);
+    });
+
+    it('devuelve null si el platillo no existe', async () => {
+        db.query.mockResolvedValueOnce([[], []]);
+        const detalle = await ReportesService.detallePlatilloTurno({ platilloId: 999, esDia: 1, incluirInventario: true });
+        expect(detalle).toBeNull();
+    });
+});
+
+describe('reportesService · CSV del turno', () => {
+    beforeEach(() => jest.resetAllMocks());
+
+    it('el CSV del turno separa secciones y respeta el gate de licencia', async () => {
+        programarTurno();
+        const reporte = await ReportesService.ventasTurno({ turnoId: 4, incluirInventario: true });
+        const csv = ReportesService.ventasTurnoACSV(reporte);
+        expect(csv.startsWith('\uFEFF')).toBe(true);
+        expect(csv).toContain('Ventas y consumo del turno;Turno #4 (Juan Perez)');
+        expect(csv).toContain('TRAGOS Y PLATILLOS VENDIDOS');
+        expect(csv).toContain('CONSUMO REAL POR INSUMO (KARDEX)');
+        expect(csv).toContain('MOVIMIENTO DE INVENTARIO DEL TURNO (POR TIPO)');
+        expect(csv).toContain('CUENTAS DEL ALCANCE');
+
+        programarTurno();
+        const sinLicencia = await ReportesService.ventasTurno({ turnoId: 4, incluirInventario: false });
+        const csv2 = ReportesService.ventasTurnoACSV(sinLicencia);
+        expect(csv2).toContain('Requiere licencia con la funcion inventario');
+        expect(csv2).not.toContain('CONSUMO REAL POR INSUMO');
+    });
+
+    it('el CSV del detalle incluye ventas, receta y kardex', async () => {
+        db.query
+            .mockResolvedValueOnce([[{ id: 12, nombre: 'Mojito Bahía', precio: 9.5, foto: null, categoria: 'Cócteles', tipo: 'BEBIDAS', es_platillo_dia: 0 }], []])
+            .mockResolvedValueOnce([[{ id: 4, fecha_apertura: new Date(), fecha_cierre: null, estado: 'abierto', nombre: 'X' }], []])
+            .mockResolvedValueOnce([[{ pedido_id: 21, mesa: 4, mesero: 'Juan', cantidad: 3, precio_unitario: 9.5, importe: 28.5, estado_item: 'entregado', notas_especiales: null, estado_pago: 'pagado', creado_en: new Date(), fecha_cierre: new Date() }], []])
+            .mockResolvedValueOnce([[{ insumo_id: 7, codigo_insumo: 'RON-BL', insumo: 'Ron blanco', unidad: 'ml', cantidad_unitaria: 60, porcentaje_merma: 0, costo_estimado: 0.02 }], []])
+            .mockResolvedValueOnce([[{ id: 1, fecha_movimiento: new Date(), tipo_movimiento: 'VENTA', cantidad: 180, costo_unitario: 0.02, costo_total: 3.6, stock_anterior: 5000, stock_nuevo: 4820, documento_numero: 'PED-000021', observaciones: '', pedido_id: 21, insumo_id: 7, codigo_insumo: 'RON-BL', insumo: 'Ron blanco', unidad: 'ml', almacen: 'Bar', numero_lote: 'L-104' }], []]);
+
+        const detalle = await ReportesService.detallePlatilloTurno({ turnoId: 4, platilloId: 12, esDia: 0, incluirInventario: true });
+        const csv = ReportesService.platilloTurnoACSV(detalle);
+        expect(csv).toContain('VENTAS POR COMANDA');
+        expect(csv).toContain('CONSUMO TEORICO (RECETA × UNIDADES VENDIDAS)');
+        expect(csv).toContain('CONSUMO REAL (KARDEX) DE LAS COMANDAS QUE INCLUYEN EL PLATILLO');
+        expect(csv).toContain('MOVIMIENTOS DE INVENTARIO');
+        expect(csv).toContain('Mojito Bahía');
+    });
+});

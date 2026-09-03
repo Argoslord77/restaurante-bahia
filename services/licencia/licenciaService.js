@@ -517,6 +517,26 @@ function descripcionSospecha(codigo) {
 /** Invalida la caché (tras activar una licencia nueva). */
 function invalidarCache() { cache = null; cacheHasta = 0; }
 
+/**
+ * ¿Permite la licencia usar una función/módulo concreto (p. ej. 'inventario')?
+ *
+ * Criterio permisivo coherente con el resto del sistema:
+ *  · Sin evaluación disponible o sin datos de licencia (instalación dormida,
+ *    licencias NO_CONFIGURADAS) → no se restringe nada.
+ *  · Licencia sin lista de funciones o con la lista vacía → plan sin
+ *    restricción declarada: todo permitido.
+ *  · Con lista declarada → la función debe venir incluida.
+ * El estado GRACIA no quita funciones: la degradación gradual es trabajo del
+ * middleware de licencia, no de esta comprobación puntual.
+ */
+function tieneFuncion(evaluacion, nombre) {
+    if (!evaluacion) return true;
+    const licencia = evaluacion.licencia;
+    if (!licencia) return true;
+    if (!Array.isArray(licencia.funciones) || licencia.funciones.length === 0) return true;
+    return licencia.funciones.map(f => String(f).toLowerCase()).includes(String(nombre).toLowerCase());
+}
+
 module.exports = {
     ESTADOS,
     evaluar,
@@ -524,6 +544,7 @@ module.exports = {
     leerLicencia,
     codigoDeInstalacion,
     registrarEvento,
+    tieneFuncion,
     RUTA_LICENCIA,
     RUTA_ESTADO,
     RUTA_CLAVE_PUBLICA
