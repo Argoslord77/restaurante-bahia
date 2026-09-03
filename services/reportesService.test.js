@@ -91,6 +91,9 @@ describe('reportesService · consumoPorInsumo', () => {
             { producto_id: 1, codigo: 'P1', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'CONSUMO_RECETA', cantidad: 80, valor: 1600 },
             { producto_id: 1, codigo: 'P1', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'MERMA', cantidad: 5, valor: 100 },
             { producto_id: 1, codigo: 'P1', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'CONTEO_FISICO', cantidad: 999, valor: 0 }
+        ], []]).mockResolvedValueOnce([[ // stock vigente en todos los almacenes (ordenado por nombre)
+            { producto_id: 1, almacen: 'Cocina', categoria: 'produccion', cantidad: 3 },
+            { producto_id: 1, almacen: 'Central', categoria: 'logistico', cantidad: 12.5 }
         ], []]);
 
         const reporte = await ReportesService.consumoPorInsumo({ desde: '2026-08-01', hasta: '2026-08-31', almacen_id: null });
@@ -102,6 +105,16 @@ describe('reportesService · consumoPorInsumo', () => {
             salidas_cantidad: 85, salidas_valor: 1700,
             venta_valor: 1600, merma_valor: 100
         });
+        // Stock sumado de los almacenes logístico y de producción
+        expect(ron.stock_total).toBe(15.5);
+        expect(ron.stock_almacenes).toEqual([
+            { almacen: 'Cocina', categoria: 'produccion', cantidad: 3 },
+            { almacen: 'Central', categoria: 'logistico', cantidad: 12.5 }
+        ]);
+        // La consulta de stock suma lotes activos sin filtrar almacén
+        const sqlStock = db.query.mock.calls[1][0];
+        expect(sqlStock).toContain("l.estado = 'ACTIVO'");
+        expect(sqlStock).toContain('FROM lotes');
         // El conteo físico es informativo: no aparece en el desglose
         expect(ron.detalle_salidas.map(d => d.etiqueta)).toEqual(['Consumo por venta', 'Merma']);
         expect(reporte.totales).toMatchObject({
@@ -114,11 +127,22 @@ describe('reportesService · consumoPorInsumo', () => {
         db.query.mockResolvedValueOnce([[
             { producto_id: 1, codigo: 'P1', nombre: 'Limón', unidad: 'kg', tipo_movimiento: 'MERMA', cantidad: 1, valor: 2 },
             { producto_id: 2, codigo: 'P2', nombre: 'Ron', unidad: 'ml', tipo_movimiento: 'VENTA', cantidad: 50, valor: 1000 }
+        ], []]).mockResolvedValueOnce([[
+            { producto_id: 2, almacen: 'Bar', categoria: 'produccion', cantidad: 4 }
         ], []]);
 
         const reporte = await ReportesService.consumoPorInsumo({ desde: '2026-08-01', hasta: '2026-08-31', almacen_id: null });
         expect(reporte.insumos[0].nombre).toBe('Ron');
         expect(reporte.insumos[1].nombre).toBe('Limón');
+        expect(reporte.insumos[0].stock_total).toBe(4);
+        expect(reporte.insumos[1].stock_total).toBe(0);
+    });
+
+    it('sin insumos con movimiento no consulta el stock', async () => {
+        db.query.mockResolvedValueOnce([[], []]);
+        const reporte = await ReportesService.consumoPorInsumo({ desde: '2026-08-01', hasta: '2026-08-31', almacen_id: null });
+        expect(reporte.insumos).toEqual([]);
+        expect(db.query).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -219,6 +243,8 @@ describe('reportesService · exportaciones CSV', () => {
                 nombre: 'Ron', codigo: 'P1', unidad: 'ml',
                 entradas_cantidad: 100, entradas_valor: 2000,
                 salidas_cantidad: 85, salidas_valor: 1700,
+                stock_total: 15.5,
+                stock_almacenes: [{ almacen: 'Central', categoria: 'logistico', cantidad: 12.5 }, { almacen: 'Cocina', categoria: 'produccion', cantidad: 3 }],
                 venta_valor: 1600, merma_valor: 100,
                 detalle_salidas: [{ etiqueta: 'Consumo por venta', cantidad: 80, valor: 1600 }, { etiqueta: 'Merma', cantidad: 5, valor: 100 }]
             }],
@@ -226,9 +252,9 @@ describe('reportesService · exportaciones CSV', () => {
         };
         const csv = ReportesService.consumoInsumosACSV(reporte);
         expect(csv.charCodeAt(0)).toBe(0xFEFF);
-        expect(csv).toContain('Insumo;Codigo;Unidad;Entradas cant;Entradas valor;Salidas cant;Salidas valor;Salidas: venta;Salidas: merma/ajuste;Desglose de salidas');
-        expect(csv).toContain('Ron;P1;ml;100,000;2000,00;85,000;1700,00;1600,00;100,00;Consumo por venta 80,000 ($1600,00) | Merma 5,000 ($100,00)');
-        expect(csv).toContain('TOTALES;;;;2000,00;;1700,00;1600,00;100,00;Insumos: 1');
+        expect(csv).toContain('Insumo;Codigo;Unidad;Entradas cant;Entradas valor;Salidas cant;Salidas valor;Stock total (todos los almacenes);Stock por almacen;Salidas: venta;Salidas: merma/ajuste;Desglose de salidas');
+        expect(csv).toContain('Ron;P1;ml;100,000;2000,00;85,000;1700,00;15,500;Central 12,500 | Cocina 3,000;1600,00;100,00;Consumo por venta 80,000 ($1600,00) | Merma 5,000 ($100,00)');
+        expect(csv).toContain('TOTALES;;;;2000,00;;1700,00;;;1600,00;100,00;Insumos: 1');
     });
 
     it('ventasHorasACCSV vuelca las dos distribuciones', () => {

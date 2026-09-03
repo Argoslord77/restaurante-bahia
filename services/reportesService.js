@@ -397,6 +397,38 @@ async function consumoPorInsumo(filtros) {
         porInsumo.set(f.producto_id, insumo);
     }
 
+    // Stock vigente de cada insumo en TODOS los almacenes (logísticos y de
+    // producción): suma de los lotes activos, independiente del filtro de
+    // almacén aplicado a los movimientos del período.
+    const stockPorProducto = new Map();
+    if (porInsumo.size > 0) {
+        const idsProductos = [...porInsumo.keys()];
+        const [stockFilas] = await db.query(`
+            SELECT l.producto_id,
+                   COALESCE(a.nombre, 'Sin almacén') AS almacen,
+                   a.categoria,
+                   COALESCE(SUM(l.cantidad_actual), 0) AS cantidad
+            FROM lotes l
+            LEFT JOIN almacenes a ON a.id = l.almacen_id
+            WHERE l.producto_id IN (${idsProductos.map(() => '?').join(', ')})
+              AND l.estado = 'ACTIVO' AND l.cantidad_actual > 0
+            GROUP BY l.producto_id, a.nombre, a.categoria
+            ORDER BY a.nombre ASC
+        `, idsProductos);
+
+        for (const s of stockFilas) {
+            const entrada = stockPorProducto.get(s.producto_id) || { total: 0, almacenes: [] };
+            const cantidad = Number(s.cantidad || 0);
+            entrada.total += cantidad;
+            entrada.almacenes.push({
+                almacen: s.almacen,
+                categoria: s.categoria || null,
+                cantidad: num(cantidad, 3)
+            });
+            stockPorProducto.set(s.producto_id, entrada);
+        }
+    }
+
     let totEntV = 0, totSalV = 0, totVentaV = 0, totMermaV = 0;
     const insumos = [...porInsumo.values()].map(i => {
         const detalle = [...i.detalle_salidas.entries()]
@@ -413,6 +445,8 @@ async function consumoPorInsumo(filtros) {
             entradas_valor: num(i.entradas_valor, 2),
             salidas_cantidad: num(i.salidas_cantidad, 3),
             salidas_valor: num(i.salidas_valor, 2),
+            stock_total: num(stockPorProducto.get(i.id)?.total || 0, 3),
+            stock_almacenes: stockPorProducto.get(i.id)?.almacenes || [],
             venta_valor: num(ventaV, 2),
             merma_valor: num(mermaV, 2),
             detalle_salidas: detalle
@@ -1334,18 +1368,21 @@ function consumoInsumosACSV(reporte) {
     const filas = [];
     filas.push(`Consumo por insumo;${reporte.desde};a;${reporte.hasta}${reporte.almacen_id ? ';Almacen ' + reporte.almacen_id : ''}`);
     filas.push('');
-    filas.push('Insumo;Codigo;Unidad;Entradas cant;Entradas valor;Salidas cant;Salidas valor;Salidas: venta;Salidas: merma/ajuste;Desglose de salidas');
+    filas.push('Insumo;Codigo;Unidad;Entradas cant;Entradas valor;Salidas cant;Salidas valor;Stock total (todos los almacenes);Stock por almacen;Salidas: venta;Salidas: merma/ajuste;Desglose de salidas');
     for (const i of reporte.insumos) {
         const desglose = i.detalle_salidas.map(d => `${d.etiqueta} ${csvNum(d.cantidad, 3)} ($${csvNum(d.valor)})`).join(' | ');
+        const stockAlmacenes = (i.stock_almacenes || [])
+            .map(s => `${s.almacen} ${csvNum(s.cantidad, 3)}`).join(' | ');
         filas.push([
             csvTexto(i.nombre), csvTexto(i.codigo), csvTexto(i.unidad),
             csvNum(i.entradas_cantidad, 3), csvNum(i.entradas_valor),
             csvNum(i.salidas_cantidad, 3), csvNum(i.salidas_valor),
+            csvNum(i.stock_total, 3), csvTexto(stockAlmacenes),
             csvNum(i.venta_valor), csvNum(i.merma_valor), csvTexto(desglose)
         ].join(';'));
     }
     const t = reporte.totales;
-    filas.push(`TOTALES;;;;${csvNum(t.entradas_valor)};;${csvNum(t.salidas_valor)};${csvNum(t.consumo_venta_valor)};${csvNum(t.merma_valor)};Insumos: ${csvNum(t.insumos, 0)}`);
+    filas.push(`TOTALES;;;;${csvNum(t.entradas_valor)};;${csvNum(t.salidas_valor)};;;${csvNum(t.consumo_venta_valor)};${csvNum(t.merma_valor)};Insumos: ${csvNum(t.insumos, 0)}`);
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 

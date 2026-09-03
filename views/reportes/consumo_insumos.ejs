@@ -111,6 +111,7 @@
                                     <th class="py-3 text-end">Valor entradas</th>
                                     <th class="py-3 text-end">Salidas</th>
                                     <th class="py-3 text-end">Valor salidas</th>
+                                    <th class="py-3 text-end" title="Stock vigente sumando los lotes activos de todos los almacenes (logísticos y de producción)">Stock total</th>
                                     <th class="py-3 text-end">A la venta</th>
                                     <th class="py-3 text-end pe-4">Merma / ajuste</th>
                                 </tr>
@@ -133,6 +134,12 @@
                                     <td class="text-end text-success">$<%= i.entradas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end fw-semibold"><%= i.salidas_cantidad.toLocaleString('es-ES') %></td>
                                     <td class="text-end fw-semibold">$<%= i.salidas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end <%= i.stock_total > 0 ? '' : 'text-danger fw-semibold' %>" title="Suma de los lotes activos en todos los almacenes (logísticos y de producción)">
+                                        <%= i.stock_total.toLocaleString('es-ES') %>
+                                        <% if (i.stock_almacenes.length > 1) { %>
+                                            <small class="text-muted d-block fw-normal"><%= i.stock_almacenes.map(s => `${s.almacen}: ${s.cantidad.toLocaleString('es-ES')}`).join(' · ') %></small>
+                                        <% } %>
+                                    </td>
                                     <td class="text-end">$<%= i.venta_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end pe-4 <%= i.merma_valor > 0 ? 'text-warning fw-semibold' : 'text-muted' %>" title="<%= mermaPct.toFixed(1) %>% de las salidas">
                                         $<%= i.merma_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %>
@@ -140,7 +147,7 @@
                                 </tr>
                                 <% }) %>
                                 <% if (reporte.insumos.length === 0) { %>
-                                <tr><td colspan="7" class="text-center text-muted py-4">Sin movimientos en el período con estos filtros.</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted py-4">Sin movimientos en el período con estos filtros.</td></tr>
                                 <% } %>
                             </tbody>
                             <tfoot class="table-light fw-bold">
@@ -150,6 +157,7 @@
                                     <td class="text-end text-success">$<%= reporte.totales.entradas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td></td>
                                     <td class="text-end">$<%= reporte.totales.salidas_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td></td>
                                     <td class="text-end">$<%= reporte.totales.consumo_venta_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end pe-4 text-warning">$<%= reporte.totales.merma_valor.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                 </tr>
