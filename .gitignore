@@ -5,3 +5,25 @@ coverage
 .DS_Store
 public/uploads/*
 !public/uploads/.gitkeep
+
+# ── Secretos y datos: NUNCA al repositorio (es público) ────────────────────
+# .gitignore no afecta a lo que YA estaba trackeado: hubo que hacer
+# `git rm --cached` de .env, certs/ y los respaldos SQL. Ver SEGURIDAD.md.
+.env
+.env.*
+!.env.example
+certs/
+*.pem
+*.key
+licencia/*.dat
+licencia/*.pub
+
+# Respaldos y volcados de base de datos (datos del negocio)
+respaldo_*.sql
+respaldo_*.txt
+*.dump
+backups/
+
+# Artefactos de ejecución
+logs/
+tmp/
