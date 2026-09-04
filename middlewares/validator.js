@@ -452,6 +452,10 @@ const salidaManualValidationRules = {
         body('cantidad')
             .notEmpty().withMessage('La cantidad es obligatoria')
             .isFloat({ min: 0.001 }).withMessage('La cantidad debe ser mayor a 0'),
+
+        body('unidad_medida_id')
+            .optional({ values: 'falsy' })
+            .isInt({ min: 1 }).withMessage('La unidad de medida no es válida'),
         
         body('tipo')
             .notEmpty().withMessage('El tipo de salida es obligatorio')

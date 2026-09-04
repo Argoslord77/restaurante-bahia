@@ -1,5 +1,6 @@
 // services/salidaManualService.js - Servicio para gestión de salidas manuales de inventario
 const SalidaManual = require('../models/salidaManualModel');
+const UnidadMedidaService = require('./unidadMedidaService');
 const logger = require('../config/logger');
 
 const SalidaManualService = {
@@ -65,15 +66,33 @@ const SalidaManualService = {
                 throw new Error('El usuario es obligatorio');
             }
 
-            // Verificar stock disponible
+            // ── Unidad de medida ─────────────────────────────────────────
+            // La salida se registra en la unidad elegida por el usuario, pero el
+            // descuento de lotes y el kardex operan en la unidad de INVENTARIO
+            // del producto (mismo criterio que las entradas de almacén).
+            // Si no se envía unidad, se asume la unidad de inventario (factor 1).
+            let cantidadInventario = Number(salidaData.cantidad);
+            let infoUnidad = null;
+
+            if (salidaData.unidad_medida_id) {
+                infoUnidad = await UnidadMedidaService.validarUnidadParaEntrada(
+                    salidaData.producto_id,
+                    salidaData.unidad_medida_id
+                );
+                const factor = Number(infoUnidad.factor_a_inventario) || 1;
+                cantidadInventario = cantidadInventario * factor;
+            }
+
+            // Verificar stock disponible (en unidades de inventario)
             const stockDisponible = await SalidaManual.verificarStock(
                 salidaData.almacen_id,
                 salidaData.producto_id,
-                salidaData.cantidad
+                cantidadInventario
             );
 
             if (!stockDisponible) {
-                throw new Error('No hay suficiente stock en el almacén');
+                throw new Error('No hay suficiente stock en el almacén' +
+                    (infoUnidad ? ` para la cantidad indicada en ${infoUnidad.unidad.abreviatura}` : ''));
             }
 
             const connection = await db.getConnection();
@@ -86,7 +105,7 @@ const SalidaManualService = {
                     salidaData.producto_id
                 );
 
-                let cantidadPendiente = salidaData.cantidad;
+                let cantidadPendiente = cantidadInventario;
                 const movimientos = [];
 
                 // Descontar de lotes
@@ -150,7 +169,17 @@ const SalidaManualService = {
 
                 await connection.commit();
                 logger.info(`Salida manual ${salidaId} registrada. Movimientos: ${movimientos.length}`);
-                return { success: true, id: salidaId, movimientos };
+                return {
+                    success: true,
+                    id: salidaId,
+                    movimientos,
+                    unidad: infoUnidad ? {
+                        id: infoUnidad.unidad.id,
+                        abreviatura: infoUnidad.unidad.abreviatura,
+                        factor_a_inventario: Number(infoUnidad.factor_a_inventario) || 1,
+                        cantidad_inventario: cantidadInventario
+                    } : null
+                };
             } catch (error) {
                 await connection.rollback();
                 throw error;
@@ -180,6 +209,84 @@ const SalidaManualService = {
         } catch (error) {
             logger.error('Error al listar salidas por período:', error);
             throw new Error('Error al listar las salidas');
+        }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Panel profesional de análisis (kardex)
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Listado filtrado, ordenado y paginado para la vista principal
+    listarFiltrado: async (filtros = {}) => {
+        try {
+            return await SalidaManual.getFiltrado(filtros);
+        } catch (error) {
+            logger.error('Error al listar salidas con filtros:', error);
+            throw new Error('Error al listar las salidas');
+        }
+    },
+
+    // Resumen por tipo con los filtros del panel aplicados
+    resumenFiltrado: async (filtros = {}) => {
+        try {
+            return await SalidaManual.getResumenFiltrado(filtros);
+        } catch (error) {
+            logger.error('Error al obtener resumen filtrado:', error);
+            return [];
+        }
+    },
+
+    // Usuarios que han registrado salidas (filtro especializado)
+    usuariosConSalidas: async () => {
+        try {
+            return await SalidaManual.getUsuariosConSalidas();
+        } catch (error) {
+            logger.error('Error al listar usuarios con salidas:', error);
+            return [];
+        }
+    },
+
+    /**
+     * Exporta a CSV el listado con los filtros aplicados del panel.
+     * Mismas convenciones que la exportación de auditoría: separador ';',
+     * BOM UTF-8 para Excel y todos los campos entrecomillados.
+     */
+    exportarCSV: async (filtros = {}, limite = 20000) => {
+        try {
+            const rows = await SalidaManual.getParaExportar(filtros, limite);
+
+            const escaparCampo = (valor) => {
+                if (valor === null || valor === undefined) return '';
+                const texto = String(valor).replace(/"/g, '""').replace(/\r?\n/g, ' ');
+                return `"${texto}"`;
+            };
+
+            const cabecera = [
+                'ID', 'Documento', 'Fecha', 'Almacen', 'Producto', 'Codigo',
+                'Cantidad', 'Unidad', 'Tipo', 'Motivo', 'Notas', 'Usuario', 'Costo impactado'
+            ].join(';');
+
+            const lineas = rows.map(r => [
+                r.id,
+                `SM-${String(r.id).padStart(6, '0')}`,
+                r.fecha_registro ? new Date(r.fecha_registro).toISOString() : '',
+                r.almacen_nombre,
+                r.producto_nombre,
+                r.producto_codigo || '',
+                r.cantidad,
+                r.unidad_abreviatura || '',
+                r.tipo,
+                r.motivo || '',
+                r.notas || '',
+                r.usuario_nombre || '',
+                Number(r.costo_total || 0).toFixed(2)
+            ].map(escaparCampo).join(';'));
+
+            // BOM para que Excel reconozca el UTF-8 y respete los acentos
+            return { csv: '\ufeff' + [cabecera, ...lineas].join('\r\n'), filas: rows.length };
+        } catch (error) {
+            logger.error('Error al exportar salidas manuales a CSV:', error);
+            throw new Error('Error al exportar las salidas');
         }
     }
 };

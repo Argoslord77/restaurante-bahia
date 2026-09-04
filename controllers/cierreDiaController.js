@@ -1,6 +1,7 @@
 // controllers/cierreDiaController.js
 const db = require('../config/db');
 const turnoService = require('../services/turnoService');
+const InventarioService = require('../services/inventarioService');
 
 /**
  * Obtiene los datos financieros del cierre (comandas, desglose de pagos y resumen).
@@ -97,7 +98,18 @@ async function obtenerDatosCierre(turnoActivo) {
             fondo_apertura: fondoApertura,
             total_en_caja_esperado: fondoApertura + total_efectivo_total_caja
         };
-    return { pedidos, desglosePagos, resumen };
+
+        // 4. Movimiento de inventario del turno (consumo por ventas, mermas,
+        //    transferencias, etc.). Un fallo del cálculo no debe tumbar el
+        //    cierre financiero: se registra y se continúa sin la sección.
+        let movimientosInventario = null;
+        try {
+            movimientosInventario = await InventarioService.movimientosPorTurno(turnoActivo);
+        } catch (eInv) {
+            console.error('Error al calcular el movimiento de inventario del turno:', eInv);
+        }
+
+    return { pedidos, desglosePagos, resumen, movimientosInventario };
 }
 
 
@@ -113,7 +125,7 @@ const CierreDiaController = {
                 return res.status(404).send('No hay un turno de servicio abierto actualmente.');
             }
 
-            const { pedidos, desglosePagos, resumen } = await obtenerDatosCierre(turnoActivo);
+            const { pedidos, desglosePagos, resumen, movimientosInventario } = await obtenerDatosCierre(turnoActivo);
 
             res.render('caja/cierre_dia_ticket', {
                 pageTitle: 'Ticket de Cierre del Día',
@@ -121,7 +133,8 @@ const CierreDiaController = {
                 user: req.user,
                 resumen,
                 pedidosCuentas: pedidos,
-                desgloseMonedas: desglosePagos
+                desgloseMonedas: desglosePagos,
+                movimientosInventario
             });
         } catch (error) {
             console.error('Error al generar ticket de cierre:', error);
@@ -156,11 +169,12 @@ const CierreDiaController = {
                         total_en_caja_esperado: 0
                     },
                     pedidosCuentas: [],
-                    desgloseMonedas: []
+                    desgloseMonedas: [],
+                    movimientosInventario: null
                 });
             }
 
-            const { pedidos, desglosePagos, resumen } = await obtenerDatosCierre(turnoActivo);
+            const { pedidos, desglosePagos, resumen, movimientosInventario } = await obtenerDatosCierre(turnoActivo);
 
             res.render('caja/cierre_dia', {
                 pageTitle: 'Cierre del Día y Auditoría de Cuentas',
@@ -169,7 +183,8 @@ const CierreDiaController = {
                 view: 'cierre-dia',
                 resumen,
                 pedidosCuentas: pedidos,
-                desgloseMonedas: desglosePagos
+                desgloseMonedas: desglosePagos,
+                movimientosInventario
             });
 
         } catch (error) {

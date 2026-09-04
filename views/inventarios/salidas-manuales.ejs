@@ -4,12 +4,144 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= typeof title !== 'undefined' ? title : 'Salidas Manuales - Restaurante Bahía' %></title>
-    <link class="js-bootstrap-css" rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/styles.css"> 
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/select2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+
+    <style>
+        /* Ajuste estético para integrar Select2 con los inputs de Bootstrap 5 */
+        .select2-container--default .select2-selection--single {
+            height: calc(1.5em + 0.75rem + 2px);
+            padding: 0.375rem 0.75rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            display: flex;
+            align-items: center;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 100%;
+            top: 0;
+            right: 10px;
+        }
+        .select2-container { width: 100% !important; }
+        .select2-container--default.select2-container--disabled .select2-selection--single {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #6c757d; }
+        /* Variante compacta para el panel de filtros (form-select-sm) */
+        select.form-select-sm + .select2-container .select2-selection--single {
+            height: calc(1.8125rem + 2px);
+            font-size: 0.875rem;
+        }
+
+        /* Encabezados ordenables de la tabla */
+        .th-orden { color: #ffffff; text-decoration: none; }
+        .th-orden:hover { color: #d1d5db; text-decoration: underline; }
+        .th-orden .fa-solid { font-size: 0.7rem; opacity: .85; }
+
+        /* Chips de rangos rápidos de fechas */
+        .chip-rango { cursor: pointer; }
+
+        /* Encabezado exclusivo del informe impreso */
+        .print-only { display: none; }
+
+        @media print {
+            @page { size: A4 landscape; margin: 12mm; }
+            body { background: #ffffff !important; }
+            .no-print, #sidebarMenu, .toast-container-custom, .modal,
+            .bg-white.d-md-none, .pagination { display: none !important; }
+            main {
+                width: 100% !important;
+                max-width: 100% !important;
+                flex: 0 0 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .card { box-shadow: none !important; border: 1px solid #dee2e6 !important; break-inside: avoid; }
+            .card-header { background: #f8f9fa !important; }
+            table { font-size: 10px; width: 100% !important; }
+            .table td, .table th { padding: 3px 6px; }
+            /* Encabezado de tabla legible en blanco y negro */
+            .table-custom-thead { background: none !important; }
+            .table-custom-thead th { color: #000000 !important; border-bottom: 2px solid #000 !important; }
+            .th-orden { color: #000000 !important; }
+            .badge { border: 1px solid #999; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .print-only { display: block !important; }
+            .fs-4 { font-size: 1.05rem !important; }
+        }
+    </style>
 </head>
 <body>
+
+    <%
+        // ── Utilidades de la vista (panel profesional de análisis) ──
+        const TIPOS_SALIDA = [
+            { id: 'merma',            etiqueta: 'Mermas',           icono: 'fa-carrot',            badge: 'bg-warning text-dark' },
+            { id: 'rotura',           etiqueta: 'Roturas',          icono: 'fa-hammer',            badge: 'bg-danger text-white' },
+            { id: 'perdida',          etiqueta: 'Pérdidas',         icono: 'fa-circle-question',   badge: 'bg-secondary text-white' },
+            { id: 'ajuste_auditoria', etiqueta: 'Ajustes Auditoría',icono: 'fa-clipboard-check',   badge: 'bg-info text-dark' },
+            { id: 'caducado',         etiqueta: 'Caducados',        icono: 'fa-clock',             badge: 'bg-dark text-white' },
+            { id: 'otro',             etiqueta: 'Otros',            icono: 'fa-ellipsis',          badge: 'bg-light text-dark border' }
+        ];
+        const etiquetaTipo = id => (TIPOS_SALIDA.find(t => t.id === id) || { etiqueta: id }).etiqueta;
+        const badgeTipo = id => (TIPOS_SALIDA.find(t => t.id === id) || { badge: 'bg-secondary text-white' }).badge;
+
+        // Conserva todos los filtros activos; permite sobrescribir/agregar parámetros
+        const qs = (extra = {}) => {
+            const base = { ...filtros };
+            delete base.pagina; // los enlaces deciden la página explícitamente
+            Object.assign(base, extra);
+            return Object.entries(base)
+                .filter(([k, v]) => v !== '' && v !== null && v !== undefined)
+                .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+                .join('&');
+        };
+
+        // Ordenamiento de columnas
+        const ordenActual = filtros.orden || 'fecha';
+        const dirActual = String(filtros.dir || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+        const flecha = col => ordenActual === col
+            ? (dirActual === 'asc' ? ' <i class="fa-solid fa-arrow-up-short-wide"></i>' : ' <i class="fa-solid fa-arrow-down-wide-short"></i>')
+            : '';
+        const urlOrden = col => '/admin/salidas-manuales?' + qs({ orden: col, dir: (ordenActual === col && dirActual === 'desc') ? 'asc' : 'desc' });
+
+        // Totales del conjunto filtrado (derivados del resumen por tipo)
+        const totalSalidas = (resumen || []).reduce((acc, r) => acc + Number(r.total_salidas || 0), 0);
+        const totalUnidades = (resumen || []).reduce((acc, r) => acc + Number(r.total_cantidad || 0), 0);
+        const totalCosto = (resumen || []).reduce((acc, r) => acc + Number(r.total_costo || 0), 0);
+        const tipoPredominante = (resumen && resumen.length) ? resumen[0] : null;
+        const fmt = (n, dec = 2) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+        // Mapas auxiliares para describir los filtros activos
+        const almacenNombre = filtros.almacenId ? ((almacenes.find(a => String(a.id) === String(filtros.almacenId)) || {}).nombre) : null;
+        const productoNombre = filtros.productoId ? ((productos.find(p => String(p.id) === String(filtros.productoId)) || {}).nombre) : null;
+        const usuarioNombre = filtros.usuarioId ? ((usuarios.find(u => String(u.id) === String(filtros.usuarioId)) || {}).nombre) : null;
+
+        // Resumen legible de los filtros aplicados (para pantalla e impresión)
+        const descripcionFiltros = (() => {
+            const partes = [];
+            if (filtros.desde && filtros.hasta) partes.push(`Período: del ${filtros.desde} al ${filtros.hasta}`);
+            else if (filtros.desde) partes.push(`Desde: ${filtros.desde}`);
+            else if (filtros.hasta) partes.push(`Hasta: ${filtros.hasta}`);
+            if (filtros.tipo) partes.push(`Tipo: ${etiquetaTipo(filtros.tipo)}`);
+            if (almacenNombre) partes.push(`Almacén: ${almacenNombre}`);
+            if (productoNombre) partes.push(`Producto: ${productoNombre}`);
+            if (usuarioNombre) partes.push(`Usuario: ${usuarioNombre}`);
+            if (filtros.buscar) partes.push(`Búsqueda: "${filtros.buscar}"`);
+            if (ordenActual !== 'fecha' || dirActual !== 'desc') partes.push(`Orden: ${ordenActual} ${dirActual}`);
+            return partes.length ? partes.join(' · ') : 'Todas las salidas registradas';
+        })();
+
+        // Ventana de paginación (primera, última y ±2 alrededor de la actual)
+        const pagActual = paginacion.pagina, totalPags = paginacion.totalPaginas;
+        const paginas = [];
+        for (let p = 1; p <= totalPags; p++) {
+            if (p === 1 || p === totalPags || Math.abs(p - pagActual) <= 2) paginas.push(p);
+        }
+    %>
 
     <div class="toast-container-custom">
         <% if (typeof error_msg !== 'undefined' && error_msg && error_msg.length > 0) { %>
@@ -35,7 +167,7 @@
         <% } %>
     </div>
 
-    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm no-print">
         <div class="d-flex align-items-center gap-2">
             <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
             <span class="fw-bold text-dark">Restaurante Bahía</span>
@@ -57,90 +189,254 @@
                     modal: "salidaManualModal" 
                 }) %>
 
-                <!-- Resumen por tipo -->
-                <div class="card card-custom shadow-sm border-0 mb-4">
-                    <div class="card-header bg-white border-0 py-3">
-                        <h6 class="fw-bold mb-0"><i class="fa-solid fa-chart-pie me-2 text-primary"></i>Resumen por Tipo</h6>
+                <!-- Encabezado del informe impreso (solo visible al imprimir) -->
+                <div class="print-only mb-3">
+                    <h2 style="font-size: 16px; margin: 0;">Restaurante Bahía — Reporte de Salidas Manuales de Inventario</h2>
+                    <div style="font-size: 11px; color: #374151;">
+                        Generado: <%= new Date().toLocaleString('es-ES') %> ·
+                        Usuario: <%= user ? user.nombre : '—' %> ·
+                        <%= salidas.length %> de <%= Number(paginacion.total).toLocaleString('es-ES') %> registro(s)
                     </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <% if (resumen && resumen.length > 0) { %>
-                                <% resumen.forEach(item => { %>
-                                    <div class="col-md-3">
-                                        <div class="p-3 bg-light rounded">
-                                            <div class="text-muted small text-capitalize"><%= item.tipo %></div>
-                                            <div class="fs-4 fw-bold text-dark"><%= item.total_salidas %></div>
-                                            <div class="text-muted small"><%= item.total_cantidad.toFixed(2) %> unidades</div>
-                                        </div>
-                                    </div>
-                                <% }) %>
-                            <% } else { %>
-                                <div class="col-12 text-center text-muted">
-                                    No hay datos de salidas manuales
+                    <div style="font-size: 11px; color: #374151;"><strong>Filtros:</strong> <%= descripcionFiltros %></div>
+                    <div style="font-size: 11px; color: #374151;">
+                        Totales: <%= Number(totalSalidas).toLocaleString('es-ES') %> salida(s) ·
+                        <%= fmt(totalUnidades, 2) %> unidades · $<%= fmt(totalCosto, 2) %> costo impactado
+                    </div>
+                    <hr style="margin: 6px 0;">
+                </div>
+
+                <!-- Indicadores del conjunto filtrado -->
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-md-3">
+                        <div class="card card-custom shadow-sm border-0 border-start border-primary border-4 h-100">
+                            <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="text-muted small fw-semibold text-uppercase">Salidas</div>
+                                    <div class="fs-4 fw-bold text-dark"><%= Number(totalSalidas).toLocaleString('es-ES') %></div>
                                 </div>
-                            <% } %>
+                                <i class="fa-solid fa-arrow-trend-down fs-3 text-primary opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card card-custom shadow-sm border-0 border-start border-danger border-4 h-100">
+                            <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="text-muted small fw-semibold text-uppercase">Unidades descontadas</div>
+                                    <div class="fs-4 fw-bold text-dark"><%= fmt(totalUnidades, 2) %></div>
+                                </div>
+                                <i class="fa-solid fa-boxes-packing fs-3 text-danger opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card card-custom shadow-sm border-0 border-start border-success border-4 h-100">
+                            <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="text-muted small fw-semibold text-uppercase">Costo impactado</div>
+                                    <div class="fs-4 fw-bold text-dark">$<%= fmt(totalCosto, 2) %></div>
+                                </div>
+                                <i class="fa-solid fa-sack-dollar fs-3 text-success opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card card-custom shadow-sm border-0 border-start border-warning border-4 h-100">
+                            <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="text-muted small fw-semibold text-uppercase">Tipo predominante</div>
+                                    <div class="fs-6 fw-bold text-dark text-truncate">
+                                        <%= tipoPredominante ? etiquetaTipo(tipoPredominante.tipo).replace(/s$/, '') : '—' %>
+                                    </div>
+                                    <div class="text-muted small"><%= tipoPredominante ? Number(tipoPredominante.total_salidas).toLocaleString('es-ES') + ' salida(s)' : 'Sin datos' %></div>
+                                </div>
+                                <i class="fa-solid fa-chart-pie fs-3 text-warning opacity-50"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Filtros de tipo -->
+                <!-- Panel de análisis: filtros especializados, exportación e impresión -->
+                <div class="card card-custom shadow-sm border-0 mb-4 no-print">
+                    <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <h6 class="fw-bold mb-0"><i class="fa-solid fa-sliders me-2 text-primary"></i>Panel de Análisis</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a href="/admin/salidas-manuales/exportar?<%= qs({ pagina: 1, porPagina: '' }) %>"
+                               class="btn btn-sm btn-outline-success fw-semibold" title="Exportar a CSV el conjunto filtrado">
+                                <i class="fa-solid fa-file-csv me-1"></i>Exportar CSV
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-dark fw-semibold" onclick="window.print()" title="Imprimir el reporte (queda auditado)">
+                                <i class="fa-solid fa-print me-1"></i>Imprimir
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Rangos rápidos de fechas -->
+                        <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                            <span class="text-muted small fw-semibold me-1"><i class="fa-regular fa-calendar me-1"></i>Rangos rápidos:</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="hoy">Hoy</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="ayer">Ayer</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="7d">Últimos 7 días</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="mes">Este mes</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="mes_anterior">Mes anterior</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="todo">Todo el histórico</button>
+                        </div>
+
+                        <form id="formFiltrosSalidas" method="get" action="/admin/salidas-manuales">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fDesde" class="form-label small fw-semibold text-secondary mb-1">Desde</label>
+                                    <input type="date" class="form-control form-control-sm" id="fDesde" name="desde" value="<%= filtros.desde %>">
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fHasta" class="form-label small fw-semibold text-secondary mb-1">Hasta</label>
+                                    <input type="date" class="form-control form-control-sm" id="fHasta" name="hasta" value="<%= filtros.hasta %>">
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fAlmacen" class="form-label small fw-semibold text-secondary mb-1">Almacén</label>
+                                    <select class="form-select form-select-sm" id="fAlmacen" name="almacenId">
+                                        <option value="">Todos</option>
+                                        <% almacenes.forEach(a => { %>
+                                            <option value="<%= a.id %>" <%= String(filtros.almacenId) === String(a.id) ? 'selected' : '' %>><%= a.nombre %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-5 col-lg-3">
+                                    <label for="fProducto" class="form-label small fw-semibold text-secondary mb-1">Producto</label>
+                                    <select class="form-select form-select-sm" id="fProducto" name="productoId">
+                                        <option value=""></option>
+                                        <% productos.forEach(p => { %>
+                                            <option value="<%= p.id %>" <%= String(filtros.productoId) === String(p.id) ? 'selected' : '' %>><%= p.nombre %> (<%= p.codigo || 'N/A' %>)</option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label for="fTipo" class="form-label small fw-semibold text-secondary mb-1">Tipo</label>
+                                    <select class="form-select form-select-sm" id="fTipo" name="tipo">
+                                        <option value="">Todos</option>
+                                        <% TIPOS_SALIDA.forEach(t => { %>
+                                            <option value="<%= t.id %>" <%= filtros.tipo === t.id ? 'selected' : '' %>><%= t.etiqueta.replace(/s$/, '') %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label for="fUsuario" class="form-label small fw-semibold text-secondary mb-1">Usuario</label>
+                                    <select class="form-select form-select-sm" id="fUsuario" name="usuarioId">
+                                        <option value="">Todos</option>
+                                        <% (usuarios || []).forEach(u => { %>
+                                            <option value="<%= u.id %>" <%= String(filtros.usuarioId) === String(u.id) ? 'selected' : '' %>><%= [u.nombre, u.apellidos].filter(Boolean).join(' ') || u.usuario || ('ID ' + u.id) %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-3">
+                                    <label for="fBuscar" class="form-label small fw-semibold text-secondary mb-1">Buscar</label>
+                                    <input type="text" class="form-control form-control-sm" id="fBuscar" name="buscar" maxlength="100"
+                                           value="<%= filtros.buscar %>" placeholder="Motivo, notas, producto...">
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label for="fOrden" class="form-label small fw-semibold text-secondary mb-1">Ordenar por</label>
+                                    <select class="form-select form-select-sm" id="fOrden" name="orden">
+                                        <option value="fecha" <%= ordenActual === 'fecha' ? 'selected' : '' %>>Fecha</option>
+                                        <option value="almacen" <%= ordenActual === 'almacen' ? 'selected' : '' %>>Almacén</option>
+                                        <option value="producto" <%= ordenActual === 'producto' ? 'selected' : '' %>>Producto</option>
+                                        <option value="cantidad" <%= ordenActual === 'cantidad' ? 'selected' : '' %>>Cantidad</option>
+                                        <option value="costo" <%= ordenActual === 'costo' ? 'selected' : '' %>>Costo</option>
+                                        <option value="tipo" <%= ordenActual === 'tipo' ? 'selected' : '' %>>Tipo</option>
+                                        <option value="usuario" <%= ordenActual === 'usuario' ? 'selected' : '' %>>Usuario</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label for="fDir" class="form-label small fw-semibold text-secondary mb-1">Dirección</label>
+                                    <select class="form-select form-select-sm" id="fDir" name="dir">
+                                        <option value="desc" <%= dirActual === 'desc' ? 'selected' : '' %>>Descendente</option>
+                                        <option value="asc" <%= dirActual === 'asc' ? 'selected' : '' %>>Ascendente</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label for="fPorPagina" class="form-label small fw-semibold text-secondary mb-1">Por página</label>
+                                    <select class="form-select form-select-sm" id="fPorPagina" name="porPagina">
+                                        <% [25, 50, 100, 200].forEach(n => { %>
+                                            <option value="<%= n %>" <%= Number(filtros.porPagina) === n ? 'selected' : '' %>><%= n %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-lg-3 d-flex gap-2">
+                                    <button type="submit" class="btn btn-sm btn-dark flex-grow-1"><i class="fa-solid fa-filter me-1"></i>Filtrar</button>
+                                    <a href="/admin/salidas-manuales" class="btn btn-sm btn-outline-secondary" title="Limpiar filtros"><i class="fa-solid fa-rotate-left"></i></a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Resumen por tipo (según filtros aplicados) -->
                 <div class="card card-custom shadow-sm border-0 mb-4">
-                    <div class="card-body py-3">
-                        <div class="d-flex gap-2 flex-wrap">
-                            <a href="/admin/salidas-manuales" class="btn <%= tipoFiltro === 'todos' ? 'btn-primary' : 'btn-outline-secondary' %>">
-                                Todos
-                            </a>
-                            <a href="/admin/salidas-manuales?tipo=merma" class="btn <%= tipoFiltro === 'merma' ? 'btn-warning' : 'btn-outline-secondary' %>">
-                                Mermas
-                            </a>
-                            <a href="/admin/salidas-manuales?tipo=rotura" class="btn <%= tipoFiltro === 'rotura' ? 'btn-danger' : 'btn-outline-secondary' %>">
-                                Roturas
-                            </a>
-                            <a href="/admin/salidas-manuales?tipo=perdida" class="btn <%= tipoFiltro === 'perdida' ? 'btn-secondary' : 'btn-outline-secondary' %>">
-                                Pérdidas
-                            </a>
-                            <a href="/admin/salidas-manuales?tipo=ajuste_auditoria" class="btn <%= tipoFiltro === 'ajuste_auditoria' ? 'btn-info' : 'btn-outline-secondary' %>">
-                                Ajustes Auditoría
-                            </a>
-                            <a href="/admin/salidas-manuales?tipo=caducado" class="btn <%= tipoFiltro === 'caducado' ? 'btn-dark' : 'btn-outline-secondary' %>">
-                                Caducados
-                            </a>
-                            <a href="/admin/salidas-manuales?tipo=otro" class="btn <%= tipoFiltro === 'otro' ? 'btn-light' : 'btn-outline-secondary' %>">
-                                Otros
-                            </a>
+                    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0"><i class="fa-solid fa-chart-pie me-2 text-primary"></i>Resumen por Tipo <span class="fw-normal text-muted small">(conjunto filtrado)</span></h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <% TIPOS_SALIDA.forEach(t => {
+                                   const fila = (resumen || []).find(r => r.tipo === t.id); %>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <a href="/admin/salidas-manuales?<%= qs({ tipo: t.id, pagina: 1 }) %>" class="text-decoration-none">
+                                        <div class="p-3 bg-light rounded h-100 <%= filtros.tipo === t.id ? 'border border-2 border-primary' : '' %>">
+                                            <div class="small fw-semibold text-dark text-capitalize">
+                                                <i class="fa-solid <%= t.icono %> me-1 text-secondary"></i><%= t.etiqueta.replace(/s$/, '') %>
+                                            </div>
+                                            <div class="fs-4 fw-bold text-dark"><%= fila ? Number(fila.total_salidas).toLocaleString('es-ES') : 0 %></div>
+                                            <div class="text-muted small">
+                                                <%= fila ? fmt(fila.total_cantidad, 2) + ' und.' : 'Sin salidas' %>
+                                                <% if (fila && Number(fila.total_costo) > 0) { %> · $<%= fmt(fila.total_costo, 2) %><% } %>
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+                            <% }) %>
                         </div>
                     </div>
                 </div>
 
                 <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                    <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span class="small text-secondary">
+                            <i class="fa-solid fa-shield-halved me-1"></i>
+                            <strong><%= Number(paginacion.total).toLocaleString('es-ES') %></strong> salida(s) — <%= descripcionFiltros %>
+                        </span>
+                        <span class="small text-muted">Página <%= paginacion.pagina %> de <%= paginacion.totalPaginas %> · <%= paginacion.porPagina %> por página</span>
+                    </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
                                 <thead class="table-custom-thead text-uppercase fs-7">
                                     <tr>
-                                        <th class="ps-4 py-3">Fecha</th>
-                                        <th class="py-3">Almacén</th>
-                                        <th class="py-3">Producto</th>
-                                        <th class="py-3">Cantidad</th>
-                                        <th class="py-3">Tipo</th>
+                                        <th class="ps-4 py-3"><a class="th-orden" href="<%= urlOrden('fecha') %>">Fecha<%- flecha('fecha') %></a></th>
+                                        <th class="py-3"><a class="th-orden" href="<%= urlOrden('almacen') %>">Almacén<%- flecha('almacen') %></a></th>
+                                        <th class="py-3"><a class="th-orden" href="<%= urlOrden('producto') %>">Producto<%- flecha('producto') %></a></th>
+                                        <th class="py-3 text-end"><a class="th-orden" href="<%= urlOrden('cantidad') %>">Cantidad<%- flecha('cantidad') %></a></th>
+                                        <th class="py-3 text-end"><a class="th-orden" href="<%= urlOrden('costo') %>">Costo<%- flecha('costo') %></a></th>
+                                        <th class="py-3"><a class="th-orden" href="<%= urlOrden('tipo') %>">Tipo<%- flecha('tipo') %></a></th>
                                         <th class="py-3">Motivo</th>
-                                        <th class="py-3">Usuario</th>
+                                        <th class="py-3 pe-4"><a class="th-orden" href="<%= urlOrden('usuario') %>">Usuario<%- flecha('usuario') %></a></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <% if (salidas.length === 0) { %>
                                         <tr>
-                                            <td colspan="7" class="text-center py-5 text-muted">
+                                            <td colspan="8" class="text-center py-5 text-muted">
                                                 <i class="fa-solid fa-box-open d-block fs-2 mb-2 text-secondary"></i> 
-                                                No hay salidas manuales registradas.
+                                                No hay salidas manuales para los filtros aplicados.
+                                                <div class="mt-2 no-print">
+                                                    <a href="/admin/salidas-manuales" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate-left me-1"></i>Ver todo el histórico</a>
+                                                </div>
                                             </td>
                                         </tr>
                                     <% } else { %>
                                         <% salidas.forEach(salida => { %>
                                             <tr>
                                                 <td class="ps-4 fw-medium">
-                                                    <div class="text-dark"><%= new Date(salida.fecha_registro).toLocaleDateString() %></div>
-                                                    <div class="text-muted small"><%= new Date(salida.fecha_registro).toLocaleTimeString() %></div>
+                                                    <div class="text-dark"><%= new Date(salida.fecha_registro).toLocaleDateString('es-ES') %></div>
+                                                    <div class="text-muted small"><%= new Date(salida.fecha_registro).toLocaleTimeString('es-ES') %></div>
                                                 </td>
                                                 <td>
                                                     <div class="fw-semibold"><%= salida.almacen_nombre %></div>
@@ -149,14 +445,17 @@
                                                     <div class="fw-medium"><%= salida.producto_nombre %></div>
                                                     <div class="text-muted small"><%= salida.producto_codigo || '' %></div>
                                                 </td>
-                                                <td class="fw-bold text-danger"><%= salida.cantidad %></td>
+                                                <td class="fw-bold text-danger text-end"><%= parseFloat(salida.cantidad).toLocaleString('es-ES', { maximumFractionDigits: 3 }) %> <%= salida.unidad_abreviatura || '' %></td>
+                                                <td class="text-end <%= Number(salida.costo_total) > 0 ? 'text-dark fw-semibold' : 'text-muted' %>">
+                                                    <%= Number(salida.costo_total) > 0 ? '$' + fmt(salida.costo_total, 2) : '—' %>
+                                                </td>
                                                 <td>
-                                                    <span class="badge bg-secondary text-white text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                        <%= salida.tipo.replace('_', ' ') %>
+                                                    <span class="badge <%= badgeTipo(salida.tipo) %> text-capitalize px-3 py-1 rounded-pill fs-7">
+                                                        <%= etiquetaTipo(salida.tipo) %>
                                                     </span>
                                                 </td>
-                                                <td><%= salida.motivo || '—' %></td>
-                                                <td><%= salida.usuario_nombre || '—' %></td>
+                                                <td class="small"><%= salida.motivo || '—' %></td>
+                                                <td class="pe-4"><%= salida.usuario_nombre || '—' %></td>
                                             </tr>
                                         <% }) %>
                                     <% } %>
@@ -164,6 +463,33 @@
                             </table>
                         </div>
                     </div>
+                    <% if (paginacion.totalPaginas > 1) { %>
+                        <div class="card-footer bg-white border-top py-3 no-print">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <span class="small text-muted">
+                                    Mostrando <%= salidas.length %> registro(s) · Total <%= Number(paginacion.total).toLocaleString('es-ES') %>
+                                </span>
+                                <nav aria-label="Paginación de salidas">
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item <%= pagActual <= 1 ? 'disabled' : '' %>">
+                                            <a class="page-link" href="/admin/salidas-manuales?<%= qs({ pagina: pagActual - 1 }) %>"><i class="fa-solid fa-chevron-left"></i></a>
+                                        </li>
+                                        <% let prev = 0; paginas.forEach(p => { %>
+                                            <% if (prev && p - prev > 1) { %>
+                                                <li class="page-item disabled"><span class="page-link">…</span></li>
+                                            <% } %>
+                                            <li class="page-item <%= p === pagActual ? 'active' : '' %>">
+                                                <a class="page-link" href="/admin/salidas-manuales?<%= qs({ pagina: p }) %>"><%= p %></a>
+                                            </li>
+                                        <% prev = p; }) %>
+                                        <li class="page-item <%= pagActual >= totalPags ? 'disabled' : '' %>">
+                                            <a class="page-link" href="/admin/salidas-manuales?<%= qs({ pagina: pagActual + 1 }) %>"><i class="fa-solid fa-chevron-right"></i></a>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    <% } %>
                 </div>
             </main>
         </div>
@@ -180,7 +506,7 @@
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form id="salidaManualForm">
+                <form id="salidaManualForm" novalidate>
                     <div class="modal-body">
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -195,17 +521,34 @@
                             
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Producto <span class="text-danger">*</span></label>
-                                <select class="form-select" id="producto" name="producto_id" required>
-                                    <option value="">Seleccione producto</option>
+                                <select class="form-select select2-busqueda" id="producto" name="producto_id" required>
+                                    <option value=""></option>
                                     <% productos.forEach(producto => { %>
-                                        <option value="<%= producto.id %>"><%= producto.nombre %> (<%= producto.codigo || 'N/A' %>)</option>
+                                        <option value="<%= producto.id %>"
+                                                data-unidad-inventario-id="<%= producto.unidad_inventario_id || '' %>"
+                                                data-unidad-inventario="<%= producto.unidad_nombre || '' %>"><%= producto.nombre %> (<%= producto.codigo || 'N/A' %>)<%= producto.categoria_nombre ? ' — ' + producto.categoria_nombre : '' %></option>
                                     <% }) %>
                                 </select>
+                                <div id="stockHint" class="form-text small"></div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Unidad de medida <span class="text-danger">*</span></label>
+                                <select class="form-select" id="unidad_medida_id" name="unidad_medida_id" required disabled>
+                                    <option value="">Seleccione el producto primero...</option>
+                                    <% (unidades || []).forEach(u => { %>
+                                        <option value="<%= u.id %>" data-tipo="<%= u.tipo %>"><%= u.nombre %> (<%= u.abreviatura %>)</option>
+                                    <% }) %>
+                                </select>
+                                <div id="conversionHint" class="form-text small"></div>
                             </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Cantidad <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" id="cantidad" name="cantidad" step="0.001" min="0.001" required>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="cantidad" name="cantidad" step="0.001" min="0.001" required>
+                                    <span class="input-group-text bg-light text-muted" id="cantidadUnidad">—</span>
+                                </div>
                             </div>
                             
                             <div class="col-md-6">
@@ -221,14 +564,14 @@
                                 </select>
                             </div>
                             
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <label class="form-label fw-semibold">Motivo</label>
                                 <input type="text" class="form-control" id="motivo" name="motivo" placeholder="Ej: Producto dañado en cocina">
                             </div>
                             
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <label class="form-label fw-semibold">Notas</label>
-                                <textarea class="form-control" id="notas" name="notas" rows="2" placeholder="Información adicional..."></textarea>
+                                <textarea class="form-control" id="notas" name="notas" rows="1" placeholder="Información adicional..."></textarea>
                             </div>
                         </div>
                     </div>
@@ -243,19 +586,221 @@
         </div>
     </div>
 
+    <script src="/js/jquery-4.0.0.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script src="/js/libs/select2.min.js"></script>
+    <script src="/js/select2-busqueda-instantanea.js"></script>
     <script>
         const salidaManualModal = new bootstrap.Modal(document.getElementById('salidaManualModal'));
         const salidaManualForm = document.getElementById('salidaManualForm');
 
+        // ═══════════════ SELECT2: selección fácil de productos ═══════════════
+        $('#producto').select2({
+            dropdownParent: $('#salidaManualModal'),
+            placeholder: 'Escriba para buscar un producto...',
+            allowClear: true,
+            width: '100%'
+        });
+
+        $('#fProducto').select2({
+            placeholder: 'Todos los productos',
+            allowClear: true,
+            width: '100%'
+        });
+
+        // ═══════════════ UNIDAD DE MEDIDA DEL FORMULARIO ═══════════════
+        // La salida se expresa en la unidad elegida; el inventario opera en la
+        // unidad canónica del producto. El factor se consulta a la API de
+        // conversiones (misma que usan entradas, POS y transferencias).
+        const $unidadSelect = $('#unidad_medida_id');
+        const cacheFactores = {};
+        let factorActual = 1;         // 1 unidad elegida = factorActual de inventario
+        let unidadInventarioTxt = ''; // abreviatura de la unidad de inventario
+        let conversionDisponible = true;
+
+        function productoSeleccionado() {
+            const $opt = $('#producto').find('option:selected');
+            return ($opt.length && $opt.val()) ? $opt : null;
+        }
+
+        function abrevUnidadSeleccionada() {
+            const texto = $unidadSelect.find('option:selected').text() || '';
+            const m = texto.match(/\(([^)]+)\)\s*$/);
+            return m ? m[1] : '';
+        }
+
+        async function obtenerFactor(productoId, unidadId) {
+            const clave = productoId + ':' + unidadId;
+            if (cacheFactores[clave] !== undefined) return cacheFactores[clave];
+            const $opt = productoSeleccionado();
+            const unidadInvId = $opt ? ($opt.attr('data-unidad-inventario-id') || '') : '';
+            if (!unidadInvId || Number(unidadId) === Number(unidadInvId)) {
+                cacheFactores[clave] = 1;
+                return 1;
+            }
+            try {
+                const resp = await fetch('/admin/api/unidades-medida/convertir?cantidad=1&desde=' + unidadId + '&hasta=' + unidadInvId + '&producto_id=' + productoId);
+                const data = await resp.json();
+                cacheFactores[clave] = data.success ? (Number(data.factor) || 1) : null;
+            } catch (e) {
+                cacheFactores[clave] = null;
+            }
+            return cacheFactores[clave];
+        }
+
+        async function actualizarUnidadUI() {
+            const productoId = $('#producto').val();
+            const $opt = productoSeleccionado();
+            const unidadInvId = $opt ? ($opt.attr('data-unidad-inventario-id') || '') : '';
+            unidadInventarioTxt = $opt ? ($opt.attr('data-unidad-inventario') || '') : '';
+
+            $unidadSelect.prop('disabled', !productoId);
+            if (!productoId) {
+                $unidadSelect.val('');
+            } else if (unidadInvId) {
+                $unidadSelect.val(unidadInvId); // propone la unidad de inventario del producto
+            }
+            await recalcularConversion();
+        }
+
+        async function recalcularConversion() {
+            const productoId = $('#producto').val();
+            const unidadId = $unidadSelect.val();
+            const hint = $('#conversionHint');
+            const abrevSel = unidadId ? abrevUnidadSeleccionada() : '';
+            $('#cantidadUnidad').text(abrevSel || '—');
+
+            factorActual = 1;
+            conversionDisponible = true;
+            if (!productoId || !unidadId) {
+                hint.attr('class', 'form-text small').html('');
+                pintarStockHint();
+                return;
+            }
+
+            const $opt = productoSeleccionado();
+            const unidadInvId = $opt ? ($opt.attr('data-unidad-inventario-id') || '') : '';
+            if (unidadInvId && Number(unidadId) !== Number(unidadInvId)) {
+                const f = await obtenerFactor(productoId, unidadId);
+                if (f === null) {
+                    conversionDisponible = false;
+                    hint.attr('class', 'form-text small text-danger fw-semibold')
+                        .html('<i class="fa-solid fa-triangle-exclamation me-1"></i>No hay factor de conversión activo hacia la unidad de inventario' + (unidadInventarioTxt ? ' (' + unidadInventarioTxt + ')' : '') + '. Configúrelo antes de registrar la salida.');
+                    pintarStockHint();
+                    return;
+                }
+                factorActual = f;
+                hint.attr('class', 'form-text small text-muted')
+                    .html('<i class="fa-solid fa-right-left me-1"></i>1 ' + abrevSel + ' = ' + f + ' ' + (unidadInventarioTxt || 'unidad de inventario'));
+            } else {
+                hint.attr('class', 'form-text small').html('');
+            }
+            pintarStockHint();
+        }
+
+        // ═══════════════ STOCK DISPONIBLE (almacén + producto) ═══════════════
+        const cacheStock = {};
+        async function obtenerStock(almacenId) {
+            if (!almacenId) return null;
+            if (cacheStock[almacenId]) return cacheStock[almacenId];
+            try {
+                const resp = await fetch('/admin/inventario/api/stock/' + almacenId);
+                const data = await resp.json();
+                if (!data.success) return null;
+                const mapa = {};
+                (data.stock || []).forEach(s => { mapa[s.producto_id] = parseFloat(s.stock_actual) || 0; });
+                cacheStock[almacenId] = mapa;
+                return mapa;
+            } catch (e) {
+                return null; // sin stock consultable no se bloquea el registro
+            }
+        }
+
+        function pintarStockHint() {
+            const hint = $('#stockHint');
+            const stockInv = parseFloat(hint.attr('data-stock')); // stock en unidades de inventario
+            if (isNaN(stockInv)) { hint.attr('class', 'form-text small').html(''); return; }
+            if (!conversionDisponible) {
+                hint.attr('class', 'form-text small').html('');
+                return;
+            }
+
+            const abrevSel = $unidadSelect.val() ? abrevUnidadSeleccionada() : (unidadInventarioTxt || '');
+            const stockEnUnidad = stockInv / (factorActual || 1);
+            const stockSelTxt = stockEnUnidad.toLocaleString('es-ES', { maximumFractionDigits: 3 });
+            const stockInvTxt = stockInv.toLocaleString('es-ES', { maximumFractionDigits: 3 });
+
+            const cantidad = parseFloat($('#cantidad').val());
+            const cantidadEnInventario = isNaN(cantidad) ? NaN : cantidad * factorActual;
+
+            if (!isNaN(cantidadEnInventario) && cantidadEnInventario > stockInv) {
+                hint.attr('class', 'form-text small text-danger fw-semibold')
+                    .html('<i class="fa-solid fa-triangle-exclamation me-1"></i>La cantidad supera el stock disponible (' + stockSelTxt + ' ' + abrevSel + ')');
+            } else {
+                const equivalencia = factorActual !== 1 ? ' <span class="text-muted">(' + stockInvTxt + ' ' + (unidadInventarioTxt || 'inv.') + ' en inventario)</span>' : '';
+                hint.attr('class', 'form-text small ' + (stockInv > 0 ? 'text-success' : 'text-danger'))
+                    .html('<i class="fa-solid fa-boxes-stacked me-1"></i>Stock disponible: <strong>' + stockSelTxt + ' ' + abrevSel + '</strong>' + equivalencia);
+            }
+        }
+
+        async function actualizarStockHint() {
+            const almacenId = $('#almacen').val();
+            const productoId = $('#producto').val();
+            const hint = $('#stockHint');
+            if (!almacenId || !productoId) { hint.removeAttr('data-stock').attr('class', 'form-text small').html(''); return; }
+            hint.attr('class', 'form-text small text-muted').html('<i class="fa-solid fa-spinner fa-spin me-1"></i>Consultando stock...');
+            const mapa = await obtenerStock(almacenId);
+            if (!mapa) { hint.removeAttr('data-stock').attr('class', 'form-text small').html(''); return; }
+            hint.attr('data-stock', mapa[productoId] !== undefined ? mapa[productoId] : 0);
+            pintarStockHint();
+        }
+
+        $('#almacen').on('change', actualizarStockHint);
+        $('#producto').on('change', function() { actualizarUnidadUI(); actualizarStockHint(); });
+        $unidadSelect.on('change', recalcularConversion);
+        $('#cantidad').on('input', pintarStockHint);
+
+        // ═══════════════ ENVÍO DEL FORMULARIO DE SALIDA ═══════════════
         salidaManualForm.addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
+
+            // Validación manual (el select nativo está oculto por Select2)
+            const requeridos = [
+                ['almacen_id', 'Seleccione un almacén'],
+                ['producto_id', 'Seleccione un producto'],
+                ['unidad_medida_id', 'Seleccione la unidad de medida'],
+                ['cantidad', 'Indique la cantidad (mayor a 0)'],
+                ['tipo', 'Seleccione el tipo de salida']
+            ];
+            for (const [campo, msg] of requeridos) {
+                if (!formData.get(campo)) {
+                    Swal.fire('Falta información', msg, 'warning');
+                    return;
+                }
+            }
+
+            // Sin factor de conversión activo no se puede registrar en otra unidad
+            if (!conversionDisponible) {
+                Swal.fire('Conversión no configurada', 'No existe un factor de conversión activo entre la unidad elegida y la unidad de inventario del producto. Configúrelo en Unidades de Medida o seleccione la unidad de inventario.', 'warning');
+                return;
+            }
+
+            // Advertencia temprana si la cantidad supera el stock consultado
+            const stockConocido = parseFloat($('#stockHint').attr('data-stock'));
+            const cantidad = parseFloat(formData.get('cantidad'));
+            const cantidadEnInventario = cantidad * factorActual;
+            if (!isNaN(stockConocido) && !isNaN(cantidadEnInventario) && cantidadEnInventario > stockConocido) {
+                Swal.fire('Stock insuficiente', 'La cantidad indicada supera el stock disponible en el almacén seleccionado.', 'warning');
+                return;
+            }
 
             const data = {
                 almacen_id: formData.get('almacen_id'),
                 producto_id: formData.get('producto_id'),
                 cantidad: formData.get('cantidad'),
+                unidad_medida_id: formData.get('unidad_medida_id'),
                 tipo: formData.get('tipo'),
                 motivo: formData.get('motivo'),
                 notas: formData.get('notas')
@@ -291,7 +836,80 @@
 
         document.getElementById('salidaManualModal').addEventListener('hidden.bs.modal', function() {
             salidaManualForm.reset();
+            $('#producto').val(null).trigger('change');
+            $unidadSelect.prop('disabled', true).val('');
+            $('#conversionHint').attr('class', 'form-text small').html('');
+            $('#cantidadUnidad').text('—');
+            $('#stockHint').removeAttr('data-stock').attr('class', 'form-text small').html('');
+            factorActual = 1;
+            conversionDisponible = true;
+        });
+
+        // ═══════════════ PANEL DE ANÁLISIS: FILTROS ═══════════════
+        function deshabilitarVacios(formulario) {
+            formulario.querySelectorAll('select, input').forEach(campo => {
+                campo.disabled = (campo.value === '' || campo.value === null);
+            });
+        }
+
+        function enviarFiltros() {
+            const form = document.getElementById('formFiltrosSalidas');
+            deshabilitarVacios(form);
+            form.submit();
+        }
+
+        document.getElementById('formFiltrosSalidas').addEventListener('submit', function(e) {
+            e.preventDefault();
+            enviarFiltros();
+        });
+
+        // Aplicar de inmediato al cambiar orden, dirección o tamaño de página
+        ['fOrden', 'fDir', 'fPorPagina'].forEach(id => {
+            document.getElementById(id).addEventListener('change', enviarFiltros);
+        });
+
+        // Rangos rápidos de fechas
+        function fechaISO(d) {
+            return d.getFullYear() + '-' +
+                   String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                   String(d.getDate()).padStart(2, '0');
+        }
+
+        document.querySelectorAll('.chip-rango').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const hoy = new Date();
+                const desde = document.getElementById('fDesde');
+                const hasta = document.getElementById('fHasta');
+
+                switch (this.dataset.rango) {
+                    case 'hoy':
+                        desde.value = fechaISO(hoy); hasta.value = fechaISO(hoy); break;
+                    case 'ayer': {
+                        const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+                        desde.value = fechaISO(ayer); hasta.value = fechaISO(ayer); break;
+                    }
+                    case '7d': {
+                        const inicio = new Date(hoy); inicio.setDate(hoy.getDate() - 6);
+                        desde.value = fechaISO(inicio); hasta.value = fechaISO(hoy); break;
+                    }
+                    case 'mes':
+                        desde.value = fechaISO(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+                        hasta.value = fechaISO(hoy); break;
+                    case 'mes_anterior': {
+                        const primero = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+                        const ultimo = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+                        desde.value = fechaISO(primero); hasta.value = fechaISO(ultimo); break;
+                    }
+                    case 'todo':
+                        desde.value = ''; hasta.value = ''; break;
+                }
+                enviarFiltros();
+            });
         });
     </script>
+    <!-- Auditoría: registra la impresión real del documento (incluido Ctrl+P) -->
+    <script src="/js/auditoria-impresion.js"
+            data-documento="Reporte de salidas manuales de inventario"
+            data-entidad="Salidas manuales de inventario"></script>
 </body>
 </html>

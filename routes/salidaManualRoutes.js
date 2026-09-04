@@ -12,6 +12,13 @@ router.get('/salidas-manuales',
     salidaManualController.viewSalidasManuales
 );
 
+// Exportar a CSV el listado con los filtros del panel aplicados
+router.get('/salidas-manuales/exportar',
+    ensureAuthenticated,
+    checkRole(['superadministrador', 'administrador', 'almacenero']),
+    salidaManualController.exportarSalidasCSV
+);
+
 // API: Registrar nueva salida manual
 router.post('/api/salidas-manuales',
     ensureAuthenticated,

@@ -8,7 +8,7 @@ const ProductoModel = {
         const query = `
             SELECT 
                 p.id, p.codigo, p.nombre, p.tipo, p.activo, p.stock_minimo, p.permitida_venta, p.foto_url,
-                p.costo_promedio, p.costo_ultimo,
+                p.costo_promedio, p.costo_ultimo, p.unidad_inventario_id,
                 c.nombre as categoria_nombre,
                 u.abreviatura as unidad_nombre
             FROM productos p

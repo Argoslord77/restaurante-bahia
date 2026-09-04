@@ -237,6 +237,26 @@
         <div class="divider"></div>
         <% } %>
 
+        <!-- Movimiento de inventario del turno (ventas, mermas, etc.) -->
+        <% if (typeof movimientosInventario !== 'undefined' && movimientosInventario && movimientosInventario.totales.movimientos > 0) { %>
+        <div class="subtitle bold text-center">MOV. INVENTARIO</div>
+        <div class="totals-container">
+            <div class="total-row">
+                <span>CONSUMO VENTAS:</span>
+                <span>$<%= parseFloat(movimientosInventario.totales.costo_consumo_venta || 0).toFixed(2) %></span>
+            </div>
+            <div class="total-row">
+                <span>MERMAS/SALIDAS:</span>
+                <span>$<%= parseFloat(movimientosInventario.totales.costo_mermas || 0).toFixed(2) %></span>
+            </div>
+            <div class="total-row">
+                <span>MOVIMIENTOS:</span>
+                <span><%= movimientosInventario.totales.movimientos %></span>
+            </div>
+        </div>
+        <div class="divider"></div>
+        <% } %>
+
         <!-- Comandas del turno -->
         <% if (pedidosCuentas && pedidosCuentas.length > 0) { %>
         <div class="subtitle bold text-center">COMANDAS DEL TURNO</div>
