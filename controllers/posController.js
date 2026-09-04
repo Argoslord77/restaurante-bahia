@@ -2,6 +2,8 @@ const pool = require('../config/db');
 const InventarioService = require('../services/inventarioService');
 const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
+// Sello de tiempo del ciclo de vida de cada ítem (envío, listo, entrega).
+const ItemTiempos = require('../services/itemTiemposService');
 
 module.exports = {
     // Vista Principal del TPV / POS
@@ -375,6 +377,19 @@ module.exports = {
                 await pool.query('UPDATE pedidos SET subtotal = ?, total = ? WHERE id = ?', [subtotal, subtotal, currentPedidoId]);
             }
 
+            // Sello de envío a producción: los ítems que nacen en cocina/bar ya
+            // están en el monitor y su reloj empieza ahora. Los que quedan en
+            // 'en_espera' (servicio directo) se sellan al entregarlos.
+            const porEstado = new Map();
+            for (const item of insertedItems) {
+                if (!ItemTiempos.areaDe(item.estado)) continue;
+                if (!porEstado.has(item.estado)) porEstado.set(item.estado, []);
+                porEstado.get(item.estado).push(item.id_detalle);
+            }
+            for (const [estado, ids] of porEstado) {
+                await ItemTiempos.sellarEnvio(pool, ids, estado);
+            }
+
             return res.json({
                 success: true,
                 id_pedido: currentPedidoId,
@@ -400,7 +415,9 @@ module.exports = {
 
             if (!pool) return res.json({ success: true });
 
-            await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [nuevo_estado, id_detalle]);
+            // Sella la transición con su hora y su responsable (quién entregó,
+            // quién preparó): alimenta los tiempos de la vista de Pedidos/Ventas.
+            await ItemTiempos.sellarItem(pool, id_detalle, nuevo_estado, { usuarioId: req.user && req.user.id });
 
             // Comprobar si todos los ítems fueron entregados
             const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [id_detalle]);
@@ -439,11 +456,11 @@ module.exports = {
 
             if (!pool) return res.json({ success: true });
 
-            await pool.query(`
-                UPDATE detalles_pedido 
-                SET estado_item = 'entregado' 
-                WHERE id_pedido = ? AND estado_item NOT IN ('entregado', 'cancelado')
-            `, [pedidoId]);
+            // Entrega en lote: cada ítem pendiente queda sellado con la hora de
+            // entrega y el dependiente que la registró.
+            await ItemTiempos.sellarItemsDePedido(pool, pedidoId, ItemTiempos.ESTADOS.ENTREGADO, {
+                usuarioId: req.user && req.user.id
+            });
 
             await pool.query("UPDATE pedidos SET estado_pedido = 'entregado' WHERE id = ?", [pedidoId]);
 
@@ -476,11 +493,11 @@ module.exports = {
                 ? `${item.notas_especiales} | CANCELADO: ${motivo}`
                 : `CANCELADO: ${motivo}`;
 
-            await pool.query(`
-                UPDATE detalles_pedido 
-                SET estado_item = 'cancelado', notas_especiales = ?, afecta_inventario = 0 
-                WHERE id = ?
-            `, [notaActualizada, detalleId]);
+            await ItemTiempos.sellarCancelacion(pool, [detalleId], {
+                afectaInventario: 0,
+                sets: ['notas_especiales = ?'],
+                params: [notaActualizada]
+            });
 
             // Recalcular total del pedido
             const [totales] = await pool.query(`
@@ -651,10 +668,11 @@ module.exports = {
                     id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
                 WHERE id = ?
             `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
-            await connection.query(`
-                UPDATE detalles_pedido SET estado_item = 'entregado'
-                WHERE id_pedido = ? AND estado_item != 'cancelado'
-            `, [pedidoId]);
+            // Al cobrar, lo que faltaba por entregar se sella como entregado por
+            // el cajero (dentro de la misma transacción del cierre de cuenta).
+            await ItemTiempos.sellarItemsDePedido(connection, pedidoId, ItemTiempos.ESTADOS.ENTREGADO, {
+                usuarioId: cajeroId
+            });
 
             for (const pago of pagosNormalizados) {
                 await connection.query(`

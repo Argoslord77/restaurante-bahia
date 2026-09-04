@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
+// Sello de tiempo del ciclo de vida del ítem (cocina/bar → listo → entregado).
+const ItemTiempos = require('../services/itemTiemposService');
 
 module.exports = {
     // Vista del Monitor Digital de Cocina / Bar
@@ -187,7 +189,9 @@ module.exports = {
 
             if (!pool) return res.json({ success: true, message: 'Estado actualizado' });
 
-            await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [targetEstado, targetId]);
+            // El monitor de cocina/bar registra QUIÉN preparó el plato y CUÁNDO:
+            // es el dato que permite medir el tiempo de entrega por ítem.
+            await ItemTiempos.sellarItem(pool, targetId, targetEstado, { usuarioId: req.user && req.user.id });
 
             // Actualizar estado general del pedido si aplica
             const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [targetId]);

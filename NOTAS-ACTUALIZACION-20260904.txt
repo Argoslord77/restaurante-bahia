@@ -1,0 +1,126 @@
+================================================================================
+ RESTAURANTE BAHIA - ACTUALIZACION 04-09-2026
+ Pedidos/Ventas profesional + tiempos por item + numero real de mesa (cliente)
+================================================================================
+
+ Base:   commit 61a0392 (rama main, "29-08-2026-21-35pm Casi Listo")
+ Guia larga del paquete anterior: GUIA-ACTUALIZACION.pdf / LEEME.txt
+
+--------------------------------------------------------------------------------
+ QUE TRAE
+--------------------------------------------------------------------------------
+
+ 1) MENU DEL CLIENTE: mostraba el ID de la mesa en la base de datos.
+    Ahora muestra el numero real (mesas.numero, p.ej. "Nro 6") en la cabecera
+    y en el resumen de la cuenta. El ID sigue usandose en las URLs porque es
+    la clave que necesitan las rutas del cliente (/cliente/dashboard/:id_mesa).
+
+ 2) VISTA DE PEDIDOS/VENTAS (/admin/pedidos): deja de ser un listado de
+    "ordenes en consumo" y pasa a ser el registro de ventas del periodo.
+      - Rango de fechas (HOY por defecto) + filtros de turno, dependiente,
+        mesa, estado y busqueda libre (pedido, mesa o cliente).
+      - Rangos rapidos: Hoy / Ayer / Ultimos 7 dias / Mes actual / Limpiar.
+      - Resumen del periodo: pedidos (abiertas, cobradas, anuladas), importe
+        equivalente en CUP, descuentos, propinas, items entregados/cancelados
+        y duracion media del servicio.
+      - Desglose de cobros por moneda (CUP, USD, ZELLE...) con su equivalente.
+      - Cada fila se despliega y muestra el detalle de los items: cantidad,
+        precio, importe, estado, area (cocina/bar), alta, envio, listo,
+        entrega, TIEMPO DE ENTREGA en h:m:s, cocinero, quien lo entrego,
+        notas y modificadores; ademas los pagos registrados (metodo, moneda,
+        monto origen, cambio aplicado, equivalente CUP, referencia) y la
+        composicion de la cuenta (subtotal, descuento, impuesto, total, propina).
+      - Imprimir (con estilos de impresion), Exportar CSV (resumen por pedido)
+        y CSV por item, paginacion y filas por pagina.
+
+ 3) TIEMPOS POR ITEM (nuevo): cada cambio de estado de un plato queda sellado
+    con su hora y su responsable.
+      creado_en / enviado_en / area_preparacion / listo_en / entregado_en /
+      cancelado_en / id_usuario_preparacion / id_usuario_entrega
+    Lo sellan: el POS (enviar ronda, cambiar estado, entregar todo, cancelar
+    item, cobrar cuenta) y el monitor de cocina/bar (quien marca "listo").
+
+ 4) AUDITORIA: /admin/pedidos queda registrado como lectura con aviso y
+    /admin/pedidos/exportar como EXPORTACION.
+
+--------------------------------------------------------------------------------
+ PASOS DE DESPLIEGUE
+--------------------------------------------------------------------------------
+
+ 1. DETENER Y RESPALDAR
+      pm2 stop rest_cafe_bar
+      mysqldump -u root -p restaurante_db --routines --triggers \
+          --single-transaction > respaldo_$(date +%Y%m%d_%H%M).sql
+
+ 2. COPIAR LOS ARCHIVOS (carpeta 'actualizados/', respetando las rutas).
+    No hay dependencias nuevas: no hace falta npm install.
+
+ 3. MIGRACION (obligatoria para ver tiempos y cocinero)
+      mysql -u root -p restaurante_db < scripts/migracion_tiempos_detalles_pedido.sql
+    o, si trabajas con knex:
+      npm run migrate
+
+    * La migracion NO es idempotente en los ALTER (ejecutar UNA sola vez),
+      pero el codigo si es tolerante: si aun no la aplicaste, la vista de
+      Pedidos/Ventas funciona igual y muestra un aviso amarillo arriba.
+    * El historico anterior a la migracion se rellena de forma aproximada
+      (apertura de la orden = alta del item, cierre de la cuenta = entrega).
+      A partir de ahora los tiempos son exactos.
+
+ 4. COMPROBAR
+      bash scripts/verificar_despliegue.sh
+      npx jest services/itemTiemposService.test.js services/ventasService.test.js \
+               controllers/pedidoController.test.js \
+               migrations/20260904090000_add_tiempos_detalles_pedido.test.js
+
+ 5. ARRANCAR
+      pm2 start rest_cafe_bar
+
+--------------------------------------------------------------------------------
+ ARCHIVOS DE ESTA ENTREGA (21)
+--------------------------------------------------------------------------------
+
+   NUEVOS
+   services/ventasService.js                          listado, totales y CSV
+   services/ventasService.test.js                     22 pruebas
+   services/itemTiemposService.js                     sello de tiempos
+   services/itemTiemposService.test.js                17 pruebas
+   controllers/pedidoController.test.js               6 pruebas (pinta la vista real)
+   migrations/20260904090000_add_tiempos_detalles_pedido.js        migracion knex
+   migrations/20260904090000_add_tiempos_detalles_pedido.test.js   6 pruebas
+   scripts/migracion_tiempos_detalles_pedido.sql      MIGRACION (SQL puro)
+
+   MODIFICADOS
+   views/pedido/pedido.ejs                            vista nueva
+   views/cliente/dashboard.ejs                        numero real de la mesa
+   controllers/pedidoController.js                    controlador del registro
+   controllers/posController.js                       sella envios/entregas/cancelaciones
+   controllers/monitorController.js                   sella quien preparo el plato
+   services/pedidoService.js                          sella las cancelaciones
+   models/pedidoModel.js                              sella las transiciones
+   models/orderModel.js                               sella las transiciones
+   routes/pedidoRoutes.js                             ruta /admin/pedidos/exportar
+   config/auditoriaCatalogo.js                        reglas de auditoria
+   config/auditoriaCatalogo.test.js                   pruebas de esas reglas
+   scripts/verificar_despliegue.sh                    chequeo de esta entrega
+   TODO                                               punto 18 cerrado
+
+--------------------------------------------------------------------------------
+ REVERTIR
+--------------------------------------------------------------------------------
+
+    pm2 stop rest_cafe_bar
+    tar xzf respaldo_codigo.tar.gz        (o volver al commit 61a0392)
+    pm2 start rest_cafe_bar
+
+    Las columnas nuevas de detalles_pedido pueden quedarse: el codigo anterior
+    las ignora. Si prefieres quitarlas: npm run migrate:rollback
+    (o los ALTER ... DROP COLUMN del final de la migracion).
+
+--------------------------------------------------------------------------------
+ PENDIENTE SIGUIENTE (TODO punto 10)
+--------------------------------------------------------------------------------
+
+    Ficha de costo de los platillos del menu/dia y de los items no elaborados
+    que se venden en el restaurante.
+================================================================================

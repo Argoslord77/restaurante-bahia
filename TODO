@@ -56,6 +56,15 @@ Source: window.print() Este error se esta manifestando y los botones de la vista
 - Dentro de la visualizacion del POS de un mesero por parte del administrador, cuando se notifique sobre items agregados a la orden se reproducira un audio llamado "success.mp3" ubicado dentro de la carpeta public/sounds
 - En la vista de salidas de Manuales (inventarios) en el formulario de salida en el campo Producto utiliza tambien un select2 para que la seleccion sea mas facil. Agrega en esta vista todas las opciones profesionales de manejo de informacion que utilizamos en el kardex como seleccion de rangos de fechas, impresion, exportar a csv, filtros especializados, etc.  
 - Agrega un campo de unidad de medida tanto en entradas como en salidas de inventarios 
-18. Bugs o cosas que quedan pendientes para arreglar manana: 
-- En la vista del menu del cliente en lugar del nro real de la mesa se esta mostrando el ID de la mesa en BD. 
-- Profesionalizar la vista de Pedidos/Ventas regidos por rangos de fechas (hoy por defecto) donde se muestra en formato de tabla como en los reportes los pedidos hechos en el dia, en curso (con toda la informacion necesaria como turno, mesa, dependiente, hora de apertura/cierre, importe [desglosado en monedas], desglose de items con info de los entregados/cancelados, tiempo de entrega de los items en formato h:m:s, cocinero, duracion del servicio, etc)
+18. Bugs o cosas que quedan pendientes para arreglar manana: [OKOKOK 04-09-2026]
+- En la vista del menu del cliente en lugar del nro real de la mesa se esta mostrando el ID de la mesa en BD. [OKOKOK]
+  (views/cliente/dashboard.ejs ahora pinta numero_mesa, que es mesas.numero; id_mesa sigue viajando en las URLs porque es la clave que usan las rutas del cliente)
+- Profesionalizar la vista de Pedidos/Ventas regidos por rangos de fechas (hoy por defecto) donde se muestra en formato de tabla como en los reportes los pedidos hechos en el dia, en curso (con toda la informacion necesaria como turno, mesa, dependiente, hora de apertura/cierre, importe [desglosado en monedas], desglose de items con info de los entregados/cancelados, tiempo de entrega de los items en formato h:m:s, cocinero, duracion del servicio, etc) [OKOKOK]
+  * /admin/pedidos: rango de fechas (hoy por defecto) + filtros de turno, dependiente, mesa, estado y busqueda libre; rangos rapidos (hoy/ayer/7 dias/mes).
+  * Resumen del periodo: pedidos, importe equivalente en CUP, propinas, items entregados/cancelados y duracion media del servicio, con el desglose de cobros por moneda.
+  * Cada fila se despliega con el detalle de items: cantidad, precio, importe, estado, area (cocina/bar), alta, envio, listo, entrega, tiempo de entrega en h:m:s, cocinero, quien lo entrego, notas y modificadores; mas los pagos registrados y la composicion de la cuenta.
+  * Imprimir, exportar CSV (resumen) y CSV por item; paginacion; caja de busqueda con icono de vaciado.
+  * REQUIERE MIGRACION: scripts/migracion_tiempos_detalles_pedido.sql (o npm run migrate). Anade creado_en/enviado_en/area_preparacion/listo_en/entregado_en/cancelado_en y los responsables a detalles_pedido. Sin la migracion la vista funciona igual pero avisa que no puede mostrar tiempos ni cocinero.
+  * El POS, el monitor de cocina/bar y el cierre de cuenta sellan ahora cada transicion (services/itemTiemposService.js).
+
+19. Queda pendiente del listado: el punto 10 (ficha de costo de los platillos del menu/dia y de los items no elaborados vendidos). [PENDIENTE]

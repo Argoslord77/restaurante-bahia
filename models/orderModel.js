@@ -1,6 +1,7 @@
 // models/orderModel.js
 const db = require('../config/db');
 const STATUS = require('../config/orderStatus');
+const ItemTiempos = require('../services/itemTiemposService');
 
 class OrderModel {
     async getActiveOrderByMesa(id_mesa) {
@@ -153,10 +154,10 @@ class OrderModel {
         return rows;
     }
 
-    async updateItemStatus(idDetalle, nuevoEstado) {
-        const query = `UPDATE detalles_pedido SET estado_item = ? WHERE id = ?`;
-        const [result] = await db.execute(query, [nuevoEstado, idDetalle]);
-        return result.affectedRows > 0;
+    // Sella la transición del ítem (hora + responsable) además del estado.
+    async updateItemStatus(idDetalle, nuevoEstado, usuarioId = null) {
+        const afectados = await ItemTiempos.sellarItem(db, idDetalle, nuevoEstado, { usuarioId });
+        return afectados > 0;
     }
 }
 

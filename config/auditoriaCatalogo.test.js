@@ -170,6 +170,31 @@ describe('Catálogo de auditoría · reportes y kardex', () => {
     });
 });
 
+describe('Catálogo de auditoría · pedidos y ventas', () => {
+    it('audita la consulta del registro de pedidos y ventas como lectura con aviso', () => {
+        const d = describir('GET', '/admin/pedidos');
+        expect(d.entidad).toBe('Pedidos y ventas');
+        expect(d.accion).toBe('Consultar registro de pedidos y ventas');
+        expect(d.categoria).toBe('LECTURA');
+        expect(d.severidad).toBe('AVISO');
+        // Con filtros de rango sigue siendo la misma entidad
+        expect(describir('GET', '/admin/pedidos?desde=2026-09-01&hasta=2026-09-04').entidad)
+            .toBe('Pedidos y ventas');
+    });
+
+    it('clasifica la exportación de pedidos y ventas como EXPORTACION', () => {
+        const d = describir('GET', '/admin/pedidos/exportar');
+        expect(d.categoria).toBe('EXPORTACION');
+        expect(d.accion).toContain('CSV');
+        expect(describir('GET', '/admin/pedidos/exportar?detalle=1').categoria).toBe('EXPORTACION');
+    });
+
+    it('no confunde el listado con la gestión de un pedido concreto', () => {
+        expect(describir('GET', '/admin/pedido/22').entidad).toBe('Pedido');
+        expect(describir('POST', '/admin/pedido/22/cerrar').entidad).toBe('Pedido');
+    });
+});
+
 describe('Catálogo de auditoría · control de ruido', () => {
     it('excluye por completo los sondeos GET de las vistas (polling)', () => {
         // El tablero del mesero comprobando alertas, el POS consultando

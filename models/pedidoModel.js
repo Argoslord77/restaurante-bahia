@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const PrecioService = require('../services/precioService');
+const ItemTiempos = require('../services/itemTiemposService');
 
 class Pedido {
 
@@ -101,12 +102,9 @@ class Pedido {
     }
 
     // Actualizar estado de un ítem individual en cocina (ej. 'PENDIENTE', 'PREPARADO')
-    static async updateEstadoItem(idDetalle, estado, connection = db) {
-        const [result] = await connection.query(
-            `UPDATE detalles_pedido SET estado_item = ? WHERE id = ?`,
-            [estado, idDetalle]
-        );
-        return result.affectedRows;
+    // sellando la transición (hora + responsable) para los reportes de tiempos.
+    static async updateEstadoItem(idDetalle, estado, connection = db, usuarioId = null) {
+        return ItemTiempos.sellarItem(connection, idDetalle, estado, { usuarioId });
     }
 
     static async actualizarEstadoMesa(id_mesa, estado, connection = db) {
@@ -176,6 +174,9 @@ class Pedido {
             [id_pedido, id_platillo, cantidad, precio]
         );
         const detalleId = resDetalle.insertId;
+
+        // La comanda nace en cocina: se sella su envío a producción.
+        await ItemTiempos.sellarEnvio(connection, [detalleId], 'en_cocina');
 
         if (modificadores && modificadores.length > 0) {
             const values = modificadores.map(mod => [detalleId, mod.id, mod.precio || 0.00]);

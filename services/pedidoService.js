@@ -4,6 +4,7 @@ const logger = require('../config/logger');
 const orderEngine = require('./orderEngineService');
 const PedidoModel = require('../models/pedidoModel');
 const STATUS = require('../config/orderStatus');
+const ItemTiempos = require('./itemTiemposService');
 
 const pedidoService = { 
 
@@ -217,10 +218,10 @@ const pedidoService = {
                 if (detalleRows.length > 0) {
                     const actualItem = detalleRows[0];
                     if (item.accion === 'reingresar') {
-                        await connection.query(`UPDATE detalles_pedido SET estado_item = 'cancelado', afecta_inventario = 0 WHERE id = ?`, [item.id_detalle]);
+                        await ItemTiempos.sellarCancelacion(connection, [item.id_detalle], { afectaInventario: 0 });
                         await connection.query(`UPDATE inventario SET stock = stock + ? WHERE id_platillo = ?`, [actualItem.cantidad, actualItem.id_platillo]);
                     } else {
-                        await connection.query(`UPDATE detalles_pedido SET estado_item = 'cancelado', afecta_inventario = 1 WHERE id = ?`, [item.id_detalle]);
+                        await ItemTiempos.sellarCancelacion(connection, [item.id_detalle], { afectaInventario: 1 });
                         await connection.query(`INSERT INTO mermas_auditoria (id_pedido, id_platillo, cantidad, motivo, id_usuario, fecha_registro) VALUES (?, ?, ?, ?, ?, NOW())`,
                             [id_pedido, actualItem.id_platillo, actualItem.cantidad, motivo, id_usuario]
                         );
