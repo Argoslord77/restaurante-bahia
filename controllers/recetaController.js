@@ -64,7 +64,9 @@ const RecetaController = {
                 stock_disponible: ing.stock_disponible,
                 stock_logistico: ing.stock_logistico,
                 stock_produccion: ing.stock_produccion,
-                es_opcional: ing.es_opcional
+                es_opcional: ing.es_opcional,
+                area_exigida: ing.area_exigida || 'ambas',
+                es_indispensable: !ing.es_opcional
             }));
 
             return res.status(200).json(mapeados);
@@ -284,7 +286,7 @@ const RecetaController = {
     // API: Agregar ingrediente individual a la receta
     addIngrediente: async (req, res) => {
         try {
-            const { receta_id, producto_id, cantidad_requerida, unidad_medida, porcentaje_merma, es_opcional } = req.body;
+            const { receta_id, producto_id, cantidad_requerida, unidad_medida, porcentaje_merma, es_opcional, area_exigida } = req.body;
             if (!receta_id || !producto_id || !cantidad_requerida) {
                 return res.status(400).json({ success: false, message: 'Faltan campos obligatorios para el ingrediente' });
             }
@@ -294,7 +296,8 @@ const RecetaController = {
                 cantidad_requerida,
                 unidad_medida,
                 porcentaje_merma: porcentaje_merma || 0,
-                es_opcional: es_opcional === 'on' || es_opcional === true || es_opcional === 1 || es_opcional === '1'
+                es_opcional: es_opcional === 'on' || es_opcional === true || es_opcional === 1 || es_opcional === '1',
+                area_exigida: ['cocina','bar','ambas'].includes(String(area_exigida||'').toLowerCase()) ? String(area_exigida).toLowerCase() : 'ambas'
             });
             return res.status(201).json({
                 success: true,

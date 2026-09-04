@@ -531,7 +531,8 @@ await pool.query(
             const pedidoId = req.params.id_pedido;
             const body = req.body || {};
             const pagos = body.pagos || [];
-            const { es_cortesia, es_factura_credito, es_pendiente_pago, descuento, recargo, propina } = body;
+            const { es_cortesia, es_factura_credito, es_pendiente_pago, descuento, recargo, propina,
+                    porciento_servicio, motivo_descuento, motivo_ajuste } = body;
             const cajeroId = req.user ? req.user.id : 1;
 
             if (!pedidoId) return res.status(400).json({ success: false, message: 'ID de pedido requerido.' });
@@ -572,13 +573,22 @@ await pool.query(
             const desc = Math.max(0, Number(descuento || 0));
             const rec = Math.max(0, Number(recargo || 0));
             const prop = Math.max(0, Number(propina || 0));
+            // % servicio variable (Juan Carlos y Asís): va a trabajadores, se deduce del propietario en cuadre.
+            // Se calcula sobre (subtotal + impuesto - descuento + recargo). Acepta porciento 0-100.
+            let porcServicio = Math.max(0, Math.min(100, Number(porciento_servicio || 0)));
+            if (!Number.isFinite(porcServicio)) porcServicio = 0;
+            const motivoDesc = (motivo_descuento || motivo_ajuste || '').toString().slice(0, 255) || null;
             const facturaImpuesto = parseFloat(await SettingService.get('factura_impuesto', 0) || 0);
             const impuesto = Number(Math.max(0, subtotal * facturaImpuesto / 100).toFixed(2));
             // Total de la orden (lo que factura la mesa). La propina NO va en
             // el total: se guarda separada en pedidos.propina y el cierre del
             // día la suma aparte al efectivo de caja (si se sumara aquí se
             // contaría doble en el cuadre).
-            const totalOrden = es_cortesia ? 0 : Number(Math.max(0, subtotal + impuesto - desc + rec).toFixed(2));
+            // El % servicio SÍ va en el total de la orden (el cliente lo paga),
+            // pero en el cierre se deduce del efectivo del propietario (va a trabajadores).
+            const baseServicio = Number(Math.max(0, subtotal + impuesto - desc + rec).toFixed(2));
+            const montoServicio = es_cortesia ? 0 : Number(((baseServicio * porcServicio) / 100).toFixed(2));
+            const totalOrden = es_cortesia ? 0 : Number(Math.max(0, baseServicio + montoServicio).toFixed(2));
             // Lo que el cliente debe abonar físicamente: orden + propina.
             const totalFinal = es_cortesia ? 0 : Number((totalOrden + prop).toFixed(2));
 
@@ -670,12 +680,26 @@ await pool.query(
 
             connection = await pool.getConnection();
             await connection.beginTransaction();
-            await connection.query(`
-                UPDATE pedidos
-                SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
-                    id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
-                WHERE id = ?
-            `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
+            // Guarda % servicio y motivo (tolerante a BD sin migrar: reintenta sin columnas nuevas).
+            try {
+                await connection.query(`
+                    UPDATE pedidos
+                    SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
+                        id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?,
+                        porciento_servicio = ?, monto_servicio = ?, motivo_descuento = ?
+                    WHERE id = ?
+                `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, porcServicio, montoServicio, motivoDesc, pedidoId]);
+            } catch (eCol) {
+                const msg = String(eCol && eCol.message || '');
+                if (/porciento_servicio|monto_servicio|motivo_descuento|Unknown column/i.test(msg)) {
+                    await connection.query(`
+                        UPDATE pedidos
+                        SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
+                            id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
+                        WHERE id = ?
+                    `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
+                } else { throw eCol; }
+            }
             await connection.query(`
                 UPDATE detalles_pedido SET estado_item = 'entregado',
                     entregado_en = COALESCE(entregado_en, NOW()),
@@ -705,7 +729,7 @@ await pool.query(
             }
             await pool.query("UPDATE mesas SET estado = 'libre' WHERE id = ?", [pedido.id_mesa]);
 
-            return res.json({ success: true, carta: pricingContext.carta, moneda_codigo: pricingContext.moneda_codigo, total: totalFinal, total_orden: totalOrden, propina: prop, message: 'Mesa cobrada y liberada con éxito' });
+            return res.json({ success: true, carta: pricingContext.carta, moneda_codigo: pricingContext.moneda_codigo, total: totalFinal, total_orden: totalOrden, propina: prop, porciento_servicio: porcServicio, monto_servicio: montoServicio, motivo_descuento: motivoDesc, message: 'Mesa cobrada y liberada con éxito' });
         } catch (err) {
             if (connection) {
                 try { await connection.rollback(); } catch (_) { /* noop */ }

@@ -9,9 +9,11 @@ const InventarioService = require('../services/inventarioService');
  */
 async function obtenerDatosCierre(turnoActivo) {
     const turnoId = turnoActivo.id;
-        // 1. Obtener comandas del turno activo
-        const [pedidos] = await db.query(`
-            SELECT 
+        // 1. Obtener comandas del turno activo (tolerante a BD sin migrar 2026-09-04)
+        let pedidos = [];
+        try {
+            const [rows] = await db.query(`
+            SELECT
                 p.id,
                 p.id_mesa,
                 m.numero AS numero_mesa,
@@ -21,6 +23,9 @@ async function obtenerDatosCierre(turnoActivo) {
                 p.impuesto,
                 p.total,
                 p.propina,
+                COALESCE(p.porciento_servicio, 0) AS porciento_servicio,
+                COALESCE(p.monto_servicio, 0) AS monto_servicio,
+                p.motivo_descuento,
                 p.estado_pedido,
                 p.estado_pago,
                 p.creado_en AS fecha_apertura,
@@ -34,6 +39,40 @@ async function obtenerDatosCierre(turnoActivo) {
             WHERE p.turno_servicio_id = ?
             ORDER BY p.id DESC
         `, [turnoId]);
+            pedidos = rows;
+        } catch (eMig) {
+            const mm = String((eMig && eMig.message) || '');
+            if (/porciento_servicio|monto_servicio|motivo_descuento|Unknown column/i.test(mm)) {
+                const [rows] = await db.query(`
+            SELECT
+                p.id,
+                p.id_mesa,
+                m.numero AS numero_mesa,
+                CONCAT('Mesa ', m.numero) AS nombre_mesa,
+                p.subtotal,
+                p.descuento,
+                p.impuesto,
+                p.total,
+                p.propina,
+                0 AS porciento_servicio,
+                0 AS monto_servicio,
+                NULL AS motivo_descuento,
+                p.estado_pedido,
+                p.estado_pago,
+                p.creado_en AS fecha_apertura,
+                p.fecha_cierre,
+                CONCAT(u.nombre, ' ', u.apellidos) AS mesero,
+                u_caj.nombre AS cajero
+            FROM pedidos p
+            LEFT JOIN mesas m ON p.id_mesa = m.id
+            LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+            LEFT JOIN usuarios u_caj ON p.id_usuario_cajero = u_caj.id
+            WHERE p.turno_servicio_id = ?
+            ORDER BY p.id DESC
+        `, [turnoId]);
+                pedidos = rows;
+            } else { throw eMig; }
+        }
 
         // 2. Desglose detallado de pagos por Método (Efectivo / Transferencia / Tarjeta) y Moneda
         const [desglosePagos] = await db.query(`
@@ -66,14 +105,17 @@ async function obtenerDatosCierre(turnoActivo) {
         let total_pendiente_pago = 0;
         let total_cortesias = 0;
         let total_propinas = 0;        // Excedente / Propinas
+        let total_servicio = 0;        // % servicio variable (va a trabajadores, se deduce del propietario)
 
         pedidos.forEach(p => {
             const total = parseFloat(p.total || 0);
             const propina = parseFloat(p.propina || 0);
+            const servicio = parseFloat(p.monto_servicio || 0);
 
             if (p.estado_pago === 'pagado') {
                 total_cobrado_caja += total;
                 total_propinas += propina;
+                total_servicio += servicio;
             } else if (p.estado_pago === 'facturado') {
                 total_cxc_facturas += total;
             } else if (p.estado_pago === 'pendiente_pago') {
@@ -86,10 +128,15 @@ async function obtenerDatosCierre(turnoActivo) {
         // Suma total del dinero cobrado en caja (Órdenes + Propinas/Excedente)
         const total_efectivo_total_caja = total_cobrado_caja + total_propinas;
         const fondoApertura = parseFloat(turnoActivo.monto_apertura || 0);
+        // Efectivo para el propietario: se deducen servicio y propinas (van a trabajadores).
+        const total_para_propietario = total_cobrado_caja - total_servicio;
+        // Nota: propinas ya están fuera de p.total (se suman aparte), servicio SÍ está dentro.
 
         const resumen = {
             total_cobrado_caja,
             total_propinas,
+            total_servicio,
+            total_para_propietario,
             total_efectivo_total_caja, // <--- TOTAL GENERAL DE CAJA
             total_cxc_facturas,
             total_pendiente_pago,

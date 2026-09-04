@@ -350,22 +350,52 @@ const Receta = {
     // Insertar desglose de ingredientes masivo (Sujeto a Transacción)
     insertDetallesTransactional: async (connection, recetaId, detalles) => {
         if (!detalles || detalles.length === 0) return;
-        const query = `
-            INSERT INTO receta_detalles 
-            (receta_id, producto_id, cantidad, unidad_medida, porcentaje_merma, costo_estimado, orden_preparacion, es_opcional) 
-            VALUES ?
-        `;
-        const values = detalles.map((d, index) => [
-            recetaId,
-            d.producto_id,
-            d.cantidad_requerida || d.cantidad || 0,
-            d.unidad_medida || 'Unidad',
-            d.porcentaje_merma || 0.00,
-            d.costo_estimado || 0.0000,
-            d.orden_preparacion || (index + 1),
-            d.es_opcional ? 1 : 0
-        ]);
-        await connection.query(query, [values]);
+        // area_exigida (cocina/bar/ambas) — tolerante a BD sin migrar
+        let tieneArea = false;
+        try {
+            const cols = await connection.query("SHOW COLUMNS FROM receta_detalles LIKE 'area_exigida'");
+            tieneArea = Array.isArray(cols) && Array.isArray(cols[0]) ? cols[0].length > 0 : !!cols;
+        } catch (_) { tieneArea = false; }
+        const normalizaArea = (v) => {
+            const s = String(v || 'ambas').toLowerCase();
+            return ['cocina','bar','ambas'].includes(s) ? s : 'ambas';
+        };
+        if (tieneArea) {
+            const query = `
+                INSERT INTO receta_detalles
+                (receta_id, producto_id, cantidad, unidad_medida, porcentaje_merma, costo_estimado, orden_preparacion, es_opcional, area_exigida)
+                VALUES ?
+            `;
+            const values = detalles.map((d, index) => [
+                recetaId,
+                d.producto_id,
+                d.cantidad_requerida || d.cantidad || 0,
+                d.unidad_medida || 'Unidad',
+                d.porcentaje_merma || 0.00,
+                d.costo_estimado || 0.0000,
+                d.orden_preparacion || (index + 1),
+                d.es_opcional ? 1 : 0,
+                normalizaArea(d.area_exigida)
+            ]);
+            await connection.query(query, [values]);
+        } else {
+            const query = `
+                INSERT INTO receta_detalles
+                (receta_id, producto_id, cantidad, unidad_medida, porcentaje_merma, costo_estimado, orden_preparacion, es_opcional)
+                VALUES ?
+            `;
+            const values = detalles.map((d, index) => [
+                recetaId,
+                d.producto_id,
+                d.cantidad_requerida || d.cantidad || 0,
+                d.unidad_medida || 'Unidad',
+                d.porcentaje_merma || 0.00,
+                d.costo_estimado || 0.0000,
+                d.orden_preparacion || (index + 1),
+                d.es_opcional ? 1 : 0
+            ]);
+            await connection.query(query, [values]);
+        }
     },
 
     // Actualizar cabecera de la receta (Sujeto a Transacción)

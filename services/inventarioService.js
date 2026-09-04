@@ -2,6 +2,7 @@
 // descuento por pedido (POS), vencimiento de lotes y alertas.
 const db = require('../config/db');
 const UnidadMedidaService = require('./unidadMedidaService');
+const Schema = require('../config/schema');
 const AlmacenService = require('./almacenService');
 
 // Almacenes operativos por defecto (cocina/bar). Central actúa como reserva.
@@ -433,12 +434,17 @@ const InventarioService = {
 
         const obtenerIngredientesPlatillo = async (platilloId) => {
             if (recipeCache.has(platilloId)) return recipeCache.get(platilloId);
+            // area_exigida es nueva (migración 2026-09-04). Si la columna aún no existe, se asume 'ambas'.
+            let tieneAreaExigida = true;
+            try { tieneAreaExigida = await Schema.hasColumn('receta_detalles', 'area_exigida'); } catch (_) { tieneAreaExigida = true; }
+            const colAreaRonda = tieneAreaExigida ? "COALESCE(rd.area_exigida, 'ambas') AS area_exigida," : "'ambas' AS area_exigida,";
             const [ingredientes] = await db.query(`
                 SELECT rd.producto_id AS insumo_id,
                        rd.cantidad AS cantidad_receta,
                        rd.unidad_medida AS unidad_receta,
                        rd.porcentaje_merma,
                        rd.es_opcional,
+                       ${colAreaRonda}
                        p.nombre AS insumo_nombre,
                        ui.abreviatura AS unidad_inventario,
                        ui.nombre AS unidad_inventario_nombre
@@ -527,6 +533,16 @@ const InventarioService = {
                 }
 
                 const esOpcional = Number(ing.es_opcional) === 1;
+                // Área exigida (cocina/bar/ambas). Si el insumo solo es exigible en un área
+                // distinta a la preferida del platillo, la falta NO bloquea: se advierte.
+                // Así la venta no se detiene por falta de stock en el área específica.
+                let areaExigida = String(ing.area_exigida || 'ambas').toLowerCase();
+                if (!['cocina','bar','ambas'].includes(areaExigida)) areaExigida = 'ambas';
+                // Criterio robusto: si el área exigida no coincide con preferido ni alterno, no bloquea.
+                // (Comparación por nombre; si no se puede determinar, se mantiene bloqueo para indispensables.)
+                const areaTexto = `${areas.preferido?.nombre || ''} ${areas.alterno?.nombre || ''}`.toLowerCase();
+                const fueraDeArea = (areaExigida !== 'ambas') && !areaTexto.includes(areaExigida);
+                const esOpcionalEfectivo = esOpcional || fueraDeArea;
                 // Presentación de las cantidades en la unidad de
                 // PRODUCCIÓN/CONSUMO (la de la receta), que es la que maneja
                 // el personal de cocina/bar. Los valores en unidad de
@@ -545,7 +561,9 @@ const InventarioService = {
                     disponible_inventario: Number(disponibleTotal.toFixed(6)),
                     unidad_inventario: unidadRef,
                     areas: `${areas.preferido.nombre} + ${areas.alterno.nombre}`,
-                    es_opcional: esOpcional
+                    es_opcional: esOpcional,
+                    area_exigida: areaExigida,
+                    bloquea_venta: false
                 };
                 detalle.push(registro);
 
@@ -553,8 +571,13 @@ const InventarioService = {
                     registro.faltante = Number(
                         (factorInvAReceta !== null ? pendiente * factorInvAReceta : pendiente).toFixed(6)
                     );
-                    if (esOpcional) {
-                        advertencias.push({ ...registro, detalle: 'Insumo opcional sin stock suficiente' });
+                    registro.area_exigida = areaExigida;
+                    registro.bloquea_venta = (!esOpcionalEfectivo);
+                    if (esOpcionalEfectivo) {
+                        const motivo = esOpcional
+                            ? 'Insumo opcional sin stock suficiente (no bloquea la venta)'
+                            : `Insumo exigible solo en ${areaExigida} — sin stock en ${areas.preferido.nombre} + ${areas.alterno.nombre} (no bloquea)`;
+                        advertencias.push({ ...registro, detalle: motivo });
                     } else {
                         faltantes.push(registro);
                     }
@@ -583,12 +606,16 @@ const InventarioService = {
             throw new Error('La cantidad a verificar no es válida.');
         }
 
+        let tieneAreaExigida2 = true;
+        try { tieneAreaExigida2 = await Schema.hasColumn('receta_detalles', 'area_exigida'); } catch (_) { tieneAreaExigida2 = true; }
+        const colAreaPlat = tieneAreaExigida2 ? "COALESCE(rd.area_exigida, 'ambas') AS area_exigida," : "'ambas' AS area_exigida,";
         const [ingredientes] = await db.query(`
             SELECT rd.producto_id AS insumo_id,
                    rd.cantidad AS cantidad_receta,
                    rd.unidad_medida AS unidad_receta,
                    rd.porcentaje_merma,
                    rd.es_opcional,
+                   ${colAreaPlat}
                    p.nombre AS insumo_nombre,
                    ui.abreviatura AS unidad_inventario,
                    ui.nombre AS unidad_inventario_nombre
