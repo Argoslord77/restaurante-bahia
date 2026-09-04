@@ -289,7 +289,7 @@
             }).then(async (result) => {
                 if (result.isConfirmed) {
                     try {
-                        const res = await fetch(`/pedido/${idPedido}/cancelar-parcial-o-total`, {
+                        const res = await fetch(`/admin/pedido/${idPedido}/cancelar-parcial-o-total`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                             body: JSON.stringify({ productosAfectados, motivo: result.value })
@@ -327,7 +327,7 @@
                 if (result.isConfirmed) {
                     Swal.fire({ title: 'Procesando baja total...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
                     try {
-                        const res = await fetch(`/pedido/<%= pedido.id %>/cancelar-parcial-o-total`, {
+                        const res = await fetch(`/admin/pedido/<%= pedido.id %>/cancelar-parcial-o-total`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                             body: JSON.stringify({ productosAfectados: [], motivo: result.value })

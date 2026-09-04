@@ -595,7 +595,9 @@
     <div class="logo-mark-img"></div>
     <div class="top-row">
       <div class="d-flex align-items-center gap-2">
-        <span class="table-badge"><span class="dot"></span> Mesa <%= id_mesa || '1' %></span>
+        <!-- Se muestra el número REAL de la mesa (mesas.numero), no su ID en BD.
+             El identificador numérico solo se usa para las rutas de la API. -->
+        <span class="table-badge"><span class="dot"></span> Mesa <%= numero_mesa || id_mesa || '1' %></span>
         <button class="btn-account-header" id="btnAccountHeader"><i class="fa-solid fa-receipt"></i> Mi Cuenta</button>
       </div>
       <button class="call-waiter" id="btnCallWaiter">
@@ -693,7 +695,7 @@
       </div>
       <div class="modal-body">
         <div class="text-center mb-3">
-          <small class="text-uppercase text-cream-muted">Restaurante Bahía — Mesa <%= id_mesa || '1' %></small>
+          <small class="text-uppercase text-cream-muted">Restaurante Bahía — Mesa <%= numero_mesa || id_mesa || '1' %></small>
           <div class="ticket-line"></div>
         </div>
 
