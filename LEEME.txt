@@ -112,6 +112,19 @@
     Las dos ultimas van a la vez que el codigo: si migras los tokens sin
     actualizar los archivos, todos tendran que volver a iniciar sesion.
 
+ 3b. MIGRACIONES AGREGADAS DESPUES DE ESE PAQUETE (en este orden)
+    mysql -u root -p restaurante_db < scripts/migracion_salidas_manuales.sql
+    mysql -u root -p restaurante_db < scripts/migracion_ubicacion_mesa.sql
+    mysql -u root -p restaurante_db < scripts/migracion_tiempos_item_pedido.sql
+
+    Las tres son aditivas (tablas/columnas nuevas, todo NULLABLE) y seguras con
+    los datos existentes. La ultima habilita las columnas de tiempos del reporte
+    de Ventas / Pedidos (enviado_en, listo_en, entregado_en y
+    usuario_produccion_id en detalles_pedido): sin aplicarla la pantalla, el
+    listado, los importes y el CSV funcionan igual y solo las columnas de
+    "Produccion", "Entrega" y "Cocinero / barra" muestran un guion. El script
+    chequea information_schema, asi que se puede ejecutar dos veces sin error.
+
  4. MIGRACION DE LA PARTE 5
     mysql -u root -p restaurante_db < scripts/migracion_licencia.sql
     (crea las tablas; NO activa nada)

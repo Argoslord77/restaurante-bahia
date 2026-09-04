@@ -7,7 +7,9 @@ const { pedidoValidationRules, handleValidationErrors } = require('../middleware
 const { asegurarTurnoActivo } = require('../middlewares/verificarTurno');
 
 // Rutas de renderizado administrativo
-router.get('/pedidos', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), pedidoController.listarPedidos);
+router.get('/pedidos', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'economico']), pedidoController.listarPedidos);
+// Exportación del reporte (mismo rango y filtros que la vista) a CSV para Excel
+router.get('/pedidos/exportar', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'economico']), pedidoController.exportarPedidos);
 router.get('/pedido/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), pedidoController.obtenerDetallePedido);
 
 // Rutas de acciones operativas

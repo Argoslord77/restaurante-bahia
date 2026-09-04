@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const InventarioService = require('../services/inventarioService');
 const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
+const SeguimientoItem = require('../services/seguimientoItemService');
 
 module.exports = {
     // Vista Principal del TPV / POS
@@ -366,6 +367,12 @@ module.exports = {
             }
 
             if (insertedItems.length > 0) {
+                // Traza de tiempos: los ítems que nacen ya en producción
+                // ('en_cocina'/'en_bar') quedan con su hora de envío a cocina/bar.
+                await SeguimientoItem.registrarEnvio({
+                    detalleIds: insertedItems.map(i => i.id_detalle)
+                });
+
                 const [totales] = await pool.query(`
                     SELECT COALESCE(SUM(cantidad * precio_unitario), 0) AS subtotal
                     FROM detalles_pedido
@@ -401,6 +408,13 @@ module.exports = {
             if (!pool) return res.json({ success: true });
 
             await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [nuevo_estado, id_detalle]);
+
+            // Traza de tiempos del ítem (enviado / listo / entregado).
+            await SeguimientoItem.registrarTransicion({
+                detalleIds: [id_detalle],
+                estado: nuevo_estado,
+                usuarioId: req.user && req.user.id
+            });
 
             // Comprobar si todos los ítems fueron entregados
             const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [id_detalle]);
@@ -464,6 +478,13 @@ module.exports = {
                     [idsEntregados]
                 );
             }
+
+            // Traza de tiempos: queda la hora exacta de cada entrega en la mesa.
+            await SeguimientoItem.registrarTransicion({
+                detalleIds: idsEntregados,
+                estado: 'entregado',
+                usuarioId: req.user && req.user.id
+            });
 
             // El estado del pedido solo avanza a 'entregado' cuando ya no
             // queda nada pendiente de servir.
@@ -688,6 +709,17 @@ module.exports = {
                 UPDATE detalles_pedido SET estado_item = 'entregado'
                 WHERE id_pedido = ? AND estado_item != 'cancelado'
             `, [pedidoId]);
+
+            // Traza de tiempos: al cobrar la cuenta todo lo servido pasa a
+            // entregado. Solo se marca ahora lo que aún no tenía hora de
+            // entrega, para conservar el tiempo real de cada plato en la mesa.
+            await SeguimientoItem.registrarTransicion({
+                pedidoId,
+                estado: 'entregado',
+                usuarioId: cajeroId,
+                conn: connection,
+                exclusivo: "entregado_en IS NULL"
+            });
 
             for (const pago of pagosNormalizados) {
                 await connection.query(`

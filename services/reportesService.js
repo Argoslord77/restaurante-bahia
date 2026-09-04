@@ -12,6 +12,8 @@
 'use strict';
 
 const db = require('../config/db');
+const Schema = require('../config/schema');
+const logger = require('../config/logger');
 const Costeo = require('./costeoService');
 const ReporteModel = require('../models/reporteModel');
 const InventarioService = require('./inventarioService');
@@ -913,6 +915,471 @@ function tendenciasACSV(reporte) {
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
+// ── Pedidos / Ventas del período ─────────────────────────────────────────
+//
+// Cuenta por cuenta, en formato de tabla y con el detalle desplegable de cada
+// orden: turno, mesa y área, dependiente y cajero, hora de apertura y cierre,
+// importe desglosado por moneda, ítems entregados y cancelados, tiempo de
+// producción y de entrega de cada plato y quién lo sacó.
+//
+// La trazabilidad por ítem vive en `detalles_pedido` (enviado_en, listo_en,
+// entregado_en, usuario_produccion_id) y es OPCIONAL: si la instalación todavía
+// no aplicó migrations/20260904120000_add_tiempos_item_pedido.js, el reporte se
+// genera igual y las columnas de tiempos muestran «—». Así el informe nunca
+// deja de estar disponible por un script sin ejecutar.
+
+const COLUMNAS_TRAZA = ['enviado_en', 'listo_en', 'entregado_en', 'usuario_produccion_id'];
+
+/** ¿La base ya tiene la trazabilidad de tiempos por ítem? */
+async function trazabilidadDisponible() {
+    try {
+        for (const columna of COLUMNAS_TRAZA) {
+            if (!await Schema.hasColumn('detalles_pedido', columna)) return false;
+        }
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+/**
+ * Segundos → «h:mm:ss» (el formato pedido para los tiempos de entrega).
+ * Un dato ausente (NULL de MySQL, o un TIMESTAMPDIFF sobre una marca que nunca
+ * se escribió) NO es cero: devuelve null para que la vista muestre «—» en vez
+ * de un engañoso 0:00:00.
+ */
+function formatearDuracion(segundos) {
+    if (segundos == null || segundos === '') return null;
+    const n = Number(segundos);
+    if (!Number.isFinite(n) || n < 0) return null;
+    const s = Math.round(n);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+}
+
+const ESTADOS_PEDIDO = ['pendiente', 'preparando', 'listo', 'entregado', 'cancelado'];
+
+// Etiquetas del estado de un ítem (coinciden con las que ven cocina y bar).
+const ETIQUETA_ESTADO_ITEM = {
+    en_espera: 'En espera',
+    en_cocina: 'En cocina',
+    en_bar: 'En bar',
+    en_preparacion: 'En preparación',
+    listo: 'Listo',
+    entregado: 'Entregado',
+    cancelado: 'Cancelado'
+};
+const ESTADOS_PAGO = ['pendiente', 'pagado', 'cortesia', 'facturado', 'pendiente_pago'];
+
+/**
+ * Filtros de la vista de Pedidos / Ventas. Todo es opcional; un valor inválido
+ * se descarta en lugar de romper la consulta (mismo criterio que el kardex).
+ */
+function leerFiltrosPedidos(query = {}) {
+    const entero = (v) => {
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const texto = (v) => String(v == null ? '' : v).trim().slice(0, 60) || null;
+    return {
+        turnoId: entero(query.turno),
+        meseroId: entero(query.mesero),
+        areaId: entero(query.area),
+        estadoPedido: ESTADOS_PEDIDO.includes(query.estado_pedido) ? query.estado_pedido : null,
+        estadoPago: ESTADOS_PAGO.includes(query.estado_pago) ? query.estado_pago : null,
+        mesa: texto(query.mesa),
+        texto: texto(query.q),
+        soloEnCurso: query.en_curso === '1' || query.en_curso === 'true'
+    };
+}
+
+/** Rango por defecto de esta vista: el día de hoy (no los 30 días de otros reportes). */
+function normalizarRangoDelDia(query = {}) {
+    const hoy = new Date();
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    let desde = String(query.desde || '').trim();
+    let hasta = String(query.hasta || '').trim();
+    if (!FECHA_OK.test(desde)) desde = iso(hoy);
+    if (!FECHA_OK.test(hasta)) hasta = iso(hoy);
+    if (desde > hasta) [desde, hasta] = [hasta, desde];
+    return { desde, hasta };
+}
+
+/** Etiquetas legibles para el filtro de estado, usadas en pantalla y en el CSV. */
+const ETIQUETA_ESTADO_PEDIDO = {
+    pendiente: 'En cola',
+    preparando: 'En preparación',
+    listo: 'Listo',
+    entregado: 'Entregado',
+    cancelado: 'Cancelado'
+};
+const ETIQUETA_ESTADO_PAGO = {
+    pendiente: 'Abierta',
+    pagado: 'Cobrada',
+    cortesia: 'Cortesía',
+    facturado: 'Facturado',
+    pendiente_pago: 'Pago pendiente'
+};
+
+/** Nombres de turno: la tabla no los guarda, se identifican por su apertura. */
+function etiquetaTurno(fila) {
+    if (!fila || !fila.turno_id) return '—';
+    const apertura = fila.turno_apertura instanceof Date
+        ? `${String(fila.turno_apertura.getDate()).padStart(2, '0')}/${String(fila.turno_apertura.getMonth() + 1).padStart(2, '0')} ${String(fila.turno_apertura.getHours()).padStart(2, '0')}:${String(fila.turno_apertura.getMinutes()).padStart(2, '0')}`
+        : String(fila.turno_apertura || '').slice(0, 16);
+    return `Turno #${fila.turno_id}${apertura ? ` · ${apertura}` : ''}`;
+}
+
+/** Hora «HH:MM» para las columnas de apertura/cierre. */
+function horaCorta(valor) {
+    if (valor instanceof Date) {
+        if (Number.isNaN(valor.getTime())) return null;
+        return `${String(valor.getHours()).padStart(2, '0')}:${String(valor.getMinutes()).padStart(2, '0')}`;
+    }
+    const s = String(valor || '');
+    return s.length >= 16 ? s.slice(11, 16) : (s ? s.slice(0, 5) : null);
+}
+
+/** Fecha «dd/mm/yyyy» — se comparte con la columna de apertura del pedido. */
+function fechaCorta(valor) {
+    if (valor instanceof Date) {
+        if (Number.isNaN(valor.getTime())) return null;
+        return `${String(valor.getDate()).padStart(2, '0')}/${String(valor.getMonth() + 1).padStart(2, '0')}/${valor.getFullYear()}`;
+    }
+    const s = String(valor || '');
+    return s.length >= 10 ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : (s || null);
+}
+
+/**
+ * Pedidos del período (abiertos o cerrados dentro del rango) con su cuenta
+ * desglosada por moneda y el detalle de ítems con tiempos de servicio.
+ *
+ * @param {object} opciones { rango: {desde, hasta}, filtros: leerFiltrosPedidos() }
+ */
+async function pedidosVentas({ rango, filtros = {} } = {}) {
+    const desde = (rango && rango.desde) || normalizarRangoDelDia().desde;
+    const hasta = (rango && rango.hasta) || normalizarRangoDelDia().hasta;
+    const hayTraza = await trazabilidadDisponible();
+    const tieneAreas = await Schema.hasColumn('mesas', 'ubicacion_id').catch(() => false);
+
+    // 1) Cabeceras de cuenta. El criterio es de solapamiento: cuenta un pedido
+    //    si se abrió dentro del rango O si se cobró dentro de él, de forma que
+    //    una mesa abierta anoche y cerrada hoy aparezca en ambos días.
+    const where = [`((p.creado_en >= ? AND p.creado_en < DATE_ADD(?, INTERVAL 1 DAY))
+                     OR (p.fecha_cierre IS NOT NULL AND p.fecha_cierre >= ?
+                         AND p.fecha_cierre < DATE_ADD(?, INTERVAL 1 DAY)))`];
+    const valores = [desde, hasta, desde, hasta];
+
+    if (filtros.turnoId) { where.push('p.turno_servicio_id = ?'); valores.push(filtros.turnoId); }
+    if (filtros.meseroId) { where.push('p.id_usuario_mesero = ?'); valores.push(filtros.meseroId); }
+    if (filtros.estadoPedido) { where.push('p.estado_pedido = ?'); valores.push(filtros.estadoPedido); }
+    if (filtros.estadoPago) { where.push('p.estado_pago = ?'); valores.push(filtros.estadoPago); }
+    if (filtros.mesa) { where.push('m.numero LIKE ?'); valores.push(`%${filtros.mesa}%`); }
+    if (filtros.areaId && tieneAreas) { where.push('m.ubicacion_id = ?'); valores.push(filtros.areaId); }
+    if (filtros.soloEnCurso) where.push('p.fecha_cierre IS NULL');
+    if (filtros.texto) {
+        where.push('(p.cliente_nombre LIKE ? OR m.numero LIKE ? OR CAST(p.id AS CHAR) = ?)');
+        valores.push(`%${filtros.texto}%`, `%${filtros.texto}%`, filtros.texto);
+    }
+
+    const [filasPedidos] = await db.query(`
+        SELECT
+            p.id, p.cliente_nombre, p.comensales,
+            p.estado_pedido, p.estado_pago,
+            p.subtotal, p.descuento, p.impuesto, p.propina, p.total,
+            p.creado_en AS abierto_en, p.fecha_cierre AS cerrado_en,
+            p.impresiones_precuenta,
+            m.id AS id_mesa, m.numero AS mesa_numero, m.carta AS mesa_carta,
+            ${tieneAreas ? 'COALESCE(ua.nombre, m.ubicacion)' : 'm.ubicacion'} AS mesa_area,
+            COALESCE(NULLIF(TRIM(CONCAT_WS(' ', um.nombre, um.apellidos)), ''), um.usuario) AS mesero,
+            COALESCE(NULLIF(TRIM(CONCAT_WS(' ', uc.nombre, uc.apellidos)), ''), uc.usuario) AS cajero,
+            t.id AS turno_id, t.fecha_apertura AS turno_apertura, t.fecha_cierre AS turno_cierre,
+            TIMESTAMPDIFF(SECOND, p.creado_en, COALESCE(p.fecha_cierre, NOW())) AS segundos_servicio
+        FROM pedidos p
+        LEFT JOIN mesas m ON m.id = p.id_mesa
+        ${tieneAreas ? 'LEFT JOIN ubicacion_mesa ua ON ua.id = m.ubicacion_id' : ''}
+        LEFT JOIN usuarios um ON um.id = p.id_usuario_mesero
+        LEFT JOIN usuarios uc ON uc.id = p.id_usuario_cajero
+        LEFT JOIN turnos_servicio t ON t.id = p.turno_servicio_id
+        WHERE ${where.join(' AND ')}
+        ORDER BY p.creado_en DESC, p.id DESC
+        LIMIT 300
+    `, valores);
+
+    const pedidoIds = filasPedidos.map(f => f.id);
+    if (!pedidoIds.length) {
+        return {
+            desde, hasta,
+            filtros,
+            trazabilidad: hayTraza,
+            pedidos: [],
+            opciones: await opcionesFiltrosPedidos(desde, hasta, tieneAreas),
+            totales: {
+                cuentas: 0, en_curso: 0, cobradas: 0, venta: 0, local: 0, propinas: 0,
+                descuentos: 0, cortesias: 0, lineas: 0, unidades: 0, entregados: 0,
+                cancelados: 0, ticket_promedio: 0, entrega_promedio: null
+            }
+        };
+    }
+
+    // 2) Ítems de esas cuentas, con sus tiempos cuando la traza existe.
+    const fragmentoTraza = hayTraza ? `
+               dp.enviado_en, dp.listo_en, dp.entregado_en,
+               TIMESTAMPDIFF(SECOND, COALESCE(dp.enviado_en, p.creado_en), dp.listo_en)     AS segundos_produccion,
+               TIMESTAMPDIFF(SECOND, COALESCE(dp.enviado_en, p.creado_en), dp.entregado_en)  AS segundos_entrega,
+               TIMESTAMPDIFF(SECOND, dp.listo_en, dp.entregado_en)                           AS segundos_en_barra,
+               COALESCE(NULLIF(TRIM(CONCAT_WS(' ', up.nombre, up.apellidos)), ''), up.usuario) AS cocinero,` : `
+               NULL AS enviado_en, NULL AS listo_en, NULL AS entregado_en,
+               NULL AS segundos_produccion, NULL AS segundos_entrega, NULL AS segundos_en_barra,
+               NULL AS cocinero,`;
+
+    const [filasItems] = await db.query(`
+        SELECT dp.id, dp.id_pedido, dp.cantidad, dp.precio_unitario, dp.estado_item,
+               dp.es_platillo_dia, dp.notas_especiales, dp.afecta_inventario,
+               (dp.cantidad * dp.precio_unitario) AS importe,
+               COALESCE(pm.nombre, pd.nombre, 'Consumo') AS nombre
+               ${fragmentoTraza}
+        FROM detalles_pedido dp
+        INNER JOIN pedidos p ON p.id = dp.id_pedido
+        LEFT JOIN platillos_menu pm
+            ON dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL)
+        LEFT JOIN platillos_dia pd
+            ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
+        ${hayTraza ? 'LEFT JOIN usuarios up ON up.id = dp.usuario_produccion_id' : ''}
+        WHERE dp.id_pedido IN (?)
+        ORDER BY dp.id_pedido ASC, dp.id ASC
+    `, [pedidoIds]);
+
+    // 3) Cobros de esas cuentas agrupados por método y moneda, para poder
+    //    mostrar el importe desglosado (CUP, USD/Zelle, tarjeta, ...).
+    const [filasPagos] = await db.query(`
+        SELECT pp.pedido_id, LOWER(pp.metodo_pago) AS metodo_pago,
+               CASE WHEN UPPER(COALESCE(m.codigo, '')) = 'ZELLE'
+                      OR UPPER(COALESCE(ms.carta, '')) = 'ZELLE' THEN 'ZELLE'
+                    ELSE COALESCE(m.codigo, 'CUP') END AS codigo_moneda,
+               CASE WHEN UPPER(COALESCE(m.codigo, '')) = 'ZELLE'
+                      OR UPPER(COALESCE(ms.carta, '')) = 'ZELLE' THEN 'Zelle'
+                    ELSE COALESCE(m.nombre, 'Moneda local') END AS nombre_moneda,
+               COALESCE(m.simbolo, '$') AS simbolo,
+               MAX(pp.factor_cambio_aplicado) AS factor_cambio,
+               SUM(pp.monto_moneda_origen) AS monto_origen,
+               SUM(pp.monto_equivalente_local) AS monto_local,
+               COUNT(pp.id) AS transacciones
+        FROM pagos_pedido pp
+        LEFT JOIN monedas m ON m.id = pp.moneda_id
+        LEFT JOIN pedidos p ON p.id = pp.pedido_id
+        LEFT JOIN mesas ms ON ms.id = p.id_mesa
+        WHERE pp.pedido_id IN (?)
+        GROUP BY pp.pedido_id, LOWER(pp.metodo_pago), m.codigo, m.nombre, m.simbolo, ms.carta
+        ORDER BY pp.pedido_id ASC, monto_local DESC
+    `, [pedidoIds]);
+
+    // 4) Ensamblado: un pedido → su cabecera, sus ítems y sus cobros.
+    const itemsPorPedido = new Map();
+    for (const fila of filasItems) {
+        if (!itemsPorPedido.has(fila.id_pedido)) itemsPorPedido.set(fila.id_pedido, []);
+        itemsPorPedido.get(fila.id_pedido).push(fila);
+    }
+    const pagosPorPedido = new Map();
+    for (const fila of filasPagos) {
+        if (!pagosPorPedido.has(fila.pedido_id)) pagosPorPedido.set(fila.pedido_id, []);
+        pagosPorPedido.get(fila.pedido_id).push(fila);
+    }
+
+    const pedidos = filasPedidos.map((fila) => {
+        const items = itemsPorPedido.get(fila.id) || [];
+        const pagos = pagosPorPedido.get(fila.id) || [];
+
+        const lineas = items.map(i => ({
+            id: i.id,
+            nombre: i.nombre,
+            es_platillo_dia: Number(i.es_platillo_dia || 0) === 1,
+            cantidad: num(i.cantidad, 0),
+            precio_unitario: num(i.precio_unitario, 2),
+            importe: num(i.importe, 2),
+            estado_item: i.estado_item,
+            estado_etiqueta: ETIQUETA_ESTADO_ITEM[i.estado_item] || i.estado_item,
+            cancelado: i.estado_item === 'cancelado',
+            entregado: i.estado_item === 'entregado',
+            notas: i.notas_especiales || '',
+            enviado_en: i.enviado_en || null,
+            listo_en: i.listo_en || null,
+            entregado_en: i.entregado_en || null,
+            produccion: formatearDuracion(i.segundos_produccion),
+            entrega: formatearDuracion(i.segundos_entrega),
+            en_barra: formatearDuracion(i.segundos_en_barra),
+            segundos_entrega: i.segundos_entrega == null ? null : num(i.segundos_entrega, 0),
+            cocinero: i.cocinero || null
+        }));
+
+        const entregados = items.filter(i => i.estado_item === 'entregado');
+        const cancelados = items.filter(i => i.estado_item === 'cancelado');
+        const pendientes = items.filter(i => i.estado_item !== 'entregado' && i.estado_item !== 'cancelado');
+
+        // Media de tiempo de entrega de los ítems servidos (para ordenar y para
+        // el titular de la fila).
+        const tiempos = entregados
+            .map(i => (i.segundos_entrega == null ? null : Number(i.segundos_entrega)))
+            .filter(v => v != null && Number.isFinite(v) && v >= 0);
+        const promedioEntrega = tiempos.length
+            ? Math.round(tiempos.reduce((s, v) => s + v, 0) / tiempos.length)
+            : null;
+
+        const importe = num(pagos.reduce((s, p) => s + Number(p.monto_origen || 0), 0), 2);
+        const equivalenteLocal = num(pagos.reduce((s, p) => s + Number(p.monto_local || 0), 0), 2);
+
+        return {
+            id: fila.id,
+            cliente_nombre: fila.cliente_nombre || '',
+            comensales: num(fila.comensales, 0),
+            estado_pedido: fila.estado_pedido,
+            estado_pedido_etiqueta: ETIQUETA_ESTADO_PEDIDO[fila.estado_pedido] || fila.estado_pedido,
+            estado_pago: fila.estado_pago,
+            estado_pago_etiqueta: ETIQUETA_ESTADO_PAGO[fila.estado_pago] || fila.estado_pago,
+            en_curso: fila.cerrado_en == null,
+            mesa_numero: fila.mesa_numero != null ? String(fila.mesa_numero) : String(fila.id_mesa || '—'),
+            id_mesa: fila.id_mesa,
+            mesa_area: fila.mesa_area || null,
+            carta: fila.mesa_carta || null,
+            mesero: fila.mesero || 'Sin asignar',
+            cajero: fila.cajero || null,
+            turno_id: fila.turno_id,
+            turno_etiqueta: etiquetaTurno(fila),
+            turno_apertura: horaCorta(fila.turno_apertura),
+            abierto_en: fila.abierto_en,
+            abierto_hora: horaCorta(fila.abierto_en),
+            abierto_fecha: fechaCorta(fila.abierto_en),
+            cerrado_en: fila.cerrado_en,
+            cerrado_hora: horaCorta(fila.cerrado_en),
+            impresiones: num(fila.impresiones_precuenta, 0),
+            subtotal: num(fila.subtotal, 2),
+            descuento: num(fila.descuento, 2),
+            impuesto: num(fila.impuesto, 2),
+            propina: num(fila.propina, 2),
+            total: num(fila.total, 2),
+            duracion_servicio: formatearDuracion(fila.segundos_servicio),
+            segundos_servicio: fila.segundos_servicio == null ? null : num(fila.segundos_servicio, 0),
+            items: lineas,
+            conteo: {
+                lineas: items.length,
+                unidades: num(items.reduce((s, i) => s + Number(i.cantidad || 0), 0), 0),
+                entregados: entregados.length,
+                cancelados: cancelados.length,
+                pendientes: pendientes.length
+            },
+            entrega_promedio_segundos: promedioEntrega,
+            entrega_promedio: formatearDuracion(promedioEntrega),
+            pagos: pagos.map(p => ({
+                metodo_pago: p.metodo_pago,
+                codigo_moneda: p.codigo_moneda,
+                nombre_moneda: p.nombre_moneda,
+                simbolo: p.simbolo,
+                factor_cambio: num(p.factor_cambio, 4),
+                monto_origen: num(p.monto_origen, 2),
+                monto_local: num(p.monto_local, 2),
+                transacciones: num(p.transacciones, 0),
+                multi_moneda: String(p.codigo_moneda || '').toUpperCase() !== 'CUP'
+            })),
+            importe_cobrado: importe,
+            equivalente_local: equivalenteLocal,
+            desglose_moneda: pagos.map(p => `${p.codigo_moneda} ${num(p.monto_origen, 2).toLocaleString('es-ES', { minimumFractionDigits: 2 })}`).join(' · ')
+        };
+    });
+
+    // 5) Totales del período (lo que se ve en las tarjetas superiores).
+    const cuenta = (campo) => num(pedidos.reduce((s, p) => s + p[campo], 0), 2);
+    const cobradas = pedidos.filter(p => p.estado_pago === 'pagado' || p.estado_pago === 'facturado');
+    const promedios = pedidos
+        .map(p => p.entrega_promedio_segundos)
+        .filter(v => v != null && Number.isFinite(v));
+
+    return {
+        desde, hasta,
+        filtros,
+        trazabilidad: hayTraza,
+        pedidos,
+        opciones: await opcionesFiltrosPedidos(desde, hasta, tieneAreas),
+        totales: {
+            cuentas: pedidos.length,
+            en_curso: pedidos.filter(p => p.en_curso).length,
+            cobradas: cobradas.length,
+            venta: cuenta('total'),
+            local: cuenta('equivalente_local'),
+            propinas: cuenta('propina'),
+            descuentos: cuenta('descuento'),
+            cortesias: pedidos.filter(p => p.estado_pago === 'cortesia').length,
+            cancelados: num(pedidos.reduce((s, p) => s + p.conteo.cancelados, 0), 0),
+            entregados: num(pedidos.reduce((s, p) => s + p.conteo.entregados, 0), 0),
+            lineas: num(pedidos.reduce((s, p) => s + p.conteo.lineas, 0), 0),
+            unidades: num(pedidos.reduce((s, p) => s + p.conteo.unidades, 0), 0),
+            ticket_promedio: cobradas.length
+                ? num(cobradas.reduce((s, p) => s + p.total, 0) / cobradas.length, 2)
+                : 0,
+            entrega_promedio: promedios.length
+                ? formatearDuracion(Math.round(promedios.reduce((s, v) => s + v, 0) / promedios.length))
+                : null
+        }
+    };
+}
+
+/** Listas para los desplegables del filtro: turnos, dependientes y áreas. */
+async function opcionesFiltrosPedidos(desde, hasta, tieneAreas) {
+    const opciones = { turnos: [], meseros: [], areas: [] };
+
+    try {
+        const [turnos] = await db.query(`
+            SELECT id, fecha_apertura, fecha_cierre, estado
+            FROM turnos_servicio
+            WHERE (DATE(fecha_apertura) >= ? AND DATE(fecha_apertura) <= ?)
+               OR (fecha_cierre IS NULL)
+            ORDER BY id DESC
+            LIMIT 40
+        `, [desde, hasta]);
+        opciones.turnos = turnos.map(t => ({
+            id: t.id,
+            etiqueta: `Turno #${t.id} · ${fechaCorta(t.fecha_apertura)} ${horaCorta(t.fecha_apertura)}` +
+                (t.estado === 'abierto' ? ' (abierto)' : ''),
+            estado: t.estado
+        }));
+    } catch (error) {
+        logger.warn(`[pedidos-ventas] No se pudieron listar los turnos: ${error.message}`);
+    }
+
+    try {
+        const [meseros] = await db.query(`
+            SELECT id, rol,
+                   COALESCE(NULLIF(TRIM(CONCAT_WS(' ', nombre, apellidos)), ''), usuario) AS nombre
+            FROM usuarios
+            WHERE activo = 1
+              AND rol IN ('dependiente', 'dependiente-pos', 'capitan', 'cajero',
+                          'administrador', 'superadministrador')
+            ORDER BY nombre ASC
+            LIMIT 100
+        `);
+        opciones.meseros = meseros;
+    } catch (error) {
+        logger.warn(`[pedidos-ventas] No se pudieron listar los dependientes: ${error.message}`);
+    }
+
+    if (tieneAreas) {
+        try {
+            const [areas] = await db.query(`
+                SELECT id, nombre FROM ubicacion_mesa
+                 WHERE activo = 1
+                 ORDER BY orden ASC, nombre ASC
+                 LIMIT 50
+            `);
+            opciones.areas = areas;
+        } catch (error) {
+            logger.warn(`[pedidos-ventas] No se pudieron listar las áreas de servicio: ${error.message}`);
+        }
+    }
+
+    return opciones;
+}
+
 // ── Generadores de CSV ───────────────────────────────────────────────────
 // Qué tragos y platillos se vendieron en un turno de servicio y qué
 // movimiento de inventario generaron (kardex por comanda cobrada).
@@ -1545,6 +2012,64 @@ function platilloTurnoACSV(detalle) {
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
+/**
+ * CSV de Pedidos / Ventas: una fila por cuenta con el importe desglosado por
+ * moneda y, debajo, el detalle de ítems con sus tiempos. Separador ';' y BOM
+ * UTF-8 (criterio del kardex) para abrirlo en Excel sin pasos intermedios.
+ */
+function pedidosVentasACSV(reporte) {
+    const filas = [];
+    const t = reporte.totales || {};
+    filas.push(`Pedidos y ventas;${reporte.desde};a;${reporte.hasta}`);
+    filas.push(`Cuentas;${csvNum(t.cuentas, 0)};Venta total;${csvNum(t.venta)};` +
+        `En curso;${csvNum(t.en_curso, 0)};Propinas;${csvNum(t.propinas)};` +
+        `Descuentos;${csvNum(t.descuentos)};Ticket promedio;${csvNum(t.ticket_promedio)}`);
+    filas.push('');
+    filas.push('PEDIDOS');
+    filas.push('Pedido;Fecha;Mesa;Area;Turno;Cliente;Comensales;Dependiente;Cajero;' +
+        'Abierto;Cerrado;Duracion servicio;Estado pedido;Estado pago;' +
+        'Subtotal;Descuento;Propina;Total;Importe cobrado;Equivalente CUP;Desglose por moneda;' +
+        'Items;Unidades;Entregados;Cancelados;Tiempo entrega promedio;Cocineros');
+    for (const p of (reporte.pedidos || [])) {
+        const cocineros = Array.from(new Set((p.items || [])
+            .map(i => i.cocinero).filter(Boolean))).join(', ');
+        filas.push([
+            csvNum(p.id, 0), csvTexto(fechaCorta(p.abierto_en)), csvTexto(p.mesa_numero),
+            csvTexto(p.mesa_area || ''), csvTexto(p.turno_etiqueta),
+            csvTexto(p.cliente_nombre), csvNum(p.comensales, 0),
+            csvTexto(p.mesero), csvTexto(p.cajero || ''),
+            csvTexto(`${fechaCorta(p.abierto_en)} ${horaCorta(p.abierto_en) || ''}`.trim()),
+            p.cerrado_en ? csvTexto(`${fechaCorta(p.cerrado_en)} ${horaCorta(p.cerrado_en) || ''}`.trim()) : '',
+            csvTexto(p.duracion_servicio || ''), csvTexto(p.estado_pedido_etiqueta),
+            csvTexto(p.estado_pago_etiqueta),
+            csvNum(p.subtotal), csvNum(p.descuento), csvNum(p.propina), csvNum(p.total),
+            csvNum(p.importe_cobrado), csvNum(p.equivalente_local), csvTexto(p.desglose_moneda),
+            csvNum(p.conteo.lineas, 0), csvNum(p.conteo.unidades, 0),
+            csvNum(p.conteo.entregados, 0), csvNum(p.conteo.cancelados, 0),
+            csvTexto(p.entrega_promedio || ''), csvTexto(cocineros)
+        ].join(';'));
+    }
+
+    filas.push('');
+    filas.push('DETALLE DE ITEMS');
+    filas.push('Pedido;Mesa;Item;Origen;Cantidad;Precio unit.;Importe;Estado;' +
+        'Enviado;Listo;Entregado;Produccion;Entrega;Cocinero;Notas');
+    for (const p of (reporte.pedidos || [])) {
+        for (const i of (p.items || [])) {
+            filas.push([
+                csvNum(p.id, 0), csvTexto(p.mesa_numero), csvTexto(i.nombre),
+                i.es_platillo_dia ? 'Dia' : 'Carta', csvNum(i.cantidad, 0),
+                csvNum(i.precio_unitario), csvNum(i.importe), csvTexto(i.estado_etiqueta),
+                csvFecha(i.enviado_en), csvFecha(i.listo_en), csvFecha(i.entregado_en),
+                csvTexto(i.produccion || ''), csvTexto(i.entrega || ''),
+                csvTexto(i.cocinero || ''), csvTexto(i.notas || '')
+            ].join(';'));
+        }
+    }
+
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
 module.exports = {
     saludInventario,
     margenPorPlatillo,
@@ -1553,6 +2078,12 @@ module.exports = {
     ventasPorHoras,
     ventasTurno,
     detallePlatilloTurno,
+    pedidosVentas,
+    pedidosVentasACSV,
+    leerFiltrosPedidos,
+    normalizarRangoDelDia,
+    trazabilidadDisponible,
+    formatearDuracion,
     tendencias,
     normalizarRango,
     margenACSV,

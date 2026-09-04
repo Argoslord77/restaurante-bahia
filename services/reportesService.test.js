@@ -2,8 +2,16 @@
 // Verifica los reportes de control: salud del inventario, margen real
 // por platillo, ventas por mesero y las exportaciones CSV.
 jest.mock('../config/db', () => ({ query: jest.fn() }));
+// El reporte de Pedidos / Ventas pregunta por las columnas de trazabilidad
+// antes de armar la consulta; aquí se controla esa respuesta por prueba.
+jest.mock('../config/schema', () => ({
+    hasColumn: jest.fn(async () => true),
+    categoriaAlmacenExpr: async () => "'logistico'",
+    invalidate: jest.fn()
+}));
 
 const db = require('../config/db');
+const Schema = require('../config/schema');
 const ReportesService = require('./reportesService');
 
 describe('reportesService · saludInventario', () => {
@@ -651,5 +659,281 @@ describe('reportesService · tendencias', () => {
         expect(csv).toContain('PRODUCTOS');
         expect(csv).toContain('Mojito');
         expect(csv).toContain('A la alza');
+    });
+});
+
+describe('reportesService · utilidades del reporte de Pedidos / Ventas', () => {
+    it('formatea los tiempos como h:mm:ss', () => {
+        expect(ReportesService.formatearDuracion(3723)).toBe('1:02:03');
+        expect(ReportesService.formatearDuracion(45)).toBe('0:00:45');
+        expect(ReportesService.formatearDuracion('59')).toBe('0:00:59');
+        expect(ReportesService.formatearDuracion(0)).toBe('0:00:00');
+        expect(ReportesService.formatearDuracion(-4)).toBeNull();
+        expect(ReportesService.formatearDuracion(null)).toBeNull();
+        expect(ReportesService.formatearDuracion('abc')).toBeNull();
+    });
+
+    it('usa el día de hoy cuando el rango viene vacío y corrige el orden', () => {
+        const hoy = new Date();
+        const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const esperado = { desde: iso(hoy), hasta: iso(hoy) };
+
+        expect(ReportesService.normalizarRangoDelDia({})).toEqual(esperado);
+        expect(ReportesService.normalizarRangoDelDia({ desde: 'hola', hasta: '' })).toEqual(esperado);
+        expect(ReportesService.normalizarRangoDelDia({ desde: '2026-09-04', hasta: '2026-08-01' }))
+            .toEqual({ desde: '2026-08-01', hasta: '2026-09-04' });
+    });
+
+    it('descarta filtros inválidos en lugar de romper la consulta', () => {
+        const filtros = ReportesService.leerFiltrosPedidos({
+            turno: '12', mesero: 'abc', estado_pedido: 'entregado',
+            estado_pago: 'TODO', mesa: '  7  ', q: '   ', en_curso: '1'
+        });
+
+        expect(filtros).toMatchObject({
+            turnoId: 12, meseroId: null, estadoPedido: 'entregado', estadoPago: null,
+            mesa: '7', texto: null, soloEnCurso: true
+        });
+    });
+});
+
+describe('reportesService · pedidosVentas', () => {
+    const SIN_FILAS = [[], []];
+    const fecha = (s) => new Date(s);
+
+    const cabecera = (over = {}) => Object.assign({
+        id: 31, cliente_nombre: 'Marta', comensales: 3, estado_pedido: 'entregado',
+        estado_pago: 'pagado', subtotal: 1450, descuento: 100, impuesto: 0,
+        propina: 50, total: 1400, abierto_en: fecha('2026-09-04T11:58:00'),
+        cerrado_en: fecha('2026-09-04T13:10:00'), impresiones_precuenta: 1,
+        id_mesa: 12, mesa_numero: '12', mesa_carta: 'CUP', mesa_area: 'Salón Principal',
+        mesero: 'Yoandri', cajero: 'Willian', turno_id: 4,
+        turno_apertura: fecha('2026-09-04T11:30:00'), turno_cierre: null,
+        segundos_servicio: 4320
+    }, over);
+
+    const item = (over = {}) => Object.assign({
+        id: 1, id_pedido: 31, cantidad: 2, precio_unitario: 150, estado_item: 'entregado',
+        es_platillo_dia: 0, notas_especiales: null, afecta_inventario: 1, importe: 300,
+        nombre: 'Morosidad', enviado_en: fecha('2026-09-04T12:00:00'),
+        listo_en: fecha('2026-09-04T12:08:00'), entregado_en: fecha('2026-09-04T12:11:00'),
+        segundos_produccion: 480, segundos_entrega: 660, segundos_en_barra: 180,
+        cocinero: 'Reinier'
+    }, over);
+
+    // Orden de consultas del reporte: cabeceras, ítems, cobros y las tres
+    // listas de los desplegables de filtro (turnos, dependientes, áreas).
+    const simular = (filas) => filas.forEach(f => db.query.mockResolvedValueOnce(f));
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        Schema.hasColumn.mockResolvedValue(true);
+    });
+
+    it('ensambla cuenta, ítems, tiempos y totales del período', async () => {
+        simular([
+            [[cabecera(), cabecera({
+                id: 32, estado_pago: 'pendiente', estado_pedido: 'preparando',
+                cerrado_en: null, subtotal: 20, total: 0, descuento: 0, propina: 0,
+                segundos_servicio: 900
+            })], []],
+            [[
+                item(),
+                item({
+                    id: 2, cantidad: 1, precio_unitario: 100, importe: 100,
+                    estado_item: 'cancelado', es_platillo_dia: 1,
+                    notas_especiales: 'CANCELADO: sin stock', afecta_inventario: 0,
+                    enviado_en: null, listo_en: null, entregado_en: null,
+                    segundos_produccion: null, segundos_entrega: null,
+                    segundos_en_barra: null, cocinero: null, nombre: 'Promoción del día'
+                }),
+                item({
+                    id: 3, id_pedido: 32, cantidad: 4, precio_unitario: 5, importe: 20,
+                    estado_item: 'en_cocina', nombre: 'Croquetas', listo_en: null,
+                    entregado_en: null, segundos_produccion: null,
+                    segundos_entrega: null, segundos_en_barra: null
+                })
+            ], []],
+            SIN_FILAS, SIN_FILAS, SIN_FILAS, SIN_FILAS
+        ]);
+
+        const reporte = await ReportesService.pedidosVentas({
+            rango: { desde: '2026-09-04', hasta: '2026-09-04' },
+            filtros: { turnoId: null, meseroId: null, areaId: null, estadoPedido: null,
+                       estadoPago: null, mesa: null, texto: null, soloEnCurso: false }
+        });
+
+        // Criterio de período: cuenta si se abrió O si se cobró en el rango.
+        expect(db.query.mock.calls[0][1]).toEqual(
+            ['2026-09-04', '2026-09-04', '2026-09-04', '2026-09-04']);
+        expect(db.query.mock.calls[0][0]).toContain('p.creado_en >= ?');
+        expect(db.query.mock.calls[0][0]).toContain('p.fecha_cierre >= ?');
+
+        expect(reporte.pedidos).toHaveLength(2);
+        const [cerrada, abierta] = reporte.pedidos;
+        expect(cerrada.en_curso).toBe(false);
+        expect(abierta.en_curso).toBe(true);
+        expect(cerrada.mesa_numero).toBe('12');
+        expect(cerrada.turno_etiqueta).toContain('Turno #4');
+        expect(cerrada.duracion_servicio).toBe('1:12:00');
+
+        expect(cerrada.items).toHaveLength(2);
+        expect(cerrada.items[0]).toMatchObject({
+            nombre: 'Morosidad', cantidad: 2, importe: 300, entrega: '0:11:00',
+            produccion: '0:08:00', en_barra: '0:03:00', cocinero: 'Reinier', entregado: true
+        });
+        expect(cerrada.items[1]).toMatchObject({
+            cancelado: true, es_platillo_dia: true, entrega: null,
+            estado_etiqueta: 'Cancelado'
+        });
+        expect(cerrada.conteo).toEqual({ lineas: 2, unidades: 3, entregados: 1, cancelados: 1, pendientes: 0 });
+        expect(cerrada.entrega_promedio).toBe('0:11:00');
+        expect(abierta.conteo).toEqual({ lineas: 1, unidades: 4, entregados: 0, cancelados: 0, pendientes: 1 });
+
+        // Sin cobros registrados no se inventa un importe cobrado
+        expect(cerrada.pagos).toEqual([]);
+        expect(cerrada.importe_cobrado).toBe(0);
+
+        expect(reporte.totales).toMatchObject({
+            cuentas: 2, en_curso: 1, cobradas: 1, venta: 1400, propinas: 50,
+            descuentos: 100, entregados: 1, cancelados: 1, lineas: 3, unidades: 7,
+            ticket_promedio: 1400, entrega_promedio: '0:11:00'
+        });
+    });
+
+    it('desglosa el importe por moneda de cobro y su equivalente local', async () => {
+        simular([
+            [[cabecera()], []],
+            [[item({ cantidad: 1, precio_unitario: 1400, importe: 1400, nombre: 'Cena' })], []],
+            [[
+                { pedido_id: 31, metodo_pago: 'efectivo', codigo_moneda: 'CUP',
+                  nombre_moneda: 'Peso cubano', simbolo: '$', factor_cambio: 1,
+                  monto_origen: 900, monto_local: 900, transacciones: 2 },
+                { pedido_id: 31, metodo_pago: 'transferencia', codigo_moneda: 'ZELLE',
+                  nombre_moneda: 'Zelle', simbolo: '$', factor_cambio: 120,
+                  monto_origen: 4.17, monto_local: 500, transacciones: 1 }
+            ], []],
+            SIN_FILAS, SIN_FILAS, SIN_FILAS
+        ]);
+
+        const reporte = await ReportesService.pedidosVentas({
+            rango: { desde: '2026-09-04', hasta: '2026-09-04' }, filtros: {}
+        });
+
+        const pedido = reporte.pedidos[0];
+        expect(pedido.pagos.map(x => x.codigo_moneda)).toEqual(['CUP', 'ZELLE']);
+        expect(pedido.pagos[0].multi_moneda).toBe(false);
+        expect(pedido.pagos[1].multi_moneda).toBe(true);
+        expect(pedido.importe_cobrado).toBe(904.17);
+        expect(pedido.equivalente_local).toBe(1400);
+        expect(pedido.desglose_moneda).toContain('ZELLE');
+    });
+
+    it('funciona sin la migración de trazabilidad: la consulta omite las columnas de tiempos', async () => {
+        Schema.hasColumn.mockImplementation(async (tabla, columna) => {
+            if (tabla !== 'detalles_pedido') return false;
+            return !['enviado_en', 'listo_en', 'entregado_en', 'usuario_produccion_id'].includes(columna);
+        });
+
+        // Sin las columnas, la consulta devuelve solo lo que existe en el
+        // esquema antiguo: la fila del detalle llega sin tiempos ni cocinero.
+        simular([
+            [[cabecera()], []],
+            [[{
+                id: 1, id_pedido: 31, cantidad: 1, precio_unitario: 1400, importe: 1400,
+                estado_item: 'entregado', es_platillo_dia: 0, notas_especiales: null,
+                afecta_inventario: 1, nombre: 'Cena'
+            }], []],
+            SIN_FILAS, SIN_FILAS, SIN_FILAS
+        ]);
+
+        const reporte = await ReportesService.pedidosVentas({
+            rango: { desde: '2026-09-04', hasta: '2026-09-04' }, filtros: {}
+        });
+
+        expect(reporte.trazabilidad).toBe(false);
+        expect(db.query.mock.calls[1][0]).not.toContain('dp.entregado_en');
+        expect(db.query.mock.calls[1][0]).not.toContain('usuario_produccion_id');
+        // Sin catálogo de áreas tampoco se une la tabla de ubicaciones
+        expect(db.query.mock.calls[0][0]).not.toContain('ubicacion_mesa');
+        expect(reporte.pedidos[0].items[0]).toMatchObject({ entrega: null, produccion: null, cocinero: null });
+        expect(reporte.pedidos[0].entrega_promedio).toBeNull();
+        expect(reporte.totales.entrega_promedio).toBeNull();
+    });
+
+    it('aplica los filtros a la consulta de cabeceras', async () => {
+        simular([SIN_FILAS, SIN_FILAS, SIN_FILAS, SIN_FILAS]);
+
+        await ReportesService.pedidosVentas({
+            rango: { desde: '2026-09-01', hasta: '2026-09-04' },
+            filtros: { turnoId: 4, meseroId: 8, areaId: 2, estadoPedido: 'entregado',
+                       estadoPago: 'pagado', mesa: '12', texto: 'Marta', soloEnCurso: true }
+        });
+
+        const [sql, valores] = db.query.mock.calls[0];
+        expect(sql).toContain('p.turno_servicio_id = ?');
+        expect(sql).toContain('m.ubicacion_id = ?');
+        expect(sql).toContain('p.cliente_nombre LIKE ?');
+        expect(sql).toContain('p.fecha_cierre IS NULL');
+        expect(valores).toEqual(['2026-09-01', '2026-09-04', '2026-09-01', '2026-09-04',
+                                 4, 8, 'entregado', 'pagado', '%12%', 2,
+                                 '%Marta%', '%Marta%', 'Marta']);
+    });
+
+    it('si no hay cuentas no consulta el detalle y devuelve totales en cero', async () => {
+        simular([SIN_FILAS, SIN_FILAS, SIN_FILAS, SIN_FILAS]);
+
+        const reporte = await ReportesService.pedidosVentas({
+            rango: { desde: '2026-09-04', hasta: '2026-09-04' }, filtros: {}
+        });
+
+        expect(reporte.pedidos).toEqual([]);
+        expect(reporte.totales).toMatchObject({ cuentas: 0, en_curso: 0, venta: 0, ticket_promedio: 0 });
+        expect(db.query).toHaveBeenCalledTimes(4);
+        expect(db.query.mock.calls[1][0]).not.toContain('detalles_pedido');
+    });
+
+    it('no rompe si las listas de filtros fallan (BD sin catálogo de áreas)', async () => {
+        simular([
+            [[cabecera()], []],
+            [[item()], []],
+            SIN_FILAS
+        ]);
+        db.query.mockRejectedValueOnce(new Error("Table 'ubicacion_mesa' doesn't exist"));
+        db.query.mockRejectedValueOnce(new Error("Table 'usuarios' doesn't exist"));
+        db.query.mockRejectedValueOnce(new Error("Table 'turnos_servicio' doesn't exist"));
+
+        const reporte = await ReportesService.pedidosVentas({
+            rango: { desde: '2026-09-04', hasta: '2026-09-04' }, filtros: {}
+        });
+
+        expect(reporte.pedidos).toHaveLength(1);
+        expect(reporte.opciones).toEqual({ turnos: [], meseros: [], areas: [] });
+    });
+
+    it('exporta resumen, cuentas y detalle de ítems al CSV', async () => {
+        simular([
+            [[cabecera()], []],
+            [[item()], []],
+            [[{ pedido_id: 31, metodo_pago: 'efectivo', codigo_moneda: 'CUP',
+                nombre_moneda: 'Peso cubano', simbolo: '$', factor_cambio: 1,
+                monto_origen: 1400, monto_local: 1400, transacciones: 1 }], []],
+            SIN_FILAS, SIN_FILAS, SIN_FILAS
+        ]);
+
+        const reporte = await ReportesService.pedidosVentas({
+            rango: { desde: '2026-09-04', hasta: '2026-09-04' }, filtros: {}
+        });
+        const csv = ReportesService.pedidosVentasACSV(reporte);
+
+        expect(csv.startsWith('\uFEFF')).toBe(true);
+        expect(csv).toContain('Pedidos y ventas;2026-09-04;a;2026-09-04');
+        expect(csv).toContain('Cuentas;1;Venta total;1400,00');
+        expect(csv).toContain('DETALLE DE ITEMS');
+        expect(csv).toContain('Morosidad');
+        expect(csv).toContain('0:11:00');
+        expect(csv).toContain('Reinier');
+        // Los decimales van con coma para Excel en español
+        expect(csv).toContain('2;150,00;300,00;Entregado');
     });
 });

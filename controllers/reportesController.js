@@ -113,6 +113,15 @@ const ENLACES = [
         badge: 'NUEVO'
     },
     {
+        id: 'pedidos-ventas',
+        titulo: 'Ventas / Pedidos del período',
+        descripcion: 'Cuenta por cuenta: turno, mesa y área, dependiente y cajero, importes desglosados por moneda, ítems entregados y cancelados y tiempo de entrega de cada plato.',
+        icono: 'fa-solid fa-file-invoice-dollar',
+        url: '/admin/pedidos',
+        grupo: 'Control financiero',
+        interno: true
+    },
+    {
         id: 'cierre',
         titulo: 'Cierre del día',
         descripcion: 'Cuadre de caja del día: ventas por método de pago, propinas y arqueos.',

@@ -57,5 +57,63 @@ Source: window.print() Este error se esta manifestando y los botones de la vista
 - En la vista de salidas de Manuales (inventarios) en el formulario de salida en el campo Producto utiliza tambien un select2 para que la seleccion sea mas facil. Agrega en esta vista todas las opciones profesionales de manejo de informacion que utilizamos en el kardex como seleccion de rangos de fechas, impresion, exportar a csv, filtros especializados, etc.  
 - Agrega un campo de unidad de medida tanto en entradas como en salidas de inventarios 
 18. Bugs o cosas que quedan pendientes para arreglar manana: 
-- En la vista del menu del cliente en lugar del nro real de la mesa se esta mostrando el ID de la mesa en BD. 
-- Profesionalizar la vista de Pedidos/Ventas regidos por rangos de fechas (hoy por defecto) donde se muestra en formato de tabla como en los reportes los pedidos hechos en el dia, en curso (con toda la informacion necesaria como turno, mesa, dependiente, hora de apertura/cierre, importe [desglosado en monedas], desglose de items con info de los entregados/cancelados, tiempo de entrega de los items en formato h:m:s, cocinero, duracion del servicio, etc)
+- En la vista del menu del cliente en lugar del nro real de la mesa se esta mostrando el ID de la mesa en BD. [OKOKOK]  
+- Profesionalizar la vista de Pedidos/Ventas regidos por rangos de fechas (hoy por defecto) donde se muestra en formato de tabla como en los reportes los pedidos hechos en el dia, en curso (con toda la informacion necesaria como turno, mesa, dependiente, hora de apertura/cierre, importe [desglosado en monedas], desglose de items con info de los entregados/cancelados, tiempo de entrega de los items en formato h:m:s, cocinero, duracion del servicio, etc) [OKOKOK]
+
+
+--------------------------------------------------------------------------
+NOTAS DE LA SESION 04-09-2026 (item 18 resuelto)
+--------------------------------------------------------------------------
+* Menu del cliente: la vista ya pinta el numero real de la mesa (mesas.numero);
+  el id de BD queda solo para las rutas de la API. [vista: views/cliente/dashboard.ejs]
+
+* Ventas / Pedidos (/admin/pedidos): rehecha como reporte profesional.
+  - Rango de fechas (hoy por defecto) + periodo rapido (Hoy, Ayer, 7 y 30 dias),
+    filtros por turno, dependiente, area, estado de pago, estado del servicio,
+    mesa y buscador en pantalla con icono de vaciado.
+  - Tarjetas de resumen: cuentas (y cuantas en curso), venta registrada, ticket
+    promedio, propinas y descuentos, items cancelados/entregados y tiempo medio
+    de entrega.
+  - Tabla con una fila por cuenta: numero de pedido, mesa y area, turno, cliente
+    y comensales, dependiente y caja, hora de apertura y cierre, duracion del
+    servicio (h:m:s), importe con el desglose por moneda de cobro (CUP, USD/Zelle,
+    tarjeta...) y su equivalente local, conteo de items entregados/cancelados/
+    pendientes y badges de estado.
+  - Cada fila se despliega y muestra el desglose por plato: cantidad, precio,
+    importe, estado, tiempo de produccion (envio -> listo), tiempo de entrega
+    (envio -> entregado, h:m:s), hora en que se sirvio y cocinero o bartender que
+    lo saco. Se imprime con los desgloses abiertos y se exporta a CSV (mismo rango
+    y filtros que la pantalla: /admin/pedidos/exportar).
+  - Criterio de periodo: entra la cuenta que se ABRE o se COBRA dentro del rango,
+    asi una mesa abierta ayer y cerrada hoy sale en los dos dias.
+  - Se anadio al centro de reportes (grupo Control financiero) y al catalogo de
+    auditoria (consulta y exportacion). Tambien se registran por fin tendencias y
+    ventas-turno, que habian quedado fuera.
+
+* IMPORTANTE - requiere script de BD una sola vez:
+    scripts/migracion_tiempos_item_pedido.sql   (o: npm run migrate)
+  Agrega a detalles_pedido: enviado_en, listo_en, entregado_en y
+  usuario_produccion_id. SIN ese script TODO SIGUE FUNCIONANDO: el listado, los
+  importes, los estados y el CSV salen igual, y solo las columnas de tiempos y
+  cocinero muestran "—". Con el script aplicado, desde ese momento las nuevas
+  cuentas quedan con trazabilidad completa (POS, monitores de cocina/bar y cobro
+  de cuenta anotan las marcas de tiempo y quien produjo cada plato).
+
+* Arreglos de arrastre detectados al rehacer la vista:
+  - El modal "Crear Orden" y los botones "Anular" apuntaban a /pedido/... cuando
+    el router esta montado en /admin (404 silencioso). Ahora es /admin/pedido/nuevo
+    y /admin/pedido/:id/cancelar-parcial-o-total (tambien corregido en el detalle
+    del pedido).
+  - El modal ya no pide teclear el id de la mesa en BD: se elige de una lista con
+    buscador (numero + area + capacidad), y no deja seleccionar mesas que ya tienen
+    una orden abierta.
+  - Vista de caja/cierre: n/a en esta sesion.
+
+* Pendientes que siguen abiertos del TODO original:
+  - (8) Las notificaciones no estan reproduciendose: los audios existen en
+    public/sounds y POS/tablero/monitor los referencian; hace falta que confirmes
+    en el dispositivo (navegador bloquea el autoplay hasta el primer toque).
+  - (10) Ficha de costo para platillos del menu/dia e items no elaborados.
+  - (15/16) El catalogo de areas (ubicacion_mesa) y el modo "POS mesero" ya estan
+    hechos; falta retirar el uso del string libre mesas.ubicacion de las vistas que
+    aun lo muestran como dato editable.

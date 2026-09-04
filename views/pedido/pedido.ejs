@@ -3,111 +3,501 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Pedidos - Restaurante</title>
+    <title><%= title || 'Ventas / Pedidos - Restaurante Bahía' %></title>
     <link rel="stylesheet" href="/css/jquery-ui.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        /* Encabezado fijo dentro del listado: con 300 cuentas el usuario no
+           pierde de vista qué columna está leyendo. */
+        .tabla-pedidos { max-height: 72vh; overflow: auto; }
+        .tabla-pedidos thead th {
+            position: sticky; top: 0; z-index: 2;
+            background: #f8f9fa; border-bottom: 2px solid #dee2e6;
+        }
+        .pedido-fila { cursor: default; }
+        .pedido-fila.en-curso > td { background: rgba(255, 193, 7, .07); }
+        .toggle-detalle { line-height: 1; color: #6c757d; }
+        .toggle-detalle i { transition: transform .15s ease; }
+        .toggle-detalle[aria-expanded="true"] i { transform: rotate(90deg); }
+        .detalle-contenedor { background: #f8f9fa; }
+        .chip-moneda {
+            display: inline-block; padding: 1px 7px; margin: 1px 2px 1px 0;
+            border: 1px solid #dee2e6; border-radius: 999px;
+            font-size: .72rem; background: #fff; white-space: nowrap;
+        }
+        .rango-rapido.active { background-color: #212529 !important; color: #fff !important; }
+        /* Impresión: solo el reporte, con los detalles abiertos y sin colores
+           de fondo que gastan tóner. */
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn, .no-imprimir,
+            .filtro-pedidos, .alert { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+            .tabla-pedidos { max-height: none !important; overflow: visible !important; }
+            .tabla-pedidos thead th { position: static !important; }
+            .detalle-fila { display: table-row !important; }
+            .card { border: 0 !important; box-shadow: none !important; }
+            table { font-size: 10px !important; }
+        }
+    </style>
 </head>
-<body>
-    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
-        <div class="d-flex align-items-center gap-2">
-            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
-            <span class="fw-bold text-dark">Restaurante Bahía</span>
-        </div>
-        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
-            <i class="fa-solid fa-bars"></i>
-        </button>
-    </div>
+<body class="bg-light">
+<%
+    // Utilidades de presentación del reporte
+    const dinero = (v) => (v == null || !Number.isFinite(Number(v)))
+        ? '—'
+        : '$' + Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const entero = (v) => Number(v || 0).toLocaleString('es-ES');
+    const hora = (d) => (d instanceof Date && !Number.isNaN(d.getTime()))
+        ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '—';
+    const dia = (d) => (d instanceof Date && !Number.isNaN(d.getTime()))
+        ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}` : '—';
+    const hoy = new Date();
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const ayer = new Date(hoy.getTime() - 86400000);
+    const hace7 = new Date(hoy.getTime() - 6 * 86400000);
+    const hace30 = new Date(hoy.getTime() - 29 * 86400000);
+
+    // Enlaces de período rápido: conservan los filtros activos y solo mueven
+    // las fechas, para no perder el turno o el dependiente seleccionado.
+    const filtrosBase = {
+        turno: filtros.turnoId || '',
+        mesero: filtros.meseroId || '',
+        area: filtros.areaId || '',
+        estado_pedido: filtros.estadoPedido || '',
+        estado_pago: filtros.estadoPago || '',
+        mesa: filtros.mesa || '',
+        q: filtros.texto || '',
+        en_curso: filtros.soloEnCurso ? '1' : ''
+    };
+    const consulta = (desde, hasta, extra) => {
+        const q = Object.assign({ desde, hasta }, filtrosBase, extra || {});
+        return Object.keys(q)
+            .filter(k => q[k] !== '' && q[k] != null)
+            .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(q[k])}`)
+            .join('&');
+    };
+    const urlPeriodo = (desde, hasta, extra) => `/admin/pedidos?${consulta(desde, hasta, extra)}`;
+    // El CSV viaja con el mismo rango y los mismos filtros de la pantalla.
+    const urlExportar = `/admin/pedidos/exportar?${consulta(rango.desde, rango.hasta)}`;
+    const t = reporte.totales;
+%>
 
     <div class="container-fluid">
         <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
             <%- include('../includes/sideBarMenu') %>
-            
+
             <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
-                <%- include('../includes/header', {encabezado_pagina: 'Ventas / Pedidos', desc_pagina: 'Monitoreo de órdenes en consumo y apertura de mesas', add_btn: true, btn_label: "Crear Orden", modal: "modalCrearPedido"}) %>
-                
-                <div class="flex-grow-1 my-3">
-                    <div class="card card-custom shadow-sm border-0 overflow-hidden">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-custom-thead text-uppercase fs-7">
-                                    <tr>
-                                        <th class="ps-4 py-3">ID Pedido</th>
-                                        <th class="py-3">Ubicación / Mesa</th>
-                                        <th class="py-3">Mesero Responsable</th>
-                                        <th class="py-3">Estado</th>
-                                        <th class="text-center py-3" style="width: 180px;">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <% if (lista.length === 0) { %>
-                                        <tr>
-                                            <td colspan="5" class="text-center py-5 text-muted">
-                                                <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i> No hay pedidos activos en este momento.
-                                            </td>
-                                        </tr>
-                                    <% } else { %>
-                                        <% lista.forEach(item => { %>
-                                            <tr>
-                                                <td class="ps-4 fw-bold text-dark">#<%= item.id %></td>
-                                                <td>
-                                                    <span class="fw-semibold text-dark"><%= item.numero_mesa %></span>
-                                                </td>
-                                                <td class="text-secondary fs-7">
-                                                    <i class="fa-solid fa-user me-1 text-muted"></i> <%= item.mesero || 'Por asignar' %>
-                                                </td>
-                                                <td>
-                                                    <span class="badge bg-warning text-dark text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                        <i class="fa-solid fa-clock me-1"></i>En Consumo
-                                                    </span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <div class="btn-group gap-1">
-                                                        <a href="/admin/pedido/<%= item.id %>" class="btn btn-sm btn-outline-secondary border-0" title="Ver Detalle / Gestionar Caja">
-                                                            <i class="fa-solid fa-eye text-primary"></i>
-                                                        </a>
-                                                        <% if (typeof user !== 'undefined' && user && ['superadministrador', 'administrador', 'cajero'].includes(user.role)) { %>
-                                                            <button class="btn btn-sm btn-outline-secondary border-0" title="Anular Pedido Completo" onclick="cancelarPedidoInmediato('<%= item.id %>')">
-                                                                <i class="fa-solid fa-trash-can text-danger"></i>
-                                                            </button>
-                                                        <% } %>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        <% }) %>
-                                    <% } %>
-                                </tbody>
-                            </table>
+
+                <%- include('../includes/header', {encabezado_pagina: 'Ventas / Pedidos', desc_pagina: 'Cuentas del período con su cuenta desglosada por moneda, tiempos de producción y entrega por plato, y las órdenes en curso del servicio.', add_btn: (user && ['superadministrador','administrador'].indexOf(user.rol) !== -1), btn_label: "Crear Orden", modal: "modalCrearPedido"}) %>
+
+                <!-- ── Filtros ─────────────────────────────────────────────── -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-3 bg-white filtro-pedidos no-imprimir">
+                    <form method="get" action="/admin/pedidos" class="row g-2 align-items-end">
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-desde">Desde</label>
+                            <input type="date" id="f-desde" name="desde" class="form-control form-control-sm" value="<%= rango.desde %>">
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-hasta">Hasta</label>
+                            <input type="date" id="f-hasta" name="hasta" class="form-control form-control-sm" value="<%= rango.hasta %>">
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-turno">Turno</label>
+                            <select id="f-turno" name="turno" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <% (reporte.opciones.turnos || []).forEach(o => { %>
+                                    <option value="<%= o.id %>" <%= filtros.turnoId === o.id ? 'selected' : '' %>><%= o.etiqueta %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-mesero">Dependiente</label>
+                            <select id="f-mesero" name="mesero" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <% (reporte.opciones.meseros || []).forEach(o => { %>
+                                    <option value="<%= o.id %>" <%= filtros.meseroId === o.id ? 'selected' : '' %>><%= o.nombre %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <% if (reporte.opciones.areas && reporte.opciones.areas.length) { %>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-area">Área</label>
+                            <select id="f-area" name="area" class="form-select form-select-sm">
+                                <option value="">Todas</option>
+                                <% reporte.opciones.areas.forEach(o => { %>
+                                    <option value="<%= o.id %>" <%= filtros.areaId === o.id ? 'selected' : '' %>><%= o.nombre %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <% } %>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-estado-pago">Estado de pago</label>
+                            <select id="f-estado-pago" name="estado_pago" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <option value="pendiente" <%= filtros.estadoPago === 'pendiente' ? 'selected' : '' %> data-en-curso="1">Abierta (en curso)</option>
+                                <option value="pagado" <%= filtros.estadoPago === 'pagado' ? 'selected' : '' %>>Cobrada</option>
+                                <option value="cortesia" <%= filtros.estadoPago === 'cortesia' ? 'selected' : '' %>>Cortesía</option>
+                                <option value="facturado" <%= filtros.estadoPago === 'facturado' ? 'selected' : '' %>>Facturado</option>
+                                <option value="pendiente_pago" <%= filtros.estadoPago === 'pendiente_pago' ? 'selected' : '' %>>Pago pendiente</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-estado-pedido">Estado del servicio</label>
+                            <select id="f-estado-pedido" name="estado_pedido" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <option value="pendiente" <%= filtros.estadoPedido === 'pendiente' ? 'selected' : '' %>>En cola</option>
+                                <option value="preparando" <%= filtros.estadoPedido === 'preparando' ? 'selected' : '' %>>En preparación</option>
+                                <option value="listo" <%= filtros.estadoPedido === 'listo' ? 'selected' : '' %>>Listo</option>
+                                <option value="entregado" <%= filtros.estadoPedido === 'entregado' ? 'selected' : '' %>>Entregado</option>
+                                <option value="cancelado" <%= filtros.estadoPedido === 'cancelado' ? 'selected' : '' %>>Cancelado</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-mesa">Mesa</label>
+                            <input type="text" id="f-mesa" name="mesa" class="form-control form-control-sm" placeholder="N.º de mesa" value="<%= filtros.mesa || '' %>">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small text-muted fw-semibold mb-1" for="f-buscador">Filtrar en pantalla</label>
+                            <input type="text" id="f-buscador" class="form-control form-control-sm" autocomplete="off"
+                                   placeholder="Buscar cliente, dependiente o producto…">
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label small text-muted fw-semibold mb-1 d-block">Período rápido</label>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="<%= urlPeriodo(iso(hoy), iso(hoy)) %>" class="btn btn-white border <%= rango.desde === iso(hoy) && rango.hasta === iso(hoy) ? 'active rango-rapido' : 'text-dark' %>">Hoy</a>
+                                <a href="<%= urlPeriodo(iso(ayer), iso(ayer)) %>" class="btn btn-white border text-dark">Ayer</a>
+                                <a href="<%= urlPeriodo(iso(hace7), iso(hoy)) %>" class="btn btn-white border text-dark">7 días</a>
+                                <a href="<%= urlPeriodo(iso(hace30), iso(hoy)) %>" class="btn btn-white border text-dark">30 días</a>
+                                <a href="<%= urlPeriodo(rango.desde, rango.hasta, { en_curso: '1' }) %>" class="btn btn-white border <%= filtros.soloEnCurso ? 'active rango-rapido' : 'text-dark' %>" title="Solo las cuentas todavía abiertas">En curso</a>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-9 d-flex justify-content-md-end gap-2 flex-wrap">
+                            <button type="submit" class="btn btn-dark btn-sm fw-semibold py-2">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Consultar
+                            </button>
+                            <a href="<%= urlExportar %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
+                            </a>
+                            <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- ── Resumen ─────────────────────────────────────────────── -->
+                <div class="row g-3 mb-3">
+                    <div class="col-6 col-lg-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-dark border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Cuentas</h6>
+                            <h4 class="fw-bold mb-0"><%= entero(t.cuentas) %></h4>
+                            <small class="text-muted"><%= entero(t.en_curso) %> en curso</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-success border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Venta registrada</h6>
+                            <h4 class="fw-bold mb-0 text-success"><%= dinero(t.venta) %></h4>
+                            <small class="text-muted"><%= entero(t.cobradas) %> cobradas</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-info border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Ticket promedio</h6>
+                            <h4 class="fw-bold mb-0 text-info"><%= dinero(t.ticket_promedio) %></h4>
+                            <small class="text-muted">por cuenta cobrada</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Propinas y descuentos</h6>
+                            <h4 class="fw-bold mb-0 text-warning"><%= dinero(t.propinas) %></h4>
+                            <small class="text-muted">descuentos <%= dinero(t.descuentos) %></small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-danger border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Ítems cancelados</h6>
+                            <h4 class="fw-bold mb-0 text-danger"><%= entero(t.cancelados) %></h4>
+                            <small class="text-muted"><%= entero(t.entregados) %> entregados</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-secondary border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Entrega promedio</h6>
+                            <h4 class="fw-bold mb-0"><%= t.entrega_promedio || '—' %></h4>
+                            <small class="text-muted">h:m:s desde el envío</small>
                         </div>
                     </div>
                 </div>
-                
+
+                <% if (!reporte.trazabilidad) { %>
+                <div class="alert alert-light border shadow-sm rounded py-2 px-3 mb-3 small text-muted no-imprimir" role="note">
+                    <i class="fa-solid fa-circle-info me-1 text-info"></i>
+                    El reporte funciona igual, pero para informar <strong>tiempos de producción, tiempo de entrega por plato y cocinero responsable</strong>
+                    hay que aplicar una sola vez la trazabilidad de ítems:
+                    <code>scripts/migracion_tiempos_item_pedido.sql</code> (o <code>npm run migrate</code>).
+                </div>
+                <% } %>
+
+                <!-- ── Tabla de cuentas ────────────────────────────────────── -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2 flex-wrap">
+                        <i class="fa-solid fa-receipt text-dark"></i>
+                        <h6 class="fw-bold mb-0">
+                            Cuentas del <%= dia(new Date(rango.desde)) %><%= rango.desde !== rango.hasta ? ` al ${dia(new Date(rango.hasta))}` : '' %>
+                            (<span id="conteo-visible"><%= reporte.pedidos.length %></span>)
+                        </h6>
+                        <span class="badge text-bg-dark ms-auto"><%= entero(t.unidades) %> unidades servidas</span>
+                    </div>
+
+                    <div class="table-responsive tabla-pedidos">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7" id="tabla-pedidos">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3" style="width: 34px;"></th>
+                                    <th class="py-3">Pedido</th>
+                                    <th class="py-3">Mesa / Área</th>
+                                    <th class="py-3">Turno</th>
+                                    <th class="py-3">Cliente</th>
+                                    <th class="py-3">Dependiente</th>
+                                    <th class="py-3">Abierto</th>
+                                    <th class="py-3">Cerrado</th>
+                                    <th class="py-3 text-center" title="Duración total de la cuenta: de la apertura al cierre (o al momento actual si sigue abierta)">Servicio</th>
+                                    <th class="py-3 text-end">Importe</th>
+                                    <th class="py-3 text-center">Ítems</th>
+                                    <th class="py-3">Estado</th>
+                                    <th class="py-3 text-center pe-4">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (!reporte.pedidos.length) { %>
+                                    <tr>
+                                        <td colspan="13" class="text-center text-muted py-5">
+                                            <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i>
+                                            No hay cuentas en el período con estos filtros.
+                                        </td>
+                                    </tr>
+                                <% } %>
+                                <% reporte.pedidos.forEach(p => { %>
+                                <tr class="pedido-fila<%= p.en_curso ? ' en-curso' : '' %>"
+                                    data-buscable="<%= `${p.id} ${p.mesa_numero} ${p.mesa_area || ''} ${p.cliente_nombre} ${p.mesero} ${p.cajero || ''} ${p.turno_etiqueta} ${p.items.map(i => i.nombre).join(' ')}`.toLowerCase().replace(/"/g, '') %>">
+                                    <td class="ps-4 text-center">
+                                        <button type="button" class="btn btn-sm btn-link p-0 toggle-detalle" data-pedido="<%= p.id %>"
+                                                aria-expanded="false" title="Ver desglose de la cuenta">
+                                            <i class="fa-solid fa-chevron-right"></i>
+                                        </button>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold">#<%= p.id %></span>
+                                        <% if (p.en_curso) { %>
+                                            <span class="badge text-bg-warning fw-semibold ms-1">En curso</span>
+                                        <% } else if (p.estado_pedido === 'cancelado') { %>
+                                            <span class="badge text-bg-danger ms-1">Anulada</span>
+                                        <% } %>
+                                        <small class="text-muted d-block"><%= dia(p.abierto_en) %> · comensales <%= p.comensales || '—' %></small>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold text-dark"><%= p.mesa_numero %></span>
+                                        <small class="text-muted d-block"><%= p.mesa_area || '—' %></small>
+                                    </td>
+                                    <td class="text-secondary"><%= p.turno_etiqueta %></td>
+                                    <td class="text-truncate" style="max-width: 150px;" title="<%= p.cliente_nombre %>">
+                                        <%= p.cliente_nombre || '—' %>
+                                    </td>
+                                    <td>
+                                        <span class="d-block text-truncate" style="max-width: 140px;"><%= p.mesero %></span>
+                                        <small class="text-muted d-block text-truncate" style="max-width: 140px;">
+                                            Caja: <%= p.cajero || '—' %>
+                                        </small>
+                                    </td>
+                                    <td class="font-monospace"><%= hora(p.abierto_en) %></td>
+                                    <td class="font-monospace <%= p.en_curso ? 'text-muted' : '' %>"><%= p.en_curso ? '—' : hora(p.cerrado_en) %></td>
+                                    <td class="text-center font-monospace"><%= p.duracion_servicio || '—' %></td>
+                                    <td class="text-end">
+                                        <span class="fw-bold <%= p.en_curso ? 'text-warning' : '' %>"><%= dinero(p.total) %></span>
+                                        <% if (p.pagos.length) { %>
+                                            <small class="d-block text-muted">
+                                                <% p.pagos.forEach(g => { %>
+                                                    <span class="chip-moneda" title="<%= g.nombre_moneda %> · <%= g.metodo_pago %><%= g.factor_cambio && g.factor_cambio !== 1 ? ` · cambio ${g.factor_cambio}` : '' %> · <%= g.transacciones %> movimiento(s)">
+                                                        <%= g.codigo_moneda %> <%= g.monto_origen.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %>
+                                                    </span>
+                                                <% }) %>
+                                            </small>
+                                            <small class="d-block text-muted">equiv. <%= dinero(p.equivalente_local) %></small>
+                                        <% } else { %>
+                                            <small class="d-block text-muted">sin cobros registrados</small>
+                                        <% } %>
+                                        <% if (p.propina > 0) { %>
+                                            <small class="d-block text-success">propina <%= dinero(p.propina) %></small>
+                                        <% } %>
+                                        <% if (p.descuento > 0) { %>
+                                            <small class="d-block text-danger">descuento <%= dinero(p.descuento) %></small>
+                                        <% } %>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-semibold"><%= p.conteo.lineas %></span>
+                                        <small class="d-block text-muted"><%= entero(p.conteo.unidades) %> uds.</small>
+                                        <% if (p.conteo.entregados > 0) { %>
+                                            <small class="d-block text-success"><i class="fa-solid fa-check me-1"></i><%= p.conteo.entregados %></small>
+                                        <% } %>
+                                        <% if (p.conteo.cancelados > 0) { %>
+                                            <small class="d-block text-danger"><i class="fa-solid fa-xmark me-1"></i><%= p.conteo.cancelados %></small>
+                                        <% } %>
+                                        <% if (p.conteo.pendientes > 0) { %>
+                                            <small class="d-block text-warning"><i class="fa-solid fa-clock me-1"></i><%= p.conteo.pendientes %></small>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <span class="badge <%= p.estado_pago === 'pagado' ? 'text-bg-success' : (p.estado_pago === 'pendiente' ? 'text-bg-warning' : (p.estado_pago === 'cancelado' ? 'text-bg-danger' : 'text-bg-secondary')) %> text-capitalize">
+                                            <%= p.estado_pago_etiqueta %>
+                                        </span>
+                                        <small class="d-block text-muted mt-1"><%= p.estado_pedido_etiqueta %></small>
+                                        <% if (p.impresiones > 0) { %>
+                                            <small class="d-block text-muted"><i class="fa-solid fa-print me-1"></i><%= p.impresiones %> precuenta(s)</small>
+                                        <% } %>
+                                    </td>
+                                    <td class="text-center pe-4">
+                                        <div class="btn-group gap-1">
+                                            <a href="/admin/pedido/<%= p.id %>" class="btn btn-sm btn-outline-secondary border-0 no-imprimir" title="Ver / gestionar la orden">
+                                                <i class="fa-solid fa-eye text-primary"></i>
+                                            </a>
+                                            <% if (p.en_curso && user && ['superadministrador', 'administrador', 'cajero'].indexOf(user.rol) !== -1) { %>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary border-0 no-imprimir anular-pedido" data-pedido="<%= p.id %>" title="Anular pedido completo">
+                                                    <i class="fa-solid fa-trash-can text-danger"></i>
+                                                </button>
+                                            <% } %>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Desglose de la cuenta (plegable) -->
+                                <tr class="detalle-fila d-none" data-detalle="<%= p.id %>">
+                                    <td colspan="13" class="p-0">
+                                        <div class="detalle-contenedor px-4 py-3 border-top">
+                                            <div class="d-flex flex-wrap gap-3 align-items-center mb-2">
+                                                <strong class="fs-7 text-uppercase text-muted">Desglose de la cuenta #<%= p.id %></strong>
+                                                <% if (p.entrega_promedio) { %>
+                                                    <span class="badge text-bg-light border">Entrega promedio <span class="font-monospace"><%= p.entrega_promedio %></span></span>
+                                                <% } %>
+                                            </div>
+                                            <div class="table-responsive bg-white rounded border">
+                                                <table class="table table-sm mb-0 fs-7 align-middle">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th class="ps-3">Ítem</th>
+                                                            <th class="text-end">Cant.</th>
+                                                            <th class="text-end">Precio</th>
+                                                            <th class="text-end">Importe</th>
+                                                            <th>Estado</th>
+                                                            <th title="De la salida a cocina/bar al momento en que producción lo marcó listo">Producción</th>
+                                                            <th title="Del envío a producción hasta que el dependiente lo entregó en la mesa">Entrega</th>
+                                                            <th>Recibe</th>
+                                                            <th class="pe-3">Cocinero / barra</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <% if (!p.items.length) { %>
+                                                            <tr><td colspan="9" class="text-center text-muted py-3">La cuenta aún no tiene productos.</td></tr>
+                                                        <% } %>
+                                                        <% p.items.forEach(i => { %>
+                                                        <tr class="<%= i.cancelado ? 'text-decoration-line-through text-muted' : '' %>">
+                                                            <td class="ps-3">
+                                                                <span class="fw-semibold"><%= i.nombre %></span>
+                                                                <% if (i.es_platillo_dia) { %>
+                                                                    <span class="badge text-bg-light border ms-1">Platillo del día</span>
+                                                                <% } %>
+                                                                <% if (i.notas) { %>
+                                                                    <small class="d-block text-muted"><i class="fa-solid fa-note-sticky me-1"></i><%= i.notas %></small>
+                                                                <% } %>
+                                                            </td>
+                                                            <td class="text-end"><%= i.cantidad %></td>
+                                                            <td class="text-end"><%= dinero(i.precio_unitario) %></td>
+                                                            <td class="text-end fw-semibold"><%= dinero(i.importe) %></td>
+                                                            <td>
+                                                                <span class="badge <%= i.cancelado ? 'text-bg-danger' : (i.entregado ? 'text-bg-success' : 'text-bg-secondary') %> text-capitalize">
+                                                                    <%= i.estado_etiqueta %>
+                                                                </span>
+                                                            </td>
+                                                            <td class="font-monospace"><%= i.produccion || '—' %></td>
+                                                            <td class="font-monospace <%= i.entrega ? 'text-success' : 'text-muted' %>"><%= i.entrega || (i.cancelado ? '—' : 'en curso') %></td>
+                                                            <td class="text-muted"><%= i.entregado_en ? `${hora(i.entregado_en)}` : '—' %></td>
+                                                            <td><%= i.cocinero || '—' %></td>
+                                                        </tr>
+                                                        <% }) %>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                            </tbody>
+                            <% if (reporte.pedidos.length) { %>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td class="ps-4"></td>
+                                    <td colspan="8">TOTALES DEL PERÍODO (<%= entero(t.cuentas) %> cuentas)</td>
+                                    <td class="text-end"><%= dinero(t.venta) %></td>
+                                    <td class="text-center"><%= entero(t.lineas) %></td>
+                                    <td><small class="fw-normal text-muted">propinas <%= dinero(t.propinas) %></small></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                            <% } %>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="alert alert-light border shadow-sm rounded py-2 px-3 mb-4 small text-muted" role="note">
+                    <i class="fa-solid fa-lightbulb me-1 text-warning"></i>
+                    <strong>Clic en la flecha de cada fila</strong> para ver el desglose por plato con sus tiempos (h:m:s) y quién lo produjo.
+                    Una cuenta se incluye en el período si se <em>abrió</em> o se <em>cobró</em> entre esas fechas, de modo que una mesa abierta
+                    anoche y cerrada hoy aparece en ambos días. El importe de la derecha está desglosado por moneda de cobro (CUP, USD/Zelle,
+                    tarjeta…), que es lo que se cuadra en caja; <em>equiv.</em> es su conversión a moneda local registrada al cambio del turno.
+                </div>
+
                 <%- include('../includes/footer') %>
             </main>
         </div>
     </div>
 
+    <!-- ── Modal: abrir una orden sobre una mesa real ─────────────────── -->
     <div class="modal fade" id="modalCrearPedido" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header bg-dark text-white">
-                    <h5 class="modal-title fw-bold">Abrir Servicio / Orden</h5>
+                    <h5 class="modal-title fw-bold">Abrir servicio / orden</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="formCrearPedido" action="/pedido/nuevo" method="POST">
+                <form id="formCrearPedido" action="/admin/pedido/nuevo" method="POST">
                     <div class="modal-body p-4">
                         <div class="row g-3">
                             <div class="col-12">
-                                <label class="form-label fw-semibold text-secondary small">Seleccionar Número de Mesa / ID</label>
-                                <input type="number" name="id_mesa" class="form-control" placeholder="Ej. 5" min="1" required>
+                                <label class="form-label fw-semibold text-secondary small" for="sel-mesa">Mesa</label>
+                                <input type="text" id="sel-mesa-buscador" class="form-control form-control-sm mb-2" placeholder="Buscar mesa o área…" autocomplete="off">
+                                <select id="sel-mesa" name="id_mesa" class="form-select shadow-sm" size="8" required>
+                                    <% (mesas || []).forEach(m => { %>
+                                        <option value="<%= m.id %>" <%= m.pedido_activo ? 'disabled' : '' %> data-buscable="<%= `${m.numero} ${m.ubicacion || ''}`.toLowerCase() %>">
+                                            Mesa <%= m.numero %> · <%= m.ubicacion || 'sin área' %> · capacidad <%= m.capacidad %><%= m.pedido_activo ? ' · ya tiene una orden abierta' : ` · ${m.estado}` %>
+                                        </option>
+                                    <% }) %>
+                                </select>
+                                <small class="text-muted d-block mt-2">
+                                    Las mesas con una orden abierta no se pueden seleccionar: cada mesa admite un solo servicio a la vez.
+                                </small>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer bg-light border-top-0">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary px-4">Iniciar Servicio</button>
+                        <button type="submit" class="btn btn-primary px-4">Iniciar servicio</button>
                     </div>
                 </form>
             </div>
@@ -118,55 +508,111 @@
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
+    <script src="/js/limpiar-busqueda.js" defer></script>
 
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            const modalCrear = document.getElementById('modalCrearPedido');
-            if (modalCrear) {
-                modalCrear.addEventListener('hidden.bs.modal', () => {
-                    document.getElementById('formCrearPedido').reset();
-                });
-            }
+    (function () {
+        'use strict';
+
+        // ── Desglose por cuenta (fila 1 fila 2) ──────────────────────────────
+        // Sin manejadores inline: la fila de detalle se muestra/oculta con la
+        // clase de Bootstrap, de modo que la impresión (CSS) pueda forzarla.
+        document.addEventListener('click', function (ev) {
+            var boton = ev.target.closest('.toggle-detalle');
+            if (!boton) return;
+            var pedido = boton.getAttribute('data-pedido');
+            var detalle = document.querySelector('tr[data-detalle="' + pedido + '"]');
+            if (!detalle) return;
+            var abierto = !detalle.classList.contains('d-none');
+            detalle.classList.toggle('d-none', abierto);
+            boton.setAttribute('aria-expanded', String(!abierto));
         });
 
-        function cancelarPedidoInmediato(idPedido) {
+        // ── Buscador en pantalla ─────────────────────────────────────────────
+        var buscador = document.getElementById('f-buscador');
+        var conteo = document.getElementById('conteo-visible');
+        function filtrar() {
+            var texto = (buscador.value || '').trim().toLowerCase();
+            var visibles = 0;
+            document.querySelectorAll('tr.pedido-fila').forEach(function (fila) {
+                var coincide = !texto || (fila.getAttribute('data-buscable') || '').indexOf(texto) !== -1;
+                fila.hidden = !coincide;
+                // La fila de desglose sigue a su cuenta: si la cuenta no coincide,
+                // su detalle tampoco debe quedar a la vista.
+                var detalle = document.querySelector('tr[data-detalle="' + fila.getAttribute('data-pedido') + '"]');
+                if (detalle) detalle.hidden = !coincide;
+                if (coincide) visibles++;
+            });
+            if (conteo) conteo.textContent = visibles;
+        }
+        if (buscador) {
+            buscador.addEventListener('input', filtrar);
+        }
+
+        // ── Anular pedido completo (mismo flujo que antes, sin inline) ───────
+        document.addEventListener('click', function (ev) {
+            var boton = ev.target.closest('.anular-pedido');
+            if (!boton) return;
+            anularPedido(boton.getAttribute('data-pedido'));
+        });
+
+        function anularPedido(idPedido) {
             Swal.fire({
-                title: '¿Anular Pedido #' + idPedido + ' por Completo?',
-                text: 'Se procederá a dar de baja toda la orden. Escriba la justificación:',
+                title: '¿Anular Pedido #' + idPedido + ' por completo?',
+                text: 'Se dará de baja toda la orden y se liberará la mesa. Escriba la justificación:',
                 input: 'textarea',
-                inputPlaceholder: 'Motivo de la cancelación total obligatoria...',
+                inputPlaceholder: 'Motivo de la cancelación total (obligatorio)…',
                 icon: 'error',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
-                confirmButtonText: 'Confirmar Anulación',
+                confirmButtonText: 'Confirmar anulación',
                 cancelButtonText: 'Volver',
-                preConfirm: (text) => {
-                    if (!text) Swal.showValidationMessage('Debe indicar un motivo para la auditoría.');
-                    return text;
+                preConfirm: function (texto) {
+                    if (!texto) { Swal.showValidationMessage('Debe indicar un motivo para la auditoría.'); return false; }
+                    return texto;
                 }
-            }).then(async (result) => {
-                if (result.isConfirmed) {
-                    Swal.fire({ title: 'Anulando orden...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-                    try {
-                        const res = await fetch(`/pedido/${idPedido}/cancelar-parcial-o-total`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                            body: JSON.stringify({ productosAfectados: [], motivo: result.value }) 
+            }).then(async function (result) {
+                if (!result.isConfirmed) return;
+                Swal.fire({ title: 'Anulando orden…', allowOutsideClick: false });
+                Swal.showLoading();
+                try {
+                    const res = await fetch('/admin/pedido/' + idPedido + '/cancelar-parcial-o-total', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify({ productosAfectados: [], motivo: result.value })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire('Pedido anulado', 'La mesa ha sido liberada.', 'success').then(function () {
+                            window.location.reload();
                         });
-                        const data = await res.json();
-                        if (data.success) {
-                            Swal.fire('Pedido Anulado', 'La mesa ha sido liberada.', 'success').then(() => {
-                                window.location.reload();
-                            });
-                        } else {
-                            Swal.fire('Error', data.message, 'error');
-                        }
-                    } catch (err) {
-                        Swal.fire('Error', 'Fallo en la comunicación con el servidor.', 'error');
+                    } else {
+                        Swal.fire('Error', data.message || 'No fue posible anular la orden.', 'error');
                     }
+                } catch (err) {
+                    Swal.fire('Error', 'Fallo en la comunicación con el servidor.', 'error');
                 }
             });
         }
+
+        // ── Modal de apertura: buscador de mesas ──────────────────────────────
+        var buscadorMesa = document.getElementById('sel-mesa-buscador');
+        var selectMesa = document.getElementById('sel-mesa');
+        if (buscadorMesa && selectMesa) {
+            buscadorMesa.addEventListener('input', function () {
+                var texto = (buscadorMesa.value || '').trim().toLowerCase();
+                Array.prototype.forEach.call(selectMesa.options, function (opt) {
+                    var coincide = !texto || (opt.getAttribute('data-buscable') || '').indexOf(texto) !== -1;
+                    opt.hidden = !coincide;
+                });
+            });
+        }
+
+        // ── Impresión: abrir todos los desgloses antes de paginar ────────────
+        window.addEventListener('beforeprint', function () {
+            document.querySelectorAll('tr[data-detalle]').forEach(function (tr) { tr.classList.remove('d-none'); });
+        });
+    })();
     </script>
 </body>
 </html>

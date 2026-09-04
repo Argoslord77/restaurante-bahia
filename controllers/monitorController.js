@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
+const SeguimientoItem = require('../services/seguimientoItemService');
 
 module.exports = {
     // Vista del Monitor Digital de Cocina / Bar
@@ -188,6 +189,14 @@ module.exports = {
             if (!pool) return res.json({ success: true, message: 'Estado actualizado' });
 
             await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [targetEstado, targetId]);
+
+            // Traza de tiempos (enviado / listo / entregado) y responsable de
+            // producción. Es registro secundario: si falla no interrumpe el monitor.
+            await SeguimientoItem.registrarTransicion({
+                detalleIds: [targetId],
+                estado: targetEstado,
+                usuarioId: req.user && req.user.id
+            });
 
             // Actualizar estado general del pedido si aplica
             const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [targetId]);
