@@ -351,17 +351,39 @@ const InventarioService = {
                        rd.es_opcional,
                        p.nombre AS insumo_nombre,
                        ui.abreviatura AS unidad_inventario,
-                       ui.nombre AS unidad_inventario_nombre
+                       ui.nombre AS unidad_inventario_nombre,
+                       ur.nombre AS unidad_produccion_nombre,
+                       ur.abreviatura AS unidad_produccion_abrev,
+                       ur.codigo AS unidad_produccion_codigo
                 FROM receta_detalles rd
                 INNER JOIN recetas r ON rd.receta_id = r.id
                 INNER JOIN productos p ON p.id = rd.producto_id
                 LEFT JOIN unidades_medida ui ON ui.id = p.unidad_inventario_id
+                LEFT JOIN unidades_medida ur ON ur.id = (
+                    SELECT u2.id FROM unidades_medida u2
+                    WHERE u2.activa = 1
+                      AND (u2.codigo = rd.unidad_medida
+                           OR u2.abreviatura = rd.unidad_medida
+                           OR u2.nombre = rd.unidad_medida)
+                    ORDER BY CASE
+                               WHEN u2.codigo = rd.unidad_medida THEN 0
+                               WHEN u2.abreviatura = rd.unidad_medida THEN 1
+                               ELSE 2 END
+                    LIMIT 1
+                )
                 WHERE r.activa = 1
                   AND (r.platillo_id = ? OR r.producto_resultante_id = ?)
             `, [platilloId, platilloId]);
             recipeCache.set(platilloId, ingredientes);
             return ingredientes;
         };
+
+        // Etiqueta legible de la UNIDAD DE PRODUCCIÓN/CONSUMO (la de la receta):
+        // es la que muestra cocina/bar en el aviso de stock insuficiente.
+        const etiquetaProduccion = (ing) =>
+            ing.unidad_produccion_nombre || ing.unidad_receta || ing.unidad_produccion_abrev || ing.unidad_produccion_codigo || '';
+        const etiquetaInventario = (ing) =>
+            ing.unidad_inventario_nombre || ing.unidad_inventario || '';
 
         const areasDe = async (platilloId) => {
             if (!areasCache.has(platilloId)) {
@@ -389,30 +411,36 @@ const InventarioService = {
             const areas = await areasDe(platilloId);
 
             for (const ing of ingredientes) {
-                let cantidadNecesaria = parseFloat(ing.cantidad_receta) * cantidad;
+                // Cantidad en la UNIDAD DE PRODUCCIÓN/CONSUMO de la receta (con merma)
+                let cantidadProduccion = parseFloat(ing.cantidad_receta) * cantidad;
                 const merma = parseFloat(ing.porcentaje_merma || 0);
-                if (merma > 0) cantidadNecesaria = (parseFloat(ing.cantidad_receta) / (1 - merma / 100)) * cantidad;
-                cantidadNecesaria = Number.isFinite(cantidadNecesaria) ? cantidadNecesaria : 0;
-                if (cantidadNecesaria <= 0) continue;
+                if (merma > 0) cantidadProduccion = (parseFloat(ing.cantidad_receta) / (1 - merma / 100)) * cantidad;
+                cantidadProduccion = Number.isFinite(cantidadProduccion) ? cantidadProduccion : 0;
+                if (cantidadProduccion <= 0) continue;
 
-                // Conversión a unidad de inventario (igual que el descuento)
+                // Conversión a la unidad de inventario (igual que el descuento)
                 const uReceta = (ing.unidad_receta || '').trim().toLowerCase();
                 const uInv = (ing.unidad_inventario || '').trim().toLowerCase();
+                const mismaUnidad = !uInv || uReceta === uInv;
                 let factor = null;
-                if (uReceta && uInv && uReceta !== uInv) {
+                if (!mismaUnidad) {
                     try {
                         factor = await UnidadMedidaService.obtenerFactor(ing.unidad_receta, ing.unidad_inventario, ing.insumo_id);
                     } catch (e) { factor = null; }
-                    if (factor !== null) cantidadNecesaria *= factor;
                 }
+                const conversionOk = mismaUnidad || factor !== null;
+                // Cantidad necesaria en versión ALMACÉN/COMPRA (base de la simulación)
+                const cantidadInventario = conversionOk
+                    ? (mismaUnidad ? cantidadProduccion : cantidadProduccion * factor)
+                    : cantidadProduccion;
 
                 await cargarStockParaProducto(ing.insumo_id, uInv);
-                // Etiqueta legible para el mensaje (nombre completo de la
-                // unidad de inventario; la conversión usa uInv/uReceta directo)
-                const unidadRef = ing.unidad_inventario_nombre || uInv || uReceta || 'und';
+                const etiquetaProd = etiquetaProduccion(ing);
+                const etiquetaInv = etiquetaInventario(ing);
 
-                // Simular consumo: primero el área preferida, luego la alterna
-                let pendiente = cantidadNecesaria;
+                // Simular consumo (en unidad de inventario, como el descuento):
+                // primero el área preferida, luego la alterna
+                let pendiente = cantidadInventario;
                 let disponibleTotal = 0;
                 for (const area of [areas.preferido, areas.alterno]) {
                     const clave = `${ing.insumo_id}:${area.id}`;
@@ -426,15 +454,26 @@ const InventarioService = {
                         pendiente -= consumo;
                     }
                 }
+                // Equivalente en unidad de producción para exhibirlo en el aviso
+                const disponibleProduccion = (conversionOk && !mismaUnidad && factor)
+                    ? disponibleTotal / factor
+                    : disponibleTotal;
 
                 const esOpcional = Number(ing.es_opcional) === 1;
                 const registro = {
                     platillo_id: platilloId,
                     insumo_id: ing.insumo_id,
                     insumo_nombre: ing.insumo_nombre,
-                    requerido: Number(cantidadNecesaria.toFixed(6)),
-                    disponible: Number(disponibleTotal.toFixed(6)),
-                    unidad: unidadRef,
+                    // PRIMARIO: unidad de producción/consumo (la de la receta)
+                    requerido: Number(cantidadProduccion.toFixed(6)),
+                    disponible: Number(disponibleProduccion.toFixed(6)),
+                    unidad: etiquetaProd,
+                    unidad_medida: ing.unidad_receta || etiquetaProd,
+                    // SECUNDARIO: equivalente en unidad de almacén/compra
+                    requerido_inventario: conversionOk && !mismaUnidad ? Number(cantidadInventario.toFixed(6)) : null,
+                    disponible_inventario: conversionOk && !mismaUnidad ? Number(disponibleTotal.toFixed(6)) : null,
+                    unidad_inventario: etiquetaInv,
+                    unidad_inventario_abrev: ing.unidad_inventario || null,
                     areas: `${areas.preferido.nombre} + ${areas.alterno.nombre}`,
                     es_opcional: esOpcional
                 };
@@ -474,11 +513,26 @@ const InventarioService = {
                    rd.es_opcional,
                    p.nombre AS insumo_nombre,
                    ui.abreviatura AS unidad_inventario,
-                   ui.nombre AS unidad_inventario_nombre
+                   ui.nombre AS unidad_inventario_nombre,
+                   ur.nombre AS unidad_produccion_nombre,
+                   ur.abreviatura AS unidad_produccion_abrev,
+                   ur.codigo AS unidad_produccion_codigo
             FROM receta_detalles rd
             INNER JOIN recetas r ON rd.receta_id = r.id
             INNER JOIN productos p ON p.id = rd.producto_id
             LEFT JOIN unidades_medida ui ON ui.id = p.unidad_inventario_id
+            LEFT JOIN unidades_medida ur ON ur.id = (
+                SELECT u2.id FROM unidades_medida u2
+                WHERE u2.activa = 1
+                  AND (u2.codigo = rd.unidad_medida
+                       OR u2.abreviatura = rd.unidad_medida
+                       OR u2.nombre = rd.unidad_medida)
+                ORDER BY CASE
+                           WHEN u2.codigo = rd.unidad_medida THEN 0
+                           WHEN u2.abreviatura = rd.unidad_medida THEN 1
+                           ELSE 2 END
+                LIMIT 1
+            )
             WHERE r.activa = 1
               AND (r.platillo_id = ? OR r.producto_resultante_id = ?)
         `, [platilloId, platilloId]);
@@ -505,97 +559,38 @@ const InventarioService = {
             areasLabel = 'Áreas de producción';
         }
 
-        // Etiqueta legible de la unidad de medida (nombre completo preferido)
-        const etiquetaUnidad = (ing) =>
-            ing.unidad_inventario_nombre || ing.unidad_inventario || ing.unidad_receta || '';
+        // Etiqueta legible de la unidad de medida: PRIMARIO = la unidad de
+        // PRODUCCIÓN/CONSUMO de la receta (la que maneja cocina/bar); el
+        // equivalente en ALMACÉN/COMPRA se envía como dato secundario.
+        const etiquetaProduccion = (ing) =>
+            ing.unidad_produccion_nombre || ing.unidad_receta || ing.unidad_produccion_abrev || ing.unidad_produccion_codigo || '';
+        const etiquetaInventario = (ing) =>
+            ing.unidad_inventario_nombre || ing.unidad_inventario || '';
 
-        const faltantes = [];
-        const advertencias = [];
-        const detalle = [];
-        for (const ingrediente of ingredientes) {
-            let cantidadNecesaria = parseFloat(ingrediente.cantidad_receta) * cantidadVenta;
-            const merma = parseFloat(ingrediente.porcentaje_merma || 0);
-            if (merma > 0) cantidadNecesaria = (parseFloat(ingrediente.cantidad_receta) / (1 - merma / 100)) * cantidadVenta;
-
-            const uReceta = (ingrediente.unidad_receta || '').trim().toLowerCase();
-            const uInv = (ingrediente.unidad_inventario || '').trim().toLowerCase();
-            if (uReceta && uInv && uReceta !== uInv) {
-                let factor = null;
-                try {
-                    // Primero intenta el factor directamente (por producto,
-                    // global o vía base de tipo), sin exigir entradas previas.
-                    factor = await UnidadMedidaService.obtenerFactor(
-                        ingrediente.unidad_receta,
-                        ingrediente.unidad_inventario,
-                        ingrediente.insumo_id
-                    );
-                } catch (e) {
-                    factor = null;
-                }
-
-                if (factor !== null) {
-                    cantidadNecesaria *= factor;
-                } else {
-                    // Sin factor: si el producto NO tiene stock alguno no hace
-                    // falta convertir (comparar requerido contra 0). Solo si
-                    // SÍ tiene stock y no hay conversión se reporta el error.
-                    const [stockCualquier] = await db.query(`
-                        SELECT COALESCE(SUM(cantidad_actual), 0) AS total
-                        FROM lotes
-                        WHERE producto_id = ? AND cantidad_actual > 0
-                          AND (estado IS NULL OR estado = 'ACTIVO')
-                    `, [ingrediente.insumo_id]);
-                    if (parseFloat(stockCualquier[0]?.total || 0) > 0) {
-                        if (!ingrediente.es_opcional) {
-                            faltantes.push({
-                                insumo_id: ingrediente.insumo_id,
-                                insumo_nombre: ingrediente.insumo_nombre,
-                                requerido: null,
-                                disponible: null,
-                                unidad: etiquetaUnidad(ingrediente),
-                                unidad_medida: ingrediente.unidad_receta,
-                                areas: areasLabel,
-                                error: `Sin factor de conversión ${ingrediente.unidad_receta} → ${ingrediente.unidad_inventario} con stock presente: insumo sin descontar`
-                            });
-                        } else {
-                            advertencias.push({ insumo_id: ingrediente.insumo_id, detalle: `Sin factor de conversión ${ingrediente.unidad_receta} → ${ingrediente.unidad_inventario}` });
-                        }
-                        continue;
-                    }
-                    // Sin stock: se continúa con requerido en unidad de receta
-                    // y disponible saldrá 0.
-                }
-            }
-
-            // Stock disponible con CONVERSIÓN por lote: cada lote aporta su
-            // cantidad convertida a la unidad de inventario (la misma unidad en
-            // la que quedó `cantidadNecesaria` tras el paso 2b). Sin esto, un
-            // lote en "Botella 700ml" se contaba como si fueran mililitros.
-            //
-            // IMPORTANTE: el stock que cuenta para el POS es el de las ÁREAS
-            // PRODUCTIVAS (almacén preferido + alterno del platillo), no el
-            // logístico: el descuento de venta solo consume de producción.
-            let disponible = 0;
+        // Stock disponible (con conversión por lote) de un insumo en una unidad
+        // destino, restringido a las áreas de producción (o un almacén dado).
+        const disponibleEn = async (ingrediente, unidadDestino) => {
+            if (!unidadDestino) return 0;
             try {
-                const unidadDestino = ingrediente.unidad_inventario || ingrediente.unidad_receta;
                 if (almacenId) {
                     const conv = await UnidadMedidaService.stockLotesConvertidos(
                         ingrediente.insumo_id, unidadDestino,
                         { almacenId, estrictoActivo: true }
                     );
-                    disponible = conv.total;
-                } else {
-                    const areas = await InventarioService._resloverAreasProduccionPlatillo(platilloId);
-                    const areasUnicas = [areas.preferido];
-                    if (Number(areas.alterno.id) !== Number(areas.preferido.id)) areasUnicas.push(areas.alterno);
-                    for (const area of areasUnicas) {
-                        const conv = await UnidadMedidaService.stockLotesConvertidos(
-                            ingrediente.insumo_id, unidadDestino,
-                            { almacenId: area.id, estrictoActivo: true }
-                        );
-                        disponible += conv.total;
-                    }
+                    return conv.total;
                 }
+                const areas = await InventarioService._resloverAreasProduccionPlatillo(platilloId);
+                const areasUnicas = [areas.preferido];
+                if (Number(areas.alterno.id) !== Number(areas.preferido.id)) areasUnicas.push(areas.alterno);
+                let total = 0;
+                for (const area of areasUnicas) {
+                    const conv = await UnidadMedidaService.stockLotesConvertidos(
+                        ingrediente.insumo_id, unidadDestino,
+                        { almacenId: area.id, estrictoActivo: true }
+                    );
+                    total += conv.total;
+                }
+                return total;
             } catch (e) {
                 // Sin conversión disponible: se conserva el comportamiento
                 // anterior (suma cruda de cantidades activas).
@@ -608,21 +603,108 @@ const InventarioService = {
                     WHERE producto_id = ?${filtroAlmacen}
                       AND estado = 'ACTIVO' AND cantidad_actual > 0
                 `, params);
-                disponible = parseFloat(stockRows[0]?.disponible || 0);
+                return parseFloat(stockRows[0]?.disponible || 0);
             }
+        };
+
+        const faltantes = [];
+        const advertencias = [];
+        const detalle = [];
+        for (const ingrediente of ingredientes) {
+            // 1) Cantidad en la UNIDAD DE PRODUCCIÓN/CONSUMO de la receta (con merma)
+            let cantidadProduccion = parseFloat(ingrediente.cantidad_receta) * cantidadVenta;
+            const merma = parseFloat(ingrediente.porcentaje_merma || 0);
+            if (merma > 0) cantidadProduccion = (parseFloat(ingrediente.cantidad_receta) / (1 - merma / 100)) * cantidadVenta;
+            cantidadProduccion = Number.isFinite(cantidadProduccion) ? cantidadProduccion : 0;
+
+            const uReceta = (ingrediente.unidad_receta || '').trim().toLowerCase();
+            const uInv = (ingrediente.unidad_inventario || '').trim().toLowerCase();
+            const mismaUnidad = !uInv || uReceta === uInv;
+
+            // 2) Factor receta → almacén/compra (igual que el descuento de venta)
+            let factor = null;
+            if (!mismaUnidad) {
+                try {
+                    factor = await UnidadMedidaService.obtenerFactor(
+                        ingrediente.unidad_receta,
+                        ingrediente.unidad_inventario,
+                        ingrediente.insumo_id
+                    );
+                } catch (e) {
+                    factor = null;
+                }
+            }
+            const conversionOk = mismaUnidad || factor !== null;
+            const cantidadInventario = conversionOk
+                ? (mismaUnidad ? cantidadProduccion : cantidadProduccion * factor)
+                : cantidadProduccion;
+
+            if (!conversionOk) {
+                // Sin factor: si el producto NO tiene stock alguno no hace
+                // falta convertir (comparar requerido contra 0). Solo si
+                // SÍ tiene stock y no hay conversión se reporta el error.
+                const [stockCualquier] = await db.query(`
+                    SELECT COALESCE(SUM(cantidad_actual), 0) AS total
+                    FROM lotes
+                    WHERE producto_id = ? AND cantidad_actual > 0
+                      AND (estado IS NULL OR estado = 'ACTIVO')
+                `, [ingrediente.insumo_id]);
+                if (parseFloat(stockCualquier[0]?.total || 0) > 0) {
+                    const base = {
+                        insumo_id: ingrediente.insumo_id,
+                        insumo_nombre: ingrediente.insumo_nombre,
+                        requerido: null,
+                        disponible: null,
+                        unidad: etiquetaProduccion(ingrediente),
+                        unidad_medida: ingrediente.unidad_receta || etiquetaProduccion(ingrediente),
+                        unidad_inventario: etiquetaInventario(ingrediente),
+                        areas: areasLabel,
+                        error: `Sin factor de conversión ${ingrediente.unidad_receta} → ${ingrediente.unidad_inventario} con stock presente: insumo sin descontar`
+                    };
+                    if (!ingrediente.es_opcional) faltantes.push(base);
+                    else advertencias.push({ ...base, detalle: base.error });
+                    continue;
+                }
+                // Sin stock: se continúa comparando en la unidad de la receta.
+            }
+
+            // 3) Stock disponible CON CONVERSIÓN por lote en ambas unidades:
+            //    producción (para el aviso) y almacén/compra (para comparar).
+            //    IMPORTANTE: cuenta solo el stock de las ÁREAS PRODUCTIVAS
+            //    (almacén preferido + alterno del platillo), no el logístico:
+            //    el descuento de venta solo consume de producción.
+            const disponibleProduccion = await disponibleEn(ingrediente, ingrediente.unidad_receta || ingrediente.unidad_inventario);
+            const disponibleInventario = await disponibleEn(ingrediente, ingrediente.unidad_inventario || ingrediente.unidad_receta);
+
             const itemDetalle = {
                 insumo_id: ingrediente.insumo_id,
                 insumo_nombre: ingrediente.insumo_nombre,
-                requerido: Number(cantidadNecesaria.toFixed(6)),
-                disponible: Number(disponible.toFixed(6)),
-                unidad: etiquetaUnidad(ingrediente),
-                unidad_medida: ingrediente.unidad_inventario || ingrediente.unidad_receta,
+                // PRIMARIO: unidad de producción/consumo (la de la receta)
+                requerido: Number(cantidadProduccion.toFixed(6)),
+                disponible: Number(disponibleProduccion.toFixed(6)),
+                unidad: etiquetaProduccion(ingrediente),
+                unidad_medida: ingrediente.unidad_receta || etiquetaProduccion(ingrediente),
+                // SECUNDARIO: equivalente en unidad de almacén/compra
+                requerido_inventario: conversionOk && !mismaUnidad ? Number(cantidadInventario.toFixed(6)) : null,
+                disponible_inventario: conversionOk && !mismaUnidad ? Number(disponibleInventario.toFixed(6)) : null,
+                unidad_inventario: etiquetaInventario(ingrediente),
+                unidad_inventario_abrev: ingrediente.unidad_inventario || null,
                 areas: areasLabel,
                 es_opcional: Number(ingrediente.es_opcional || 0) === 1
             };
             detalle.push(itemDetalle);
-            if (disponible + 0.000001 < cantidadNecesaria && !ingrediente.es_opcional) {
-                faltantes.push({ ...itemDetalle, faltante: Number((cantidadNecesaria - disponible).toFixed(6)) });
+
+            // La decisión de faltante se toma en la unidad en que se comparó
+            // (almacén si hay conversión; receta si no).
+            const hayStock = conversionOk ? disponibleInventario : disponibleProduccion;
+            const requeridoComparar = conversionOk ? cantidadInventario : cantidadProduccion;
+            if (hayStock + 0.000001 < requeridoComparar) {
+                const conFaltante = { ...itemDetalle, faltante: Number((requeridoComparar - hayStock).toFixed(6)) };
+                if (Number(ingrediente.es_opcional || 0) === 1) {
+                    advertencias.push({ ...conFaltante, detalle: 'Insumo opcional sin stock suficiente' });
+                } else {
+                    faltantes.push(conFaltante);
+                }
             }
         }
 

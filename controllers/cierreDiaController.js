@@ -1,6 +1,7 @@
 // controllers/cierreDiaController.js
 const db = require('../config/db');
 const turnoService = require('../services/turnoService');
+const CierreInventarioService = require('../services/cierreInventarioService');
 
 /**
  * Obtiene los datos financieros del cierre (comandas, desglose de pagos y resumen).
@@ -156,11 +157,21 @@ const CierreDiaController = {
                         total_en_caja_esperado: 0
                     },
                     pedidosCuentas: [],
-                    desgloseMonedas: []
+                    desgloseMonedas: [],
+                    inventarioMovimientos: null
                 });
             }
 
             const { pedidos, desglosePagos, resumen } = await obtenerDatosCierre(turnoActivo);
+
+            // Movimiento de inventario del turno (venta, mermas, ajustes, etc.)
+            let inventarioMovimientos = null;
+            try {
+                inventarioMovimientos = await CierreInventarioService.resumenMovimientosTurno(turnoId);
+            } catch (eInv) {
+                console.error('Error al obtener el movimiento de inventario del turno:', eInv);
+                inventarioMovimientos = null;
+            }
 
             res.render('caja/cierre_dia', {
                 pageTitle: 'Cierre del Día y Auditoría de Cuentas',
@@ -169,7 +180,8 @@ const CierreDiaController = {
                 view: 'cierre-dia',
                 resumen,
                 pedidosCuentas: pedidos,
-                desgloseMonedas: desglosePagos
+                desgloseMonedas: desglosePagos,
+                inventarioMovimientos
             });
 
         } catch (error) {
@@ -263,6 +275,43 @@ const CierreDiaController = {
             return res.status(500).json({ success: false, message: 'Error interno al asentar cobro.' });
         } finally {
             connection.release();
+        }
+    },
+
+    /**
+     * Exporta a CSV el movimiento de inventario del turno (o de un turno dado).
+     * GET /admin/cierre-dia/movimientos-inventario/exportar?turno_id=N
+     */
+    exportarMovimientosInventario: async (req, res) => {
+        try {
+            const turnoId = parseInt(req.query.turno_id, 10) || null;
+            let turno = null;
+            if (turnoId) {
+                const [turnos] = await db.query(
+                    'SELECT id, fecha_apertura, fecha_cierre FROM turnos_servicio WHERE id = ? LIMIT 1',
+                    [turnoId]
+                );
+                turno = turnos[0] || null;
+            } else {
+                turno = await turnoService.obtenerTurnoActivo();
+            }
+            if (!turno) {
+                return res.status(404).send('No hay un turno de servicio para exportar.');
+            }
+
+            const data = await CierreInventarioService.resumenMovimientosTurno(turno.id);
+            const { csv } = CierreInventarioService.movimientosTurnoACSV(data);
+
+            const fecha = new Date().toISOString().slice(0, 10);
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader(
+                'Content-Disposition',
+                `attachment; filename="movimientos-inventario-turno-${turno.id}-${fecha}.csv"`
+            );
+            res.send(csv);
+        } catch (error) {
+            console.error('Error al exportar movimiento de inventario:', error);
+            res.status(500).send('Error al generar el CSV de movimientos de inventario.');
         }
     },
 

@@ -1692,19 +1692,30 @@
             // El detalle de insumos va en un bloque COLAPSABLE (oculto por
             // defecto): el mensaje principal se mantiene limpio y profesional;
             // el dependiente expande "Ver insumos faltantes" cuando lo necesite.
+            // La unidad mostrada es la de PRODUCCIÓN/CONSUMO (la de la receta);
+            // la equivalente de almacén/compra aparece como nota secundaria.
+            const unidadDe = (f) => {
+                const raw = f.unidad || f.unidad_medida || '';
+                return (raw && String(raw).trim() !== 'undefined' && String(raw).trim() !== '') ? String(raw).trim() : '';
+            };
+            const nombresPorPlatillo = stockCheck.platos || {};
             const lineas = faltantes.map(f => {
-                const unidad = esc(f.unidad || f.unidad_medida || '');
+                const unidad = esc(unidadDe(f));
+                const unidadInv = f.unidad_inventario_nombre || f.unidad_inventario || '';
                 const areas = f.areas ? ` <span class="text-muted">(${esc(f.areas)})</span>` : '';
+                const paraPlatillo = (f.platillo_id && nombresPorPlatillo[f.platillo_id])
+                    ? ` <span class="text-muted">— ${esc(nombresPorPlatillo[f.platillo_id])}</span>`
+                    : '';
                 const req = (f.requerido === null || f.requerido === undefined)
                     ? `<span class="text-danger">${esc(f.error || 'unidad sin conversión definida')}</span>`
                     : `se requieren <b>${fmtCant(f.requerido)} ${unidad}</b>, disponible <b>${fmtCant(f.disponible)} ${unidad}</b>` +
                       // Equivalencia secundaria en la unidad de almacén/compra
                       // (útil para reponer), solo si difiere de la de producción.
-                      ((f.unidad_inventario && f.unidad && String(f.unidad_inventario).trim().toLowerCase() !== String(f.unidad).trim().toLowerCase()
+                      ((unidadInv && String(unidadInv).trim().toLowerCase() !== String(unidad).trim().toLowerCase()
                         && f.requerido_inventario !== null && f.requerido_inventario !== undefined)
-                          ? ` <span class="text-muted">(≈ ${fmtCant(f.requerido_inventario)} ${escapeHtml(f.unidad_inventario)} en almacén)</span>`
+                          ? ` <span class="text-muted">(≈ ${fmtCant(f.requerido_inventario)} ${escapeHtml(unidadInv)} en almacén)</span>`
                           : '');
-                return `<li class="mb-1"><b>${esc(f.insumo_nombre)}</b>: ${req}${areas}</li>`;
+                return `<li class="mb-1"><b>${esc(f.insumo_nombre)}</b>: ${req}${areas}${paraPlatillo}</li>`;
             }).join('');
             const avisos = advertencias.map(f =>
                 `<li class="text-warning-emphasis"><small>Opcional sin stock: ${esc(f.insumo_nombre)}${f.unidad ? ` (${esc(f.unidad)})` : ''}</small></li>`
@@ -2281,7 +2292,13 @@
                         showConfirmButton: false
                     });
                 } else if (result.value && !result.value.success) {
-                    Swal.fire('Error', result.value.message || result.value.error, 'error');
+                    // Aviso profesional con el detalle colapsable de insumos
+                    // (mismo modal que el chequeo previo al agregar al carrito).
+                    if (Array.isArray(result.value.faltantes) && result.value.faltantes.length > 0) {
+                        mostrarFaltantesStock(result.value, 'Stock insuficiente para la ronda', null);
+                    } else {
+                        Swal.fire('Error', result.value.message || result.value.error, 'error');
+                    }
                 }
             });
         }

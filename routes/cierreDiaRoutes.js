@@ -10,6 +10,13 @@ router.get('/cierre-dia/ticket', ensureAuthenticated, checkRole(['superadministr
 // Distinto de la pre-cuenta del POS: regresa al Cierre del Día, no al POS.
 router.get('/cierre-dia/ticket-pedido/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'economico']), cierreDiaController.viewTicketPedido);
 router.post('/cierre-dia/liquidar-cuenta/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), cierreDiaController.liquidarCuenta);
+// Exportar CSV del movimiento de inventario del turno (Caja / Cierre del Día)
+router.get(
+    '/cierre-dia/movimientos-inventario/exportar',
+    ensureAuthenticated,
+    checkRole(['superadministrador', 'administrador', 'cajero', 'economico']),
+    cierreDiaController.exportarMovimientosInventario
+);
 // routes/cierreDiaRoutes.js
 router.get(
     '/cierres-historico', 

@@ -39,5 +39,5 @@ Que un inicio se arranque con caja y cuenta de Cliente, para por etapa ir insert
 
 13. Al guardar el producto en creacion/edicion no se esta guardando la unidad de medida de consumo, arreglar. [OKOKOK]
 14. En la vista de configurar receta no se esta mostrando la cantidad de disponibilidad correcta porque no se esta haciendo uso del servicio UnidadMedidaService con su funcion UnidadMedidaService.convertir(). Verificalo. [OKOKOK]
-13. En la vista de POS cuando un item no puede ser agregado esta listando las unidades necesarias del item en la unidad de medida utilizada durante su estancia en almacen o de compra no en la unidad de produccion o consumo como deberia de ser. [PENDING]
-14. Agregar en la vista de caja y cierre del dia el movimiento de inventario segun venta, mermas, etc. [PENDING]
+13. En la vista de POS cuando un item no puede ser agregado esta listando las unidades necesarias del item en la unidad de medida utilizada durante su estancia en almacen o de compra no en la unidad de produccion o consumo como deberia de ser. [OKOKOK] (inventarioService: unidad primaria de produccion/consumo + equivalencia de almacen como nota; detalle colapsable en el modal, sin 'undefined')
+14. Agregar en la vista de caja y cierre del dia el movimiento de inventario segun venta, mermas, etc. [OKOKOK] (servicio cierreInventarioService + seccion en cierre_dia.ejs con resumen por tipo, detalle por producto, filtros, export CSV e impresion)

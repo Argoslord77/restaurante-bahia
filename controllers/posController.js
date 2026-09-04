@@ -322,15 +322,23 @@ module.exports = {
                     const resumen = stockRonda.faltantes.map(f => {
                         const nombrePlatillo = itemsVerificados.find(iv => Number(iv.idPlatillo) === Number(f.platillo_id));
                         const label = nombrePlatillo ? nombrePlatillo.nombre : `platillo #${f.platillo_id}`;
-                        // Las cantidades llegan en la unidad de PRODUCCIÓN/CONSUMO
-                        // (la de la receta): es la que usan cocina/bar.
-                        return `«${label}» requiere ${f.insumo_nombre} (${fmtCant(f.requerido)} ${f.unidad}) pero solo hay ${fmtCant(f.disponible)} ${f.unidad} en ${f.areas}`;
+                        // Primario: unidad de PRODUCCIÓN/CONSUMO (la de la receta),
+                        // la que usan cocina/bar. Equivalencia de almacén como nota.
+                        const unidad = f.unidad || f.unidad_medida || '';
+                        const unidadInv = f.unidad_inventario || '';
+                        const equiv = (f.requerido_inventario !== null && f.requerido_inventario !== undefined
+                            && unidadInv && String(unidadInv).trim().toLowerCase() !== String(unidad).trim().toLowerCase())
+                            ? ` (≈ ${fmtCant(f.requerido_inventario)} ${unidadInv} en almacén)`
+                            : '';
+                        return `«${label}» requiere ${f.insumo_nombre} (${fmtCant(f.requerido)} ${unidad}${equiv}) pero solo hay ${fmtCant(f.disponible)} ${unidad} en ${f.areas}`;
                     });
                     return res.status(400).json({
                         success: false,
                         message: `No hay stock suficiente en producción para completar la orden. Falta: ${resumen.join('; ')}.`,
                         faltantes: stockRonda.faltantes,
-                        advertencias: stockRonda.advertencias || []
+                        advertencias: stockRonda.advertencias || [],
+                        // Mapa platillo_id → nombre para el aviso del navegador
+                        platos: Object.fromEntries(itemsVerificados.map(iv => [String(iv.idPlatillo), iv.nombre]))
                     });
                 }
             }
