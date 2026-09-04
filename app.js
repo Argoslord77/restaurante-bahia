@@ -1,216 +1,30 @@
-const express = require('express');
-const https = require('https');
-const fs = require('fs');
-const session = require('express-session');
-const passport = require('passport');
-const flash = require('connect-flash');
-const favicon = require('serve-favicon');
-const path = require('path');
+#!/usr/bin/env node
+// app.js — Punto de entrada del servidor.
+//
+// Ya no construye nada: delega en config/app.js (ensamblado) y config/server.js
+// (listener HTTP/HTTPS + apagado ordenado). Se mantiene como `main` para que
+// `npm start`, `nodemon app.js` y pm2 sigan funcionando exactamente igual.
+//
+// Como además EXPORTA la app, los tests pueden hacer require('./app') y usarla
+// con supertest sin abrir un puerto.
+'use strict';
+
 require('dotenv').config();
-const cookieParser = require('cookie-parser');
+
 const logger = require('./config/logger');
-const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+const { createApp } = require('./config/app');
+const { iniciarServidor, registrarApagadoGracioso } = require('./config/server');
 
-const app = express();
-// Pasamos la configuración a Passport
-require('./config/passport')(passport);
-const PORT = process.env.PORT || 3000;
+const app = createApp();
 
-// Configurar motor de plantillas EJS
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-
-// Middleware para archivos estáticos (CSS/JS local de Bootstrap)
-app.use(express.static(path.join(__dirname, 'public')));
-
-// ==========================================
-// SEGURIDAD - Helmet para headers de seguridad
-// ==========================================
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-            // helmet trae script-src-attr 'none' por defecto y bloqueaba TODOS los
-            // onclick inline (botones de impresion, acciones de tablas, etc.)
-            scriptSrcAttr: ["'unsafe-inline'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'"],
-            fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
-            objectSrc: ["'none'"],
-            mediaSrc: ["'self'"],
-            frameSrc: ["'none'"],
-        },
-    },
-    hsts: {
-        maxAge: 31536000,
-        includeSubDomains: true,
-        preload: true
-    }
-}));
-
-// ==========================================
-// SEGURIDAD - Rate Limiting
-// ==========================================
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 2000, // límite de 100 requests por ventana
-    message: {
-        success: false,
-        message: 'Demasiadas solicitudes desde esta IP, por favor intenta más tarde.'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-// Aplicar rate limiting a todas las rutas
-app.use(limiter);
-
-// Middleware para procesar datos de formularios (URL-encoded) y JSON
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-
-app.use(cookieParser(process.env.COOKIE_SECRET));
-
-// ==========================================
-// 1. CONFIGURACIÓN DE SESIONES Y FLASH (Mover aquí arriba)
-// ==========================================
-app.use(session({ 
-    secret: process.env.SESSION_SECRET, 
-    resave: false,                  
-    saveUninitialized: false,       
-    cookie: { 
-        secure: true,                
-        maxAge: 3600000                 
-    } 
-}));
-
-//Inicializar Passport y su sesión
-app.use(passport.initialize());
-app.use(passport.session());
-app.use(flash());
-
-// ==========================================
-// MIDDLEWARE DE RECORDARME AUTOMÁTICO
-// ==========================================
-const { checkRememberMe } = require('./middlewares/auth');
-app.use(checkRememberMe);
-
-// ==========================================
-// 2. VARIABLES GLOBALES PARA EJS (Justo después de flash)
-// ==========================================
-app.use((req, res, next) => {
-    res.locals.success_msg = req.flash('success_msg');
-    res.locals.error_msg = req.flash('error_msg');
-    res.locals.user = req.session.user || null;
-    next();
-});
-
-// ==========================================
-// 2.b AUDITORÍA GLOBAL DE OPERACIONES
-// ==========================================
-// Debe ir DESPUÉS de la sesión, Passport y checkRememberMe (para conocer al
-// usuario) y ANTES de las rutas (para envolver toda la aplicación).
-// Registra consultas, altas, modificaciones, bajas, impresiones y cierres.
-// El detalle semántico de cada ruta vive en config/auditoriaCatalogo.js.
-const { auditoriaGlobal } = require('./middlewares/auditoria');
-app.use(auditoriaGlobal());
-
-// ==========================================
-// 2.c LICENCIA DE LA INSTALACIÓN
-// ==========================================
-// Va después de la auditoría (para que el intento quede registrado) y antes de
-// las rutas. Nunca bloquea el inicio de sesión, la pantalla de licencia ni el
-// cierre de las operaciones que ya estén abiertas.
-const { exigirLicencia } = require('./middlewares/licencia');
-app.use(exigirLicencia());
-
-// ==========================================
-// 3. SERVIR EL FAVICON CON EXPRESS y serve-favicon
-// ==========================================
-app.use(favicon(path.join(__dirname, 'public/img', 'favicon.png')));
-
-// ==========================================
-// 3. VINCULACIÓN DE RUTAS (Siempre al final de los middlewares globales)
-// ==========================================
-const authRoutes = require('./routes/authRoutes');
-const userRoutes = require('./routes/userRoutes');
-const adminRoutes = require('./routes/adminRoutes');
-const almacenRoutes = require('./routes/almacenRoutes');
-const productoRoutes = require('./routes/productoRoutes');
-const posRoutes = require('./routes/posRoutes');
-const pedidoRoutes = require('./routes/pedidoRoutes');
-const recetaRoutes = require('./routes/recetaRoutes');
-const transferenciaRoutes = require('./routes/transferenciaRoutes');
-const salidaManualRoutes = require('./routes/salidaManualRoutes');
-const settingRoutes = require('./routes/settingRoutes');
-const entradaRoutes = require('./routes/entradaRoutes');
-const inventarioRoutes = require('./routes/inventarioRoutes');
-const reporteRoutes = require('./routes/reporteRoutes');
-const turnoRoutes = require('./routes/turnoRoutes');
-const monedaRoutes = require('./routes/monedaRoutes');
-const cierreDiaRoutes = require('./routes/cierreDiaRoutes');
-const clienteRoutes = require('./routes/clienteRoutes'); 
-const unidadMedidaRoutes = require('./routes/unidadMedidaRoutes'); 
-const auditoriaRoutes = require('./routes/auditoriaRoutes'); 
-const fichaCostoRoutes = require('./routes/fichaCostoRoutes');
-const licenciaRoutes = require('./routes/licenciaRoutes');
-
-app.use('/', authRoutes);
-app.use('/admin', userRoutes);
-app.use('/admin', adminRoutes);
-app.use('/admin', almacenRoutes);
-app.use('/admin', productoRoutes);
-app.use('/admin', pedidoRoutes);
-app.use('/admin', recetaRoutes);
-app.use('/admin', transferenciaRoutes);
-app.use('/admin', salidaManualRoutes);
-app.use('/admin', settingRoutes);
-app.use('/admin', transferenciaRoutes);
-app.use('/admin', entradaRoutes);
-app.use('/admin', inventarioRoutes);
-app.use('/admin', reporteRoutes);
-app.use('/admin', turnoRoutes);
-app.use('/admin', monedaRoutes);
-app.use('/admin', cierreDiaRoutes);
-app.use('/admin', unidadMedidaRoutes);
-app.use('/admin', auditoriaRoutes);
-app.use('/admin', fichaCostoRoutes);
-app.use('/admin', licenciaRoutes);
-
-app.use(posRoutes);
-app.use(clienteRoutes);
-
-// Ruta inicial 
-app.get('/', (req, res) => {
-    res.redirect('/admin/dashboard'); 
-});
-
-// ==========================================
-// MIDDLEWARE DE MANEJO DE ERRORES (Siempre al final)
-// ==========================================
-// Manejo de rutas no encontradas
-// app.use(notFoundHandler);
-
-// Manejo centralizado de errores
-app.use(errorHandler);
-
-// 1. Leer los certificados generados por mkcert
-const sslOptions = {
-  key: fs.readFileSync(path.join(__dirname, 'certs', 'key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, 'certs', 'cert.pem'))
-};
-
-// 2. Crear el servidor HTTPS (o HTTP si SERVER_HTTP=1, p. ej. detrás de un proxy/preview)
-if (process.env.SERVER_HTTP === '1') {
-  require('http').createServer(app).listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor HTTP corriendo en: http://localhost:${PORT} (SERVER_HTTP=1)`);
-  });
-} else {
-  https.createServer(sslOptions, app).listen(PORT, () => {
-    console.log(`Servidor HTTPS corriendo en: https://localhost:${PORT}`);
-  });
+if (require.main === module) {
+    iniciarServidor(app)
+        .then((servidor) => registrarApagadoGracioso(servidor))
+        .catch((error) => {
+            logger.error(`No se pudo iniciar el servidor: ${error.message}`);
+            console.error(error.message);
+            process.exit(1);
+        });
 }
+
+module.exports = app;

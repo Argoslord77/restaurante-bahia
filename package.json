@@ -2,7 +2,7 @@
   "name": "rest_cafe_bar",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
     "start": "node app.js",
     "tailwind:watch": "npx @tailwindcss/cli -i ./src/input.css -o ./public/css/tailwind.css --watch",
@@ -14,7 +14,10 @@
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
     "seed": "knex seed:run",
-    "seed:make": "knex seed:make"
+    "seed:make": "knex seed:make",
+    "start:http": "SERVER_HTTP=1 node app.js",
+    "check:rutas": "node scripts/verificar-rutas.js",
+    "smoke": "node scripts/smoke-bootstrap.js"
   },
   "keywords": [],
   "author": "",

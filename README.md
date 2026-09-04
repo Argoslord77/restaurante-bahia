@@ -13,6 +13,7 @@ Sistema de gestión integral para restaurantes con funcionalidades de POS, inven
 - [Estructura del Proyecto](#estructura-del-proyecto)
 - [Roles de Usuario](#roles-de-usuario)
 - [Testing](#testing)
+- [Arranque Modular](#arranque-modular)
 - [Arquitectura](#arquitectura)
 
 ## ✨ Características
@@ -232,8 +233,9 @@ console.log(hash);
 Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
 
 ```env
-# Puerto del servidor
+# Puerto e interfaz del servidor
 PORT=3000
+HOST=0.0.0.0
 
 # Configuración de Base de Datos
 DB_HOST=localhost
@@ -244,12 +246,22 @@ DB_NAME=restaurante_db
 # Secretos de sesión y cookies
 SESSION_SECRET=tu_secreto_de_sesion_muy_largo_y_seguro
 COOKIE_SECRET=tu_secreto_de_cookies_muy_largo_y_seguro
+SESSION_MAX_AGE_MS=3600000
 
 # Ambiente
 NODE_ENV=development
 
 # IP del servidor (opcional)
 SERVER_IP=
+
+# ── Opcionales (ver MODULARIZACION.md) ─────────────────────────────
+# SERVER_HTTP=1              # servir en HTTP (detrás de proxy, preview, pruebas)
+# TRUST_PROXY=1              # detrás de nginx: IP y esquema reales del cliente
+# SSL_KEY_PATH=/ruta/key.pem # certificados fuera de ./certs
+# SSL_CERT_PATH=/ruta/cert.pem
+# RATE_LIMIT_MAX=2000        # peticiones por ventana
+# RATE_LIMIT_WINDOW_MS=900000
+# ENABLE_NOT_FOUND=1         # 404 con error.ejs en vez del 404 de Express
 ```
 
 **⚠️ IMPORTANTE**: Nunca commits el archivo `.env` al control de versiones. Ya está incluido en `.gitignore`.
@@ -271,8 +283,26 @@ nodemon app.js
 ### Modo Producción
 
 ```bash
-node app.js
+node app.js            # HTTPS con certs/key.pem y certs/cert.pem
+npm run start:http     # HTTP plano (SERVER_HTTP=1): pruebas o detrás de un proxy
 ```
+
+### Comprobaciones rápidas (no requieren base de datos)
+
+```bash
+npm run check:rutas    # imprime y valida el registro central de rutas
+npm run smoke          # arranca la app en un puerto efímero y consulta /api/health
+```
+
+### Sondeo de vida
+
+```bash
+curl -k https://localhost:3000/api/health
+# {"status":"ok","servicio":"restaurante-bahia","entorno":"production",...}
+```
+
+No toca la base de datos ni el sistema de licencias, así que sirve para pm2,
+systemd o cualquier monitor externo.
 
 ### Ejecutar Tests
 
@@ -302,12 +332,18 @@ Credenciales iniciales (según tu configuración):
 
 ```
 REST_CAFE_BAR/
-├── app.js                      # Punto de entrada principal
+├── app.js                      # Punto de entrada delgado (crea la app y escucha)
 ├── package.json                # Dependencias y scripts
 ├── jest.config.js             # Configuración de Jest
 ├── .env                       # Variables de entorno (no commit)
 ├── .gitignore                # Archivos ignorados por Git
 ├── config/
+│   ├── app.js                # createApp(): ensambla middlewares y rutas
+│   ├── security.js           # helmet, política CSP y rate limit
+│   ├── session.js            # cookies, sesión, Passport, flash, contexto EJS
+│   ├── views.js              # motor EJS, estáticos y favicon
+│   ├── routes.js             # REGISTRO_RUTAS: tabla única de routers
+│   ├── server.js             # listener HTTP/HTTPS y apagado ordenado
 │   ├── db.js                 # Configuración de base de datos
 │   ├── passport.js           # Estrategia de autenticación
 │   └── multer.js             # Configuración de subida de archivos
@@ -375,9 +411,13 @@ El proyecto utiliza Jest como framework de testing.
 
 ### Tests Disponibles
 
-- **Unit Tests**: Services y Models
+- **Unit Tests**: Services, Models y módulos de arranque (`config/*.test.js`)
 - **Integration Tests**: Controllers
+- **Smoke Test**: `npm run smoke` (arranque sin base de datos)
 - **Coverage Report**: Disponible con `npm run test:coverage`
+
+> `jest.config.js` excluye `config/environments/` del `testMatch`: `test.js` es
+> configuración de entorno, no una suite.
 
 ### Ejecutar Tests Específicos
 
@@ -388,6 +428,33 @@ npm test userService.test.js
 # Tests con patrón
 npm test -- --testNamePattern="UserService"
 ```
+
+## 🧩 Arranque Modular
+
+El arranque de la aplicación está desacoplado del punto de entrada. `app.js`
+solo crea la app y la pone a escuchar; cada responsabilidad vive en su módulo
+dentro de `config/`, con tests propios:
+
+| Módulo | Responsabilidad |
+|---|---|
+| `config/app.js` | `createApp()`: ensambla todo en el orden correcto |
+| `config/security.js` | Cabeceras helmet/CSP y límite de peticiones |
+| `config/session.js` | Cookies firmadas, sesión, Passport, flash, `res.locals` |
+| `config/views.js` | Motor EJS, estáticos y favicon |
+| `config/routes.js` | Registro central de routers (una sola fuente de verdad) |
+| `config/server.js` | Listener HTTP/HTTPS, certificados y apagado ordenado |
+
+**Añadir una ruta nueva** es una línea en `config/routes.js`:
+
+```js
+{ prefijo: '/admin', modulo: 'miModuloRoutes', descripcion: 'Para qué sirve' }
+```
+
+`npm run check:rutas` detecta routers duplicados, ausentes o con prefijo mal
+formado antes de reiniciar el servicio.
+
+📄 Detalle completo, variables nuevas y guía de despliegue/marcha atrás en
+[MODULARIZACION.md](./MODULARIZACION.md).
 
 ## 🏗️ Arquitectura
 
