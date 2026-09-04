@@ -65,3 +65,14 @@ Source: window.print() Este error se esta manifestando y los botones de la vista
 - En la vista del POS del dependiente en formato de movil mueve horizontalmente el boton de "Ver comanda" hacia el centro para evitar que colisiones con el boton de regresar al inicio de la pagina cuando se hace scroll. [OKOKKO]
 - Recuerda que cuando se visite la precuenta desde el reporte de pedido, el boton de regresar que aparece cuando se pinche el ticket de precuenta tienen que navegar al reporte de pedido no al POS, no lo corregiste. [OKOKKO]
 - Al momento de crear un turno hay que seleccionar el cocinero de turno entre los cocineros que esten activos en el sistema, de no haber ninguno definido informarselo al usuario que accede al backend. Esto es debido a que en el reporte de pedidos y ventas (/admin/pedido/:id_pedido)  en la columna "elaboro" se esta utilizando el nombre del dependiente, lo cual esta mal, en su lugar se debe de tomar el cocinero activo en el turno y mostrar su nombre. 
+
+19. Modularizar el arranque de la aplicacion: app.js era un monolito de ~200 lineas (CSP, rate limit, sesion, Passport, flash, auditoria, licencia, favicon, 23 app.use, lectura de certificados y listen). Ahora app.js solo crea la app y escucha, y cada responsabilidad vive en config/ con sus propios tests. [OKOKKO]
+	19.1 config/app.js createApp() ensambla respetando el orden contractual de middlewares.
+	19.2 config/security.js centraliza helmet/CSP: la directiva script-src-attr 'unsafe-inline' (la que arreglo los botones de impresion) queda con test de regresion.
+	19.3 config/session.js corrige la cookie de sesion: era secure:true incluso con SERVER_HTTP=1, o sea que en modo HTTP/detras de proxy era imposible iniciar sesion. Ahora sigue al modo real de arranque.
+	19.4 config/routes.js registro central: elimina el DOBLE montaje de transferenciaRoutes y valida routers duplicados, ausentes o con prefijo mal formado (npm run check:rutas).
+	19.5 config/views.js favicon tolerante: si falta public/img/favicon.png avisa y arranca (antes tiraba el proceso al cargar el modulo).
+	19.6 config/server.js lee los certificados SOLO al arrancar en HTTPS (antes el readFileSync corria al importar, lo que rompia require('./app') en tests), permite SSL_KEY_PATH/SSL_CERT_PATH, explica como resolverlo (mkcert) y cierra listener + pool de MySQL en SIGINT/SIGTERM.
+	19.7 Sondeo GET /api/health montado antes de auditoria y licencia: no toca la BD.
+	19.8 jest.config.js ya no toma config/environments/test.js como suite: era el unico FAIL de la linea base ('Your test suite must contain at least one test').
+	19.9 Verificacion: 25 suites / 302 casos en verde (la linea base eran 19 suites / 243 casos con 1 suite rota), npm run check:rutas y npm run smoke (arranque sin BD). Documentacion en MODULARIZACION.md.
