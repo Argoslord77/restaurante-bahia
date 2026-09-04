@@ -54,6 +54,10 @@
         ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '—';
     const dia = (d) => (d instanceof Date && !Number.isNaN(d.getTime()))
         ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}` : '—';
+    const diaIso = (s) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+        return m ? `${m[3]}/${m[2]}/${m[1]}` : (s || '—');
+    };
     const hoy = new Date();
     const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const ayer = new Date(hoy.getTime() - 86400000);
@@ -140,7 +144,7 @@
                             <label class="form-label small text-muted fw-semibold mb-1" for="f-estado-pago">Estado de pago</label>
                             <select id="f-estado-pago" name="estado_pago" class="form-select form-select-sm">
                                 <option value="">Todos</option>
-                                <option value="pendiente" <%= filtros.estadoPago === 'pendiente' ? 'selected' : '' %> data-en-curso="1">Abierta (en curso)</option>
+                                <option value="pendiente" <%= filtros.estadoPago === 'pendiente' ? 'selected' : '' %>>Abierta (en curso)</option>
                                 <option value="pagado" <%= filtros.estadoPago === 'pagado' ? 'selected' : '' %>>Cobrada</option>
                                 <option value="cortesia" <%= filtros.estadoPago === 'cortesia' ? 'selected' : '' %>>Cortesía</option>
                                 <option value="facturado" <%= filtros.estadoPago === 'facturado' ? 'selected' : '' %>>Facturado</option>
@@ -251,7 +255,7 @@
                     <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2 flex-wrap">
                         <i class="fa-solid fa-receipt text-dark"></i>
                         <h6 class="fw-bold mb-0">
-                            Cuentas del <%= dia(new Date(rango.desde)) %><%= rango.desde !== rango.hasta ? ` al ${dia(new Date(rango.hasta))}` : '' %>
+                            Cuentas del <%= diaIso(rango.desde) %><%= rango.desde !== rango.hasta ? ` al ${diaIso(rango.hasta)}` : '' %>
                             (<span id="conteo-visible"><%= reporte.pedidos.length %></span>)
                         </h6>
                         <span class="badge text-bg-dark ms-auto"><%= entero(t.unidades) %> unidades servidas</span>
