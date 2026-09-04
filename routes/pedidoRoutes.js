@@ -8,6 +8,10 @@ const { asegurarTurnoActivo } = require('../middlewares/verificarTurno');
 
 // Rutas de renderizado administrativo
 router.get('/pedidos', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), pedidoController.listarPedidos);
+
+// Exportar a CSV el reporte de Pedidos / Ventas con los filtros aplicados
+router.get('/pedidos/exportar', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), pedidoController.exportarPedidosCSV);
+
 router.get('/pedido/:id', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), pedidoController.obtenerDetallePedido);
 
 // Rutas de acciones operativas

@@ -349,8 +349,8 @@ module.exports = {
                 const [result] = await pool.query(`
                     INSERT INTO detalles_pedido (
                         id_pedido, id_platillo, es_platillo_dia, cantidad,
-                        precio_unitario, notas_especiales, estado_item, afecta_inventario
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                        precio_unitario, notas_especiales, estado_item, afecta_inventario, hora_enviado
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW())
                 `, [currentPedidoId, item.idPlatillo, item.esDia, item.cantidad, item.precio, item.notas, item.estadoInicial]);
                 insertedItems.push({
                     id_detalle: result.insertId,
@@ -400,7 +400,15 @@ module.exports = {
 
             if (!pool) return res.json({ success: true });
 
-            await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [nuevo_estado, id_detalle]);
+            // Se sella la marca de tiempo del circuito del ítem según el estado
+            // (reporte de Pedidos / Ventas: tiempos de elaboración y entrega).
+            const camposItem = ['estado_item = ?'];
+            if (nuevo_estado === 'entregado') camposItem.push('hora_entregado = COALESCE(hora_entregado, NOW())');
+            if (nuevo_estado === 'listo') camposItem.push('hora_listo = COALESCE(hora_listo, NOW())');
+            await pool.query(
+                `UPDATE detalles_pedido SET ${camposItem.join(', ')} WHERE id = ?`,
+                [nuevo_estado, id_detalle]
+            );
 
             // Comprobar si todos los ítems fueron entregados
             const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [id_detalle]);
@@ -440,8 +448,8 @@ module.exports = {
             if (!pool) return res.json({ success: true });
 
             await pool.query(`
-                UPDATE detalles_pedido 
-                SET estado_item = 'entregado' 
+                UPDATE detalles_pedido
+                SET estado_item = 'entregado', hora_entregado = COALESCE(hora_entregado, NOW())
                 WHERE id_pedido = ? AND estado_item NOT IN ('entregado', 'cancelado')
             `, [pedidoId]);
 
@@ -652,7 +660,8 @@ module.exports = {
                 WHERE id = ?
             `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
             await connection.query(`
-                UPDATE detalles_pedido SET estado_item = 'entregado'
+                UPDATE detalles_pedido
+                SET estado_item = 'entregado', hora_entregado = COALESCE(hora_entregado, NOW())
                 WHERE id_pedido = ? AND estado_item != 'cancelado'
             `, [pedidoId]);
 

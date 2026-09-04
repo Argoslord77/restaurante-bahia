@@ -187,7 +187,28 @@ module.exports = {
 
             if (!pool) return res.json({ success: true, message: 'Estado actualizado' });
 
-            await pool.query('UPDATE detalles_pedido SET estado_item = ? WHERE id = ?', [targetEstado, targetId]);
+            // Se sellan las marcas de tiempo del circuito del ítem y, al
+            // marcarlo como listo, quién lo preparó (reporte de Pedidos /
+            // Ventas: cocinero y tiempos de elaboración/entrega).
+            const camposMonitor = ['estado_item = ?'];
+            const paramsMonitor = [targetEstado];
+            if (targetEstado === 'en_cocina' || targetEstado === 'en_bar' || targetEstado === 'en_preparacion') {
+                camposMonitor.push('hora_enviado = COALESCE(hora_enviado, NOW())');
+            }
+            if (targetEstado === 'listo') {
+                camposMonitor.push('hora_listo = COALESCE(hora_listo, NOW())');
+                if (req.user && req.user.id) {
+                    camposMonitor.push('cocinado_por = COALESCE(cocinado_por, ?)');
+                    paramsMonitor.push(req.user.id);
+                }
+            }
+            if (targetEstado === 'entregado') {
+                camposMonitor.push('hora_entregado = COALESCE(hora_entregado, NOW())');
+            }
+            await pool.query(
+                `UPDATE detalles_pedido SET ${camposMonitor.join(', ')} WHERE id = ?`,
+                [...paramsMonitor, targetId]
+            );
 
             // Actualizar estado general del pedido si aplica
             const [rows] = await pool.query('SELECT id_pedido FROM detalles_pedido WHERE id = ?', [targetId]);

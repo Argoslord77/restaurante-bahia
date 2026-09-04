@@ -182,6 +182,12 @@ const REGLAS = [
 
     // ══════════════ Salón y pedidos ══════════════
     { patron: /^\/admin\/mesas/, entidad: 'Mesa', modulo: 'Salón' },
+    { patron: /^\/admin\/pedidos\/exportar/, entidad: 'Reporte de pedidos', modulo: 'Pedidos',
+      accion: 'Exportar reporte de pedidos/ventas a CSV', categoria: CATEGORIAS.EXPORTACION,
+      severidad: SEVERIDADES.AVISO },
+    { patron: /^\/admin\/pedidos/, entidad: 'Reporte de pedidos', modulo: 'Pedidos',
+      accion: 'Consultar reporte de pedidos/ventas', categoria: CATEGORIAS.LECTURA,
+      severidad: SEVERIDADES.INFO },
     { patron: /^\/admin\/pedido/, entidad: 'Pedido', modulo: 'Pedidos' },
 
     // ══════════════ Punto de venta ══════════════

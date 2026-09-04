@@ -46,14 +46,14 @@ const pedidoService = {
     },
 
     // Cambia el estado de un item
-    cambiarEstadoItem: async (idDetalle, nuevoEstado) => {
+    cambiarEstadoItem: async (idDetalle, nuevoEstado, usuarioId = null) => {
         const item = await PedidoModel.getDetalleById(idDetalle);
         if (!item) {
             throw new Error('Detalle no encontrado.');
         }
 
         orderEngine.validateItemStatus(item.estado_item, nuevoEstado);
-        return await PedidoModel.updateEstadoItem(idDetalle, nuevoEstado);
+        return await PedidoModel.updateEstadoItem(idDetalle, nuevoEstado, db, usuarioId);
     },
 
     // Obtener pedidos en consumo
@@ -197,6 +197,150 @@ const pedidoService = {
         } finally {
             connection.release();
         }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // REPORTE PROFESIONAL DE PEDIDOS / VENTAS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Listado filtrado + ordenado + paginado, con el desglose de ítems y de
+    // pagos por moneda ya adjunto a cada pedido de la página.
+    listarVentas: async (filtros = {}) => {
+        const resultado = await PedidoModel.getVentasFiltradas(filtros);
+        const ids = resultado.rows.map(r => r.id);
+
+        if (ids.length > 0) {
+            const [items, pagos] = await Promise.all([
+                PedidoModel.getItemsPorPedidos(ids),
+                PedidoModel.getPagosPorPedidos(ids)
+            ]);
+            const itemsPorPedido = {};
+            items.forEach(it => {
+                (itemsPorPedido[it.id_pedido] = itemsPorPedido[it.id_pedido] || []).push(it);
+            });
+            const pagosPorPedido = {};
+            pagos.forEach(pg => {
+                (pagosPorPedido[pg.pedido_id] = pagosPorPedido[pg.pedido_id] || []).push(pg);
+            });
+            resultado.rows.forEach(p => {
+                p.items = itemsPorPedido[p.id] || [];
+                p.pagos = pagosPorPedido[p.id] || [];
+            });
+        }
+
+        return resultado;
+    },
+
+    // Totales del conjunto filtrado (tarjetas del encabezado del reporte)
+    resumenVentas: async (filtros = {}) => {
+        try {
+            return await PedidoModel.getResumenVentas(filtros);
+        } catch (error) {
+            logger.error('Error al obtener el resumen de ventas:', error);
+            return { total_pedidos: 0, en_curso: 0, cobrados: 0, importe_cobrado: 0, propinas: 0 };
+        }
+    },
+
+    // Turnos y dependientes con pedidos (desplegables del panel de filtros)
+    opcionesFiltrosVentas: async () => {
+        try {
+            const [turnos, meseros] = await Promise.all([
+                PedidoModel.getTurnosConPedidos(),
+                PedidoModel.getMeserosConPedidos()
+            ]);
+            return { turnos, meseros };
+        } catch (error) {
+            logger.error('Error al cargar los filtros de pedidos:', error);
+            return { turnos: [], meseros: [] };
+        }
+    },
+
+    /**
+     * Exporta a CSV el listado de pedidos con los filtros del panel aplicados.
+     * Mismas convenciones que la exportación de salidas manuales y auditoría:
+     * separador ';', BOM UTF-8 para Excel y todos los campos entrecomillados.
+     */
+    exportarVentasCSV: async (filtros = {}, limite = 20000) => {
+        const rows = await PedidoModel.getParaExportarVentas(filtros, limite);
+        const ids = rows.map(r => r.id);
+
+        const itemsPorPedido = {};
+        const pagosPorPedido = {};
+        if (ids.length > 0) {
+            const [items, pagos] = await Promise.all([
+                PedidoModel.getItemsPorPedidos(ids),
+                PedidoModel.getPagosPorPedidos(ids)
+            ]);
+            items.forEach(it => {
+                (itemsPorPedido[it.id_pedido] = itemsPorPedido[it.id_pedido] || []).push(it);
+            });
+            pagos.forEach(pg => {
+                (pagosPorPedido[pg.pedido_id] = pagosPorPedido[pg.pedido_id] || []).push(pg);
+            });
+        }
+
+        const escaparCampo = (valor) => {
+            if (valor === null || valor === undefined) return '';
+            const texto = String(valor).replace(/"/g, '""').replace(/\r?\n/g, ' ');
+            return `"${texto}"`;
+        };
+
+        const fmtFecha = (v) => v ? new Date(v).toISOString().slice(0, 19).replace('T', ' ') : '';
+        const fmtSegundos = (seg) => {
+            const s = Math.max(0, Math.round(Number(seg) || 0));
+            const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+        };
+
+        const cabecera = [
+            'Pedido', 'Fecha apertura', 'Turno', 'Mesa', 'Ubicacion', 'Dependiente',
+            'Comensales', 'Cliente', 'Estado pedido', 'Estado pago',
+            'Subtotal', 'Descuento', 'Impuesto', 'Total (CUP)', 'Propina',
+            'Hora cierre', 'Duracion servicio', 'Items', 'Entregados', 'Cancelados',
+            'Pagos (desglose monedas)', 'Cajero', 'Detalle de items'
+        ].join(';');
+
+        const lineas = rows.map(r => {
+            const pagosTexto = (pagosPorPedido[r.id] || [])
+                .map(pg => `${Number(pg.monto_moneda_origen).toFixed(2)} ${pg.moneda_codigo || '—'}${Number(pg.factor_cambio_aplicado) !== 1 ? ' (x' + Number(pg.factor_cambio_aplicado).toFixed(2) + ')' : ''}`)
+                .join(' | ');
+            const itemsTexto = (itemsPorPedido[r.id] || [])
+                .map(it => `${it.cantidad}x ${it.nombre_platillo} [${it.estado_item}]` +
+                    (it.cocinero_nombre ? ` (${it.cocinero_nombre})` : '') +
+                    (it.hora_enviado && it.hora_entregado
+                        ? ` entrega ${fmtSegundos((new Date(it.hora_entregado) - new Date(it.hora_enviado)) / 1000)}`
+                        : ''))
+                .join(' | ');
+
+            return [
+                r.id,
+                fmtFecha(r.creado_en),
+                r.turno_id ? `#${r.turno_id} ${r.turno_usuario || ''} ${fmtFecha(r.turno_apertura).slice(0, 10)}` : '',
+                r.numero_mesa,
+                r.ubicacion_mesa || '',
+                r.mesero_nombre || r.mesero_usuario || '',
+                r.comensales,
+                r.cliente_nombre || '',
+                r.estado_pedido,
+                r.estado_pago,
+                Number(r.subtotal || 0).toFixed(2),
+                Number(r.descuento || 0).toFixed(2),
+                Number(r.impuesto || 0).toFixed(2),
+                Number(r.total || 0).toFixed(2),
+                Number(r.propina || 0).toFixed(2),
+                fmtFecha(r.fecha_cierre),
+                fmtSegundos(r.duracion_seg),
+                r.items_total,
+                r.items_entregados,
+                r.items_cancelados,
+                pagosTexto,
+                r.cajero_usuario || '',
+                itemsTexto
+            ].map(escaparCampo).join(';');
+        });
+
+        const csv = '\uFEFF' + [cabecera, ...lineas].join('\r\n');
+        return { csv, filas: rows.length };
     },
 
     // Control centralizado de cancelaciones y alteración de stocks

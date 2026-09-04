@@ -3,15 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Pedidos - Restaurante</title>
-    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <title>Pedidos / Ventas - Restaurante Bahía</title>
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css">
+
+    <style>
+        /* Encabezados ordenables de la tabla */
+        .th-orden { color: #ffffff; text-decoration: none; }
+        .th-orden:hover { color: #d1d5db; text-decoration: underline; }
+        .th-orden .fa-solid { font-size: 0.7rem; opacity: .85; }
+
+        /* Chips de rangos rápidos de fechas */
+        .chip-rango { cursor: pointer; }
+
+        /* Fila expandible del desglose de ítems */
+        .fila-items > td { background: #f8f9fa; padding: 0 !important; }
+        .fila-items .tabla-items { font-size: 0.8rem; }
+        .fila-items .tabla-items th { padding: 6px 10px; }
+        .fila-items .tabla-items td { padding: 5px 10px; }
+        .btn-expandir { width: 26px; height: 26px; padding: 0; line-height: 1; }
+
+        /* Encabezado exclusivo del informe impreso */
+        .print-only { display: none; }
+
+        @media print {
+            @page { size: A4 landscape; margin: 12mm; }
+            body { background: #ffffff !important; }
+            .no-print, #sidebarMenu, .toast-container-custom, .modal,
+            .bg-white.d-md-none, .pagination { display: none !important; }
+            main {
+                width: 100% !important;
+                max-width: 100% !important;
+                flex: 0 0 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .card { box-shadow: none !important; border: 1px solid #dee2e6 !important; break-inside: avoid; }
+            .card-header { background: #f8f9fa !important; }
+            table { font-size: 10px; width: 100% !important; }
+            .table td, .table th { padding: 3px 6px; }
+            .table-custom-thead { background: none !important; }
+            .table-custom-thead th { color: #000000 !important; border-bottom: 2px solid #000 !important; }
+            .th-orden { color: #000000 !important; }
+            .badge { border: 1px solid #999; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .print-only { display: block !important; }
+            .fs-4 { font-size: 1.05rem !important; }
+            /* Al imprimir se muestra el desglose de ítems de todas las órdenes */
+            .fila-items { display: table-row !important; }
+        }
+    </style>
 </head>
 <body>
-    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+
+    <%
+        // ── Utilidades de la vista (reporte profesional de Pedidos / Ventas) ──
+        const fmt = (n, dec = 2) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+        const fmtInt = (n) => Number(n || 0).toLocaleString('es-ES');
+
+        // h:m:s a partir de una cantidad de segundos
+        const hms = (seg) => {
+            const s = Math.max(0, Math.round(Number(seg) || 0));
+            const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+        };
+        // Diferencia h:m:s entre dos fechas (null → "—")
+        const hmsEntre = (a, b) => {
+            if (!a || !b) return '—';
+            return hms((new Date(b) - new Date(a)) / 1000);
+        };
+        const horaCorta = (v) => v ? new Date(v).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '—';
+        const fechaCorta = (v) => v ? new Date(v).toLocaleDateString('es-ES') : '—';
+
+        // Etiquetas y colores de los estados de pedido, pago e ítem
+        const ETIQUETAS_PAGO = {
+            pendiente:      { texto: 'Pendiente',        badge: 'bg-warning text-dark' },
+            pagado:         { texto: 'Pagado',           badge: 'bg-success text-white' },
+            facturado:      { texto: 'Facturado',        badge: 'bg-info text-dark' },
+            cortesia:       { texto: 'Cortesía',         badge: 'bg-dark text-white' },
+            pendiente_pago: { texto: 'Vale pendiente',   badge: 'bg-secondary text-white' },
+            cancelado:      { texto: 'Anulado',          badge: 'bg-danger text-white' }
+        };
+        const ETIQUETAS_ITEM = {
+            en_espera:  { texto: 'En espera',  badge: 'bg-secondary text-white' },
+            en_cocina:  { texto: 'En cocina',  badge: 'bg-warning text-dark' },
+            en_bar:     { texto: 'En bar',     badge: 'bg-info text-dark' },
+            listo:      { texto: 'Listo',      badge: 'bg-primary text-white' },
+            entregado:  { texto: 'Entregado',  badge: 'bg-success text-white' },
+            cancelado:  { texto: 'Cancelado',  badge: 'bg-danger text-white' }
+        };
+        const etiquetaPago = (e) => ETIQUETAS_PAGO[e] || { texto: e || '—', badge: 'bg-secondary text-white' };
+        const etiquetaItem = (e) => ETIQUETAS_ITEM[e] || { texto: e || '—', badge: 'bg-secondary text-white' };
+
+        // Conserva todos los filtros activos; permite sobrescribir/agregar parámetros.
+        // El rango de fechas se conserva aunque esté vacío: es la marca del
+        // modo "Todo el histórico" (desde=&hasta=) y debe sobrevivir a los
+        // enlaces de paginación y de ordenado.
+        const qs = (extra = {}) => {
+            const base = { ...filtros };
+            delete base.pagina; // los enlaces deciden la página explícitamente
+            Object.assign(base, extra);
+            return Object.entries(base)
+                .filter(([k, v]) => {
+                    if (k === 'desde' || k === 'hasta') return true;
+                    return v !== '' && v !== null && v !== undefined;
+                })
+                .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+                .join('&');
+        };
+
+        // Ordenamiento de columnas
+        const ordenActual = filtros.orden || 'fecha';
+        const dirActual = String(filtros.dir || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+        const flecha = col => ordenActual === col
+            ? (dirActual === 'asc' ? ' <i class="fa-solid fa-arrow-up-short-wide"></i>' : ' <i class="fa-solid fa-arrow-down-wide-short"></i>')
+            : '';
+        const urlOrden = col => '/admin/pedidos?' + qs({ orden: col, dir: (ordenActual === col && dirActual === 'desc') ? 'asc' : 'desc' });
+
+        // Resumen legible de los filtros aplicados (para pantalla e impresión)
+        const ETIQUETAS_ESTADO = { todos: 'Todos', curso: 'En curso', cobrados: 'Cobrados', cortesia: 'Cortesía', anulados: 'Anulados' };
+        const turnoElegido = filtros.turnoId ? (turnos.find(t => String(t.id) === String(filtros.turnoId)) || null) : null;
+        const meseroElegido = filtros.meseroId ? (meseros.find(m => String(m.id) === String(filtros.meseroId)) || null) : null;
+        const descripcionFiltros = (() => {
+            const partes = [];
+            if (filtros.desde && filtros.hasta) partes.push(`Período: del ${filtros.desde} al ${filtros.hasta}`);
+            else if (filtros.desde) partes.push(`Desde: ${filtros.desde}`);
+            else if (filtros.hasta) partes.push(`Hasta: ${filtros.hasta}`);
+            if (filtros.estado && filtros.estado !== 'todos') partes.push(`Estado: ${ETIQUETAS_ESTADO[filtros.estado] || filtros.estado}`);
+            if (turnoElegido) partes.push(`Turno: #${turnoElegido.id} · ${turnoElegido.turno_usuario || ''} (${fechaCorta(turnoElegido.fecha_apertura)})`);
+            if (meseroElegido) partes.push(`Dependiente: ${[meseroElegido.nombre, meseroElegido.apellidos].filter(Boolean).join(' ') || meseroElegido.usuario}`);
+            if (filtros.mesa) partes.push(`Mesa: ${filtros.mesa}`);
+            if (filtros.buscar) partes.push(`Búsqueda: "${filtros.buscar}"`);
+            return partes.length ? partes.join(' · ')
+                : (filtros.desde || filtros.hasta ? 'Todos los pedidos del día' : 'Todo el histórico de pedidos');
+        })();
+
+        // Ventana de paginación (primera, última y ±2 alrededor de la actual)
+        const pagActual = paginacion.pagina, totalPags = paginacion.totalPaginas;
+        const paginas = [];
+        for (let p = 1; p <= totalPags; p++) {
+            if (p === 1 || p === totalPags || Math.abs(p - pagActual) <= 2) paginas.push(p);
+        }
+
+        const puedeAnular = typeof user !== 'undefined' && user && ['superadministrador', 'administrador', 'cajero'].includes(user.role);
+    %>
+
+    <div class="toast-container-custom">
+        <% if (typeof error_msg !== 'undefined' && error_msg && error_msg.length > 0) { %>
+            <div class="toast show text-white bg-danger border-0 shadow" role="alert" id="liveToast">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-xmark me-2"></i><%= error_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+
+        <% if (typeof success_msg !== 'undefined' && success_msg && success_msg.length > 0) { %>
+            <div class="toast show text-white bg-success border-0 shadow" role="alert" id="liveToast">
+                <div class="d-flex">
+                    <div class="toast-body fw-semibold fs-7">
+                        <i class="fa-solid fa-circle-check me-2"></i><%= success_msg %>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <% } %>
+    </div>
+
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm no-print">
         <div class="d-flex align-items-center gap-2">
             <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
             <span class="fw-bold text-dark">Restaurante Bahía</span>
@@ -24,66 +186,415 @@
     <div class="container-fluid">
         <div class="row">
             <%- include('../includes/sideBarMenu') %>
-            
+
             <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
-                <%- include('../includes/header', {encabezado_pagina: 'Ventas / Pedidos', desc_pagina: 'Monitoreo de órdenes en consumo y apertura de mesas', add_btn: true, btn_label: "Crear Orden", modal: "modalCrearPedido"}) %>
-                
-                <div class="flex-grow-1 my-3">
-                    <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                <%- include('../includes/header', {
+                    encabezado_pagina: '🧾 Pedidos / Ventas',
+                    desc_pagina: 'Órdenes del día por rango de fechas: en curso y cobradas, con desglose de ítems, pagos por moneda, tiempos del servicio y cocinero.',
+                    add_btn: true,
+                    btn_label: "Crear Orden",
+                    modal: "modalCrearPedido"
+                }) %>
+
+                <!-- Encabezado del informe impreso (solo visible al imprimir) -->
+                <div class="print-only mb-3">
+                    <h2 style="font-size: 16px; margin: 0;">Restaurante Bahía — Reporte de Pedidos / Ventas</h2>
+                    <div style="font-size: 11px; color: #374151;">
+                        Generado: <%= new Date().toLocaleString('es-ES') %> ·
+                        Usuario: <%= user ? (user.nombre || user.usuario) : '—' %> ·
+                        <%= lista.length %> de <%= fmtInt(paginacion.total) %> pedido(s)
+                    </div>
+                    <div style="font-size: 11px; color: #374151;"><strong>Filtros:</strong> <%= descripcionFiltros %></div>
+                    <div style="font-size: 11px; color: #374151;">
+                        Totales: <%= fmtInt(resumen.total_pedidos) %> cuenta(s) ·
+                        <%= fmtInt(resumen.en_curso) %> en curso ·
+                        <%= fmtInt(resumen.cobrados) %> cobrada(s) ·
+                        $<%= fmt(resumen.importe_cobrado, 2) %> cobrado ·
+                        $<%= fmt(resumen.propinas, 2) %> en propinas
+                    </div>
+                    <hr style="margin: 6px 0;">
+                </div>
+
+                <!-- Indicadores del conjunto filtrado -->
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-md-3">
+                        <div class="card card-custom shadow-sm border-0 border-start border-primary border-4 h-100">
+                            <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="text-muted small fw-semibold text-uppercase">Cuentas</div>
+                                    <div class="fs-4 fw-bold text-dark"><%= fmtInt(resumen.total_pedidos) %></div>
+                                </div>
+                                <i class="fa-solid fa-receipt fs-3 text-primary opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card card-custom shadow-sm border-0 border-start border-warning border-4 h-100">
+                            <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="text-muted small fw-semibold text-uppercase">En curso</div>
+                                    <div class="fs-4 fw-bold text-dark"><%= fmtInt(resumen.en_curso) %></div>
+                                </div>
+                                <i class="fa-solid fa-utensils fs-3 text-warning opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card card-custom shadow-sm border-0 border-start border-success border-4 h-100">
+                            <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="text-muted small fw-semibold text-uppercase">Importe cobrado</div>
+                                    <div class="fs-4 fw-bold text-dark">$<%= fmt(resumen.importe_cobrado, 2) %></div>
+                                    <div class="text-muted small"><%= fmtInt(resumen.cobrados) %> cuenta(s) cobrada(s)</div>
+                                </div>
+                                <i class="fa-solid fa-sack-dollar fs-3 text-success opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card card-custom shadow-sm border-0 border-start border-info border-4 h-100">
+                            <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <div class="text-muted small fw-semibold text-uppercase">Propinas</div>
+                                    <div class="fs-4 fw-bold text-dark">$<%= fmt(resumen.propinas, 2) %></div>
+                                </div>
+                                <i class="fa-solid fa-hand-holding-heart fs-3 text-info opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de análisis: filtros especializados, exportación e impresión -->
+                <div class="card card-custom shadow-sm border-0 mb-4 no-print">
+                    <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <h6 class="fw-bold mb-0"><i class="fa-solid fa-sliders me-2 text-primary"></i>Panel de Análisis</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a href="/admin/pedidos/exportar?<%= qs({ pagina: 1, porPagina: '' }) %>"
+                               class="btn btn-sm btn-outline-success fw-semibold" title="Exportar a CSV el conjunto filtrado">
+                                <i class="fa-solid fa-file-csv me-1"></i>Exportar CSV
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-dark fw-semibold" onclick="window.print()" title="Imprimir el reporte (queda auditado)">
+                                <i class="fa-solid fa-print me-1"></i>Imprimir
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Rangos rápidos de fechas -->
+                        <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                            <span class="text-muted small fw-semibold me-1"><i class="fa-regular fa-calendar me-1"></i>Rangos rápidos:</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="hoy">Hoy</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="ayer">Ayer</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="7d">Últimos 7 días</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="mes">Este mes</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="mes_anterior">Mes anterior</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill chip-rango" data-rango="todo">Todo el histórico</button>
+                        </div>
+
+                        <form id="formFiltrosPedidos" method="get" action="/admin/pedidos">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fDesde" class="form-label small fw-semibold text-secondary mb-1">Desde</label>
+                                    <input type="date" class="form-control form-control-sm" id="fDesde" name="desde" value="<%= filtros.desde %>">
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fHasta" class="form-label small fw-semibold text-secondary mb-1">Hasta</label>
+                                    <input type="date" class="form-control form-control-sm" id="fHasta" name="hasta" value="<%= filtros.hasta %>">
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fEstado" class="form-label small fw-semibold text-secondary mb-1">Estado</label>
+                                    <select class="form-select form-select-sm" id="fEstado" name="estado">
+                                        <option value="todos" <%= filtros.estado === 'todos' ? 'selected' : '' %>>Todos</option>
+                                        <option value="curso" <%= filtros.estado === 'curso' ? 'selected' : '' %>>En curso</option>
+                                        <option value="cobrados" <%= filtros.estado === 'cobrados' ? 'selected' : '' %>>Cobrados</option>
+                                        <option value="cortesia" <%= filtros.estado === 'cortesia' ? 'selected' : '' %>>Cortesía</option>
+                                        <option value="anulados" <%= filtros.estado === 'anulados' ? 'selected' : '' %>>Anulados</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-3">
+                                    <label for="fTurno" class="form-label small fw-semibold text-secondary mb-1">Turno de servicio</label>
+                                    <select class="form-select form-select-sm" id="fTurno" name="turnoId">
+                                        <option value="">Todos</option>
+                                        <% turnos.forEach(t => { %>
+                                            <option value="<%= t.id %>" <%= String(filtros.turnoId) === String(t.id) ? 'selected' : '' %>>
+                                                #<%= t.id %> · <%= t.turno_usuario || '—' %> (<%= fechaCorta(t.fecha_apertura) %>)<%= t.estado === 'abierto' ? ' · abierto' : '' %>
+                                            </option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label for="fMesero" class="form-label small fw-semibold text-secondary mb-1">Dependiente</label>
+                                    <select class="form-select form-select-sm" id="fMesero" name="meseroId">
+                                        <option value="">Todos</option>
+                                        <% meseros.forEach(m => { %>
+                                            <option value="<%= m.id %>" <%= String(filtros.meseroId) === String(m.id) ? 'selected' : '' %>>
+                                                <%= [m.nombre, m.apellidos].filter(Boolean).join(' ') || m.usuario || ('ID ' + m.id) %>
+                                            </option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-2 col-lg-1">
+                                    <label for="fMesa" class="form-label small fw-semibold text-secondary mb-1">Mesa</label>
+                                    <input type="text" class="form-control form-control-sm" id="fMesa" name="mesa" maxlength="100" value="<%= filtros.mesa %>" placeholder="Nº">
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label for="fBuscar" class="form-label small fw-semibold text-secondary mb-1">Buscar</label>
+                                    <input type="text" class="form-control form-control-sm" id="fBuscar" name="buscar" maxlength="100" data-limpiar data-limpiar-enviar="si"
+                                           value="<%= filtros.buscar %>" placeholder="Nº pedido o cliente...">
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fOrden" class="form-label small fw-semibold text-secondary mb-1">Ordenar por</label>
+                                    <select class="form-select form-select-sm" id="fOrden" name="orden">
+                                        <option value="fecha" <%= ordenActual === 'fecha' ? 'selected' : '' %>>Apertura</option>
+                                        <option value="id" <%= ordenActual === 'id' ? 'selected' : '' %>>Nº pedido</option>
+                                        <option value="mesa" <%= ordenActual === 'mesa' ? 'selected' : '' %>>Mesa</option>
+                                        <option value="mesero" <%= ordenActual === 'mesero' ? 'selected' : '' %>>Dependiente</option>
+                                        <option value="total" <%= ordenActual === 'total' ? 'selected' : '' %>>Importe</option>
+                                        <option value="duracion" <%= ordenActual === 'duracion' ? 'selected' : '' %>>Duración</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fDir" class="form-label small fw-semibold text-secondary mb-1">Dirección</label>
+                                    <select class="form-select form-select-sm" id="fDir" name="dir">
+                                        <option value="desc" <%= dirActual === 'desc' ? 'selected' : '' %>>Descendente</option>
+                                        <option value="asc" <%= dirActual === 'asc' ? 'selected' : '' %>>Ascendente</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label for="fPorPagina" class="form-label small fw-semibold text-secondary mb-1">Por página</label>
+                                    <select class="form-select form-select-sm" id="fPorPagina" name="porPagina">
+                                        <% [25, 50, 100, 200].forEach(n => { %>
+                                            <option value="<%= n %>" <%= Number(filtros.porPagina) === n ? 'selected' : '' %>><%= n %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-lg-3 d-flex gap-2">
+                                    <button type="submit" class="btn btn-sm btn-dark flex-grow-1"><i class="fa-solid fa-filter me-1"></i>Filtrar</button>
+                                    <a href="/admin/pedidos" class="btn btn-sm btn-outline-secondary" title="Limpiar filtros (vuelve al día de hoy)"><i class="fa-solid fa-rotate-left"></i></a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Listado de pedidos del período -->
+                <div class="card card-custom shadow-sm border-0 overflow-hidden">
+                    <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span class="small text-secondary">
+                            <i class="fa-solid fa-shield-halved me-1"></i>
+                            <strong><%= fmtInt(paginacion.total) %></strong> pedido(s) — <%= descripcionFiltros %>
+                        </span>
+                        <span class="small text-muted no-print">Página <%= paginacion.pagina %> de <%= paginacion.totalPaginas %> · <%= paginacion.porPagina %> por página · <i class="fa-solid fa-chevron-down me-1"></i>desglose de ítems por orden</span>
+                    </div>
+                    <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
                                 <thead class="table-custom-thead text-uppercase fs-7">
                                     <tr>
-                                        <th class="ps-4 py-3">ID Pedido</th>
-                                        <th class="py-3">Ubicación / Mesa</th>
-                                        <th class="py-3">Mesero Responsable</th>
+                                        <th class="ps-4 py-3 no-print" style="width: 36px;"></th>
+                                        <th class="py-3"><a class="th-orden" href="<%= urlOrden('id') %>">Pedido<%- flecha('id') %></a></th>
+                                        <th class="py-3">Turno</th>
+                                        <th class="py-3"><a class="th-orden" href="<%= urlOrden('mesa') %>">Mesa<%- flecha('mesa') %></a></th>
+                                        <th class="py-3"><a class="th-orden" href="<%= urlOrden('mesero') %>">Dependiente<%- flecha('mesero') %></a></th>
+                                        <th class="py-3"><a class="th-orden" href="<%= urlOrden('fecha') %>">Apertura<%- flecha('fecha') %></a></th>
+                                        <th class="py-3">Cierre</th>
+                                        <th class="py-3 text-center"><a class="th-orden" href="<%= urlOrden('duracion') %>">Servicio<%- flecha('duracion') %></a></th>
+                                        <th class="py-3 text-center">Ítems</th>
+                                        <th class="py-3 text-end"><a class="th-orden" href="<%= urlOrden('total') %>">Importe<%- flecha('total') %></a></th>
                                         <th class="py-3">Estado</th>
-                                        <th class="text-center py-3" style="width: 180px;">Acciones</th>
+                                        <th class="py-3 text-center pe-4 no-print" style="width: 110px;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <% if (lista.length === 0) { %>
                                         <tr>
-                                            <td colspan="5" class="text-center py-5 text-muted">
-                                                <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i> No hay pedidos activos en este momento.
+                                            <td colspan="12" class="text-center py-5 text-muted">
+                                                <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i>
+                                                No hay pedidos para los filtros aplicados.
+                                                <div class="mt-2 no-print">
+                                                    <a href="/admin/pedidos?desde=&hasta=" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate-left me-1"></i>Ver todo el histórico</a>
+                                                </div>
                                             </td>
                                         </tr>
                                     <% } else { %>
-                                        <% lista.forEach(item => { %>
+                                        <% lista.forEach(p => {
+                                               const pago = etiquetaPago(p.estado_pago);
+                                               const enCurso = !p.fecha_cierre && p.estado_pago !== 'cancelado';
+                                               const anulado = p.estado_pago === 'cancelado'; %>
                                             <tr>
-                                                <td class="ps-4 fw-bold text-dark">#<%= item.id %></td>
+                                                <td class="ps-4 no-print">
+                                                    <% if (p.items && p.items.length) { %>
+                                                        <button class="btn btn-sm btn-outline-secondary btn-expandir rounded-circle" type="button"
+                                                                data-bs-toggle="collapse" data-bs-target="#items-pedido-<%= p.id %>" aria-expanded="false" aria-controls="items-pedido-<%= p.id %>"
+                                                                title="Ver desglose de ítems">
+                                                            <i class="fa-solid fa-chevron-down"></i>
+                                                        </button>
+                                                    <% } %>
+                                                </td>
+                                                <td class="fw-bold text-dark">#<%= p.id %>
+                                                    <% if (p.comensales && Number(p.comensales) > 1) { %>
+                                                        <div class="text-muted small"><i class="fa-solid fa-user-group me-1"></i><%= p.comensales %> comensales</div>
+                                                    <% } %>
+                                                    <% if (p.cliente_nombre) { %>
+                                                        <div class="text-muted small text-truncate" style="max-width: 140px;" title="<%= p.cliente_nombre %>"><i class="fa-solid fa-user me-1"></i><%= p.cliente_nombre %></div>
+                                                    <% } %>
+                                                </td>
+                                                <td class="small">
+                                                    <% if (p.turno_id) { %>
+                                                        <span class="fw-semibold">#<%= p.turno_id %></span>
+                                                        <div class="text-muted"><%= p.turno_usuario || '—' %></div>
+                                                    <% } else { %>—<% } %>
+                                                </td>
                                                 <td>
-                                                    <span class="fw-semibold text-dark"><%= item.numero_mesa %></span>
+                                                    <span class="fw-semibold text-dark"><%= p.numero_mesa %></span>
+                                                    <% if (p.ubicacion_mesa) { %>
+                                                        <div class="text-muted small"><%= p.ubicacion_mesa %></div>
+                                                    <% } %>
                                                 </td>
-                                                <td class="text-secondary fs-7">
-                                                    <i class="fa-solid fa-user me-1 text-muted"></i> <%= item.mesero || 'Por asignar' %>
+                                                <td class="small">
+                                                    <%= p.mesero_nombre || p.mesero_usuario || 'Por asignar' %>
+                                                </td>
+                                                <td class="small">
+                                                    <div class="text-dark"><%= fechaCorta(p.creado_en) %></div>
+                                                    <div class="text-muted"><%= horaCorta(p.creado_en) %></div>
+                                                </td>
+                                                <td class="small">
+                                                    <% if (p.fecha_cierre) { %>
+                                                        <div class="text-dark"><%= fechaCorta(p.fecha_cierre) %></div>
+                                                        <div class="text-muted"><%= horaCorta(p.fecha_cierre) %></div>
+                                                    <% } else { %><span class="text-muted">—</span><% } %>
+                                                </td>
+                                                <td class="text-center font-monospace small">
+                                                    <span title="Duración del servicio (apertura → cierre)<%= p.fecha_cierre ? '' : ' · hasta ahora' %>"><%= hms(p.duracion_seg) %></span>
+                                                </td>
+                                                <td class="text-center small">
+                                                    <span class="fw-semibold text-dark"><%= p.items_total %></span>
+                                                    <% if (Number(p.items_entregados) > 0) { %>
+                                                        <span class="text-success" title="Entregados"> · <%= p.items_entregados %>✓</span>
+                                                    <% } %>
+                                                    <% if (Number(p.items_cancelados) > 0) { %>
+                                                        <span class="text-danger" title="Cancelados"> · <%= p.items_cancelados %>✗</span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="text-end">
+                                                    <div class="fw-bold text-dark">$<%= fmt(p.total, 2) %></div>
+                                                    <% if (Number(p.propina) > 0) { %>
+                                                        <div class="small text-info-emphasis">+ $<%= fmt(p.propina, 2) %> propina</div>
+                                                    <% } %>
+                                                    <% if (Number(p.descuento) > 0) { %>
+                                                        <div class="small text-danger">− $<%= fmt(p.descuento, 2) %> dto.</div>
+                                                    <% } %>
+                                                    <% (p.pagos || []).forEach(pg => { %>
+                                                        <div class="small text-muted">
+                                                            <%= Number(pg.monto_moneda_origen).toFixed(2) %> <%= pg.moneda_codigo || '—' %><% if (Number(pg.factor_cambio_aplicado) !== 1) { %> (x<%= Number(pg.factor_cambio_aplicado).toFixed(2) %>)<% } %>
+                                                        </div>
+                                                    <% }) %>
                                                 </td>
                                                 <td>
-                                                    <span class="badge bg-warning text-dark text-capitalize px-3 py-1 rounded-pill fs-7">
-                                                        <i class="fa-solid fa-clock me-1"></i>En Consumo
-                                                    </span>
+                                                    <span class="badge <%= pago.badge %> px-3 py-1 rounded-pill fs-7"><%= pago.texto %></span>
+                                                    <% if (enCurso) { %>
+                                                        <div class="mt-1"><span class="badge bg-warning text-dark px-3 py-1 rounded-pill fs-7"><i class="fa-solid fa-clock me-1"></i>En consumo</span></div>
+                                                    <% } else if (anulado) { %>
+                                                        <div class="mt-1"><span class="badge bg-danger text-white px-3 py-1 rounded-pill fs-7">Anulado</span></div>
+                                                    <% } %>
                                                 </td>
-                                                <td class="text-center">
+                                                <td class="text-center pe-4 no-print">
                                                     <div class="btn-group gap-1">
-                                                        <a href="/admin/pedido/<%= item.id %>" class="btn btn-sm btn-outline-secondary border-0" title="Ver Detalle / Gestionar Caja">
+                                                        <a href="/admin/pedido/<%= p.id %>" class="btn btn-sm btn-outline-secondary border-0" title="Ver Detalle / Gestionar Caja">
                                                             <i class="fa-solid fa-eye text-primary"></i>
                                                         </a>
-                                                        <% if (typeof user !== 'undefined' && user && ['superadministrador', 'administrador', 'cajero'].includes(user.role)) { %>
-                                                            <button class="btn btn-sm btn-outline-secondary border-0" title="Anular Pedido Completo" onclick="cancelarPedidoInmediato('<%= item.id %>')">
+                                                        <% if (puedeAnular && enCurso) { %>
+                                                            <button class="btn btn-sm btn-outline-secondary border-0" title="Anular Pedido Completo" onclick="cancelarPedidoInmediato('<%= p.id %>')">
                                                                 <i class="fa-solid fa-trash-can text-danger"></i>
                                                             </button>
                                                         <% } %>
                                                     </div>
                                                 </td>
                                             </tr>
+
+                                            <!-- Desglose de ítems de la orden (fila expandible) -->
+                                            <% if (p.items && p.items.length) { %>
+                                                <tr class="collapse fila-items" id="items-pedido-<%= p.id %>">
+                                                    <td colspan="12">
+                                                        <div class="px-3 py-2">
+                                                            <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+                                                                <span class="fw-semibold small text-secondary">
+                                                                    <i class="fa-solid fa-clipboard-list me-1"></i>Desglose de ítems — Orden #<%= p.id %>
+                                                                </span>
+                                                                <% if (p.cajero_usuario) { %>
+                                                                    <span class="small text-muted"><i class="fa-solid fa-cash-register me-1"></i>Cobrada por: <strong><%= p.cajero_usuario %></strong></span>
+                                                                <% } %>
+                                                            </div>
+                                                            <div class="table-responsive">
+                                                                <table class="table table-sm table-striped tabla-items mb-0 align-middle">
+                                                                    <thead class="table-custom-thead text-uppercase">
+                                                                        <tr>
+                                                                            <th>Platillo</th>
+                                                                            <th class="text-center">Cant.</th>
+                                                                            <th class="text-end">Precio</th>
+                                                                            <th class="text-end">Importe</th>
+                                                                            <th>Estado</th>
+                                                                            <th>Cocina / Bar</th>
+                                                                            <th class="text-center">Preparación</th>
+                                                                            <th class="text-center">Entrega</th>
+                                                                            <th>Notas</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        <% p.items.forEach(it => {
+                                                                               const ei = etiquetaItem(it.estado_item); %>
+                                                                            <tr>
+                                                                                <td class="fw-medium"><%= it.nombre_platillo %></td>
+                                                                                <td class="text-center"><%= it.cantidad %></td>
+                                                                                <td class="text-end">$<%= fmt(it.precio_unitario, 2) %></td>
+                                                                                <td class="text-end fw-semibold">$<%= fmt(it.cantidad * it.precio_unitario, 2) %></td>
+                                                                                <td><span class="badge <%= ei.badge %> rounded-pill fs-7"><%= ei.texto %></span></td>
+                                                                                <td class="small"><%= it.cocinero_nombre || '—' %></td>
+                                                                                <td class="text-center font-monospace small" title="Hora enviado → listo"><%= hmsEntre(it.hora_enviado, it.hora_listo) %></td>
+                                                                                <td class="text-center font-monospace small" title="Hora enviado → entregado"><%= hmsEntre(it.hora_enviado, it.hora_entregado) %></td>
+                                                                                <td class="small text-muted text-truncate" style="max-width: 160px;" title="<%= it.notas_especiales || '' %>"><%= it.notas_especiales || '—' %></td>
+                                                                            </tr>
+                                                                        <% }) %>
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <% } %>
                                         <% }) %>
                                     <% } %>
                                 </tbody>
                             </table>
                         </div>
                     </div>
+                    <% if (paginacion.totalPaginas > 1) { %>
+                        <div class="card-footer bg-white border-top py-3 no-print">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <span class="small text-muted">
+                                    Mostrando <%= lista.length %> pedido(s) · Total <%= fmtInt(paginacion.total) %>
+                                </span>
+                                <nav aria-label="Paginación de pedidos">
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item <%= paginacion.pagina <= 1 ? 'disabled' : '' %>">
+                                            <a class="page-link" href="/admin/pedidos?<%= qs({ pagina: Math.max(1, paginacion.pagina - 1) }) %>" aria-label="Anterior">«</a>
+                                        </li>
+                                        <% let anterior = 0; paginas.forEach(pg => { %>
+                                            <% if (pg - anterior > 1) { %><li class="page-item disabled"><span class="page-link">…</span></li><% } %>
+                                            <li class="page-item <%= pg === paginacion.pagina ? 'active' : '' %>">
+                                                <a class="page-link" href="/admin/pedidos?<%= qs({ pagina: pg }) %>"><%= pg %></a>
+                                            </li>
+                                            <% anterior = pg; %>
+                                        <% }) %>
+                                        <li class="page-item <%= paginacion.pagina >= paginacion.totalPaginas ? 'disabled' : '' %>">
+                                            <a class="page-link" href="/admin/pedidos?<%= qs({ pagina: Math.min(paginacion.totalPaginas, paginacion.pagina + 1) }) %>" aria-label="Siguiente">»</a>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    <% } %>
                 </div>
-                
+
                 <%- include('../includes/footer') %>
             </main>
         </div>
@@ -96,7 +607,7 @@
                     <h5 class="modal-title fw-bold">Abrir Servicio / Orden</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="formCrearPedido" action="/pedido/nuevo" method="POST">
+                <form id="formCrearPedido" action="/admin/pedido/nuevo" method="POST">
                     <div class="modal-body p-4">
                         <div class="row g-3">
                             <div class="col-12">
@@ -127,6 +638,46 @@
                     document.getElementById('formCrearPedido').reset();
                 });
             }
+
+            // ── Rangos rápidos de fechas ──
+            // Rellena Desde/Hasta y envía el formulario del panel.
+            document.querySelectorAll('.chip-rango').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const hoy = new Date();
+                    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    let desde = iso(hoy), hasta = iso(hoy);
+
+                    switch (chip.dataset.rango) {
+                        case 'hoy': break;
+                        case 'ayer': {
+                            const a = new Date(hoy); a.setDate(a.getDate() - 1);
+                            desde = hasta = iso(a);
+                            break;
+                        }
+                        case '7d': {
+                            const a = new Date(hoy); a.setDate(a.getDate() - 6);
+                            desde = iso(a);
+                            break;
+                        }
+                        case 'mes':
+                            desde = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`;
+                            break;
+                        case 'mes_anterior': {
+                            const primero = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+                            const ultimo = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+                            desde = iso(primero); hasta = iso(ultimo);
+                            break;
+                        }
+                        case 'todo':
+                            desde = ''; hasta = '';
+                            break;
+                    }
+
+                    document.getElementById('fDesde').value = desde;
+                    document.getElementById('fHasta').value = hasta;
+                    document.getElementById('formFiltrosPedidos').submit();
+                });
+            });
         });
 
         function cancelarPedidoInmediato(idPedido) {
@@ -151,7 +702,7 @@
                         const res = await fetch(`/pedido/${idPedido}/cancelar-parcial-o-total`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                            body: JSON.stringify({ productosAfectados: [], motivo: result.value }) 
+                            body: JSON.stringify({ productosAfectados: [], motivo: result.value })
                         });
                         const data = await res.json();
                         if (data.success) {

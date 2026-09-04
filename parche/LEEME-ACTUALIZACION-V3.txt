@@ -1,0 +1,148 @@
+============================================================================
+ ACTUALIZACIÓN V3 — REST_CAFE_BAR / RESTAURANTE BAHÍA
+ Fecha: 04-09-2026
+ Base: su repositorio en el estado "29-08-2026-21-35pm Casi Listo"
+       (ya incluye el update del 29-08 con kardex/reportes/POS mesero y el
+       update de salidas manuales + unidad de medida en entradas/salidas)
+ Contenido: punto 18 del TODO ("bugs para arreglar mañana") y soporte de
+            datos que ese reporte necesita.
+============================================================================
+
+QUÉ TRAE ESTA VERSIÓN
+---------------------
+ 1. PEDIDOS / VENTAS PROFESIONAL (punto 18, segunda parte)
+    La vista /admin/pedidos deja de ser un simple listado de órdenes en
+    consumo y pasa a ser un reporte completo regido por rangos de fechas
+    (HOY por defecto), al nivel del kardex y las salidas manuales:
+
+    * Tarjetas de totales del conjunto filtrado: cuentas, en curso, importe
+      cobrado (CUP) y propinas.
+    * Panel de análisis: rangos rápidos (Hoy, Ayer, 7 días, Este mes, Mes
+      anterior, Todo el histórico), Desde/Hasta, estado (Todos / En curso /
+      Cobrados / Cortesía / Anulados), turno de servicio, dependiente,
+      mesa, búsqueda libre (nº de pedido o cliente), orden (apertura, nº,
+      mesa, dependiente, importe, duración), dirección y tamaño de página.
+    * Tabla: nº de pedido (con comensales y cliente), turno (#id · usuario),
+      mesa + área, dependiente, apertura y cierre (fecha y hora), DURACIÓN
+      DEL SERVICIO en h:m:s, ítems (total · entregados · cancelados),
+      importe con descuento, propina y DESGLOSE DE PAGOS POR MONEDA
+      (p. ej. "5.00 USD (x420.00)"), estado de pago y de consumo.
+    * Fila expandible por orden (chevron) con el DESGLOSE DE ÍTEMS:
+      platillo, cantidad, precio, importe, estado, QUIÉN LO PREPARÓ
+      (cocina/bar), tiempo de PREPARACIÓN (enviado→listo) y de ENTREGA
+      (enviado→entregado) en h:m:s, notas y cajero que cobró.
+    * Imprimir (A4 apaisado, con encabezado del informe, filtros y totales;
+      imprime todas las órdenes con su desglose expandido) y Exportar CSV
+      con los filtros aplicados (queda AUDITADO como EXPORTACION).
+
+ 2. MENÚ DEL CLIENTE: NÚMERO REAL DE MESA (punto 18, primera parte)
+    El dashboard que ve el cliente al escanear el QR mostraba el ID interno
+    de la mesa en la base de datos. Ahora muestra el número real (mesas.
+    numero) en la insignia del encabezado y en el resumen de la cuenta.
+
+ 3. BOTÓN "CREAR ORDEN" ARREGLADO
+    El formulario del modal apuntaba a /pedido/nuevo (ruta inexistente:
+    el POST vive bajo /admin). Ahora apunta a /admin/pedido/nuevo y abre
+    el servicio correctamente.
+
+ 4. TIEMPOS Y COCINERO POR ÍTEM (datos del reporte)
+    detalles_pedido gana cuatro columnas: hora_enviado, hora_listo,
+    hora_entregado y cocinado_por. Se sellan solas en el flujo normal:
+      - El POS registra hora_enviado al agregar el ítem a la orden.
+      - El monitor de cocina/bar registra hora_listo y quién lo preparó
+        (cocinado_por) al marcar "listo".
+      - El dependiente (entregar ítem, entregar todo) y el cobro de la
+        cuenta registran hora_entregado (sin sobreescribir la primera).
+    Los ítems anteriores a la migración no tienen esas marcas: el reporte
+    muestra "—" en esos tiempos y en el cocinero.
+
+ARCHIVOS DE ESTE UPDATE (20 + migraciones)
+------------------------------------------
+  config/auditoriaCatalogo.js        2 reglas: consulta y exportación CSV
+  controllers/monitorController.js   sella hora_listo/cocinado_por
+  controllers/pedidoController.js    reporte + exportar CSV + filtros
+  controllers/posController.js       sella hora_enviado/hora_entregado
+  models/pedidoModel.js              consultas del reporte + sellado
+  routes/pedidoRoutes.js             GET /admin/pedidos/exportar
+  services/pedidoService.js          armado del reporte + CSV
+  views/cliente/dashboard.ejs        número real de mesa (2 puntos)
+  views/pedido/pedido.ejs            vista profesional completa
+  models/pedidoModel.ventas.test.js      } pruebas nuevas (29)
+  services/pedidoService.ventas.test.js  } npm test pasa de 243 a 272
+  controllers/pedidoController.ventas.test.js }
+  TODO                               punto 18 marcado [OKOKOK]
+  + scripts/migracion_*.sql (todos, acumulativos: cada uno avisa si ya
+    fue aplicado) y migrations/20260904120000_add_tiempos_entrega_...js
+
+MIGRACIÓN OBLIGATORIA (solo una vez)
+------------------------------------
+  scripts/migracion_tiempos_entrega_pedidos.sql
+  → Agrega a detalles_pedido: hora_enviado, hora_listo, hora_entregado y
+    cocinado_por (FK a usuarios). Nullable: los ítems históricos quedan
+    en NULL y el reporte les muestra "—".
+
+  Verifica si ya está aplicada (devuelve 1 = ya aplicada):
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema='restaurante_db'
+      AND table_name='detalles_pedido' AND column_name='hora_enviado';
+
+  Equivalente con knex si lo prefiere: npm run migrate
+
+  REQUISITO del código ya publicado (solo si quedara pendiente): la tabla
+  ubicacion_mesa de las mesas (el reporte muestra el área de cada mesa):
+    SELECT COUNT(*) FROM information_schema.tables
+    WHERE table_schema='restaurante_db' AND table_name='ubicacion_mesa';
+  Si devuelve 0, aplique también scripts/migracion_ubicacion_mesa.sql.
+
+PASOS DE DESPLIEGUE
+-------------------
+ 1. Respaldar el proyecto y la base de datos:
+      mysqldump restaurante_db > respaldo_antes_actualizacion_v3.sql
+ 2. Extraer este comprimido sobre la raíz del proyecto (sobrescribe los
+    archivos listados y deja los scripts de migración en scripts/).
+ 3. Aplicar scripts/migracion_tiempos_entrega_pedidos.sql (phpMyAdmin →
+    SQL, HeidiSQL o mysql -u usuario -p restaurante_db < archivo.sql).
+ 4. No hay dependencias nuevas: no hace falta npm install.
+ 5. Reiniciar el servicio:
+      pm2 restart all   (o como tengas configurado el proceso)
+ 6. Verificación rápida:
+      npm test
+    → deben pasar 272 tests. El aviso de config/environments/test.js es
+      el falso positivo conocido de siempre.
+
+VERIFICACIÓN FUNCIONAL
+----------------------
+  - Menú lateral → "Ventas / Pedidos": carga con HOY por defecto; las
+    tarjetas muestran las cuentas del día y el importe cobrado.
+  - Abrir una orden en curso (chevron de la primera columna): se expande
+    el desglose de ítems con su estado, notas y tiempos (los ítems viejos
+    muestran "—"; los nuevos que se cocinen desde ahora van sellando
+    preparación/entrega y cocinero).
+  - Cobros de hoy: el importe muestra el desglose por moneda de cada abono
+    (p. ej. "5.00 USD (x420.00)") y la propina en su línea.
+  - "Todo el histórico" (chip): la tabla y la paginación conservan el modo
+    histórico; "Limpiar" (flecha) vuelve al día de hoy.
+  - "Exportar CSV": descarga un archivo que Excel abre con columnas
+    separadas; Auditoría registra "Exportar reporte de pedidos/ventas".
+  - "Imprimir": A4 apaisado con encabezado, filtros, totales y todas las
+    órdenes con su desglose expandido.
+  - Botón "Crear Orden": abre el modal, elige una mesa e "Iniciar Servicio"
+    lleva al detalle de la nueva orden (antes quedaba en 404).
+  - Escanear el QR de una mesa (o abrir /cliente/dashboard/<id>): la
+    insignia y el resumen de la cuenta muestran el NÚMERO de la mesa, no
+    su ID.
+  - Monitores de cocina y bar: al marcar un ítem "listo" queda registrado
+    quién lo preparó; en Pedidos / Ventas, ese nombre aparece en la
+    columna "Cocina / Bar" del desglose.
+
+NOTAS DE COMPORTAMIENTO NUEVO (para el personal)
+------------------------------------------------
+ * Pedidos / Ventas es de CONSULTA: no modifica órdenes ni inventario.
+   Desde la fila de cada orden se sigue podiendo abrir el detalle para
+   gestionar la caja, y anular (solo cuentas en curso, con motivo).
+ * "Cobrados" incluye pagadas, facturadas y vales pendientes de pago
+   (cuentas cerradas); la cortesía y las anuladas tienen su propio filtro.
+ * La exportación a CSV queda registrada en la auditoría (EXPORTACION).
+ * Los tiempos de los ítems empiezan a registrarse a partir de esta
+   actualización; el histórico anterior no se puede reconstruir y se
+   muestra "—".
