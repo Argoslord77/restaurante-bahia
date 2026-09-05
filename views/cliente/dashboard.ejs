@@ -764,6 +764,8 @@
   const CONSUMOS_RAW = <%- JSON.stringify(typeof consumos !== 'undefined' ? consumos : []) %>;
   
   const cart = {};
+  // Evita dobles envíos por doble toque o mala conexión móvil.
+  let enviandoPrePedido = false;
 
   // Mapeo automático de iconos según la categoría
   function getIconForCategory(catName) {
@@ -947,6 +949,7 @@
     const btnConfirm = document.getElementById('btnConfirmOrder');
     if (btnConfirm) {
       btnConfirm.addEventListener('click', async () => {
+        if (enviandoPrePedido) return;
         const ids = Object.keys(cart);
         if (ids.length === 0) {
           showToast('Selecciona al menos un ítem');
@@ -959,6 +962,9 @@
           notas_especiales: ''
         }));
 
+        enviandoPrePedido = true;
+        btnConfirm.disabled = true;
+        btnConfirm.classList.add('disabled');
         try {
           if (typeof Swal !== 'undefined') {
             Swal.fire({
@@ -994,6 +1000,10 @@
         } catch (err) {
           console.error(err);
           showToast('Error de conexión al enviar la orden');
+        } finally {
+          enviandoPrePedido = false;
+          btnConfirm.disabled = false;
+          btnConfirm.classList.remove('disabled');
         }
       });
     }

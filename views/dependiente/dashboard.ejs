@@ -166,6 +166,9 @@
 
         .btn-monitor-qr { background-color: #7c3aed; color: #ffffff; }
         .btn-monitor-qr:hover { background-color: #6d28d9; color: #ffffff; }
+        .prepedido-popup { width: min(440px, calc(100vw - 24px)) !important; }
+        .prepedido-popup .swal2-html-container { margin-top: .75rem; }
+        .prepedido-popup .list-group-item { border: 1px solid #e5e7eb !important; background: #f8fafc !important; }
     </style>
 </head>
 <body>
@@ -643,6 +646,7 @@
                 }
 
                 // 2. Procesar Pre-pedidos agrupados por mesa
+                let colaPrePedidos = Promise.resolve();
                 if (prePedidos.length > 0) {
                     const prepedidosPorMesa = {};
                     prePedidos.forEach(item => {
@@ -656,8 +660,8 @@
                         prepedidosPorMesa[item.id_mesa].items.push(item);
                     });
 
-                    Object.values(prepedidosPorMesa).forEach(grupo => {
-                        const key = `pre_mesa_${grupo.idMesa}_count_${grupo.items.length}`;
+                    for (const grupo of Object.values(prepedidosPorMesa)) {
+                        const key = `pre_mesa_${grupo.idMesa}_items_${grupo.items.map(i => i.id).sort((a, b) => a - b).join('-')}`;
                         if (!alertasProcesadas.has(key)) {
                             alertasProcesadas.add(key);
                             hayNuevasAlertas = true;
@@ -668,13 +672,13 @@
                                 </li>`)
                                 .join('');
 
-                            Swal.fire({
-                                title: `🍽️ Pre-pedido: Mesa ${grupo.numeroMesa}`,
+                            colaPrePedidos = colaPrePedidos.then(() => Swal.fire({
+                                title: `Pre-pedido recibido · Mesa ${grupo.numeroMesa}`,
                                 html: `<div class="text-start mt-3">
                                         <p class="text-secondary small fw-bold text-uppercase mb-2">Detalle de la selección:</p>
                                         <ul class="list-group list-group-flush">${resumenText}</ul>
                                        </div>`,
-                                icon: 'question',
+                                icon: 'info',
                                 showCancelButton: true,
                                 showDenyButton: true,
                                 confirmButtonText: '<i class="fa-solid fa-cart-plus me-1"></i> Cargar al POS',
@@ -684,7 +688,7 @@
                                 denyButtonColor: '#ef4444',
                                 cancelButtonColor: '#64748b',
                                 allowOutsideClick: false,
-                                customClass: { popup: 'rounded-4 border-0 shadow-lg' }
+                                customClass: { popup: 'rounded-3 border-0 shadow-lg prepedido-popup', title: 'fw-semibold text-dark', confirmButton: 'rounded-2 px-3', denyButton: 'rounded-2 px-3', cancelButton: 'rounded-2 px-3' }
                             }).then(async (result) => {
                                 if (result.isConfirmed) {
                                     const itemsPrePedido = grupo.items.map(item => ({
@@ -701,9 +705,9 @@
                                 } else if (result.isDenied) {
                                     await fetch(`/pos/mesas/${grupo.idMesa}/pre-pedidos`, { method: 'DELETE' });
                                 }
-                            });
+                            }));
                         }
-                    });
+                    }
                 }
 
                 if (hayNuevasAlertas) {
