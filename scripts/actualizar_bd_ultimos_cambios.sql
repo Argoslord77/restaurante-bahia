@@ -75,3 +75,21 @@ SELECT 'salidas_manuales.unidad_medida_id',
 FROM information_schema.COLUMNS
 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'salidas_manuales'
   AND COLUMN_NAME = 'unidad_medida_id';
+
+-- 4) Personal productivo por turno.
+-- Para instalaciones existentes se puede ejecutar también:
+--   scripts/migracion_turno_personal.sql
+
+-- 4) Personal productivo obligatorio por turno (históricos admiten NULL).
+SET @has_cocinero := (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='turnos_servicio' AND COLUMN_NAME='cocinero_id');
+SET @sql := IF(@has_cocinero=0, 'ALTER TABLE turnos_servicio ADD COLUMN cocinero_id INT NULL AFTER usuario_apertura_id', 'SELECT 1');
+PREPARE stmt_cocinero FROM @sql; EXECUTE stmt_cocinero; DEALLOCATE PREPARE stmt_cocinero;
+SET @has_bartender := (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='turnos_servicio' AND COLUMN_NAME='bartender_id');
+SET @sql := IF(@has_bartender=0, 'ALTER TABLE turnos_servicio ADD COLUMN bartender_id INT NULL AFTER cocinero_id', 'SELECT 1');
+PREPARE stmt_bartender FROM @sql; EXECUTE stmt_bartender; DEALLOCATE PREPARE stmt_bartender;
+SET @has_idx_bartender := (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='turnos_servicio' AND INDEX_NAME='idx_ts_bartender');
+SET @sql := IF(@has_idx_bartender=0, 'ALTER TABLE turnos_servicio ADD KEY idx_ts_bartender (bartender_id)', 'SELECT 1');
+PREPARE stmt_idx_bartender FROM @sql; EXECUTE stmt_idx_bartender; DEALLOCATE PREPARE stmt_idx_bartender;
+SET @has_fk_bartender := (SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='turnos_servicio' AND CONSTRAINT_NAME='fk_ts_bartender');
+SET @sql := IF(@has_fk_bartender=0, 'ALTER TABLE turnos_servicio ADD CONSTRAINT fk_ts_bartender FOREIGN KEY (bartender_id) REFERENCES usuarios(id) ON DELETE SET NULL', 'SELECT 1');
+PREPARE stmt_fk_bartender FROM @sql; EXECUTE stmt_fk_bartender; DEALLOCATE PREPARE stmt_fk_bartender;

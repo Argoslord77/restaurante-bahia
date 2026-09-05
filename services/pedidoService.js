@@ -264,6 +264,7 @@ const pedidoService = {
                 CONCAT(um.nombre, ' ', um.apellidos) AS mesero,
                 CONCAT(uc.nombre, ' ', uc.apellidos) AS cajero,
                 CONCAT(uco.nombre, ' ', uco.apellidos) AS cocinero_turno,
+                CONCAT(uba.nombre, ' ', uba.apellidos) AS bartender_turno,
                 TIMESTAMPDIFF(SECOND, p.creado_en, COALESCE(p.fecha_cierre, NOW())) AS duracion_seg,
                 (SELECT COUNT(*) FROM detalles_pedido d WHERE d.id_pedido = p.id) AS items_total,
                 (SELECT COUNT(*) FROM detalles_pedido d WHERE d.id_pedido = p.id AND d.estado_item = 'entregado') AS items_entregados,
@@ -274,6 +275,7 @@ const pedidoService = {
             LEFT JOIN usuarios uc ON p.id_usuario_cajero = uc.id
             LEFT JOIN turnos_servicio ts ON p.turno_servicio_id = ts.id
             LEFT JOIN usuarios uco ON ts.cocinero_id = uco.id
+            LEFT JOIN usuarios uba ON ts.bartender_id = uba.id
             WHERE DATE(p.creado_en) BETWEEN ? AND ?
             ORDER BY p.creado_en DESC
         `, [desde, hasta]);
@@ -289,11 +291,13 @@ const pedidoService = {
                     d.notas_especiales, d.creado_en, d.entregado_en,
                     TIMESTAMPDIFF(SECOND, d.creado_en, d.entregado_en) AS entrega_seg,
                     COALESCE(pd.nombre, pm.nombre, 'Ítem') AS nombre,
+                    COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') AS tipo_categoria,
                     CONCAT(ue.nombre, ' ', ue.apellidos) AS cocinero
                 FROM detalles_pedido d
                 LEFT JOIN platillos_menu pm ON (d.es_platillo_dia = 0 OR d.es_platillo_dia IS NULL) AND pm.id = d.id_platillo
                 LEFT JOIN platillos_dia pd ON d.es_platillo_dia = 1 AND pd.id = d.id_platillo
                 LEFT JOIN usuarios ue ON d.usuario_elaboro_id = ue.id
+                LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
                 WHERE d.id_pedido IN (?)
                 ORDER BY d.id_pedido, d.id ASC
             `, [ids]);
@@ -312,8 +316,8 @@ const pedidoService = {
             const cocineroPorPedido = {};
             pedidos.forEach(p => { cocineroPorPedido[p.id] = p.cocinero_turno || null; });
             Object.keys(itemsPorPedido).forEach(pid => {
-                if (!cocineroPorPedido[pid]) return;
-                itemsPorPedido[pid].forEach(it => { it.cocinero = cocineroPorPedido[pid]; });
+                if (!cocineroPorPedido[pid] && !(pedidos.find(p => String(p.id) === String(pid)) || {}).bartender_turno) return;
+                itemsPorPedido[pid].forEach(it => { it.cocinero = /bebida|bar/i.test(it.tipo_categoria || '') ? (pedidos.find(p => String(p.id) === String(pid)) || {}).bartender_turno || cocineroPorPedido[pid] : cocineroPorPedido[pid]; });
             });
             
             pagosPorPedido = pagos.reduce((acc, pg) => { (acc[pg.pedido_id] = acc[pg.pedido_id] || []).push(pg); return acc; }, {});
@@ -379,6 +383,7 @@ const pedidoService = {
                 CONCAT(um2.nombre, ' ', um2.apellidos) AS mesero,
                 CONCAT(uc.nombre, ' ', uc.apellidos) AS cajero,
                 CONCAT(uco.nombre, ' ', uco.apellidos) AS cocinero_turno,
+                CONCAT(uba.nombre, ' ', uba.apellidos) AS bartender_turno,
                 TIMESTAMPDIFF(SECOND, p.creado_en, COALESCE(p.fecha_cierre, NOW())) AS duracion_seg
             FROM pedidos p
             LEFT JOIN mesas m ON p.id_mesa = m.id
@@ -386,6 +391,7 @@ const pedidoService = {
             LEFT JOIN usuarios um2 ON p.id_usuario_mesero = um2.id
             LEFT JOIN usuarios uc ON p.id_usuario_cajero = uc.id
             LEFT JOIN usuarios uco ON ts.cocinero_id = uco.id
+            LEFT JOIN usuarios uba ON ts.bartender_id = uba.id
             ${joinUbic}
             WHERE p.id = ?
             LIMIT 1
@@ -399,6 +405,7 @@ const pedidoService = {
                 d.es_platillo_dia, d.afecta_inventario, d.creado_en, d.entregado_en,
                 TIMESTAMPDIFF(SECOND, d.creado_en, d.entregado_en) AS entrega_seg,
                 COALESCE(pd.nombre, pm.nombre, 'Ítem') AS nombre,
+                    COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') AS tipo_categoria,
                 CONCAT(ue.nombre, ' ', ue.apellidos) AS cocinero,
                 (SELECT GROUP_CONCAT(mm.nombre SEPARATOR ', ')
                    FROM detalles_pedido_modificadores dpm
@@ -408,13 +415,14 @@ const pedidoService = {
             LEFT JOIN platillos_menu pm ON (d.es_platillo_dia = 0 OR d.es_platillo_dia IS NULL) AND pm.id = d.id_platillo
             LEFT JOIN platillos_dia pd ON d.es_platillo_dia = 1 AND pd.id = d.id_platillo
             LEFT JOIN usuarios ue ON d.usuario_elaboro_id = ue.id
+            LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
             WHERE d.id_pedido = ?
             ORDER BY d.id ASC
         `, [id]);
         // «Elaboró» = cocinero activo del turno (no quien marcó la entrega).
         // Fallback al estampado para turnos antiguos sin cocinero asignado.
-        if (pedido.cocinero_turno) {
-            items.forEach(it => { it.cocinero = pedido.cocinero_turno; });
+        if (pedido.cocinero_turno || pedido.bartender_turno) {
+            items.forEach(it => { it.cocinero = /bebida|bar/i.test(it.tipo_categoria || '') ? (pedido.bartender_turno || pedido.cocinero_turno) : pedido.cocinero_turno; });
         }
 
         const [pagos] = await db.query(`

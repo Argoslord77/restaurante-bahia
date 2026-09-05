@@ -39,13 +39,14 @@
     // Aviso al usuario del backend: sin cocineros activos no se puede
     // asignar el cocinero de turno (los reportes mostrarán «—» en Elaboró).
     const sinCocineros = typeof cocineros === 'undefined' || !Array.isArray(cocineros) || cocineros.length === 0;
+    const sinBartenders = typeof bartenders === 'undefined' || !Array.isArray(bartenders) || bartenders.length === 0;
 %>
-<% if (sinCocineros) { %>
+<% if (sinCocineros || sinBartenders) { %>
     <div class="alert alert-warning d-flex align-items-start gap-2 shadow-sm border-0 rounded py-2 px-3 mb-4" role="alert">
         <i class="fa-solid fa-triangle-exclamation mt-1"></i>
         <div>
-            <strong>No hay cocineros activos definidos en el sistema.</strong>
-            <div class="small">Podrás abrir el turno, pero no quedará registrada la cocina de turno y los reportes de pedidos mostrarán «—» en la columna «Elaboró». Añade o activa cocineros en <a href="/admin/usuarios">Personal / Usuarios</a> y vuelve a abrir.</div>
+            <strong>Falta personal productivo activo para iniciar turnos.</strong>
+            <div class="small">No podrás abrir un turno hasta seleccionar un cocinero y un bartender. Añade o activa ambos perfiles en <a href="/admin/usuarios">Personal / Usuarios</a> y vuelve a abrir.</div>
         </div>
     </div>
 <% } %>
@@ -123,7 +124,7 @@
 
                                                 <div class="col-12">
                                                     <div class="col-12">
-                                                        <label class="form-label fw-semibold text-secondary small">Cocinero de Turno <% if (!sinCocineros) { %><span class="text-danger">*</span><% } %></label>
+                                                        <label class="form-label fw-semibold text-secondary small">Cocinero de Turno <span class="text-danger">*</span></label>
                                                         <% if (sinCocineros) { %>
                                                             <input type="text" class="form-control" value="Sin cocineros activos en el sistema" disabled>
                                                         <% } else { %>
@@ -134,7 +135,16 @@
                                                                 <% }) %>
                                                             </select>
                                                         <% } %>
-                                                        <div class="form-text text-muted fs-7">Se mostrará como «Elaboró» en los reportes de pedidos y ventas del turno.</div>
+                                                        <label class="form-label fw-semibold text-secondary small mt-3">Bartender de Turno <span class="text-danger">*</span></label>
+                                                        <% if (sinBartenders) { %>
+                                                            <input type="text" class="form-control" value="Sin bartenders activos en el sistema" disabled>
+                                                        <% } else { %>
+                                                            <select id="bartender_turno" class="form-select" required>
+                                                                <option value="">Seleccione el bartender en turno…</option>
+                                                                <% bartenders.forEach(b => { %><option value="<%= b.id %>"><%= b.nombre %> (<%= b.usuario %>)</option><% }) %>
+                                                            </select>
+                                                        <% } %>
+                                                        <div class="form-text text-muted fs-7">Bebidas y tragos mostrarán este usuario en «Elaboró»; los platillos usarán el cocinero.</div>
                                                     </div>
                                                     
                                                     <label class="form-label fw-semibold text-secondary small">Notas de Apertura / Observaciones</label>
@@ -457,7 +467,8 @@
 
                     const data = {
                         monto_apertura: parseFloat(document.getElementById('monto_apertura').value),
-                        cocinero_id: (document.getElementById('cocinero_turno') && !document.getElementById('cocinero_turno').disabled) ? (parseInt(document.getElementById('cocinero_turno').value) || null) : null,
+                        cocinero_id: parseInt(document.getElementById('cocinero_turno')?.value) || null,
+                        bartender_id: parseInt(document.getElementById('bartender_turno')?.value) || null,
                         observaciones: document.getElementById('observaciones').value,
                         monedas_turno: monedasTurno
                     };

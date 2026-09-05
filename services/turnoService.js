@@ -19,13 +19,13 @@ class TurnoService {
         return { turnoActivo, historial, monedas };
     }
 
-    static async abrirNuevoTurno(usuarioId, montoApertura, observaciones, monedasTurno = [], cocineroId = null) {
+    static async abrirNuevoTurno(usuarioId, montoApertura, observaciones, monedasTurno = [], cocineroId = null, bartenderId = null) {
         const turnoExistente = await TurnoModel.findActive();
         if (turnoExistente) {
             throw new Error("Operación denegada. Ya existe un turno de servicio activo.");
         }
 
-        const turnoId = await TurnoModel.createAperturaConMonedas(usuarioId, montoApertura, observaciones, monedasTurno, cocineroId);
+        const turnoId = await TurnoModel.createAperturaConMonedas(usuarioId, montoApertura, observaciones, monedasTurno, cocineroId, bartenderId);
         return turnoId;
     }
 

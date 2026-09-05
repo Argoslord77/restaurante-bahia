@@ -23,16 +23,24 @@ exports.renderTurnos = async (req, res) => {
             }
         }
 
-        // Cocineros activos del sistema: la apertura de turno exige elegir
-        // el cocinero de turno (los reportes lo muestran como "Elaboró").
+        // Personal productivo obligatorio del turno: ambos quedan disponibles
+        // para resolver «Elaboró» según sea platillo o bebida.
         // Si no hay ninguno definido, se avisa al usuario del backend.
         let cocineros = [];
+        let bartenders = [];
         try {
             [cocineros] = await db.query(
                 "SELECT id, CONCAT(nombre, ' ', COALESCE(apellidos,'')) AS nombre, usuario FROM usuarios WHERE rol = 'cocinero' AND activo = 1 ORDER BY nombre ASC"
             );
         } catch (eCoc) {
             console.error('No se pudo consultar los cocineros activos:', eCoc.message);
+        }
+        try {
+            [bartenders] = await db.query(
+                "SELECT id, CONCAT(nombre, ' ', COALESCE(apellidos,'')) AS nombre, usuario FROM usuarios WHERE rol = 'bartender' AND activo = 1 ORDER BY nombre ASC"
+            );
+        } catch (eBar) {
+            console.error('No se pudo consultar los bartenders activos:', eBar.message);
         }
 
         return res.render('caja/turnos', {
@@ -42,6 +50,7 @@ exports.renderTurnos = async (req, res) => {
             historial,
             monedas,
             cocineros,
+            bartenders,
             movimientosInventario,
             view: "turnos"
         });
@@ -57,7 +66,7 @@ exports.renderTurnos = async (req, res) => {
  * POST /admin/turno/apertura
  */
 exports.abrirTurno = async (req, res) => {
-    const { monto_apertura, observaciones, monedas_turno, cocinero_id } = req.body;
+    const { monto_apertura, observaciones, monedas_turno, cocinero_id, bartender_id } = req.body;
     const usuario_apertura_id = req.user.id; 
 
     // Validación básica sintáctica en controlador
@@ -69,9 +78,12 @@ exports.abrirTurno = async (req, res) => {
     }
 
     try {
-        // Validación del cocinero de turno: opcional SOLO si no hay cocineros
-        // activos definidos en el sistema (el usuario ya fue advertido en la vista).
+        // Cocinero y bartender son obligatorios para iniciar un turno.
+        if (!cocinero_id || !bartender_id) {
+            return res.status(400).json({ success: false, message: 'Debe seleccionar un cocinero y un bartender para iniciar el turno.' });
+        }
         let cocineroId = null;
+        let bartenderId = null;
         if (cocinero_id) {
             const [cocs] = await db.query(
                 "SELECT id FROM usuarios WHERE id = ? AND rol = 'cocinero' AND activo = 1 LIMIT 1",
@@ -82,8 +94,14 @@ exports.abrirTurno = async (req, res) => {
             }
             cocineroId = cocs[0].id;
         }
+        const [bars] = await db.query(
+            "SELECT id FROM usuarios WHERE id = ? AND rol = 'bartender' AND activo = 1 LIMIT 1",
+            [bartender_id]
+        );
+        if (bars.length === 0) return res.status(400).json({ success: false, message: 'El bartender seleccionado no está activo o no existe.' });
+        bartenderId = bars[0].id;
 
-        const turnoId = await TurnoService.abrirNuevoTurno(usuario_apertura_id, monto_apertura, observaciones, monedas_turno, cocineroId);
+        const turnoId = await TurnoService.abrirNuevoTurno(usuario_apertura_id, monto_apertura, observaciones, monedas_turno, cocineroId, bartenderId);
         
         return res.status(201).json({
             success: true,
