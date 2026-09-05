@@ -74,7 +74,8 @@ const ENLACES = [
         icono: 'fa-solid fa-chart-line',
         url: '/admin/reportes/margen-platillos',
         grupo: 'Control financiero',
-        badge: 'NUEVO'
+        badge: 'EMPRESA',
+        plan: 'EMPRESA'
     },
     {
         id: 'ventas-horas',
@@ -83,7 +84,8 @@ const ENLACES = [
         icono: 'fa-solid fa-clock',
         url: '/admin/reportes/ventas-horas',
         grupo: 'Control financiero',
-        badge: 'NUEVO'
+        badge: 'EMPRESA',
+        plan: 'EMPRESA'
     },
     {
         id: 'rentabilidad',
@@ -101,7 +103,8 @@ const ENLACES = [
         icono: 'fa-solid fa-user-tie',
         url: '/admin/reportes/ventas-mesero',
         grupo: 'Control financiero',
-        badge: 'NUEVO'
+        badge: 'EMPRESA',
+        plan: 'EMPRESA'
     },
     {
         id: 'cierre',

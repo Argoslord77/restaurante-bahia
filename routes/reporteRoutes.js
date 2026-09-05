@@ -21,19 +21,19 @@ router.get('/reportes', ensureAuthenticated, puedeVer, reportesController.viewHu
 
 // ── Reportes nuevos ─────────────────────────────────────────────────────
 router.get('/reportes/salud-inventario', ensureAuthenticated, puedeVer, reportesController.viewSaludInventario);
-router.get('/reportes/margen-platillos', ensureAuthenticated, puedeVer, reportesController.viewMargenPlatillos);
+router.get('/reportes/margen-platillos', ensureAuthenticated, puedeVer, requiereEmpresa, reportesController.viewMargenPlatillos);
 router.get('/reportes/explosion-recetas', ensureAuthenticated, puedeVer, reportesController.viewExplosionRecetas);
-router.get('/reportes/ventas-mesero', ensureAuthenticated, puedeVer, reportesController.viewVentasMesero);
+router.get('/reportes/ventas-mesero', ensureAuthenticated, puedeVer, requiereEmpresa, reportesController.viewVentasMesero);
 router.get('/reportes/consumo-insumos', ensureAuthenticated, puedeVer, reportesController.viewConsumoInsumos);
-router.get('/reportes/ventas-horas', ensureAuthenticated, puedeVer, reportesController.viewVentasHoras);
+router.get('/reportes/ventas-horas', ensureAuthenticated, puedeVer, requiereEmpresa, reportesController.viewVentasHoras);
 router.get('/reportes/turno-inventario', ensureAuthenticated, puedeVer, requiereEmpresa, reportesController.viewTurnoInventario);
 
 // ── Exportaciones a CSV (Excel) ─────────────────────────────────────────
 router.get('/reportes/salud-inventario/exportar', ensureAuthenticated, puedeVer, reportesController.exportarSaludInventario);
-router.get('/reportes/margen-platillos/exportar', ensureAuthenticated, puedeVer, reportesController.exportarMargenPlatillos);
+router.get('/reportes/margen-platillos/exportar', ensureAuthenticated, puedeVer, requiereEmpresa, reportesController.exportarMargenPlatillos);
 router.get('/reportes/explosion-recetas/exportar', ensureAuthenticated, puedeVer, reportesController.exportarExplosionRecetas);
-router.get('/reportes/ventas-mesero/exportar', ensureAuthenticated, puedeVer, reportesController.exportarVentasMesero);
+router.get('/reportes/ventas-mesero/exportar', ensureAuthenticated, puedeVer, requiereEmpresa, reportesController.exportarVentasMesero);
 router.get('/reportes/consumo-insumos/exportar', ensureAuthenticated, puedeVer, reportesController.exportarConsumoInsumos);
-router.get('/reportes/ventas-horas/exportar', ensureAuthenticated, puedeVer, reportesController.exportarVentasHoras);
+router.get('/reportes/ventas-horas/exportar', ensureAuthenticated, puedeVer, requiereEmpresa, reportesController.exportarVentasHoras);
 
 module.exports = router;
