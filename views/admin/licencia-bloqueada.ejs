@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Licencia no válida - Restaurante Bahía</title>
+    <title><%= mensaje ? 'Función no disponible' : 'Licencia no válida' %> - Restaurante Bahía</title>
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
     <style>
@@ -19,11 +19,9 @@
             <div class="card-body p-4 p-md-5">
                 <div class="text-center mb-4">
                     <i class="fa-solid fa-lock fs-1 text-danger"></i>
-                    <h1 class="h3 fw-bold mt-3 mb-1">Licencia no válida</h1>
+                    <h1 class="h3 fw-bold mt-3 mb-1"><%= mensaje ? 'Función no disponible' : 'Licencia no válida' %></h1>
                     <p class="text-secondary mb-0">
-                        Esta instalación no tiene una licencia válida. Puedes seguir
-                        <strong>cerrando</strong> las operaciones abiertas (cobrar cuentas y cerrar el
-                        turno), pero no abrir trabajo nuevo.
+                        <%= mensaje || 'Esta instalación no tiene una licencia válida. Puedes seguir cerrando las operaciones abiertas (cobrar cuentas y cerrar el turno), pero no abrir trabajo nuevo.' %>
                     </p>
                 </div>
 

@@ -6,6 +6,7 @@ const router = express.Router();
 const { ensureAuthenticated, checkRole } = require('../middlewares/auth');
 const reportesController = require('../controllers/reportesController');
 const kardexController = require('../controllers/kardexController');
+const { requiereEmpresa } = require('../middlewares/licenciaPlan');
 
 // Perfiles con acceso a la información de control (mismo criterio que
 // fichas de costo y valorización).
@@ -25,6 +26,7 @@ router.get('/reportes/explosion-recetas', ensureAuthenticated, puedeVer, reporte
 router.get('/reportes/ventas-mesero', ensureAuthenticated, puedeVer, reportesController.viewVentasMesero);
 router.get('/reportes/consumo-insumos', ensureAuthenticated, puedeVer, reportesController.viewConsumoInsumos);
 router.get('/reportes/ventas-horas', ensureAuthenticated, puedeVer, reportesController.viewVentasHoras);
+router.get('/reportes/turno-inventario', ensureAuthenticated, puedeVer, requiereEmpresa, reportesController.viewTurnoInventario);
 
 // ── Exportaciones a CSV (Excel) ─────────────────────────────────────────
 router.get('/reportes/salud-inventario/exportar', ensureAuthenticated, puedeVer, reportesController.exportarSaludInventario);

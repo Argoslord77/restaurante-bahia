@@ -31,6 +31,16 @@ const ENLACES = [
         badge: 'NUEVO'
     },
     {
+        id: 'turno-inventario',
+        titulo: 'Turno: tragos, platillos e inventario',
+        descripcion: 'Detalle exhaustivo del turno abierto: unidades vendidas, recetas, consumo real del kardex, desviaciones y valor actual de los insumos. Solo plan EMPRESA.',
+        icono: 'fa-solid fa-chart-pie',
+        url: '/admin/reportes/turno-inventario',
+        grupo: 'Control físico',
+        badge: 'EMPRESA',
+        plan: 'EMPRESA'
+    },
+    {
         id: 'salud',
         titulo: 'Salud del inventario',
         descripcion: 'Bajo mínimo, lotes vencidos, por vencer y capital detenido sin rotación, con su impacto en dinero. Exportable a CSV.',
@@ -146,7 +156,7 @@ exports.viewHub = async (req, res) => {
         return res.render('reportes/hub', {
             title: 'Centro de Reportes - Restaurante Bahía',
             view: 'reportes',
-            enlaces: ENLACES,
+            enlaces: ENLACES.filter(e => !e.plan || String(req.licencia && req.licencia.licencia && req.licencia.licencia.plan || '').toUpperCase() === e.plan),
             indicadores,
             user: req.user || null,
             success_msg: req.flash ? req.flash('success_msg') : null,
@@ -342,6 +352,26 @@ exports.viewVentasHoras = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al cargar las ventas por hora:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.viewTurnoInventario = async (req, res) => {
+    try {
+        const selector = String(req.query.producto || '');
+        const [idSeleccionado, tipoSeleccionado] = selector.split(':');
+        const productoId = parseInt(idSeleccionado || req.query.producto_id, 10) || null;
+        const esPlatilloDia = tipoSeleccionado !== undefined ? tipoSeleccionado : req.query.es_platillo_dia;
+        const reporte = await ReportesService.totalesTurnoInventario({ productoId, esPlatilloDia });
+        const [catalogo] = await db.query(`
+            SELECT id, nombre, 0 AS es_platillo_dia FROM platillos_menu
+            UNION ALL SELECT id, nombre, 1 AS es_platillo_dia FROM platillos_dia
+            ORDER BY nombre ASC
+        `).catch(() => [[]]);
+        const productos = (catalogo || []).map(p => ({ id: Number(p.id), es_platillo_dia: Number(p.es_platillo_dia), nombre: p.nombre }));
+        return res.render('reportes/turno_inventario', { title: 'Turno e Inventario - Restaurante Bahía', view: 'turno_inventario', reporte, productos, productoId, esPlatilloDia });
+    } catch (error) {
+        console.error('Error al cargar el reporte del turno e inventario:', error);
         return res.status(500).send('Error interno al generar el reporte');
     }
 };

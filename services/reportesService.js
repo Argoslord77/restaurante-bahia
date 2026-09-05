@@ -499,6 +499,106 @@ async function ventasPorHoras(rango) {
     };
 }
 
+/**
+ * Reporte exhaustivo del turno abierto: venta de cada trago/platillo,
+ * receta que lo respalda, consumo teórico, movimiento real del kardex y
+ * existencia valorizada de los insumos involucrados.
+ *
+ * Los movimientos se relacionan con el turno a través del pedido; no se
+ * presupone una columna turno_id en movimientos_inventario, por lo que sirve
+ * también para instalaciones antiguas.
+ */
+async function totalesTurnoInventario({ turnoId, productoId = null, esPlatilloDia = null } = {}) {
+    let turno;
+    if (turnoId) {
+        const [turnos] = await db.query(`
+            SELECT ts.id, ts.fecha_apertura, ts.estado,
+                   COALESCE(CONCAT(u.nombre, ' ', u.apellidos), 'N/D') AS abierto_por
+            FROM turnos_servicio ts LEFT JOIN usuarios u ON u.id = ts.usuario_apertura_id
+            WHERE ts.id = ? LIMIT 1`, [turnoId]);
+        turno = turnos[0] || null;
+    } else {
+        const [turnos] = await db.query(`
+            SELECT ts.id, ts.fecha_apertura, ts.estado,
+                   COALESCE(CONCAT(u.nombre, ' ', u.apellidos), 'N/D') AS abierto_por
+            FROM turnos_servicio ts LEFT JOIN usuarios u ON u.id = ts.usuario_apertura_id
+            WHERE ts.estado = 'abierto' ORDER BY ts.fecha_apertura DESC LIMIT 1`);
+        turno = turnos[0] || null;
+    }
+    if (!turno) return { turno: null, items: [], insumos: [], totales: null };
+
+    const params = [turno.id];
+    const filtros = ['p.turno_servicio_id = ?', "dp.estado_item <> 'cancelado'"];
+    if (productoId) { filtros.push('dp.id_platillo = ?'); params.push(productoId); }
+    if (esPlatilloDia !== null && esPlatilloDia !== '') {
+        filtros.push('COALESCE(dp.es_platillo_dia, 0) = ?'); params.push(Number(esPlatilloDia));
+    }
+    const [ventas] = await db.query(`
+        SELECT dp.id_platillo AS producto_id, COALESCE(dp.es_platillo_dia, 0) AS es_platillo_dia,
+               COALESCE(pm.nombre, pd.nombre, 'Sin nombre') AS nombre,
+               COALESCE(cp.nombre, 'Sin categoría') AS categoria,
+               SUM(dp.cantidad) AS unidades, SUM(dp.cantidad * dp.precio_unitario) AS venta,
+               COUNT(DISTINCT dp.id_pedido) AS pedidos,
+               GROUP_CONCAT(DISTINCT dp.id_pedido) AS pedido_ids
+        FROM pedidos p INNER JOIN detalles_pedido dp ON dp.id_pedido = p.id
+        LEFT JOIN platillos_menu pm ON pm.id = dp.id_platillo AND COALESCE(dp.es_platillo_dia, 0) = 0
+        LEFT JOIN platillos_dia pd ON pd.id = dp.id_platillo AND COALESCE(dp.es_platillo_dia, 0) = 1
+        LEFT JOIN categorias_platillos cp ON cp.id = pm.categoria
+        WHERE ${filtros.join(' AND ')}
+        GROUP BY dp.id_platillo, COALESCE(dp.es_platillo_dia, 0),
+                 COALESCE(pm.nombre, pd.nombre, 'Sin nombre'), COALESCE(cp.nombre, 'Sin categoría')
+        ORDER BY nombre ASC`, params);
+
+    // Se consultan recetas y movimientos por pedido en consultas separadas para
+    // evitar multiplicar cantidades al combinar varios ingredientes.
+    const pedidoIds = [...new Set(ventas.flatMap(v => String(v.pedido_ids || '').split(',').map(Number).filter(Boolean)))];
+    if (!pedidoIds.length) return { turno, items: [], insumos: [], totales: { pedidos: 0, unidades: 0, venta: 0, costo_movimientos: 0, valor_stock: 0 } };
+    const [recetas] = await db.query(`
+        SELECT r.platillo_id AS producto_id, rd.producto_id AS insumo_id, rd.cantidad AS cantidad_receta,
+               COALESCE(rd.porcentaje_merma, 0) AS merma_pct, p.codigo, p.nombre AS insumo,
+               COALESCE(um.abreviatura, um.nombre, '') AS unidad,
+               COALESCE(rd.costo_estimado, p.costo_promedio, 0) AS costo_unitario
+        FROM recetas r INNER JOIN receta_detalles rd ON rd.receta_id = r.id
+        INNER JOIN productos p ON p.id = rd.producto_id
+        LEFT JOIN unidades_medida um ON um.id = p.unidad_consumo_id
+        WHERE r.activa = 1 AND r.tipo = 'VENTA'`);
+    const recetaMap = new Map();
+    recetas.forEach(r => { const k = `${r.producto_id}`; if (!recetaMap.has(k)) recetaMap.set(k, []); recetaMap.get(k).push(r); });
+    const [movs] = await db.query(`
+        SELECT mi.producto_id AS insumo_id, mi.tipo_movimiento, SUM(mi.cantidad) AS cantidad,
+               SUM(COALESCE(NULLIF(mi.costo_total, 0), mi.cantidad * mi.costo_unitario, 0)) AS valor
+        FROM movimientos_inventario mi WHERE mi.referencia_tipo = 'PEDIDO' AND mi.referencia_id IN (?)
+        GROUP BY mi.producto_id, mi.tipo_movimiento`, [pedidoIds]);
+    const [stock] = await db.query(`
+        SELECT p.id AS insumo_id, p.codigo, p.nombre AS insumo,
+               COALESCE(um.abreviatura, um.nombre, '') AS unidad,
+               COALESCE(SUM(l.cantidad_actual), 0) AS existencia,
+               COALESCE(SUM(l.cantidad_actual * l.costo_unitario), 0) AS valor_stock
+        FROM productos p LEFT JOIN lotes l ON l.producto_id = p.id AND l.cantidad_actual > 0
+        LEFT JOIN unidades_medida um ON um.id = p.unidad_consumo_id
+        GROUP BY p.id, p.codigo, p.nombre, um.abreviatura, um.nombre`);
+    const stockMap = new Map(stock.map(s => [Number(s.insumo_id), s]));
+    const movMap = new Map();
+    movs.forEach(m => { const k = `${m.insumo_id}`; if (!movMap.has(k)) movMap.set(k, []); movMap.get(k).push(m); });
+    const insMap = new Map();
+    let totalUnidades = 0, totalVenta = 0;
+    const items = ventas.map(v => {
+        const unidades = Number(v.unidades || 0); totalUnidades += unidades; totalVenta += Number(v.venta || 0);
+        const ingredientes = (recetaMap.get(`${v.producto_id}`) || []).map(r => {
+            const teorico = Number(r.cantidad_receta || 0) * unidades * (1 + Number(r.merma_pct || 0) / 100);
+            const movimientos = (movMap.get(`${r.insumo_id}`) || []).map(m => ({ tipo: m.tipo_movimiento, cantidad: num(m.cantidad, 3), valor: num(m.valor, 2) }));
+            const real = movimientos.reduce((s, m) => s + m.cantidad, 0);
+            const valor = movimientos.reduce((s, m) => s + m.valor, 0);
+            const ac = insMap.get(r.insumo_id) || { ...r, teorico: 0, real: 0, valor_movimiento: 0, movimientos: [], stock: stockMap.get(Number(r.insumo_id)) || null };
+            ac.teorico += teorico; ac.real += real; ac.valor_movimiento += valor; ac.movimientos.push(...movimientos); insMap.set(r.insumo_id, ac);
+            return { insumo_id: r.insumo_id, insumo: r.insumo, codigo: r.codigo, unidad: r.unidad, teorico: num(teorico, 3), real: num(real, 3), desviacion: num(real - teorico, 3), valor_movimiento: num(valor, 2), movimientos };
+        });
+        return { producto_id: v.producto_id, es_platillo_dia: Number(v.es_platillo_dia), nombre: v.nombre, categoria: v.categoria, unidades: num(unidades, 3), venta: num(v.venta, 2), pedidos: num(v.pedidos), ingredientes };
+    });
+    const insumos = [...insMap.values()].map(i => ({ insumo_id: i.insumo_id, codigo: i.codigo, insumo: i.insumo, unidad: i.unidad, teorico: num(i.teorico, 3), real: num(i.real, 3), desviacion: num(i.real - i.teorico, 3), valor_movimiento: num(i.valor_movimiento, 2), stock: i.stock ? { existencia: num(i.stock.existencia, 3), valor_stock: num(i.stock.valor_stock, 2) } : { existencia: 0, valor_stock: 0 }, movimientos: i.movimientos })).sort((a, b) => b.valor_movimiento - a.valor_movimiento);
+    return { turno, items, insumos, totales: { pedidos: pedidoIds.length, unidades: num(totalUnidades, 3), venta: num(totalVenta, 2), costo_movimientos: num(insumos.reduce((s, i) => s + i.valor_movimiento, 0), 2), valor_stock: num(insumos.reduce((s, i) => s + i.stock.valor_stock, 0), 2) } };
+}
+
 // ── Generadores de CSV ───────────────────────────────────────────────────
 // Mismo formato que el kardex: separador ';', decimales con coma y BOM
 // UTF-8 para que Excel lo abra directamente.
@@ -660,5 +760,6 @@ module.exports = {
     explosionACSV,
     ventasMeseroACSV,
     consumoInsumosACSV,
-    ventasHorasACSV
+    ventasHorasACSV,
+    totalesTurnoInventario
 };
