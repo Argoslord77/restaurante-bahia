@@ -104,6 +104,7 @@
                                             <th class="ps-4 py-3">Hora</th>
                                             <th class="py-3 text-end">Cuentas</th>
                                             <th class="py-3 text-end">Ventas</th>
+                                            <th class="py-3 text-end">Excedente</th>
                                             <th class="py-3 text-end pe-4" style="min-width:160px">Peso</th>
                                         </tr>
                                     </thead>
@@ -115,6 +116,7 @@
                                             <td class="ps-4 fw-semibold"><%= h.etiqueta %><% if (esPico) { %> <span class="badge text-bg-primary ms-1">pico</span><% } %></td>
                                             <td class="text-end"><%= h.cuentas %></td>
                                             <td class="text-end fw-semibold">$<%= h.ventas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                            <td class="text-end text-warning">$<%= (h.excedentes || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                             <td class="pe-4">
                                                 <div class="progress" style="height: 16px;">
                                                     <div class="progress-bar bg-<%= esPico ? 'primary' : 'secondary' %>" role="progressbar" style="width: <%= Math.min(pct, 100) %>%;" aria-valuenow="<%= pct.toFixed(0) %>" aria-valuemin="0" aria-valuemax="100"></div>
@@ -146,6 +148,7 @@
                                             <th class="ps-4 py-3">Día</th>
                                             <th class="py-3 text-end">Cuentas</th>
                                             <th class="py-3 text-end">Ventas</th>
+                                            <th class="py-3 text-end">Excedente</th>
                                             <th class="py-3 text-end pe-4" style="min-width:160px">Peso</th>
                                         </tr>
                                     </thead>
@@ -157,6 +160,7 @@
                                             <td class="ps-4 fw-semibold"><%= d.nombre %><% if (esPico) { %> <span class="badge text-bg-warning text-dark ms-1">pico</span><% } %></td>
                                             <td class="text-end"><%= d.cuentas %></td>
                                             <td class="text-end fw-semibold">$<%= d.ventas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                            <td class="text-end text-warning">$<%= (d.excedentes || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                             <td class="pe-4">
                                                 <div class="progress" style="height: 16px;">
                                                     <div class="progress-bar bg-<%= esPico ? 'warning' : 'secondary' %>" role="progressbar" style="width: <%= Math.min(pct, 100) %>%;" aria-valuenow="<%= pct.toFixed(0) %>" aria-valuemin="0" aria-valuemax="100"></div>

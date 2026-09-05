@@ -168,6 +168,7 @@
                                         <% if (Number(P.descuento) > 0) { %><tr><td class="text-muted">Descuento</td><td class="text-end text-danger">-$<%= parseFloat(P.descuento).toFixed(2) %></td></tr><% } %>
                                         <% if (Number(P.impuesto) > 0) { %><tr><td class="text-muted">Impuesto</td><td class="text-end">$<%= parseFloat(P.impuesto).toFixed(2) %></td></tr><% } %>
                                         <% if (Number(P.propina) > 0) { %><tr><td class="text-muted">Propina</td><td class="text-end">$<%= parseFloat(P.propina).toFixed(2) %></td></tr><% } %>
+                                        <% if (Number(P.excedente_cobro) > 0) { %><tr><td class="text-warning">Excedente de cobro</td><td class="text-end text-warning">$<%= parseFloat(P.excedente_cobro).toFixed(2) %></td></tr><% } %>
                                         <tr class="table-light"><td class="fw-bold">TOTAL</td><td class="text-end fw-bold text-success">$<%= parseFloat(P.total || 0).toFixed(2) %></td></tr>
                                     </tbody>
                                 </table>

@@ -293,6 +293,7 @@ async function ventasPorMesero(rango) {
                SUM(CASE WHEN p.estado_pago = 'cortesia' THEN 1 ELSE 0 END) AS cortesias,
                COALESCE(SUM(p.total), 0) AS ventas,
                COALESCE(SUM(p.propina), 0) AS propinas,
+               COALESCE(SUM(p.excedente_cobro), 0) AS excedentes,
                COALESCE(SUM(p.descuento), 0) AS descuentos,
                COALESCE(AVG(NULLIF(p.total, 0)), 0) AS ticket_promedio
         FROM usuarios u
@@ -304,15 +305,16 @@ async function ventasPorMesero(rango) {
         ORDER BY ventas DESC, cuentas DESC
     `, [desde, hasta]);
 
-    let totCuentas = 0, totCortesias = 0, totVentas = 0, totPropinas = 0, totDescuentos = 0;
+    let totCuentas = 0, totCortesias = 0, totVentas = 0, totPropinas = 0, totExcedentes = 0, totDescuentos = 0;
     const meseros = filas.map(f => {
         const cuentas = num(f.cuentas);
         const cortesias = num(f.cortesias);
         const ventas = num(f.ventas, 2);
         const propinas = num(f.propinas, 2);
         const descuentos = num(f.descuentos, 2);
+        const excedentes = num(f.excedentes, 2);
         totCuentas += cuentas; totCortesias += cortesias;
-        totVentas += ventas; totPropinas += propinas; totDescuentos += descuentos;
+        totVentas += ventas; totPropinas += propinas; totExcedentes += excedentes; totDescuentos += descuentos;
         return {
             id: f.id,
             mesero: String(f.mesero || '').trim() || 'Mesero',
@@ -321,6 +323,7 @@ async function ventasPorMesero(rango) {
             cortesias,
             ventas,
             propinas,
+            excedentes,
             descuentos,
             ticket_promedio: num(f.ticket_promedio, 2),
             ticket_promedio_real: cuentas > 0 ? num(ventas / cuentas, 2) : 0
@@ -337,6 +340,7 @@ async function ventasPorMesero(rango) {
             cortesias: num(totCortesias),
             ventas: num(totVentas, 2),
             propinas: num(totPropinas, 2),
+            excedentes: num(totExcedentes, 2),
             descuentos: num(totDescuentos, 2),
             ticket_promedio: totCuentas > 0 ? num(totVentas / totCuentas, 2) : 0
         }
@@ -449,7 +453,8 @@ async function ventasPorHoras(rango) {
     const [porHora] = await db.query(`
         SELECT HOUR(p.creado_en) AS hora, COUNT(*) AS cuentas,
                COALESCE(SUM(p.total), 0) AS ventas,
-               COALESCE(SUM(p.propina), 0) AS propinas
+               COALESCE(SUM(p.propina), 0) AS propinas,
+               COALESCE(SUM(p.excedente_cobro), 0) AS excedentes
         FROM pedidos p
         WHERE ${cond}
         GROUP BY HOUR(p.creado_en)
@@ -459,23 +464,24 @@ async function ventasPorHoras(rango) {
     const [porDia] = await db.query(`
         SELECT DAYOFWEEK(p.creado_en) AS dia, COUNT(*) AS cuentas,
                COALESCE(SUM(p.total), 0) AS ventas,
-               COALESCE(SUM(p.propina), 0) AS propinas
+               COALESCE(SUM(p.propina), 0) AS propinas,
+               COALESCE(SUM(p.excedente_cobro), 0) AS excedentes
         FROM pedidos p
         WHERE ${cond}
         GROUP BY DAYOFWEEK(p.creado_en)
         ORDER BY FIELD(dia, 2, 3, 4, 5, 6, 7, 1)
     `, [desde, hasta]);
 
-    let totCuentas = 0, totVentas = 0, totPropinas = 0;
+    let totCuentas = 0, totVentas = 0, totPropinas = 0, totExcedentes = 0;
     const horas = porHora.map(h => {
         const cuentas = num(h.cuentas); const ventas = num(h.ventas, 2);
-        totCuentas += cuentas; totVentas += ventas; totPropinas += num(h.propinas, 2);
-        return { hora: num(h.hora), etiqueta: `${String(h.hora).padStart(2, '0')}:00`, cuentas, ventas, propinas: num(h.propinas, 2) };
+        totCuentas += cuentas; totVentas += ventas; totPropinas += num(h.propinas, 2); totExcedentes += num(h.excedentes, 2);
+        return { hora: num(h.hora), etiqueta: `${String(h.hora).padStart(2, '0')}:00`, cuentas, ventas, propinas: num(h.propinas, 2), excedentes: num(h.excedentes, 2) };
     });
     // El día pico se mide sobre el orden devuelto (lunes primero)
     const dias = porDia.map(d => ({
         dia: num(d.dia), nombre: NOMBRES_DIA[d.dia] || '—',
-        cuentas: num(d.cuentas), ventas: num(d.ventas, 2), propinas: num(d.propinas, 2)
+        cuentas: num(d.cuentas), ventas: num(d.ventas, 2), propinas: num(d.propinas, 2), excedentes: num(d.excedentes, 2)
     }));
 
     const maxHoraVentas = horas.reduce((m, h) => Math.max(m, h.ventas), 0);
@@ -494,6 +500,7 @@ async function ventasPorHoras(rango) {
             cuentas: num(totCuentas),
             ventas: num(totVentas, 2),
             propinas: num(totPropinas, 2),
+            excedentes: num(totExcedentes, 2),
             ticket_promedio: totCuentas > 0 ? num(totVentas / totCuentas, 2) : 0
         }
     };
@@ -693,16 +700,16 @@ function ventasMeseroACSV(reporte) {
     const filas = [];
     filas.push(`Ventas por mesero;${reporte.desde};a;${reporte.hasta}`);
     filas.push('');
-    filas.push('Mesero;Rol;Cuentas;Cortesias;Ventas;Ticket promedio;Propinas;Descuentos');
+    filas.push('Mesero;Rol;Cuentas;Cortesias;Ventas;Ticket promedio;Propinas;Excedentes;Descuentos');
     for (const m of reporte.meseros) {
         filas.push([
             csvTexto(m.mesero), csvTexto(m.rol), csvNum(m.cuentas, 0),
             csvNum(m.cortesias, 0), csvNum(m.ventas), csvNum(m.ticket_promedio),
-            csvNum(m.propinas), csvNum(m.descuentos)
+            csvNum(m.propinas), csvNum(m.excedentes), csvNum(m.descuentos)
         ].join(';'));
     }
     const t = reporte.totales;
-    filas.push(`TOTALES;;${csvNum(t.cuentas, 0)};${csvNum(t.cortesias, 0)};${csvNum(t.ventas)};${csvNum(t.ticket_promedio)};${csvNum(t.propinas)};${csvNum(t.descuentos)}`);
+    filas.push(`TOTALES;;${csvNum(t.cuentas, 0)};${csvNum(t.cortesias, 0)};${csvNum(t.ventas)};${csvNum(t.ticket_promedio)};${csvNum(t.propinas)};${csvNum(t.excedentes)};${csvNum(t.descuentos)}`);
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
@@ -732,19 +739,19 @@ function ventasHorasACSV(reporte) {
     filas.push(`Ventas por hora y dia;${reporte.desde};a;${reporte.hasta}`);
     filas.push('');
     filas.push('POR HORA');
-    filas.push('Hora;Cuentas;Ventas;Propinas');
+    filas.push('Hora;Cuentas;Ventas;Propinas;Excedentes');
     for (const h of reporte.horas) {
-        filas.push(`${h.etiqueta};${csvNum(h.cuentas, 0)};${csvNum(h.ventas)};${csvNum(h.propinas)}`);
+        filas.push(`${h.etiqueta};${csvNum(h.cuentas, 0)};${csvNum(h.ventas)};${csvNum(h.propinas)};${csvNum(h.excedentes)}`);
     }
     filas.push('');
     filas.push('POR DIA DE LA SEMANA');
-    filas.push('Dia;Cuentas;Ventas;Propinas');
+    filas.push('Dia;Cuentas;Ventas;Propinas;Excedentes');
     for (const d of reporte.dias) {
-        filas.push(`${csvTexto(d.nombre)};${csvNum(d.cuentas, 0)};${csvNum(d.ventas)};${csvNum(d.propinas)}`);
+        filas.push(`${csvTexto(d.nombre)};${csvNum(d.cuentas, 0)};${csvNum(d.ventas)};${csvNum(d.propinas)};${csvNum(d.excedentes)}`);
     }
     const t = reporte.totales;
     filas.push('');
-    filas.push(`TOTALES;;${csvNum(t.cuentas, 0)};${csvNum(t.ventas)};${csvNum(t.propinas)}`);
+    filas.push(`TOTALES;;${csvNum(t.cuentas, 0)};${csvNum(t.ventas)};${csvNum(t.propinas)};${csvNum(t.excedentes)}`);
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 

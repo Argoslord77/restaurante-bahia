@@ -200,6 +200,7 @@
                                         <td>
                                             <%- badgePago(p.estado_pago, p.estado_pedido) %>
                                             <% if (Number(p.propina) > 0) { %><small class="d-block text-muted">propina $<%= parseFloat(p.propina).toFixed(2) %></small><% } %>
+                                            <% if (Number(p.excedente_cobro) > 0) { %><small class="d-block text-warning">excedente $<%= parseFloat(p.excedente_cobro).toFixed(2) %></small><% } %>
                                         </td>
                                         <td class="text-end">
                                             <div class="btn-group btn-group-sm">

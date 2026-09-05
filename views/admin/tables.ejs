@@ -23,7 +23,7 @@
 </head>
 <body>
 
-    <input type="hidden" id="serverBaseUrl" value="https://<%= serverIp %>:3000/">
+    <input type="hidden" id="serverBaseUrl" value="<%= serverBaseUrl || ('https://' + serverIp + ':3000/') %>">
 
     <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
         <div class="d-flex align-items-center gap-2">

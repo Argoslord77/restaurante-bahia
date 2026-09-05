@@ -81,6 +81,13 @@
                     </div>
                     <div class="col-12 col-sm-6 col-md-3">
                         <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Excedentes de cobro</h6>
+                            <h3 class="fw-bold mb-0 text-warning">$<%= (reporte.totales.excedentes || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
+                            <small class="text-muted">Pagos sobre el total + propina</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
                             <h6 class="text-muted fw-semibold mb-1 fs-7">Cortesías / Descuentos</h6>
                             <h3 class="fw-bold mb-0 text-warning"><%= reporte.totales.cortesias %> / $<%= reporte.totales.descuentos.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></h3>
                             <small class="text-muted">A revisar en conjunto</small>
@@ -100,7 +107,7 @@
                                     <th class="py-3 text-end">Cortesías</th>
                                     <th class="py-3 text-end">Ventas</th>
                                     <th class="py-3 text-end">Ticket promedio</th>
-                                    <th class="py-3 text-end">Propinas</th>
+                                    <th class="py-3 text-end">Propinas</th><th class="text-end">Excedente</th>
                                     <th class="py-3 text-end pe-4">Descuentos</th>
                                 </tr>
                             </thead>
@@ -117,11 +124,12 @@
                                     <td class="text-end fw-semibold">$<%= m.ventas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end">$<%= m.ticket_promedio_real.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end text-success">$<%= m.propinas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end text-warning">$<%= (m.excedentes || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end pe-4">$<%= m.descuentos.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                 </tr>
                                 <% }) %>
                                 <% if (reporte.meseros.length === 0) { %>
-                                <tr><td colspan="8" class="text-center text-muted py-4">Sin cuentas cobradas en el período.</td></tr>
+                                <tr><td colspan="9" class="text-center text-muted py-4">Sin cuentas cobradas en el período.</td></tr>
                                 <% } %>
                             </tbody>
                             <% if (reporte.meseros.length) { %>
@@ -133,6 +141,7 @@
                                     <td class="text-end">$<%= reporte.totales.ventas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end">$<%= reporte.totales.ticket_promedio.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end text-success">$<%= reporte.totales.propinas.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end text-warning">$<%= (reporte.totales.excedentes || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                     <td class="text-end pe-4">$<%= reporte.totales.descuentos.toLocaleString('es-ES', { minimumFractionDigits: 2 }) %></td>
                                 </tr>
                             </tfoot>

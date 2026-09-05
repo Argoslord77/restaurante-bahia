@@ -61,7 +61,7 @@
                                             <div class="text-muted fs-8 d-flex flex-wrap gap-1 align-items-center">
                                                 <span>Órdenes: <b>$<%= resumen.total_cobrado_caja.toFixed(2) %></b></span>
                                                 <span class="text-secondary opacity-50">•</span>
-                                                <span class="text-success fw-semibold">+ Propina: <b>$<%= resumen.total_propinas.toFixed(2) %></b></span>
+                                                <span class="text-success fw-semibold">+ Propina: <b>$<%= resumen.total_propinas.toFixed(2) %></b><br><span class="text-warning">Excedentes: <b>$<%= (resumen.total_excedentes || 0).toFixed(2) %></b></span></span>
                                             </div>
                                         </div>
                                         <div class="rounded-circle bg-success-subtle p-3 text-success flex-shrink-0">

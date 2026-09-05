@@ -12,7 +12,10 @@ function obtenerBasePublica(req) {
     }
 
     const hostHeader = typeof req.get === 'function' ? req.get('host') : null;
-    const host = configurado || hostHeader || req.hostname || 'localhost';
+    // El host del navegador es la IP vigente del servidor en la LAN; no se
+    // congela una dirección que pueda cambiar por DHCP. SERVER_IP queda como
+    // respaldo explícito para instalaciones detrás de proxy.
+    const host = hostHeader || configurado || req.hostname || 'localhost';
     const hostTienePuerto = /^\[[^\]]+\]:\d+$/.test(host) || /:\d+$/.test(host);
     return `${protocolo}://${host}${hostTienePuerto ? '' : `:${puerto}`}`;
 }
@@ -276,7 +279,8 @@ const DashboardDependienteController = {
         for (const id of ids) {
             try {
                 const [pedidos] = await db.query(`
-                    SELECT p.id, p.total, p.propina, p.descuento, p.impuesto,
+                    SELECT p.id, p.total, p.propina,
+                p.excedente_cobro, p.descuento, p.impuesto,
                            p.estado_pago, p.fecha_cierre,
                            m.numero AS mesa_numero,
                            CONCAT(u.nombre, ' ', COALESCE(u.apellidos, '')) AS mesero_nombre

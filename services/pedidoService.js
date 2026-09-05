@@ -258,6 +258,7 @@ const pedidoService = {
                 p.cliente_nombre, p.comensales,
                 p.estado_pedido, p.estado_pago,
                 p.subtotal, p.descuento, p.impuesto, p.total, p.propina,
+                p.excedente_cobro,
                 p.creado_en, p.fecha_cierre,
                 p.turno_servicio_id, ts.estado AS turno_estado,
                 CONCAT(um.nombre, ' ', um.apellidos) AS mesero,
@@ -326,12 +327,13 @@ const pedidoService = {
                 acc.cobrados++;
                 acc.ventas += (p.estado_pago === 'cortesia' ? 0 : total);
                 acc.propinas += parseFloat(p.propina || 0);
+                acc.excedentes += parseFloat(p.excedente_cobro || 0);
             } else {
                 acc.en_curso++;
                 acc.en_curso_importe += total;
             }
             return acc;
-        }, { total: 0, cobrados: 0, en_curso: 0, cancelados: 0, ventas: 0, propinas: 0, en_curso_importe: 0 });
+        }, { total: 0, cobrados: 0, en_curso: 0, cancelados: 0, ventas: 0, propinas: 0, excedentes: 0, en_curso_importe: 0 });
 
         kpis.ticket_promedio = kpis.cobrados > 0 ? kpis.ventas / kpis.cobrados : 0;
 
@@ -369,6 +371,7 @@ const pedidoService = {
                 p.cliente_nombre, p.comensales,
                 p.estado_pedido, p.estado_pago,
                 p.subtotal, p.descuento, p.impuesto, p.total, p.propina,
+                p.excedente_cobro,
                 p.creado_en, p.fecha_cierre, p.fecha_precuenta,
                 p.impresiones_precuenta, p.actualizado_en,
                 p.turno_servicio_id, ts.estado AS turno_estado,

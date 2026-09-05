@@ -34,7 +34,9 @@ exports.listTables = async (req, res) => {
             }
         }
 
-        const serverIp = process.env.SERVER_IP || 'localhost';
+        const serverHost = (typeof req.get === 'function' && req.get('host')) || req.hostname || 'localhost';
+        const protocolo = req.protocol || (process.env.SERVER_HTTP === '1' ? 'http' : 'https');
+        const serverBaseUrl = `${protocolo}://${serverHost}/`;
 
         // Renderiza la vista 
         res.render('admin/tables', {
@@ -47,7 +49,8 @@ exports.listTables = async (req, res) => {
             turnoActivo,
             user: req.user,
             view: 'tables',
-            serverIp
+            serverIp: serverHost,
+            serverBaseUrl
         });
     } catch (error) {
         console.error('Error crítico al listar mesas con distribución:', error);

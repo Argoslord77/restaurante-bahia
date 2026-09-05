@@ -572,6 +572,9 @@ await pool.query(
             const desc = Math.max(0, Number(descuento || 0));
             const rec = Math.max(0, Number(recargo || 0));
             const prop = Math.max(0, Number(propina || 0));
+            // Diferencia pagada por encima de orden + propina; se registra
+            // separada para no inflar las propinas ni perder el excedente.
+            let excedenteCobro = 0;
             const facturaImpuesto = parseFloat(await SettingService.get('factura_impuesto', 0) || 0);
             const impuesto = Number(Math.max(0, subtotal * facturaImpuesto / 100).toFixed(2));
             // Total de la orden (lo que factura la mesa). La propina NO va en
@@ -660,6 +663,7 @@ await pool.query(
                     pricingContext.es_zelle ? pago.monto_moneda_origen : pago.monto_equivalente_local
                 ), 0);
                 const diferencia = Number((totalAbonado - totalFinal).toFixed(2));
+                excedenteCobro = Math.max(0, diferencia);
                 if (diferencia < -0.01) {
                     return res.status(400).json({
                         success: false,
@@ -673,9 +677,9 @@ await pool.query(
             await connection.query(`
                 UPDATE pedidos
                 SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
-                    id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
+                    id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, excedente_cobro = ?, total = ?
                 WHERE id = ?
-            `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
+            `, [estadoPago, cajeroId, desc, impuesto, prop, excedenteCobro, totalOrden, pedidoId]);
             await connection.query(`
                 UPDATE detalles_pedido SET estado_item = 'entregado',
                     entregado_en = COALESCE(entregado_en, NOW()),
@@ -705,7 +709,7 @@ await pool.query(
             }
             await pool.query("UPDATE mesas SET estado = 'libre' WHERE id = ?", [pedido.id_mesa]);
 
-            return res.json({ success: true, carta: pricingContext.carta, moneda_codigo: pricingContext.moneda_codigo, total: totalFinal, total_orden: totalOrden, propina: prop, message: 'Mesa cobrada y liberada con éxito' });
+            return res.json({ success: true, carta: pricingContext.carta, moneda_codigo: pricingContext.moneda_codigo, total: totalFinal, total_orden: totalOrden, propina: prop, excedente_cobro: excedenteCobro, message: 'Mesa cobrada y liberada con éxito' });
         } catch (err) {
             if (connection) {
                 try { await connection.rollback(); } catch (_) { /* noop */ }

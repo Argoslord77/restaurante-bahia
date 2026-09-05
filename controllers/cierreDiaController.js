@@ -21,6 +21,7 @@ async function obtenerDatosCierre(turnoActivo) {
                 p.impuesto,
                 p.total,
                 p.propina,
+                p.excedente_cobro,
                 p.estado_pedido,
                 p.estado_pago,
                 p.creado_en AS fecha_apertura,
@@ -65,7 +66,8 @@ async function obtenerDatosCierre(turnoActivo) {
         let total_cxc_facturas = 0;
         let total_pendiente_pago = 0;
         let total_cortesias = 0;
-        let total_propinas = 0;        // Excedente / Propinas
+        let total_propinas = 0;
+        let total_excedentes = 0;        // Diferencias pagadas por encima del total + propina
 
         pedidos.forEach(p => {
             const total = parseFloat(p.total || 0);
@@ -74,6 +76,7 @@ async function obtenerDatosCierre(turnoActivo) {
             if (p.estado_pago === 'pagado') {
                 total_cobrado_caja += total;
                 total_propinas += propina;
+                total_excedentes += parseFloat(p.excedente_cobro || 0);
             } else if (p.estado_pago === 'facturado') {
                 total_cxc_facturas += total;
             } else if (p.estado_pago === 'pendiente_pago') {
@@ -84,12 +87,13 @@ async function obtenerDatosCierre(turnoActivo) {
         });
 
         // Suma total del dinero cobrado en caja (Órdenes + Propinas/Excedente)
-        const total_efectivo_total_caja = total_cobrado_caja + total_propinas;
+        const total_efectivo_total_caja = total_cobrado_caja + total_propinas + total_excedentes;
         const fondoApertura = parseFloat(turnoActivo.monto_apertura || 0);
 
         const resumen = {
             total_cobrado_caja,
             total_propinas,
+            total_excedentes,
             total_efectivo_total_caja, // <--- TOTAL GENERAL DE CAJA
             total_cxc_facturas,
             total_pendiente_pago,

@@ -51,8 +51,8 @@ describe('reportesService · ventasPorMesero', () => {
 
     it('agrupa el desempeño por mesero y totaliza el período', async () => {
         db.query.mockResolvedValueOnce([[
-            { id: 5, mesero: 'Juan Perez ', rol: 'dependiente', cuentas: 10, cortesias: 1, ventas: 250, propinas: 15, descuentos: 5, ticket_promedio: 25 },
-            { id: 8, mesero: 'Ana Gomez', rol: 'capitan', cuentas: 2, cortesias: 0, ventas: 50, propinas: 0, descuentos: 0, ticket_promedio: 25 }
+            { id: 5, mesero: 'Juan Perez ', rol: 'dependiente', cuentas: 10, cortesias: 1, ventas: 250, propinas: 15, excedentes: 0, descuentos: 5, ticket_promedio: 25 },
+            { id: 8, mesero: 'Ana Gomez', rol: 'capitan', cuentas: 2, cortesias: 0, ventas: 50, propinas: 0, excedentes: 0, descuentos: 0, ticket_promedio: 25 }
         ], []]);
 
         const reporte = await ReportesService.ventasPorMesero({ desde: '2026-08-01', hasta: '2026-08-31' });
@@ -60,11 +60,11 @@ describe('reportesService · ventasPorMesero', () => {
         expect(reporte.meseros).toHaveLength(2);
         expect(reporte.meseros[0]).toMatchObject({
             mesero: 'Juan Perez', rol: 'dependiente', cuentas: 10, cortesias: 1,
-            ventas: 250, propinas: 15, ticket_promedio_real: 25
+            ventas: 250, propinas: 15, excedentes: 0, ticket_promedio_real: 25
         });
         expect(reporte.totales).toMatchObject({
             meseros: 2, cuentas: 12, cortesias: 1, ventas: 300,
-            propinas: 15, descuentos: 5, ticket_promedio: 25
+            propinas: 15, excedentes: 0, descuentos: 5, ticket_promedio: 25
         });
 
         // La consulta filtra por cuentas cobradas del período
@@ -202,14 +202,14 @@ describe('reportesService · exportaciones CSV', () => {
     it('ventasMeseroACSV lista meseros y totales', () => {
         const reporte = {
             desde: '2026-08-01', hasta: '2026-08-31',
-            meseros: [{ mesero: 'Juan Perez', rol: 'dependiente', cuentas: 10, cortesias: 1, ventas: 250, propinas: 15, descuentos: 5, ticket_promedio: 25, ticket_promedio_real: 25 }],
-            totales: { meseros: 1, cuentas: 10, cortesias: 1, ventas: 250, propinas: 15, descuentos: 5, ticket_promedio: 25 }
+            meseros: [{ mesero: 'Juan Perez', rol: 'dependiente', cuentas: 10, cortesias: 1, ventas: 250, propinas: 15, excedentes: 0, descuentos: 5, ticket_promedio: 25, ticket_promedio_real: 25 }],
+            totales: { meseros: 1, cuentas: 10, cortesias: 1, ventas: 250, propinas: 15, excedentes: 0, descuentos: 5, ticket_promedio: 25 }
         };
         const csv = ReportesService.ventasMeseroACSV(reporte);
         expect(csv.charCodeAt(0)).toBe(0xFEFF);
-        expect(csv).toContain('Mesero;Rol;Cuentas;Cortesias;Ventas;Ticket promedio;Propinas;Descuentos');
-        expect(csv).toContain('Juan Perez;dependiente;10;1;250,00;25,00;15,00;5,00');
-        expect(csv).toContain('TOTALES;;10;1;250,00;25,00;15,00;5,00');
+        expect(csv).toContain('Mesero;Rol;Cuentas;Cortesias;Ventas;Ticket promedio;Propinas;Excedentes;Descuentos');
+        expect(csv).toContain('Juan Perez;dependiente;10;1;250,00;25,00;15,00;0,00;5,00');
+        expect(csv).toContain('TOTALES;;10;1;250,00;25,00;15,00;0,00;5,00');
     });
 
     it('consumoInsumosACSV lista insumos con su desglose y totales', () => {
