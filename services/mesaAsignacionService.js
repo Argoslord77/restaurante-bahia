@@ -99,8 +99,53 @@ async function resolverMeseroTitular(idMesa, turnoId, abridorId) {
     return { id: abridorId, nombre: null, esAsignado: false };
 }
 
+// Ítems en estado 'listo' (para entregar) del turno indicado.
+// - dependienteId: solo mesas asignadas a ese dependiente (tablero propio).
+// - dependienteId null: todas las mesas (capitán en modo Solo capitanes).
+// Nunca lanza: ante cualquier fallo devuelve [].
+async function obtenerItemsListos({ turnoId, dependienteId = null } = {}) {
+    if (!pool || !turnoId) return [];
+    try {
+        const joinsAsignacion = dependienteId
+            ? `INNER JOIN detalle_asignacion_mesa dam ON dam.mesa_id = m.id AND dam.dependiente_id = ?
+               INNER JOIN asignaciones_diarias ad ON dam.asignacion_diaria_id = ad.id
+                 AND ad.turno_id = ?
+                 AND ad.id IN (
+                     SELECT MAX(a2.id) FROM asignaciones_diarias a2
+                     WHERE a2.turno_id = ?
+                     GROUP BY a2.ubicacion
+                 )`
+            : '';
+        const params = dependienteId ? [turnoId, dependienteId, turnoId, turnoId] : [turnoId];
+        const [filas] = await pool.query(`
+            SELECT dp.id AS id_detalle, dp.id_pedido, dp.cantidad,
+                   COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre,
+                   p.id_mesa, m.numero AS numero_mesa,
+                   COALESCE(um.nombre, m.ubicacion) AS mesa_ubicacion
+            FROM detalles_pedido dp
+            INNER JOIN pedidos p ON dp.id_pedido = p.id
+              AND p.turno_servicio_id = ?
+              AND p.estado_pago = 'pendiente'
+              AND p.estado_pedido != 'cancelado'
+            INNER JOIN mesas m ON p.id_mesa = m.id
+            ${joinsAsignacion}
+            LEFT JOIN ubicacion_mesa um ON m.ubicacion_id = um.id
+            LEFT JOIN platillos_menu pm ON (dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL))
+            LEFT JOIN platillos_dia pd ON (dp.id_platillo = pd.id AND dp.es_platillo_dia = 1)
+            WHERE dp.estado_item = 'listo'
+            ORDER BY dp.id ASC
+            LIMIT 100
+        `, params);
+        return filas || [];
+    } catch (error) {
+        console.error('Error al obtener ítems listos para entregar:', error);
+        return [];
+    }
+}
+
 module.exports = {
     obtenerDependienteAsignado,
     obtenerMapaAsignados,
-    resolverMeseroTitular
+    resolverMeseroTitular,
+    obtenerItemsListos
 };

@@ -1,0 +1,63 @@
+ACTUALIZACIÓN V5 — Listos al asignado y al capitán + tiempos vivos cada 10 s
+Restaurante Bahía · 2026-09-10 · Aplica sobre la V4 (6af2cdd)
+====================================================================
+
+QUÉ RESUELVE
+------------
+1) NOTIFICACIÓN DE PLATILLO/BEBIDA LISTA (monitores activos + Solo capitanes)
+   Cuando el cocinero/bartender marca un ítem como listo en el monitor, el
+   aviso llega POR IGUAL al dependiente asignado a la mesa y al capitán:
+   - El sondeo del salón (/pos/alertas-pendientes) incluye ahora itemsListos:
+     el dependiente recibe los de SUS mesas asignadas; el capitán, con modo
+     "Solo capitanes", los de TODO el salón (mismo ritmo de sondeo, 4 s).
+   - Aviso toast "¡Listo para entregar! Mesa X" con detalle + sonido, solo
+     para lo Nuevo (la primera carga siembra sin avisar).
+   - Insignia persistente en cada tarjeta con listos ("N listos para
+     entregar"); desaparece al marcar entregado. Sin listos no estorba.
+   - Sin monitores, o capitán en modo "todos", no hay listos en el salón
+     (el POS por pedido sigue avisando a quien lo opera, como antes).
+
+2) TIEMPOS EN ELABORACIÓN CADA 10 SEGUNDOS (detalle informacional)
+   En las pantallas de pedidos no cerrados los tiempos se refrescan en vivo:
+   - Monitor cocina/bar: badge "EN ELABORACIÓN mm:ss" por comanda.
+   - Salón dependiente/capitán: "Abierta hace …" en cada tarjeta ocupada.
+   - Ventas/Pedidos (admin): nueva columna "Tiempo" en órdenes en consumo.
+   Formato compacto ("45 s", "12:05", "1:05:12"). Una sola librería
+   (public/js/tiempo-transcurrido.js) con pruebas unitarias.
+
+3) REPARACIÓN: views/pos.ejs traía la cola duplicada (44 líneas de JS pegadas
+   tras el </html>, se veían como texto al pie del POS). Recortada.
+
+ARCHIVOS INCLUIDOS (10)
+-----------------------
+controllers/posController.js               itemsListos en alertas-pendientes
+controllers/posController.test.js          +5 pruebas de ámbito de listos
+services/mesaAsignacionService.js          +obtenerItemsListos (asignado/todo)
+services/mesaAsignacionService.test.js     +4 pruebas
+public/js/tiempo-transcurrido.js           NUEVO: ticker 10 s (UMD)
+public/js/tiempo-transcurrido.test.js      NUEVO: 9 pruebas
+views/dependiente/dashboard.ejs            toast+insignias listos, línea tiempo
+views/monitor.ejs                          badge elaboración + ticker
+views/pedido/pedido.ejs                    columna Tiempo + ticker
+views/pos.ejs                              cola duplicada eliminada
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Descomprima el zip en la RAÍZ del proyecto conservando las carpetas.
+2. No requiere migración SQL (usa tablas existentes).
+3. Reinicie el servidor (pm2/node). Si el navegador cachea el JS, recargue
+   con Ctrl+F5 en salón/monitores (archivo NUEVO /js/tiempo-transcurrido.js).
+4. Verificación rápida:
+   - Opciones generales: "Solo capitanes" + monitores habilitados.
+   - Marque un ítem Listo en cocina/bar: toast+sonido e insignia aparecen a
+     la vez en la sesión del dependiente asignado y en la del capitán.
+   - Monitores, salón y Ventas/Pedidos muestran tiempos que avanzan solos.
+5. Pruebas: npx jest → 259/259 (3 suites de entorno fallan igual que en base).
+
+NOTAS
+-----
+- En modo "todos" el dependiente recibe los listos de sus mesas; el capitán
+  no recibe listos del salón (opera por POS, que avisa por pedido).
+- En supervisión (admin mirando el salón de un mesero) el sondeo de alertas
+  sigue desactivado, como antes.
+- El servicio de listos nunca lanza: ante un fallo de BD devuelve [].

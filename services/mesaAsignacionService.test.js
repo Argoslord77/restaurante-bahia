@@ -81,4 +81,45 @@ describe('mesaAsignacionService', () => {
                 .resolves.toEqual({ id: 9, nombre: null, esAsignado: false });
         });
     });
+
+    describe('obtenerItemsListos', () => {
+        const FILA = {
+            id_detalle: 11, id_pedido: 50, cantidad: 2, nombre: 'Mojito',
+            id_mesa: 3, numero_mesa: '3', mesa_ubicacion: 'Terraza'
+        };
+
+        it('filtra por mesas asignadas al dependiente', async () => {
+            pool.query.mockResolvedValue([[FILA], []]);
+
+            const items = await MesaAsignacionService.obtenerItemsListos({ turnoId: 7, dependienteId: 5 });
+
+            expect(items).toEqual([FILA]);
+            const [sql, params] = pool.query.mock.calls[0];
+            expect(sql).toContain("dp.estado_item = 'listo'");
+            expect(sql).toContain('dam.dependiente_id = ?');
+            expect(sql).toContain('MAX(a2.id)');
+            expect(params).toEqual([7, 5, 7, 7]);
+        });
+
+        it('sin dependiente cubre todas las mesas', async () => {
+            pool.query.mockResolvedValue([[], []]);
+
+            const items = await MesaAsignacionService.obtenerItemsListos({ turnoId: 7, dependienteId: null });
+
+            expect(items).toEqual([]);
+            const [sql, params] = pool.query.mock.calls[0];
+            expect(sql).not.toContain('dam.dependiente_id');
+            expect(params).toEqual([7]);
+        });
+
+        it('devuelve [] ante un fallo de BD (no lanza)', async () => {
+            pool.query.mockRejectedValueOnce(new Error('DB down'));
+            await expect(MesaAsignacionService.obtenerItemsListos({ turnoId: 7 })).resolves.toEqual([]);
+        });
+
+        it('devuelve [] sin turno (no consulta)', async () => {
+            await expect(MesaAsignacionService.obtenerItemsListos({ turnoId: null })).resolves.toEqual([]);
+            expect(pool.query).not.toHaveBeenCalled();
+        });
+    });
 });

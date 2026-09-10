@@ -272,7 +272,7 @@
                                         let estadoClase = estadoMesa.toLowerCase();
                                     %>
                                         <div class="col">
-                                            <div class="monitor-mesa-card">
+                                            <div class="monitor-mesa-card" data-mesa-id="<%= mesa.id %>">
                                                 <div class="monitor-mesa-header">
                                                     <span class="monitor-mesa-badge" title="<%= mesa.nombre %>"><%= mesa.nombre %></span>
                                                     <span class="monitor-status-badge status-monitor-<%= estadoClase %>">
@@ -292,6 +292,9 @@
                                                         <span class="d-block mt-1 text-truncate"><i class="fa-solid fa-user-check me-1"></i> Asignada a: <strong><%= mesa.dependiente_asignado.nombre %></strong></span>
                                                         <% } %>
                                                         <span class="d-block mt-1"><i class="fa-solid fa-tags me-1"></i> Carta: <strong><%= mesa.carta || 'CUP' %></strong></span>
+                                                        <% if (mesa.hora_apertura) { %>
+                                                        <span class="d-block mt-1"><i class="fa-solid fa-clock me-1"></i> Abierta hace <strong data-t0-ms="<%= new Date(mesa.hora_apertura).getTime() %>">…</strong></span>
+                                                        <% } %>
                                                     </div>
                                                 </div>
 
@@ -383,6 +386,7 @@
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
     <script src="/js/libs/qrcode.min.js"></script>
+    <script src="/js/tiempo-transcurrido.js"></script>
     <script>
         // ============================================================
         // RESUMEN DE CUENTAS PAGADAS (supervisión POS mesero)
@@ -608,6 +612,34 @@
         let alertasProcesadas = new Set();
         const POLLING_INTERVAL = 4000; // Sondeo cada 4 segundos
 
+        let listosVistos = new Set();
+        let primerSondeoListosCompletado = false;
+
+        // Insignia "listo para entregar" en cada tarjeta con ítems en 'listo'.
+        function actualizarInsigniasListos(items) {
+            const porMesa = {};
+            (items || []).forEach(it => {
+                porMesa[it.id_mesa] = (porMesa[it.id_mesa] || 0) + 1;
+            });
+            document.querySelectorAll('.monitor-mesa-card[data-mesa-id]').forEach(card => {
+                const n = porMesa[card.getAttribute('data-mesa-id')] || 0;
+                const zona = card.querySelector('.monitor-footer-info');
+                if (!zona) return;
+                let insignia = zona.querySelector('.insignia-listos');
+                if (n > 0) {
+                    if (!insignia) {
+                        insignia = document.createElement('span');
+                        insignia.className = 'd-block mt-1 insignia-listos';
+                        insignia.style.cssText = 'color:#047857;font-weight:800;'
+                        zona.appendChild(insignia);
+                    }
+                    insignia.innerHTML = `<i class="fa-solid fa-bell me-1"></i> ${n} listo${n > 1 ? 's' : ''} para entregar`;
+                } else if (insignia) {
+                    insignia.remove();
+                }
+            });
+        }
+
         async function verificarAlertasCliente() {
             try {
                 const response = await fetch('/pos/alertas-pendientes');
@@ -616,7 +648,7 @@
                 const data = await response.json();
                 if (!data.success) return;
 
-                const { notificaciones = [], prePedidos = [] } = data.alertas || {};
+                const { notificaciones = [], prePedidos = [], itemsListos = [] } = data.alertas || {};
                 let hayNuevasAlertas = false;
 
                 // 1. Procesar llamadas de clientes y solicitudes de cierre
@@ -714,6 +746,45 @@
                     });
                 }
 
+                // 3. Ítems listos para entregar (monitores de elaboración).
+                // La primera carga siembra sin avisar; los siguientes sondeos
+                // avisan solo lo nuevo. Las insignias de las tarjetas reflejan
+                // siempre el estado actual.
+                if (!primerSondeoListosCompletado) {
+                    itemsListos.forEach(it => listosVistos.add(String(it.id_detalle)));
+                    primerSondeoListosCompletado = true;
+                } else {
+                    const nuevosPorMesa = {};
+                    itemsListos.forEach(it => {
+                        const key = String(it.id_detalle);
+                        if (!listosVistos.has(key)) {
+                            listosVistos.add(key);
+                            const grupo = nuevosPorMesa[it.id_mesa] || (nuevosPorMesa[it.id_mesa] = {
+                                numero: it.numero_mesa || it.id_mesa,
+                                items: []
+                            });
+                            grupo.items.push(it);
+                        }
+                    });
+                    const gruposNuevos = Object.values(nuevosPorMesa);
+                    if (gruposNuevos.length > 0) {
+                        hayNuevasAlertas = true;
+                        if (gruposNuevos.length > 3) {
+                            const resumen = gruposNuevos.map(g => `Mesa ${g.numero} (${g.items.length})`).join(' · ');
+                            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '¡Platillos listos para entregar!', html: resumen, showConfirmButton: false, timer: 5000, timerProgressBar: true });
+                        } else {
+                            gruposNuevos.forEach(grupo => {
+                                const detalle = grupo.items.map(i => `<strong>${i.cantidad}x</strong> ${i.nombre}`).join('<br>');
+                                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `¡Listo para entregar! Mesa ${grupo.numero}`, html: detalle, showConfirmButton: false, timer: 5000, timerProgressBar: true });
+                            });
+                        }
+                    }
+                    // Poda: los ids que ya no están listos salen del registro.
+                    const actuales = new Set(itemsListos.map(it => String(it.id_detalle)));
+                    listosVistos.forEach(key => { if (!actuales.has(key)) listosVistos.delete(key); });
+                }
+                actualizarInsigniasListos(itemsListos);
+
                 if (hayNuevasAlertas) {
                     reproducirSonidoAlerta();
                 }
@@ -737,6 +808,11 @@
         setInterval(verificarAlertasCliente, POLLING_INTERVAL);
         document.addEventListener('DOMContentLoaded', verificarAlertasCliente);
     })();
+
+    // Tiempos "abierta hace" de las tarjetas: refresco vivo cada 10 s.
+    if (window.TiempoTranscurrido) {
+        window.TiempoTranscurrido.iniciarTickerTiempos();
+    }
     </script>
 </body>
 </html>

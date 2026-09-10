@@ -2853,48 +2853,4 @@
         window.addEventListener('beforeunload', detenerPollingItemsListos);
     </script>
 </body>
-</html>                 data.itemsListos.forEach(item => {
-                            if (!itemsListosAnteriores.has(item.id_detalle)) {
-                                itemsListosAnteriores.add(item.id_detalle);
-                                hayNuevosListos = true;
-
-                                const hItem = historicoDetalles.find(d => d.id_detalle == item.id_detalle);
-                                if (hItem) hItem.estado = 'listo';
-                            }
-                        });
-
-                        if (hayNuevosListos) {
-                            renderHistory();
-                            Swal.fire({
-                                toast: true,
-                                position: 'top-end',
-                                icon: 'success',
-                                title: '¡Nuevos platillos listos!',
-                                showConfirmButton: false,
-                                timer: 3000
-                            });
-                        }
-                    }
-                })
-                .catch(err => console.error("Error al consultar ítems listos:", err));
-        }
-
-        let pollTimer = null;
-        function iniciarPollingItemsListos() {
-            if (!MONITORES_HABILITADOS) return;
-            verificarItemsListos();
-            if (!pollTimer) pollTimer = setInterval(verificarItemsListos, 8000);
-        }
-
-        function detenerPollingItemsListos() {
-            if (pollTimer) {
-                clearInterval(pollTimer);
-                pollTimer = null;
-            }
-        }
-
-        iniciarPollingItemsListos();
-        window.addEventListener('beforeunload', detenerPollingItemsListos);
-    </script>
-</body>
 </html>

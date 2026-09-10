@@ -15,7 +15,7 @@ jest.mock('../services/precioService', () => ({
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
-const { viewPOS, initOrderManual, abrirOObtenerPedidoMesa, initOrderQR, apiSaveOrder } = require('./posController');
+const { viewPOS, initOrderManual, abrirOObtenerPedidoMesa, initOrderQR, apiSaveOrder, obtenerAlertasPendientes } = require('./posController');
 
 function crearReqRes({ url = '/pos/15', query = {}, params = {} } = {}) {
     const req = { url, query, params, user: { id: 1, rol: 'administrador', nombre: 'Admin' } };
@@ -289,5 +289,108 @@ describe('posController · titularidad del salón (capitán sobre mesa ajena)', 
         await viewPOS(req, res);
 
         expect(res.render).toHaveBeenCalledWith('pos', expect.objectContaining({ operadorEsTitular: true }));
+    });
+});
+
+describe('posController.obtenerAlertasPendientes · ítems listos (V5)', () => {
+    let modoToma = 'todos';
+    let monitores = true;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        modoToma = 'todos';
+        monitores = true;
+        SettingService.get.mockImplementation(async (clave, valorPorDefecto) => {
+            if (clave === 'habilitar_monitores_elaboracion') return monitores;
+            if (clave === 'pos_quien_toma_ordenes') return modoToma;
+            return valorPorDefecto;
+        });
+    });
+
+    const FILA_LISTO = {
+        id_detalle: 11, id_pedido: 50, cantidad: 2, nombre: 'Mojito',
+        id_mesa: 3, numero_mesa: '3', mesa_ubicacion: 'Terraza'
+    };
+
+    function simularAlertas({ listos = [FILA_LISTO] } = {}) {
+        simularPool([
+            ['FROM notificaciones_mesero', [[{ id: 1, tipo: 'LLAMADA_SERVICIO', mensaje: 'hola', nombre_mesa: '3' }], []]],
+            ['FROM pre_pedidos', [[], []]],
+            ["estado_item = 'listo'", [[...listos], []]]
+        ]);
+    }
+
+    function llamadaListos() {
+        return pool.query.mock.calls.find(([sql]) => String(sql).includes("estado_item = 'listo'"));
+    }
+
+    it('el dependiente recibe los listos de SUS mesas asignadas', async () => {
+        simularAlertas();
+        const { req, res } = crearReqResAPI({ user: { id: 5, rol: 'dependiente' } });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        const llamada = llamadaListos();
+        expect(llamada).toBeDefined();
+        expect(llamada[0]).toContain('dam.dependiente_id = ?');
+        expect(llamada[1]).toEqual([7, 5, 7, 7]);
+        const cuerpo = res.json.mock.calls[0][0];
+        expect(cuerpo.alertas.itemsListos).toHaveLength(1);
+        expect(cuerpo.alertas.itemsListos[0]).toMatchObject({ id_detalle: 11, nombre: 'Mojito' });
+        expect(cuerpo.alertas.notificaciones).toHaveLength(1); // sin regresión
+    });
+
+    it('el capitán (Solo capitanes) recibe los listos de TODO el salón', async () => {
+        modoToma = 'solo_capitanes';
+        simularAlertas();
+        const { req, res } = crearReqResAPI({ user: { id: 9, rol: 'capitan' } });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        const llamada = llamadaListos();
+        expect(llamada).toBeDefined();
+        expect(llamada[0]).not.toContain('dam.dependiente_id');
+        expect(llamada[1]).toEqual([7]);
+        expect(res.json.mock.calls[0][0].alertas.itemsListos).toHaveLength(1);
+    });
+
+    it('el capitán (modo todos) no recibe listos del salón', async () => {
+        simularPool([
+            ['FROM notificaciones_mesero', [[], []]],
+            ['FROM pre_pedidos', [[], []]]
+        ]);
+        const { req, res } = crearReqResAPI({ user: { id: 9, rol: 'capitan' } });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        expect(llamadaListos()).toBeUndefined();
+        expect(res.json.mock.calls[0][0].alertas.itemsListos).toEqual([]);
+    });
+
+    it('sin monitores no hay listos aunque haya rol de servicio', async () => {
+        monitores = false;
+        simularPool([
+            ['FROM notificaciones_mesero', [[], []]],
+            ['FROM pre_pedidos', [[], []]]
+        ]);
+        const { req, res } = crearReqResAPI({ user: { id: 5, rol: 'dependiente' } });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        expect(llamadaListos()).toBeUndefined();
+        expect(res.json.mock.calls[0][0].alertas.itemsListos).toEqual([]);
+    });
+
+    it('sin usuario autenticado no hay listos', async () => {
+        simularPool([
+            ['FROM notificaciones_mesero', [[], []]],
+            ['FROM pre_pedidos', [[], []]]
+        ]);
+        const { req, res } = crearReqResAPI({ user: null });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        expect(llamadaListos()).toBeUndefined();
+        expect(res.json.mock.calls[0][0].alertas.itemsListos).toEqual([]);
     });
 });

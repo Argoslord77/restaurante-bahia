@@ -121,6 +121,7 @@
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
+    <script src="/js/tiempo-transcurrido.js"></script>
     <script>
         const MONITORES_HABILITADOS = <%= monitoresHabilitados ? 'true' : 'false' %>;
         const CURRENT_AREA_KEY = '<%= currentAreaKey %>';
@@ -279,6 +280,7 @@
                                     MESA ${comanda.numero_mesa}
                                 </span>
                                 <div class="text-[11px] text-slate-500 mt-2.5 font-bold tracking-wider">ORDEN #${comanda.id_pedido}</div>
+                                <div class="text-[11px] text-slate-500 mt-1 font-bold tracking-wider">⏱ EN ELABORACIÓN <span class="text-slate-700" data-t0="${comanda.fecha_pedido}">…</span></div>
                             </div>
                             <span class="text-[11px] text-[#b45309] font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-[#fef3c7] px-3 py-1.5 rounded-lg border border-[#fde68a]">
                                 <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> En cola
@@ -470,6 +472,9 @@
 
                 procesarYRenderizar(comandasActuales);
                 actualizarUI();
+                if (window.TiempoTranscurrido) {
+                    window.TiempoTranscurrido.iniciarTickerTiempos();
+                }
             }
         });
     </script>

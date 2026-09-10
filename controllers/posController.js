@@ -1078,11 +1078,35 @@ module.exports = {
                 ORDER BY pp.creado_en ASC
             `);
 
+            // Ítems listos para entregar en el ámbito del visor. Con
+            // monitores activos el dependiente recibe los de sus mesas
+            // asignadas y el capitán (modo Solo capitanes) los de todo el
+            // salón, por igual y al mismo ritmo de sondeo.
+            let itemsListos = [];
+            try {
+                const monitoresActivos = await SettingService.get('habilitar_monitores_elaboracion', true);
+                if (monitoresActivos) {
+                    const rolVisor = rolEmpleado(req);
+                    const turnoId = req.turnoServicioId || null;
+                    const usuarioId = req.user && req.user.id ? req.user.id : null;
+                    if (rolVisor === 'dependiente' && usuarioId) {
+                        itemsListos = await MesaAsignacionService.obtenerItemsListos({ turnoId, dependienteId: usuarioId });
+                    } else if (rolVisor === 'capitan') {
+                        const modo = await PosAutorizacionService.modoTomaOrdenes();
+                        if (modo === PosAutorizacionService.MODO_TOMA_SOLO_CAPITANES) {
+                            itemsListos = await MesaAsignacionService.obtenerItemsListos({ turnoId, dependienteId: null });
+                        }
+                    }
+                }
+            } catch (errorListos) {
+                console.error('Error al obtener ítems listos para alertas:', errorListos);
+            }
             res.json({
                 success: true,
                 alertas: {
                     notificaciones,
-                    prePedidos
+                    prePedidos,
+                    itemsListos
                 }
             });
         } catch (err) {
