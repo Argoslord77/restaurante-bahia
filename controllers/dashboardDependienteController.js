@@ -2,6 +2,7 @@
 const db = require('../config/db');
 const turnoService = require('../services/turnoService');
 const PosAutorizacionService = require('../services/posAutorizacionService');
+const MesaAsignacionService = require('../services/mesaAsignacionService');
 
 function obtenerBasePublica(req) {
     const protocolo = process.env.PUBLIC_PROTOCOL || (process.env.SERVER_HTTP === '1' ? 'http' : 'https');
@@ -101,7 +102,11 @@ const DashboardDependienteController = {
                 `;
                 paramsMesas = [turnoId, usuarioId, turnoId, turnoId];
             } else {
-                // Admin, Capitán o Supervisor (Muestra todas las mesas del salón sin duplicados)
+                // Capitan, Admin o Supervisor: ven TODAS las mesas del salon.
+                // El capitan necesita operar cualquier mesa aunque no le este
+                // asignada (sobre todo con "Solo capitanes" en Opciones
+                // generales); la titularidad de cada mesa se conserva en el
+                // pedido y se etiqueta abajo, sin suplantar al asignado.
                 queryMesas = `
                     SELECT
                         m.id,
@@ -136,6 +141,17 @@ const DashboardDependienteController = {
             
             // Pasar el turnoId y el usuarioId a los stats para cálculos reales
             const stats = await DashboardDependienteController.getDashboardStats(turnoId, usuarioId, usuarioRol);
+            // Mapa mesa -> dependiente asignado vigente: etiqueta en el
+            // tablero a quien pertenece cada mesa. Nunca rompe el salon.
+            let mapaAsignados = {};
+            try {
+                mapaAsignados = await MesaAsignacionService.obtenerMapaAsignados(turnoId);
+            } catch (errorMapa) {
+                console.error('Error al obtener mapa de dependientes asignados:', errorMapa);
+            }
+            for (const mesa of (mesas || [])) {
+                mesa.dependiente_asignado = (mesa && mapaAsignados[mesa.id]) || null;
+            }
 
             // Autorización para TOMAR órdenes según Opciones generales. Se
             // evalúa con el rol del VISOR autenticado (en supervisión el

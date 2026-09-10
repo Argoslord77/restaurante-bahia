@@ -288,6 +288,9 @@
                                                     <div class="monitor-footer-info">
                                                         <span class="d-block"><i class="fa-solid fa-users me-1"></i> Capacidad: <strong><%= mesa.capacidad %> personas</strong></span>
                                                         <span class="d-block mt-1 text-truncate"><i class="fa-solid fa-layer-group me-1"></i> <%= mesa.ubicacion || 'Salón Principal' %></span>
+                                                        <% if (mesa.dependiente_asignado && mesa.dependiente_asignado.id !== (user.id || -1)) { %>
+                                                        <span class="d-block mt-1 text-truncate"><i class="fa-solid fa-user-check me-1"></i> Asignada a: <strong><%= mesa.dependiente_asignado.nombre %></strong></span>
+                                                        <% } %>
                                                         <span class="d-block mt-1"><i class="fa-solid fa-tags me-1"></i> Carta: <strong><%= mesa.carta || 'CUP' %></strong></span>
                                                     </div>
                                                 </div>

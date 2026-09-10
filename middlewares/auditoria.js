@@ -250,6 +250,12 @@ function auditoriaGlobal(opciones = {}) {
                 const duracion = Number(process.hrtime.bigint() - inicio) / 1e6;
 
                 const extra = {};
+                // Datos extra aportados por el controlador (p. ej. el titular
+                // de la mesa cuando el operador no lo es). Se sanean igual
+                // que el resto de campos antes de persistir el asiento.
+                if (req.auditoriaExtra && typeof req.auditoriaExtra === 'object') {
+                    Object.assign(extra, req.auditoriaExtra);
+                }
                 if (ventanaActiva) {
                     extra.nota_agrupacion =
                         `Endpoint de sondeo: este asiento representa todas las peticiones ` +

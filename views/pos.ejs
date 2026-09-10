@@ -1007,6 +1007,11 @@
                     <span class="mesa-pill">
                         <i class="fa-solid fa-table text-info"></i> <%= textoMesa %>
                     </span>
+                    <% if (typeof operadorEsTitular !== 'undefined' && !operadorEsTitular && typeof meseroDeLaOrden !== 'undefined' && meseroDeLaOrden) { %>
+                    <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle rounded-pill px-2 py-1" title="Esta orden pertenece al dependiente asignado a la mesa; usted la está operando" style="font-size: 11px;">
+                        <i class="fa-solid fa-user-check"></i> TITULAR: <%= meseroDeLaOrden %>
+                    </span>
+                    <% } %>
                     <div class="d-flex align-items-center gap-1">
                         <% if (!monitoresHabilitados) { %>
                             <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2 py-0.5 font-bold" style="font-size: 10px;">

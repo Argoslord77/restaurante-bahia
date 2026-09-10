@@ -3,6 +3,7 @@ const InventarioService = require('../services/inventarioService');
 const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
 const PosAutorizacionService = require('../services/posAutorizacionService');
+const MesaAsignacionService = require('../services/mesaAsignacionService');
 
 /**
  * Rol del empleado autenticado (Passport o sesión de respaldo).
@@ -49,6 +50,7 @@ module.exports = {
             let nombreMesa = 'Mesa Activa';
             let detallesActuales = [];
             let meseroDeLaOrden = null;
+            let operadorEsTitular = true;
 
             // Resolver primero la mesa/pedido para saber qué carta debe usarse
             // en todas las tarjetas del catálogo.
@@ -84,6 +86,12 @@ module.exports = {
                     turnoId = ped.turno_servicio_id;
                     nombreMesa = ped.mesa_numero || nombreMesa;
                     meseroDeLaOrden = ped.mesero_nombre || null;
+                    // Si quien opera la orden no es su titular (p. ej. un
+                    // capitan sobre una mesa asignada a otro dependiente),
+                    // la vista lo indica sin cambiar la titularidad.
+                    if (req.user && req.user.id && ped.id_usuario_mesero) {
+                        operadorEsTitular = Number(ped.id_usuario_mesero) === Number(req.user.id);
+                    }
 
                     const [detalles] = await pool.query(`
                         SELECT dp.id AS id_detalle,
@@ -160,6 +168,7 @@ module.exports = {
                 soloVisualizacion,
                 posVolverUrl,
                 meseroDeLaOrden,
+                operadorEsTitular,
                 modoTomaOrdenes,
                 puedeTomarOrdenes,
                 cortesiaRequiereAutorizacion,
@@ -203,7 +212,8 @@ module.exports = {
             const idPedidoSolicitado = body.id_pedido || body.pedido_id || null;
             const items = body.items || [];
             let idMesa = body.id_mesa || null;
-            const meseroId = req.user ? req.user.id : 1;
+            // Quien abre/opera la mesa (puede no ser su titular).
+            const abridorId = req.user ? req.user.id : 1;
             const habilitarMonitores = await SettingService.get('habilitar_monitores_elaboracion', true);
 
             // Puerta de autorización (Opciones generales): si la casa
@@ -369,6 +379,19 @@ module.exports = {
             }
 
             if (!pedidoExistente) {
+                // Titularidad del salon: la orden se atribuye al dependiente
+                // asignado a la mesa en el turno (si lo hay), aunque quien la
+                // opere sea otro miembro del circuito (p. ej. un capitan).
+                // El operador real queda registrado en la auditoria.
+                const titular = await MesaAsignacionService.resolverMeseroTitular(idMesa, turnoId, abridorId);
+                const meseroId = titular.id;
+                if (titular.esAsignado && Number(titular.id) !== Number(abridorId)) {
+                    req.auditoriaExtra = {
+                        mesero_titular_id: titular.id,
+                        mesero_titular_nombre: titular.nombre,
+                        operado_por_id: abridorId
+                    };
+                }
                 const [nuevo] = await pool.query(`
                     INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
                     VALUES (?, ?, ?, 'pendiente', 'pendiente')
@@ -848,7 +871,20 @@ module.exports = {
                 }
                 const [turnos] = await pool.query("SELECT id FROM turnos_servicio WHERE estado = 'abierto' ORDER BY id DESC LIMIT 1");
                 const turnoId = turnos.length > 0 ? turnos[0].id : 1;
-                const meseroId = req.user ? req.user.id : 1;
+                // Titularidad del salon: la orden se atribuye al dependiente
+                // asignado a la mesa en el turno (si lo hay), aunque quien la
+                // opere sea otro miembro del circuito (p. ej. un capitan).
+                // El operador real queda registrado en la auditoria.
+                const abridorId = req.user ? req.user.id : 1;
+                const titular = await MesaAsignacionService.resolverMeseroTitular(idMesa, turnoId, abridorId);
+                const meseroId = titular.id;
+                if (titular.esAsignado && Number(titular.id) !== Number(abridorId)) {
+                    req.auditoriaExtra = {
+                        mesero_titular_id: titular.id,
+                        mesero_titular_nombre: titular.nombre,
+                        operado_por_id: abridorId
+                    };
+                }
 
                 const [nuevo] = await pool.query(`
                     INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
@@ -868,7 +904,8 @@ module.exports = {
     initOrderManual: async (req, res) => {
         try {
             const { id_mesa } = req.body;
-            const meseroId = req.user ? req.user.id : 1;
+            // Quien abre/opera la mesa (puede no ser su titular).
+            const abridorId = req.user ? req.user.id : 1;
 
             if (!id_mesa) {
                 return res.status(400).json({ success: false, message: 'id_mesa es requerido' });
@@ -907,6 +944,19 @@ module.exports = {
             if (existentes.length > 0) {
                 pedidoId = existentes[0].id;
             } else {
+                // Titularidad del salon: la orden se atribuye al dependiente
+                // asignado a la mesa en el turno (si lo hay), aunque quien la
+                // opere sea otro miembro del circuito (p. ej. un capitan).
+                // El operador real queda registrado en la auditoria.
+                const titular = await MesaAsignacionService.resolverMeseroTitular(id_mesa, turnoId, abridorId);
+                const meseroId = titular.id;
+                if (titular.esAsignado && Number(titular.id) !== Number(abridorId)) {
+                    req.auditoriaExtra = {
+                        mesero_titular_id: titular.id,
+                        mesero_titular_nombre: titular.nombre,
+                        operado_por_id: abridorId
+                    };
+                }
                 const [nuevo] = await pool.query(`
                     INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
                     VALUES (?, ?, ?, 'pendiente', 'pendiente')
@@ -935,7 +985,8 @@ module.exports = {
             }
 
             const idMesa = autoRows[0].id_mesa;
-            const meseroId = req.user ? req.user.id : 1;
+            // Quien abre/opera la mesa (puede no ser su titular).
+            const abridorId = req.user ? req.user.id : 1;
 
             const [turnos] = await pool.query("SELECT id FROM turnos_servicio WHERE estado = 'abierto' ORDER BY id DESC LIMIT 1");
             if (turnos.length === 0) {
@@ -956,6 +1007,19 @@ module.exports = {
                 // La lectura QR que crea orden también toma la orden.
                 if (!(await PosAutorizacionService.puedeTomarOrdenes(rolEmpleado(req)))) {
                     return res.status(403).json({ success: false, codigo: 'ORDEN_NO_AUTORIZADA', message: MENSAJE_TOMA_NO_AUTORIZADA });
+                }
+                // Titularidad del salon: la orden se atribuye al dependiente
+                // asignado a la mesa en el turno (si lo hay), aunque quien la
+                // opere sea otro miembro del circuito (p. ej. un capitan).
+                // El operador real queda registrado en la auditoria.
+                const titular = await MesaAsignacionService.resolverMeseroTitular(idMesa, turnoId, abridorId);
+                const meseroId = titular.id;
+                if (titular.esAsignado && Number(titular.id) !== Number(abridorId)) {
+                    req.auditoriaExtra = {
+                        mesero_titular_id: titular.id,
+                        mesero_titular_nombre: titular.nombre,
+                        operado_por_id: abridorId
+                    };
                 }
                 const [nuevo] = await pool.query(`
                     INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)

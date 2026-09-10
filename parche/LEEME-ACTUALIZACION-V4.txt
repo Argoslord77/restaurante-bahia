@@ -1,0 +1,56 @@
+ACTUALIZACIÓN V4 — Capitán opera TODAS las mesas sin suplantar al titular
+Restaurante Bahía · 2026-09-10 · Aplica sobre la V3 (bd26e57)
+====================================================================
+
+QUÉ RESUELVE
+------------
+Con el modo "Solo capitanes" (Opciones generales) el capitán necesita operar
+con todas las mesas del salón estén asignadas a su usuario o no.
+
+- El capitán VISUALIZA todas las mesas desde su dashboard (ya lo hacía; ahora
+  queda explícito y cada tarjeta se etiqueta con "Asignada a: <nombre>" cuando
+  la mesa pertenece a otro dependiente).
+- El capitán ACCEDE y OPERA cualquier mesa (abrir, comandar, precuenta, cobro)
+  igual que el dependiente asignado: POS, precuenta y cobro no tienen puertas
+  de titularidad (verificado: solo filtran por pedido/mesa).
+- Al operar mesa ajena, el capitán NO SUPLANTA al dependiente asignado en los
+  registros de negocio: todo pedido nuevo queda a nombre del titular
+  (id_usuario_mesero = asignado vigente en el turno; si la mesa no tiene
+  asignado, queda a nombre de quien la abre). POS muestra el chip
+  "TITULAR: <nombre>" cuando el operador no es el titular.
+- La AUDITORÍA conserva al operador real (actor = capitán) y además guarda al
+  titular en datos_operacion (mesero_titular_id/nombre, operado_por_id).
+
+ARCHIVOS INCLUIDOS (10)
+-----------------------
+controllers/posController.js                  titular en 4 creaciones + flag operadorEsTitular
+controllers/posController.test.js             +8 pruebas de titularidad
+controllers/pedidoController.js               titular en crearPedido (apertura admin)
+controllers/dashboardDependienteController.js rama capitán explícita + mapa de asignados
+controllers/dashboardDependienteController.test.js +3 pruebas (capitán ve todo)
+middlewares/auditoria.js                      hook req.auditoriaExtra del controlador
+services/mesaAsignacionService.js             NUEVO: asignado vigente + titular (nunca lanza)
+services/mesaAsignacionService.test.js        NUEVO: 9 pruebas
+views/dependiente/dashboard.ejs               etiqueta "Asignada a:"
+views/pos.ejs                                 chip "TITULAR:" en el carrito
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Descomprima el zip en la RAÍZ del proyecto conservando las carpetas.
+2. No requiere migración SQL (solo código; usa tablas existentes).
+3. Reinicie el servidor (pm2/node).
+4. Verificación rápida:
+   - Entre como capitán: el dashboard muestra todas las mesas etiquetadas.
+   - Abra una mesa asignada a un dependiente: el pedido queda a nombre del
+     dependiente y el POS muestra "TITULAR: <nombre>".
+   - Auditoría: el asiento muestra actor = capitán y datos_operacion con el
+     titular (mesero_titular_id).
+5. Pruebas: npx jest → 241/241 (3 suites de entorno fallan igual que en base).
+
+NOTAS
+-----
+- Si una mesa no tiene asignación vigente en el turno, el pedido queda a
+  nombre de quien la abre (comportamiento anterior, sin cambios).
+- El servicio de asignación nunca lanza excepciones: ante un fallo de BD, el
+  tablero se muestra sin etiquetas y el pedido se atribuye al abridor.
+- La rama del dependiente no cambia: sigue viendo solo sus mesas asignadas.

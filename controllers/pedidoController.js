@@ -1,4 +1,5 @@
 const pedidoService = require('../services/pedidoService');
+const MesaAsignacionService = require('../services/mesaAsignacionService');
 const inventarioService = require('../services/inventarioService');
 const db = require('../config/db');
 const Pedido = require('../models/pedidoModel'); // Importación necesaria para usar addDetailWithModifiers
@@ -47,12 +48,24 @@ const pedidoController = {
     crearPedido: async (req, res) => {
         try {
             const { id_mesa } = req.body;
-            const id_usuario_mesero = req.user?.id;
+            const abridorId = req.user?.id;
             const turno_servicio_id = req.turnoServicioId;
 
-            if (!id_usuario_mesero) {
+            if (!abridorId) {
                 req.flash('error_msg', 'Sesión inválida o expirada. Inicie sesión de nuevo para abrir una mesa.');
                 return res.redirect('/login');
+            }
+            // Titularidad del salon: si la mesa tiene dependiente asignado en
+            // el turno, el pedido se le atribuye a el; quien abre la mesa
+            // queda registrado en la auditoria.
+            const titular = await MesaAsignacionService.resolverMeseroTitular(id_mesa, turno_servicio_id, abridorId);
+            const id_usuario_mesero = titular.id;
+            if (titular.esAsignado && Number(titular.id) !== Number(abridorId)) {
+                req.auditoriaExtra = {
+                    mesero_titular_id: titular.id,
+                    mesero_titular_nombre: titular.nombre,
+                    operado_por_id: abridorId
+                };
             }
 
             const nuevoId = await pedidoService.crearNuevoPedido(id_mesa, id_usuario_mesero, turno_servicio_id);

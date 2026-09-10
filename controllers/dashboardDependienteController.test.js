@@ -219,3 +219,65 @@ describe('DashboardDependienteController — POS mesero (visualización)', () =>
         });
     });
 });
+
+describe('DashboardDependienteController — titularidad del salón (capitán)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('el capitán ve TODAS las mesas del salón (sin filtro de asignación)', async () => {
+        turnoService.obtenerTurnoActivo.mockResolvedValue({ id: 7 });
+        const mesas = [
+            { id: 1, numero: '1', nombre: '1', id_pedido_activo: null },
+            { id: 2, numero: '2', nombre: '2', id_pedido_activo: 44 }
+        ];
+        db.query.mockImplementation(async () => {
+            const n = db.query.mock.calls.length;
+            if (n === 1) return [[...mesas], []];
+            if (n === 2) return [[{ total_mesas: 2, mesas_ocupadas: 1, pedidos_pendientes: 1, en_preparacion: 0, ventas_del_turno: 100 }], []];
+            if (n === 3) return [[{ mesa_id: 1, id: 5, usuario: 'juan', nombre: 'Juan', apellidos: 'Perez' }], []];
+            return [[], []];
+        });
+
+        const { req, res } = crearReqRes({ user: { id: 9, rol: 'capitan', nombre: 'Capitán' } });
+        await controller.viewDependienteDashboard(req, res);
+
+        const sqlMesas = db.query.mock.calls[0][0];
+        expect(sqlMesas).not.toContain('dam.dependiente_id = ?');
+        expect(sqlMesas).toContain('FROM mesas m');
+
+        const datos = res.render.mock.calls[0][1];
+        expect(datos.mesas).toHaveLength(2);
+        expect(datos.mesas[0].dependiente_asignado).toEqual({ id: 5, usuario: 'juan', nombre: 'Juan Perez' });
+        expect(datos.mesas[1].dependiente_asignado).toBeNull();
+        expect(datos.modoTomaOrdenes).toBe('todos');
+        expect(datos.puedeTomarOrdenes).toBe(true);
+    });
+
+    it('el dependiente sigue viendo solo sus mesas asignadas', async () => {
+        turnoService.obtenerTurnoActivo.mockResolvedValue({ id: 7 });
+        db.query.mockResolvedValue([[], []]);
+
+        const { req, res } = crearReqRes({ user: { id: 9, rol: 'dependiente', nombre: 'Juan' } });
+        await controller.viewDependienteDashboard(req, res);
+
+        const sqlMesas = db.query.mock.calls[0][0];
+        expect(sqlMesas).toContain('dam.dependiente_id = ?');
+    });
+
+    it('el salón no se rompe si falla la consulta de asignados', async () => {
+        turnoService.obtenerTurnoActivo.mockResolvedValue({ id: 7 });
+        db.query.mockImplementation(async () => {
+            const n = db.query.mock.calls.length;
+            if (n === 1) return [[{ id: 1, numero: '1', nombre: '1' }], []];
+            if (n === 2) return [[{ total_mesas: 1, mesas_ocupadas: 0, pedidos_pendientes: 0, en_preparacion: 0, ventas_del_turno: 0 }], []];
+            throw new Error('DB down');
+        });
+
+        const { req, res } = crearReqRes({ user: { id: 9, rol: 'capitan', nombre: 'Capitán' } });
+        await controller.viewDependienteDashboard(req, res);
+
+        const datos = res.render.mock.calls[0][1];
+        expect(datos.mesas[0].dependiente_asignado).toBeNull();
+    });
+});
