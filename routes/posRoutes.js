@@ -22,7 +22,7 @@ router.get('/dependiente/dashboard', ensureAuthenticated, checkRole(['superadmin
 router.post('/pos/init-manual', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posValidationRules.initOrderManual, handleValidationErrors, ensureAuthenticated, posController.initOrderManual);
 
 // Variante 2: Entrada automática por lectura de Código QR físico
-router.get('/qr/:hash', ensureAuthenticated, posController.initOrderQR);
+router.get('/qr/:hash', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.initOrderQR);
 
 // ========================================================
 // ENDPOINTS ASÍNCRONOS (API)
@@ -61,7 +61,9 @@ router.put('/pos/cancelar-item/:id_detalle', ensureAuthenticated, asegurarTurnoA
 router.get('/api/pos/items-listos/:id_pedido', posController.getItemsListos);
 
 // Obtener monedas y tasas vigentes del turno activo para el modal de cobro POS
-router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'dependiente']), turnoController.obtenerMonedasTurnoActivo);
+// (el capitán cobra como un dependiente más: sin su rol aquí el modal de
+// cobro le fallaba al consultar las monedas del turno).
+router.get('/api/pos/monedas-turno-activo', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero', 'dependiente', 'capitan']), turnoController.obtenerMonedasTurnoActivo);
 
 router.get('/pos/alertas-pendientes', asegurarTurnoActivo, posController.obtenerAlertasPendientes);
 
@@ -83,7 +85,7 @@ router.get('/pos/precuenta/:id_pedido', ensureAuthenticated, checkRole(['superad
 router.post('/pos/cobrar/:id_pedido', ensureAuthenticated, asegurarTurnoActivo, checkRole(['capitan', 'superadministrador', 'administrador', 'cajero', 'dependiente']), posController.procesarCobroAvanzado);
 
 // Abrir/Obtener pedido activo de una mesa y cargar POS
-router.get('/pos/mesa/:idMesa', asegurarTurnoActivo, posController.abrirOObtenerPedidoMesa);
+router.get('/pos/mesa/:idMesa', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.abrirOObtenerPedidoMesa);
 
 // Interfaz fija del punto de venta acoplada al pedido en curso
 router.get('/pos/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.viewPOS);

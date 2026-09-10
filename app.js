@@ -184,9 +184,17 @@ app.use('/admin', licenciaRoutes);
 app.use(posRoutes);
 app.use(clienteRoutes);
 
-// Ruta inicial 
+// Ruta inicial (según el rol: el personal de servicio entra a su circuito
+// dependiente/capitán y no al panel administrativo, al que no tiene acceso)
 app.get('/', (req, res) => {
-    res.redirect('/admin/dashboard'); 
+    const { destinoPorRol } = require('./middlewares/auth');
+    const rol = (req.session && req.session.user && req.session.user.rol)
+        || (req.user && req.user.rol)
+        || null;
+    if (!req.isAuthenticated || !req.isAuthenticated() || !rol) {
+        return res.redirect('/login');
+    }
+    return res.redirect(destinoPorRol(rol) || '/login');
 });
 
 // ==========================================

@@ -2,6 +2,18 @@ const pool = require('../config/db');
 const InventarioService = require('../services/inventarioService');
 const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
+const PosAutorizacionService = require('../services/posAutorizacionService');
+
+/**
+ * Rol del empleado autenticado (Passport o sesión de respaldo).
+ */
+function rolEmpleado(req) {
+    return (req.user && req.user.rol)
+        || (req.session && req.session.user && req.session.user.rol)
+        || null;
+}
+
+const MENSAJE_TOMA_NO_AUTORIZADA = 'Solo los capitanes están autorizados a tomar órdenes según la configuración general (Configuración → Opciones generales).';
 
 module.exports = {
     // Vista Principal del TPV / POS
@@ -10,6 +22,15 @@ module.exports = {
             const pedidoId = req.params.id_pedido || req.query.id_pedido || null;
             const habilitarMonitores = await SettingService.get('habilitar_monitores_elaboracion', true);
             const facturaImpuesto = parseFloat(await SettingService.get('factura_impuesto', 0) || 0);
+
+            // Autorizaciones del circuito de servicio (Opciones generales):
+            // quién puede tomar órdenes y cómo se autorizan las cortesías.
+            const rolActual = rolEmpleado(req);
+            const modoTomaOrdenes = await PosAutorizacionService.modoTomaOrdenes();
+            const puedeTomarOrdenes = await PosAutorizacionService.puedeTomarOrdenes(rolActual);
+            const cortesiaRequiereAutorizacion = await PosAutorizacionService.cortesiaRequiereAutorizacion();
+            const cortesiaRolesAutorizan = await PosAutorizacionService.rolesAutorizanCortesia();
+            const puedeAutorizarCortesia = await PosAutorizacionService.puedeAutorizarCortesia(rolActual);
 
             // Modo visualización (herramienta "POS mesero"): el administrador
             // consulta la orden sin poder modificarla. La vista deshabilita
@@ -139,6 +160,12 @@ module.exports = {
                 soloVisualizacion,
                 posVolverUrl,
                 meseroDeLaOrden,
+                modoTomaOrdenes,
+                puedeTomarOrdenes,
+                cortesiaRequiereAutorizacion,
+                cortesiaRolesAutorizan,
+                puedeAutorizarCortesia,
+                mensajeTomaNoAutorizada: MENSAJE_TOMA_NO_AUTORIZADA,
                 user: req.user || null
             });
         } catch (err) {
@@ -178,6 +205,12 @@ module.exports = {
             let idMesa = body.id_mesa || null;
             const meseroId = req.user ? req.user.id : 1;
             const habilitarMonitores = await SettingService.get('habilitar_monitores_elaboracion', true);
+
+            // Puerta de autorización (Opciones generales): si la casa
+            // configuró "solo capitanes", el dependiente no puede tomar.
+            if (!(await PosAutorizacionService.puedeTomarOrdenes(rolEmpleado(req)))) {
+                return res.status(403).json({ success: false, codigo: 'ORDEN_NO_AUTORIZADA', message: MENSAJE_TOMA_NO_AUTORIZADA });
+            }
 
             if (!Array.isArray(items)) {
                 return res.status(400).json({ success: false, message: 'El listado de ítems no es válido.' });
@@ -511,6 +544,58 @@ module.exports = {
 
             if (!pedidoId) return res.status(400).json({ success: false, message: 'ID de pedido requerido.' });
 
+            // ============================================================
+            // AUTORIZACIÓN DE CORTESÍA (Opciones generales)
+            // La mesa de cortesía (100% gratis) exige motivo obligatorio y,
+            // si quien cobra no es supervisor, las credenciales de uno
+            // (administrador o capitán) que la autorice. Todo queda
+            // registrado en el pedido y en la auditoría global.
+            // ============================================================
+            let cortesiaAutorizadaPor = null;
+            let cortesiaMotivo = null;
+            let cortesiaColumnasOk = false;
+            if (es_cortesia) {
+                const requiereAuth = await PosAutorizacionService.cortesiaRequiereAutorizacion();
+                if (requiereAuth) {
+                    cortesiaMotivo = String(body.cortesia_motivo || body.motivo_ajuste || '').trim();
+                    if (!cortesiaMotivo) {
+                        return res.status(400).json({
+                            success: false,
+                            requiere_autorizacion: true,
+                            message: 'Las cortesías requieren un motivo obligatorio y la autorización de un supervisor.'
+                        });
+                    }
+                    if (await PosAutorizacionService.puedeAutorizarCortesia(rolEmpleado(req))) {
+                        cortesiaAutorizadaPor = req.user ? req.user.id
+                            : ((req.session && req.session.user && req.session.user.id) || null);
+                    } else {
+                        const cred = (body.autorizacion && typeof body.autorizacion === 'object') ? body.autorizacion : {};
+                        if (!cred.usuario || !cred.password) {
+                            return res.status(403).json({
+                                success: false,
+                                requiere_autorizacion: true,
+                                message: 'Esta cortesía debe ser autorizada por un supervisor (administrador o capitán). Indica sus credenciales.'
+                            });
+                        }
+                        const verif = await PosAutorizacionService.verificarSupervisor(cred.usuario, cred.password);
+                        if (!verif.ok) {
+                            return res.status(403).json({ success: false, requiere_autorizacion: true, message: verif.error });
+                        }
+                        const cobradorId = req.user ? req.user.id : null;
+                        if (cobradorId && verif.supervisor.id === cobradorId) {
+                            return res.status(403).json({
+                                success: false,
+                                requiere_autorizacion: true,
+                                message: 'El supervisor que autoriza debe ser diferente del usuario que cobra.'
+                            });
+                        }
+                        cortesiaAutorizadaPor = verif.supervisor.id;
+                    }
+                    cortesiaMotivo = cortesiaMotivo.slice(0, 255);
+                    cortesiaColumnasOk = await PosAutorizacionService.asegurarColumnasCortesia();
+                }
+            }
+
             const [pedidoRows] = await pool.query(`
                 SELECT p.*, m.carta, m.numero AS numero_mesa
                 FROM pedidos p
@@ -645,12 +730,22 @@ module.exports = {
 
             connection = await pool.getConnection();
             await connection.beginTransaction();
-            await connection.query(`
-                UPDATE pedidos
-                SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
-                    id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
-                WHERE id = ?
-            `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
+            if (es_cortesia && cortesiaAutorizadaPor && cortesiaColumnasOk) {
+                await connection.query(`
+                    UPDATE pedidos
+                    SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
+                        id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?,
+                        cortesia_autorizada_por = ?, cortesia_motivo = ?, cortesia_autorizada_en = NOW()
+                    WHERE id = ?
+                `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, cortesiaAutorizadaPor, cortesiaMotivo, pedidoId]);
+            } else {
+                await connection.query(`
+                    UPDATE pedidos
+                    SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
+                        id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
+                    WHERE id = ?
+                `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
+            }
             await connection.query(`
                 UPDATE detalles_pedido SET estado_item = 'entregado'
                 WHERE id_pedido = ? AND estado_item != 'cancelado'
@@ -678,7 +773,16 @@ module.exports = {
             }
             await pool.query("UPDATE mesas SET estado = 'libre' WHERE id = ?", [pedido.id_mesa]);
 
-            return res.json({ success: true, carta: pricingContext.carta, moneda_codigo: pricingContext.moneda_codigo, total: totalFinal, total_orden: totalOrden, propina: prop, message: 'Mesa cobrada y liberada con éxito' });
+            return res.json({
+                success: true,
+                carta: pricingContext.carta,
+                moneda_codigo: pricingContext.moneda_codigo,
+                total: totalFinal,
+                total_orden: totalOrden,
+                propina: prop,
+                cortesia_autorizada_por: es_cortesia ? cortesiaAutorizadaPor : null,
+                message: es_cortesia ? 'Cortesía autorizada: mesa liberada con éxito' : 'Mesa cobrada y liberada con éxito'
+            });
         } catch (err) {
             if (connection) {
                 try { await connection.rollback(); } catch (_) { /* noop */ }
@@ -735,6 +839,13 @@ module.exports = {
             if (pedidos.length > 0) {
                 return res.redirect(`/pos/${pedidos[0].id}${prePedidoQuery}`);
             } else {
+                // Abrir mesa crea la orden: puerta de autorización (solo
+                // quien puede TOMAR órdenes; el resto solo opera órdenes
+                // ya abiertas por un autorizado).
+                if (!(await PosAutorizacionService.puedeTomarOrdenes(rolEmpleado(req)))) {
+                    if (req.flash) req.flash('error_msg', MENSAJE_TOMA_NO_AUTORIZADA);
+                    return res.redirect('/dependiente/dashboard');
+                }
                 const [turnos] = await pool.query("SELECT id FROM turnos_servicio WHERE estado = 'abierto' ORDER BY id DESC LIMIT 1");
                 const turnoId = turnos.length > 0 ? turnos[0].id : 1;
                 const meseroId = req.user ? req.user.id : 1;
@@ -761,6 +872,12 @@ module.exports = {
 
             if (!id_mesa) {
                 return res.status(400).json({ success: false, message: 'id_mesa es requerido' });
+            }
+
+            // Puerta de autorización (Opciones generales): abrir mesa toma
+            // la orden; solo el personal autorizado puede hacerlo.
+            if (!(await PosAutorizacionService.puedeTomarOrdenes(rolEmpleado(req)))) {
+                return res.status(403).json({ success: false, codigo: 'ORDEN_NO_AUTORIZADA', message: MENSAJE_TOMA_NO_AUTORIZADA });
             }
 
             if (!pool) {
@@ -827,7 +944,7 @@ module.exports = {
             const turnoId = turnos[0].id;
 
             const [existentes] = await pool.query(`
-                SELECT id FROM pedidos 
+                SELECT id FROM pedidos
                 WHERE id_mesa = ? AND estado_pago = 'pendiente' AND turno_servicio_id = ?
                 ORDER BY id DESC LIMIT 1
             `, [idMesa, turnoId]);
@@ -836,6 +953,10 @@ module.exports = {
             if (existentes.length > 0) {
                 pedidoId = existentes[0].id;
             } else {
+                // La lectura QR que crea orden también toma la orden.
+                if (!(await PosAutorizacionService.puedeTomarOrdenes(rolEmpleado(req)))) {
+                    return res.status(403).json({ success: false, codigo: 'ORDEN_NO_AUTORIZADA', message: MENSAJE_TOMA_NO_AUTORIZADA });
+                }
                 const [nuevo] = await pool.query(`
                     INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, estado_pedido, estado_pago)
                     VALUES (?, ?, ?, 'pendiente', 'pendiente')

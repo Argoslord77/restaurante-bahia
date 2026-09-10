@@ -758,9 +758,27 @@
         body.pos-vista .remove-item,
         body.pos-vista .clear-note-btn,
         body.pos-vista .add-notes { opacity: .45; }
+        /* ===== Toma de órdenes restringida (Opciones generales) ===== */
+        .pos-toma-banner {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 18px;
+            background: linear-gradient(90deg, #fef3c7, #fde68a);
+            color: #78350f;
+            border-bottom: 1px solid #f59e0b;
+            font-size: 13px;
+        }
+        .pos-toma-banner i.fa-user-lock { font-size: 20px; }
+        .pos-toma-banner small { display: block; opacity: .85; }
+        body.pos-sin-toma #btn-save-order { opacity: .55; }
+        body.pos-sin-toma .dish-card { cursor: not-allowed; }
     </style>
 </head>
-<body<% if (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) { %> class="pos-vista"<% } %>>
+<%
+    const posSinToma = (typeof puedeTomarOrdenes !== 'undefined' && puedeTomarOrdenes === false);
+%>
+<body<% if ((typeof soloVisualizacion !== 'undefined' && soloVisualizacion) || posSinToma) { %> class="<%= (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) ? 'pos-vista' : '' %><%= posSinToma ? ' pos-sin-toma' : '' %>"<% } %>>
     <input type="hidden" id="pos_id_pedido" value="<%= id_pedido %>">
     <input type="hidden" id="pos_id_mesa" value="<%= typeof id_mesa !== 'undefined' ? id_mesa : '' %>">
 
@@ -848,6 +866,14 @@
         <a href="<%= posVolverUrl || '/admin/pos-mesero' %>" class="btn btn-sm btn-dark rounded-pill px-3 flex-shrink-0">
             <i class="fa-solid fa-arrow-left me-1"></i> Volver al salón del mesero
         </a>
+    </div>
+    <% } else if (posSinToma) { %>
+    <div class="pos-toma-banner">
+        <i class="fa-solid fa-user-lock"></i>
+        <div class="flex-grow-1">
+            <strong>Solo los capitanes pueden tomar órdenes</strong> (Configuración → Opciones generales).
+            <small>Puedes entregar productos, consultar la pre-cuenta y cobrar, pero no agregar productos a la orden.</small>
+        </div>
     </div>
     <% } %>
 
@@ -1102,6 +1128,44 @@
         const SOLO_VISUALIZACION = <%= (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) ? 'true' : 'false' %>;
         const POS_DASHBOARD_URL = '<%= posDashboardUrl %>';
         const FACTURA_IMPUESTO = <%= parseFloat(typeof facturaImpuesto !== 'undefined' ? facturaImpuesto : 0) || 0 %>;
+        // Autorizaciones del circuito de servicio (Opciones generales). Si la
+        // vista no las trae (render antiguo), se permite y el servidor decide.
+        const PUEDE_TOMAR_ORDENES = <%= (typeof puedeTomarOrdenes === 'undefined' || puedeTomarOrdenes) ? 'true' : 'false' %>;
+        const MENSAJE_TOMA_BLOQUEO = <%- JSON.stringify(typeof mensajeTomaNoAutorizada !== 'undefined' && mensajeTomaNoAutorizada ? mensajeTomaNoAutorizada : 'No estás autorizado a tomar órdenes según la configuración general.') %>;
+        const CORTESIA_REQUIERE_AUTH = <%= (typeof cortesiaRequiereAutorizacion !== 'undefined' && cortesiaRequiereAutorizacion) ? 'true' : 'false' %>;
+        const PUEDE_AUTORIZAR_CORTESIA = <%= (typeof puedeAutorizarCortesia !== 'undefined' && puedeAutorizarCortesia) ? 'true' : 'false' %>;
+
+        // Toma de órdenes restringida a capitanes: bloqueo en fase de captura
+        // de TODO lo que agrega productos (agregar, cantidades, notas y
+        // guardar ronda). Entregar, cancelar, pre-cuenta y cobrar siguen
+        // habilitados: no son "tomar" la orden. El servidor revalida con 403.
+        if (!PUEDE_TOMAR_ORDENES && !SOLO_VISUALIZACION) {
+            const SELECTORES_TOMA_BLOQUEADA = [
+                '#btn-save-order',
+                '.update-qty',
+                '.remove-item',
+                '.clear-note-btn',
+                '.add-notes',
+                '.cart-item-note',
+                '#dishes-grid .dish-card'
+            ].join(',');
+            document.addEventListener('click', (e) => {
+                const objetivo = e.target.closest(SELECTORES_TOMA_BLOQUEADA);
+                if (!objetivo) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'warning',
+                        title: MENSAJE_TOMA_BLOQUEO,
+                        showConfirmButton: false,
+                        timer: 2300
+                    });
+                }
+            }, true);
+        }
         let carrito = []; 
         let historicoDetalles = []; 
         let activeCategory = 'todos';
@@ -1304,6 +1368,15 @@
             const prePedidoData = urlParams.get('cargarPrePedido');
 
             if (!prePedidoData) return;
+
+            // Sin autorización de toma, los pre-pedidos del cliente no se
+            // cargan a la orden (los atiende un capitán). Se limpia el
+            // parámetro para no reintentar en cada recarga.
+            if (!PUEDE_TOMAR_ORDENES) {
+                try { window.history.replaceState({}, document.title, window.location.pathname); } catch (_) {}
+                Swal.fire('Sin autorización para tomar órdenes', MENSAJE_TOMA_BLOQUEO, 'warning');
+                return;
+            }
 
             try {
                 const items = JSON.parse(decodeURIComponent(prePedidoData));
@@ -2448,6 +2521,23 @@
                                 <label class="form-check-label small" for="swal-es-factura">Factura (Crédito)</label>
                             </div>
                         </div>
+
+                        <div id="nota-cortesia-auth" class="alert alert-warning py-2 px-2.5 mt-2 mb-0 small text-start" style="display:none;"></div>
+
+                        <div id="bloque-autorizacion-cortesia" class="mt-2 p-2 rounded border border-warning bg-light text-start" style="display:none;">
+                            <div class="small fw-bold text-warning-emphasis mb-1">
+                                <i class="fa-solid fa-shield-halved me-1"></i>Autorización del supervisor
+                            </div>
+                            <div class="small text-muted mb-2">Tu rol no puede autorizar cortesías. Indica las credenciales del supervisor (administrador o capitán) que la aprueba.</div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <input type="text" id="swal-sup-usuario" class="form-control form-control-sm" placeholder="Usuario supervisor" autocomplete="off">
+                                </div>
+                                <div class="col-6">
+                                    <input type="password" id="swal-sup-password" class="form-control form-control-sm" placeholder="Contraseña" autocomplete="off">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 `,
                 focusConfirm: false,
@@ -2535,14 +2625,39 @@
                         });
                     }
 
+                    const notaCortesiaAuth = document.getElementById('nota-cortesia-auth');
+                    const bloqueAuthCortesia = document.getElementById('bloque-autorizacion-cortesia');
+                    const inputMotivoAjuste = document.getElementById('swal-motivo-ajuste');
+
+                    function actualizarBloqueCortesia() {
+                        const activa = Boolean(chkCortesia && chkCortesia.checked && CORTESIA_REQUIERE_AUTH);
+                        if (notaCortesiaAuth) {
+                            notaCortesiaAuth.style.display = activa ? 'block' : 'none';
+                            if (activa) {
+                                notaCortesiaAuth.innerHTML = PUEDE_AUTORIZAR_CORTESIA
+                                    ? '<i class="fa-solid fa-circle-info me-1"></i>Como supervisor, autorizas esta cortesía con tu cobro. El <b>motivo</b> es obligatorio.'
+                                    : '<i class="fa-solid fa-shield-halved me-1"></i>Esta cortesía requiere las <b>credenciales de un supervisor</b> y el <b>motivo</b> obligatorio.';
+                            }
+                        }
+                        if (bloqueAuthCortesia) {
+                            bloqueAuthCortesia.style.display = (activa && !PUEDE_AUTORIZAR_CORTESIA) ? 'block' : 'none';
+                        }
+                        if (inputMotivoAjuste) {
+                            inputMotivoAjuste.placeholder = (chkCortesia && chkCortesia.checked) ? 'Motivo (OBLIGATORIO en cortesía)' : 'VIP / Servicio';
+                            inputMotivoAjuste.classList.toggle('border-warning', Boolean(chkCortesia && chkCortesia.checked));
+                        }
+                    }
+
                     if (chkCortesia) {
                         chkCortesia.addEventListener('change', (e) => {
                             if (e.target.checked) {
                                 if (chkFactura) chkFactura.checked = false;
                                 if (chkPendiente) chkPendiente.checked = false;
                             }
+                            actualizarBloqueCortesia();
                             updateTabla();
                         });
+                        actualizarBloqueCortesia();
                     }
 
                     if (chkFactura) {
@@ -2611,6 +2726,25 @@
                         return false;
                     }
 
+                    // Cortesía autorizada: motivo obligatorio y, si quien
+                    // cobra no es supervisor, credenciales del supervisor.
+                    let autorizacion = null;
+                    if (esCortesia && CORTESIA_REQUIERE_AUTH) {
+                        if (!motivo_ajuste || !String(motivo_ajuste).trim()) {
+                            Swal.showValidationMessage('Las cortesías requieren un motivo obligatorio (campo Motivo).');
+                            return false;
+                        }
+                        if (!PUEDE_AUTORIZAR_CORTESIA) {
+                            const supUsuario = (document.getElementById('swal-sup-usuario')?.value || '').trim();
+                            const supPassword = document.getElementById('swal-sup-password')?.value || '';
+                            if (!supUsuario || !supPassword) {
+                                Swal.showValidationMessage('Indica el usuario y la contraseña del supervisor que autoriza la cortesía.');
+                                return false;
+                            }
+                            autorizacion = { usuario: supUsuario, password: supPassword };
+                        }
+                    }
+
                     return {
                         pagos,
                         es_cortesia: esCortesia,
@@ -2619,7 +2753,9 @@
                         descuento,
                         recargo,
                         propina,
-                        motivo_ajuste
+                        motivo_ajuste,
+                        cortesia_motivo: motivo_ajuste,
+                        autorizacion
                     };
                 }
             });
@@ -2645,7 +2781,11 @@
                         window.location.href = POS_DASHBOARD_URL;
                     });
                 } else {
-                    Swal.fire('Error en el cobro', data.message || 'No se pudo registrar el pago', 'error');
+                    Swal.fire(
+                        data.requiere_autorizacion ? 'Cortesía no autorizada' : 'Error en el cobro',
+                        data.message || 'No se pudo registrar el pago',
+                        'error'
+                    );
                 }
             } catch (err) {
                 Swal.fire('Error de Red', 'Fallo al procesar el pago.', 'error');
@@ -2665,6 +2805,50 @@
                         let hayNuevosListos = false;
 
                         data.itemsListos.forEach(item => {
+                            if (!itemsListosAnteriores.has(item.id_detalle)) {
+                                itemsListosAnteriores.add(item.id_detalle);
+                                hayNuevosListos = true;
+
+                                const hItem = historicoDetalles.find(d => d.id_detalle == item.id_detalle);
+                                if (hItem) hItem.estado = 'listo';
+                            }
+                        });
+
+                        if (hayNuevosListos) {
+                            renderHistory();
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: '¡Nuevos platillos listos!',
+                                showConfirmButton: false,
+                                timer: 3000
+                            });
+                        }
+                    }
+                })
+                .catch(err => console.error("Error al consultar ítems listos:", err));
+        }
+
+        let pollTimer = null;
+        function iniciarPollingItemsListos() {
+            if (!MONITORES_HABILITADOS) return;
+            verificarItemsListos();
+            if (!pollTimer) pollTimer = setInterval(verificarItemsListos, 8000);
+        }
+
+        function detenerPollingItemsListos() {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        }
+
+        iniciarPollingItemsListos();
+        window.addEventListener('beforeunload', detenerPollingItemsListos);
+    </script>
+</body>
+</html>                 data.itemsListos.forEach(item => {
                             if (!itemsListosAnteriores.has(item.id_detalle)) {
                                 itemsListosAnteriores.add(item.id_detalle);
                                 hayNuevosListos = true;

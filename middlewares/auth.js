@@ -1,7 +1,37 @@
 const db = require('../config/db');
 const { hashToken } = require('../config/tokens');
 
+/**
+ * Destino inicial de cada rol tras un acceso válido.
+ * El capitán es personal de servicio con rol elevado: comparte el circuito
+ * del dependiente (dashboard -> POS -> precuenta -> cobro) y NO el panel
+ * administrativo. Los roles sin panel asignado devuelven null (se les
+ * cierra la sesión con un aviso en lugar de dejarlos en un bucle login).
+ */
+const DESTINOS_POR_ROL = {
+    superadministrador: '/admin/dashboard',
+    administrador: '/admin/dashboard',
+    dependiente: '/dependiente/dashboard',
+    capitan: '/dependiente/dashboard',
+    bartender: '/monitor/bar',
+    'jefe-cocina': '/monitor/cocina',
+    cocinero: '/monitor/cocina',
+    'ayudante-cocina': '/monitor/cocina',
+    luncher: '/monitor/cocina',
+    porcionador: '/monitor/cocina',
+    cajero: '/admin/pedidos',
+    economico: '/admin/cierre-dia',
+    almacenero: '/admin/almacenes'
+};
+
+function destinoPorRol(rol) {
+    if (!rol) return null;
+    return DESTINOS_POR_ROL[String(rol).toLowerCase()] || null;
+}
+
 module.exports = {
+    destinoPorRol,
+    DESTINOS_POR_ROL,
     // 1. Tu guardián existente de autenticación por sesión
     ensureAuthenticated: function(req, res, next) {
         if (req.isAuthenticated()) {
@@ -19,7 +49,20 @@ module.exports = {
                 return next(); // El usuario tiene el rol correcto, continúa a la ruta
             }
             
-            // Si no tiene los permisos necesarios, lanzamos un error y lo devolvemos
+            // Un usuario autenticado con otro rol no debe caer al formulario
+            // de acceso (antes el capitán terminaba en un bucle /login):
+            // se le devuelve a SU panel con un aviso. Solo los anónimos
+            // (o roles sin panel asignado) van al login/logout.
+            if (req.user && req.user.rol) {
+                const destino = destinoPorRol(req.user.rol);
+                req.flash('error_msg', 'No tienes permisos autorizados para acceder a esta sección.');
+                if (destino && req.path !== destino && req.originalUrl !== destino) {
+                    return res.redirect(destino);
+                }
+                if (!destino) {
+                    return res.redirect('/logout');
+                }
+            }
             req.flash('error_msg', 'No tienes permisos autorizados para acceder a esta sección.');
             res.redirect('/login'); // Para evitar redirecciones infinitas
         };

@@ -5,6 +5,13 @@ const controller = require('./dashboardDependienteController');
 
 jest.mock('../config/db');
 jest.mock('../services/turnoService');
+// El salón consulta las Opciones generales (quién toma órdenes) vía
+// SettingService: se mockea para no contaminar el conteo de consultas SQL.
+jest.mock('../services/settingService', () => ({
+    get: jest.fn(async (clave, valorPorDefecto) => valorPorDefecto),
+    getAll: jest.fn(async () => ({})),
+    set: jest.fn(async () => true)
+}));
 
 function crearReqRes({ query = {}, user = null } = {}) {
     const req = {

@@ -48,35 +48,13 @@ function auditarSesion(req, { accion, exitosa, severidad, usuario = null, datos 
 router.get('/login', (req, res) => {
     //Redireccionar al usuario segun su rol en el Sistema
     if (req.isAuthenticated() && typeof req.session.user !== 'undefined'){
-        switch(req.session.user.rol){
-            case "superadministrador":
-                return res.redirect('/admin/dashboard');
-            break;
-            case "administrador":
-                return res.redirect('/admin/dashboard');
-            break;
-            case "dependiente":
-                return res.redirect('/dependiente/dashboard');
-                break;
-            case "bartender":
-                return res.redirect('/monitor/bar');
-                break;
-            case "jefe-cocina":
-                return res.redirect('/monitor/cocina');
-                break;
-            case "cocinero":
-                return res.redirect('/monitor/cocina');
-                break;
-            case "luncher":
-                return res.redirect('/monitor/cocina');
-                break;
-            case "porcionador":
-                return res.redirect('/monitor/cocina');
-                break;
-            default:
-                return res.redirect('/logout');
-                break; 
-        };
+        const { destinoPorRol } = require('../middlewares/auth');
+        const destino = destinoPorRol(req.session.user.rol);
+        if (destino) {
+            return res.redirect(destino);
+        }
+        req.flash('error_msg', 'Tu rol no tiene un panel asignado en el sistema. Contacta al administrador.');
+        return res.redirect('/logout');
     } else {
         res.render('auth/login');
     }; 
@@ -201,7 +179,17 @@ router.post('/login', authLimiter, (req, res, next) => {
                 authLimiter.resetKey(req.ip);
             } catch (_) { /* el limiter nunca debe tumbar un login válido */ }
 
-            return res.redirect('/admin/dashboard');
+            // Destino según el rol: el capitán (y el dependiente) entran a
+            // su circuito de servicio (dashboard -> POS -> precuenta ->
+            // cobro). Antes todos caían a /admin/dashboard y el capitán,
+            // sin permiso allí, rebotaba al login en cada acceso.
+            const { destinoPorRol } = require('../middlewares/auth');
+            const destino = destinoPorRol(user.rol);
+            if (!destino) {
+                req.flash('error_msg', 'Tu rol no tiene un panel asignado en el sistema. Contacta al administrador.');
+                return res.redirect('/logout');
+            }
+            return res.redirect(destino);
         });
     })(req, res, next);
 });

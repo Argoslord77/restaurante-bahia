@@ -1,0 +1,115 @@
+============================================================================
+ ACTUALIZACIÓN V3 — RESTAURANTE BAHÍA
+ Fecha: 10-09-2026
+ Rama: arena/01a08ac3-restaurante-bahia
+============================================================================
+
+CONTENIDO DE ESTA VERSIÓN
+----------------------------------------------------------------
+1) EL CAPITÁN YA NO REBOTA AL LOGIN (navegación por rol)
+   * Causa: el login mandaba a TODOS a /admin/dashboard y el capitán, sin
+     permiso allí, rebotaba al login; además el GET /login no contemplaba
+     el rol "capitan" y lo enviaba a /logout (bucle).
+   * Ahora cada rol entra a SU panel (middlewares/auth.js: destinoPorRol):
+     - superadministrador/administrador -> /admin/dashboard
+     - dependiente/capitan             -> /dependiente/dashboard
+       (el capitán sigue el circuito dependiente: dashboard -> POS ->
+       precuenta -> Cobrar Orden)
+     - bartender -> /monitor/bar ; cocina (jefe/cocinero/ayudante/luncher/
+       porcionador) -> /monitor/cocina
+     - cajero -> /admin/pedidos ; economico -> /admin/cierre-dia ;
+       almacenero -> /admin/almacenes
+     - roles sin panel asignado -> se les cierra la sesión con aviso.
+   * Si un autenticado intenta abrir una sección ajena a su rol, vuelve a
+     SU panel con aviso (antes caía al formulario de login).
+   * La ruta raíz "/" también redirige según el rol.
+   * El capitán ya puede cobrar completo: se agregó su rol al endpoint de
+     monedas del turno (/api/pos/monedas-turno-activo), que antes se lo
+     negaba y le rompía el modal de cobro.
+   * Endurecimiento menor: /pos/mesa/:idMesa y /qr/:hash ahora exigen
+     autenticación + rol de servicio (antes la primera era pública).
+
+2) OPCIONES GENERALES: QUIÉN PUEDE TOMAR ÓRDENES
+   * Configuración -> Opciones generales -> "Quién puede tomar órdenes
+     en el POS": [Capitanes y dependientes] o [Solo capitanes].
+     Aplica de inmediato, sin reiniciar.
+   * En modo "Solo capitanes":
+     - El dependiente ve un aviso en su tablero y no puede "Abrir Mesa"
+       (botón bloqueado); conserva sus mesas para entregar, pre-cuenta
+       y cobrar.
+     - En el POS ve un aviso y no puede agregar productos, cambiar
+       cantidades/notas ni guardar rondas (entregar, cancelar,
+       pre-cuenta y cobrar siguen habilitados).
+     - El SERVIDOR revalida siempre: guardar ronda, abrir mesa (manual,
+       /pos/mesa y QR) devuelven 403 al no autorizado. Los intentos
+       quedan en auditoría.
+   * Los administradores siempre pueden operar el POS.
+
+3) CORTESÍA AUTORIZADA (mecanismo anti-fraude)
+   * Configuración -> Opciones generales -> "Las cortesías requieren
+     autorización de un supervisor" (activado por defecto).
+   * Al cobrar una mesa como Cortesía (100%):
+     - Motivo OBLIGATORIO (campo Motivo del cobro).
+     - Si quien cobra es supervisor (administrador o capitán), la
+       autoriza él mismo con su cobro.
+     - Si NO es supervisor (dependiente, cajero), debe indicar en el
+       propio modal las credenciales (usuario + contraseña) del
+       supervisor que la aprueba; el servidor valida clave con bcrypt,
+       cuenta activa y rol autorizador. El autorizador debe ser
+       distinto de quien cobra.
+   * Cada cortesía guarda en el pedido: quién la autorizó
+     (cortesia_autorizada_por), motivo (cortesia_motivo) y fecha/hora
+     (cortesia_autorizada_en). Las columnas se crean SOLAS al cobrar
+     la primera cortesía; también se incluye el script manual
+     scripts/migracion_cortesia_autorizacion.sql (seguro de re-ejecutar).
+   * La auditoría global registra el cobro con el supervisor (su clave
+     viaja solo por HTTPS y queda redactada en el registro).
+
+ARCHIVOS INCLUIDOS (extraer sobre la raíz del proyecto)
+----------------------------------------------------------------
+ LEEME-ACTUALIZACION-V3.txt
+ app.js
+ controllers/dashboardDependienteController.js
+ controllers/dashboardDependienteController.test.js
+ controllers/posController.js
+ controllers/settingController.js
+ middlewares/auth.js
+ routes/authRoutes.js
+ routes/posRoutes.js
+ scripts/migracion_cortesia_autorizacion.sql   (opcional: la app auto-migra)
+ services/posAutorizacionService.js            (NUEVO)
+ services/posAutorizacionService.test.js       (NUEVO)
+ services/settingService.js
+ views/admin/settings.ejs
+ views/dependiente/dashboard.ejs
+ views/pos.ejs
+
+INSTALACIÓN EN EL SERVIDOR LOCAL
+----------------------------------------------------------------
+ 1. Detén la app (si usas pm2:  pm2 stop rest_cafe_bar  o  pm2 stop all).
+ 2. RESPALDA tu base de datos (Configuración -> Respaldos -> Descargar
+    salva SQL) y tu carpeta del proyecto.
+ 3. Extrae este ZIP sobre la carpeta del proyecto, SOBRESCRIBIENDO.
+ 4. (Opcional pero recomendado) Ejecuta en MySQL/MariaDB el script
+    scripts/migracion_cortesia_autorizacion.sql sobre restaurante_db.
+    Si lo omites, la app crea las columnas automáticamente al cobrar
+    la primera cortesía. Los 3 ajustes nuevos también se crean solos.
+ 5. Reinicia:  pm2 restart rest_cafe_bar   (o  npm start).
+ 6. Verifica:
+    - Entra como capitán: debe llegar a /dependiente/dashboard y poder
+      abrir mesa -> POS -> pre-cuenta -> cobrar.
+    - Configuración -> Opciones generales: cambia "Solo capitanes",
+      entra como dependiente y confirma el bloqueo; vuelve a "Capitanes
+      y dependientes".
+    - Cobra una mesa como Cortesía siendo dependiente: debe pedir
+      motivo + credenciales de supervisor; siendo capitán/admin, solo
+      motivo.
+
+PRUEBAS AUTOMÁTICAS
+----------------------------------------------------------------
+ npm test   -> 221/221 pasan (12 pruebas nuevas en
+ services/posAutorizacionService.test.js). Quedan 3 suites que no
+ cargan por causas preexistentes del entorno (módulos winston/supertest
+ y un fichero de config que calza el patrón de jest), sin relación
+ con este cambio.
+============================================================================

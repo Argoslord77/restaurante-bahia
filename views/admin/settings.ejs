@@ -298,7 +298,7 @@
                                         </div>
 
                                         <!-- Opción 2: Permitir Pre-pedidos a Clientes -->
-                                        <% 
+                                        <%
                                             const prepedidoActivo = settings.cliente_permite_prepedido && (settings.cliente_permite_prepedido.valor === '1' || settings.cliente_permite_prepedido.valor === true || settings.cliente_permite_prepedido === true || settings.cliente_permite_prepedido === '1');
                                         %>
                                         <div class="col-12 col-md-10">
@@ -319,6 +319,75 @@
                                                     <div class="form-check form-switch m-0 fs-4">
                                                         <input class="form-check-input role-switch" type="checkbox" id="cfg_cliente_permite_prepedido" role="switch"
                                                                <%= prepedidoActivo ? 'checked' : '' %>>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Opción 3: Quién puede tomar órdenes en el POS -->
+                                        <%
+                                            const modoTomaCfg = (settings.pos_quien_toma_ordenes && String(settings.pos_quien_toma_ordenes.valor).trim().toLowerCase() === 'solo_capitanes') ? 'solo_capitanes' : 'todos';
+                                        %>
+                                        <div class="col-12 col-md-10">
+                                            <div class="p-3 border rounded shadow-sm bg-light">
+                                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                                    <h6 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                                                        <i class="fa-solid fa-user-check text-success"></i>
+                                                        <%= settings.pos_quien_toma_ordenes ? settings.pos_quien_toma_ordenes.nombre : 'Quién puede tomar órdenes en el POS' %>
+                                                    </h6>
+                                                    <span id="lbl_status_toma_ordenes" class="badge <%= modoTomaCfg === 'solo_capitanes' ? 'bg-warning-subtle text-warning-emphasis border border-warning' : 'bg-success-subtle text-success border border-success' %> px-2.5 py-1.5 font-bold">
+                                                        <%= modoTomaCfg === 'solo_capitanes' ? 'Solo capitanes' : 'Capitanes y dependientes' %>
+                                                    </span>
+                                                </div>
+                                                <small class="text-muted d-block mb-2">
+                                                    Define qué personal de servicio puede <strong>tomar órdenes</strong> (abrir mesas con orden y agregar productos) en el POS. Los administradores siempre pueden operar. El cambio aplica de inmediato en el tablero y en el POS.
+                                                </small>
+                                                <div class="btn-group w-100" role="group" aria-label="Quién toma órdenes">
+                                                    <input type="radio" class="btn-check" name="cfg_pos_quien_toma" id="cfg_toma_todos" value="todos" autocomplete="off" <%= modoTomaCfg === 'todos' ? 'checked' : '' %>>
+                                                    <label class="btn btn-outline-success btn-sm fw-semibold" for="cfg_toma_todos">
+                                                        <i class="fa-solid fa-users me-1"></i> Capitanes y dependientes
+                                                    </label>
+                                                    <input type="radio" class="btn-check" name="cfg_pos_quien_toma" id="cfg_toma_solo_capitanes" value="solo_capitanes" autocomplete="off" <%= modoTomaCfg === 'solo_capitanes' ? 'checked' : '' %>>
+                                                    <label class="btn btn-outline-warning btn-sm fw-semibold" for="cfg_toma_solo_capitanes">
+                                                        <i class="fa-solid fa-user-tie me-1"></i> Solo capitanes
+                                                    </label>
+                                                </div>
+                                                <div class="form-text text-muted fs-7 mt-2">
+                                                    <i class="fa-solid fa-circle-info me-1"></i>
+                                                    En modo "Solo capitanes" los dependientes conservan sus mesas asignadas para entregar, consultar la pre-cuenta y cobrar, pero no pueden abrir mesas ni agregar productos.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Opción 4: Las cortesías requieren autorización -->
+                                        <%
+                                            const cortesiaAuthCfg = !(settings.cortesia_requiere_autorizacion && (settings.cortesia_requiere_autorizacion.valor === '0' || settings.cortesia_requiere_autorizacion.valor === false || settings.cortesia_requiere_autorizacion.valor === 0 || settings.cortesia_requiere_autorizacion === false || settings.cortesia_requiere_autorizacion === '0'));
+                                            const rolesCortesiaCfg = String((settings.cortesia_roles_autorizan && settings.cortesia_roles_autorizan.valor) || 'superadministrador,administrador,capitan').split(',').map(s => s.trim()).filter(Boolean);
+                                        %>
+                                        <div class="col-12 col-md-10">
+                                            <div class="p-3 border rounded shadow-sm bg-light d-flex align-items-center justify-content-between">
+                                                <div>
+                                                    <h6 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                                                        <i class="fa-solid fa-gift text-danger"></i>
+                                                        <%= settings.cortesia_requiere_autorizacion ? settings.cortesia_requiere_autorizacion.nombre : 'Las cortesías requieren autorización de un supervisor' %>
+                                                    </h6>
+                                                    <small class="text-muted d-block">
+                                                        Al cobrar una mesa como <strong>Cortesía (100%)</strong> se exige un motivo obligatorio y la autorización de un supervisor: si quien cobra es supervisor la autoriza él mismo; si no, debe indicar las credenciales del supervisor que la aprueba. La autorización queda registrada en el pedido y en la auditoría.
+                                                    </small>
+                                                    <div class="mt-1 d-flex flex-wrap gap-1 align-items-center">
+                                                        <small class="text-muted fw-semibold me-1">Pueden autorizar:</small>
+                                                        <% rolesCortesiaCfg.forEach(function(rolCortesia) { %>
+                                                            <span class="badge bg-secondary-subtle text-dark border text-capitalize"><%= rolCortesia %></span>
+                                                        <% }) %>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-3 ms-3">
+                                                    <span id="lbl_status_cortesia_auth" class="badge <%= cortesiaAuthCfg ? 'bg-success-subtle text-success border border-success' : 'bg-danger-subtle text-danger border border-danger' %> px-2.5 py-1.5 font-bold">
+                                                        <%= cortesiaAuthCfg ? 'Exigida' : 'No exigida' %>
+                                                    </span>
+                                                    <div class="form-check form-switch m-0 fs-4">
+                                                        <input class="form-check-input role-switch" type="checkbox" id="cfg_cortesia_requiere_autorizacion" role="switch"
+                                                               <%= cortesiaAuthCfg ? 'checked' : '' %>>
                                                     </div>
                                                 </div>
                                             </div>
@@ -569,6 +638,93 @@
                             ? 'Los pedidos se enviarán a las pantallas de Cocina y Bar para su elaboración.' 
                             : 'El flujo operará directamente en POS sin pasar por monitores de cocina.',
                         timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    this.checked = !isChecked; // Revertir en caso de error
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(() => {
+                this.checked = !isChecked;
+                Swal.fire('Error', 'No se pudo conectar con el servidor para actualizar la opción.', 'error');
+            });
+        });
+
+        // Quién puede tomar órdenes en el POS (Opciones generales): aplicación inmediata
+        document.querySelectorAll('input[name="cfg_pos_quien_toma"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                if (!this.checked) return;
+                const nuevoValor = this.value;
+                const badgeLabel = document.getElementById('lbl_status_toma_ordenes');
+
+                fetch('/admin/configuracion/opcion-rapida', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        clave: 'pos_quien_toma_ordenes',
+                        valor: nuevoValor,
+                        tipo: 'string'
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        if (nuevoValor === 'solo_capitanes') {
+                            badgeLabel.textContent = 'Solo capitanes';
+                            badgeLabel.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning px-2.5 py-1.5 font-bold';
+                        } else {
+                            badgeLabel.textContent = 'Capitanes y dependientes';
+                            badgeLabel.className = 'badge bg-success-subtle text-success border border-success px-2.5 py-1.5 font-bold';
+                        }
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Configuración actualizada!',
+                            text: nuevoValor === 'solo_capitanes'
+                                ? 'A partir de ahora solo los capitanes pueden tomar órdenes en el POS.'
+                                : 'Capitanes y dependientes pueden tomar órdenes en el POS.',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                })
+                .catch(() => Swal.fire('Error', 'No se pudo conectar con el servidor para actualizar la opción.', 'error'));
+            });
+        });
+
+        // Las cortesías requieren autorización (Opciones generales): aplicación inmediata
+        document.getElementById('cfg_cortesia_requiere_autorizacion').addEventListener('change', function() {
+            const isChecked = this.checked;
+            const nuevoValor = isChecked ? '1' : '0';
+            const badgeLabel = document.getElementById('lbl_status_cortesia_auth');
+
+            fetch('/admin/configuracion/opcion-rapida', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clave: 'cortesia_requiere_autorizacion',
+                    valor: nuevoValor
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (isChecked) {
+                        badgeLabel.textContent = 'Exigida';
+                        badgeLabel.className = 'badge bg-success-subtle text-success border border-success px-2.5 py-1.5 font-bold';
+                    } else {
+                        badgeLabel.textContent = 'No exigida';
+                        badgeLabel.className = 'badge bg-danger-subtle text-danger border border-danger px-2.5 py-1.5 font-bold';
+                    }
+                    Swal.fire({
+                        icon: isChecked ? 'success' : 'warning',
+                        title: isChecked ? '¡Autorización de cortesías activada!' : '¡Autorización de cortesías desactivada!',
+                        text: isChecked
+                            ? 'Las cortesías exigirán motivo y autorización de un supervisor.'
+                            : 'Las cortesías podrán aplicarse sin autorización. No recomendado.',
+                        timer: 2200,
                         showConfirmButton: false
                     });
                 } else {

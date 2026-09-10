@@ -79,6 +79,27 @@ class SettingService {
                     descripcion: 'Unidades de Medida Permitidas (Stock)',
                     grupo: 'inventario',
                     tipo: 'string'
+                },
+                {
+                    clave: 'pos_quien_toma_ordenes',
+                    valor: 'todos',
+                    descripcion: 'Quién puede tomar órdenes en el POS (todos = capitanes y dependientes; solo_capitanes = únicamente capitanes)',
+                    grupo: 'general',
+                    tipo: 'string'
+                },
+                {
+                    clave: 'cortesia_requiere_autorizacion',
+                    valor: '1',
+                    descripcion: 'Las cortesías (100%) requieren autorización de un supervisor',
+                    grupo: 'general',
+                    tipo: 'boolean'
+                },
+                {
+                    clave: 'cortesia_roles_autorizan',
+                    valor: 'superadministrador,administrador,capitan',
+                    descripcion: 'Roles que pueden autorizar cortesías (separados por coma)',
+                    grupo: 'general',
+                    tipo: 'string'
                 }
             ];
 
@@ -181,7 +202,10 @@ class SettingService {
             factura_propina: { nombre: 'Porcentaje de Propina Sugerida (%)', valor: '0' },
             inventario_unidades: { nombre: 'Unidades de Medida Permitidas (Stock)', valor: 'Uds, Kg, Lts, Oz' },
             cliente_permite_prepedido: { nombre: 'Permitir Pre-pedidos a Clientes', valor: '1' },
-            habilitar_monitores_elaboracion: { nombre: 'Habilitar monitores de elaboración en el Servicio', valor: '1' }
+            habilitar_monitores_elaboracion: { nombre: 'Habilitar monitores de elaboración en el Servicio', valor: '1' },
+            pos_quien_toma_ordenes: { nombre: 'Quién puede tomar órdenes en el POS', valor: 'todos' },
+            cortesia_requiere_autorizacion: { nombre: 'Las cortesías requieren autorización de un supervisor', valor: '1' },
+            cortesia_roles_autorizan: { nombre: 'Roles que pueden autorizar cortesías', valor: 'superadministrador,administrador,capitan' }
         };
 
         if (!pool) return defaults;

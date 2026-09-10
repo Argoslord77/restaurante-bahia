@@ -1,6 +1,7 @@
 // controllers/dashboardDependienteController.js
 const db = require('../config/db');
 const turnoService = require('../services/turnoService');
+const PosAutorizacionService = require('../services/posAutorizacionService');
 
 function obtenerBasePublica(req) {
     const protocolo = process.env.PUBLIC_PROTOCOL || (process.env.SERVER_HTTP === '1' ? 'http' : 'https');
@@ -136,6 +137,15 @@ const DashboardDependienteController = {
             // Pasar el turnoId y el usuarioId a los stats para cálculos reales
             const stats = await DashboardDependienteController.getDashboardStats(turnoId, usuarioId, usuarioRol);
 
+            // Autorización para TOMAR órdenes según Opciones generales. Se
+            // evalúa con el rol del VISOR autenticado (en supervisión el
+            // visor es administrador y las acciones ya están deshabilitadas).
+            const rolVisor = (req.user && req.user.rol)
+                || (req.session && req.session.user && req.session.user.rol)
+                || usuarioRol;
+            const modoTomaOrdenes = await PosAutorizacionService.modoTomaOrdenes();
+            const puedeTomarOrdenes = await PosAutorizacionService.puedeTomarOrdenes(rolVisor);
+
             res.render('dependiente/dashboard', {
                 mesas,
                 stats,
@@ -147,6 +157,8 @@ const DashboardDependienteController = {
                 modoVisualizacion,
                 meseroVisualizado,
                 cuentasPagadas,
+                modoTomaOrdenes,
+                puedeTomarOrdenes,
                 success_msg: req.flash('success_msg'),
                 error_msg: req.flash('error_msg')
             });

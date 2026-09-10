@@ -127,6 +127,29 @@ module.exports = {
                 );
             }
 
+            // Opciones generales del POS (también aceptadas en guardado masivo)
+            const { pos_quien_toma_ordenes, cortesia_requiere_autorizacion } = req.body;
+            if (pos_quien_toma_ordenes !== undefined
+                && ['todos', 'solo_capitanes'].includes(String(pos_quien_toma_ordenes).trim().toLowerCase())) {
+                await SettingService.set(
+                    'pos_quien_toma_ordenes',
+                    String(pos_quien_toma_ordenes).trim().toLowerCase(),
+                    'Quién puede tomar órdenes en el POS (todos = capitanes y dependientes; solo_capitanes = únicamente capitanes)',
+                    'general',
+                    'string'
+                );
+            }
+
+            if (cortesia_requiere_autorizacion !== undefined) {
+                await SettingService.set(
+                    'cortesia_requiere_autorizacion',
+                    cortesia_requiere_autorizacion === '1' || cortesia_requiere_autorizacion === 'on' || cortesia_requiere_autorizacion === true,
+                    'Las cortesías (100%) requieren autorización de un supervisor',
+                    'general',
+                    'boolean'
+                );
+            }
+
             if (req.xhr || req.headers.accept?.includes('json') || req.headers['content-type']?.includes('json')) {
                 return res.json({ success: true, message: 'Ajustes del sistema guardados correctamente.' });
             }
@@ -156,6 +179,18 @@ module.exports = {
 
             if (tipoSetting === 'boolean') {
                 valorParsed = (valor === true || valor === 'true' || valor === 1 || valor === '1');
+            }
+
+            // Opciones generales del POS: solo valores conocidos.
+            if (clave === 'pos_quien_toma_ordenes') {
+                tipoSetting = 'string';
+                valorParsed = String(valor || '').trim().toLowerCase();
+                if (!['todos', 'solo_capitanes'].includes(valorParsed)) {
+                    return res.status(400).json({ success: false, message: 'Valor no válido para quién toma órdenes (usa "todos" o "solo_capitanes").' });
+                }
+            }
+            if (clave === 'cortesia_requiere_autorizacion') {
+                tipoSetting = 'boolean';
             }
 
             const success = await SettingService.set(clave, valorParsed, '', 'general', tipoSetting);

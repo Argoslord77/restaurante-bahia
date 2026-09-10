@@ -226,6 +226,17 @@
             </div>
         <% } %>
 
+        <% const puedeTomarOrdenesTablero = (typeof puedeTomarOrdenes === 'undefined') ? true : Boolean(puedeTomarOrdenes); %>
+        <% if (!esModoVisualizacion && !puedeTomarOrdenesTablero) { %>
+            <div class="alert alert-warning border-0 shadow-sm rounded-3 p-3 mb-4 d-flex align-items-center gap-3" role="alert">
+                <i class="fa-solid fa-user-lock fs-4 text-warning"></i>
+                <div>
+                    <div class="fw-bold text-warning-emphasis">Solo los capitanes pueden tomar órdenes</div>
+                    <small class="text-muted d-block">Por configuración general (Opciones generales) no puedes abrir mesas ni agregar productos. Conservas tus mesas para entregar, consultar la pre-cuenta y cobrar.</small>
+                </div>
+            </div>
+        <% } %>
+
         <div class="row g-4">
             <!-- Sección Salón de Mesas (Ocupa el 100% del ancho) -->
             <div class="col-12">
@@ -293,9 +304,15 @@
                                                             </button>
                                                         <% } %>
                                                     <% } else if (!mesa.id_pedido_activo) { %>
+                                                        <% if (puedeTomarOrdenesTablero) { %>
                                                         <button class="btn-monitor btn-monitor-libre abrir-mesa-btn" data-mesa-id="<%= mesa.id %>">
                                                             <i class="fa-solid fa-plus"></i> Abrir Mesa
                                                         </button>
+                                                        <% } else { %>
+                                                        <button type="button" class="btn-monitor btn-monitor-libre abrir-mesa-btn" data-mesa-id="<%= mesa.id %>" data-sin-autorizacion="1" disabled style="opacity: .55; cursor: not-allowed;" title="Solo los capitanes pueden tomar órdenes">
+                                                            <i class="fa-solid fa-lock"></i> Solo capitanes
+                                                        </button>
+                                                        <% } %>
                                                     <% } else if (estadoMesa === 'Pendiente') { %>
                                                         <a href="/pos/<%= mesa.id_pedido_activo %>" class="btn-monitor btn-monitor-pendiente text-decoration-none">
                                                             <i class="fa-solid fa-bell"></i> Atender Pedido
@@ -426,6 +443,9 @@
             }).then(() => mostrarSiguienteResumenCuenta());
         }
 
+        const PUEDE_TOMAR_ORDENES_TABLERO = <%= (typeof puedeTomarOrdenes === 'undefined' || puedeTomarOrdenes) ? 'true' : 'false' %>;
+        const MENSAJE_TOMA_BLOQUEO_TABLERO = 'Solo los capitanes están autorizados a tomar órdenes según la configuración general.';
+
         document.addEventListener('DOMContentLoaded', function() {
             const MODO_VISUALIZACION = <%= (typeof modoVisualizacion !== 'undefined' && modoVisualizacion) ? 'true' : 'false' %>;
 
@@ -512,6 +532,10 @@
                 const abrirButton = e.target.closest('.abrir-mesa-btn');
                 if (!abrirButton) return;
                 if (MODO_VISUALIZACION) return; // Supervisión: nunca abrir mesas
+                if (!PUEDE_TOMAR_ORDENES_TABLERO || abrirButton.hasAttribute('data-sin-autorizacion')) {
+                    Swal.fire('Sin autorización para tomar órdenes', MENSAJE_TOMA_BLOQUEO_TABLERO, 'warning');
+                    return;
+                }
                 const idMesa = abrirButton.getAttribute('data-mesa-id');
                 abrirButton.disabled = true;
                 operacionEnCurso = true;
