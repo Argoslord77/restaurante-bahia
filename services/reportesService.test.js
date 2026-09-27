@@ -320,3 +320,159 @@ describe('reportesService · margenPorPlatillo', () => {
         expect(def.desde).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 });
+
+describe('reportesService · listarTurnos', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('lista los turnos con etiqueta de apertura y marca el que sigue abierto', async () => {
+        db.query.mockResolvedValueOnce([[
+            { id: 7, estado: 'abierto', fecha_apertura: '2026-09-27 12:00:00', fecha_cierre: null, abierto_por: 'Juan Perez', pedidos: 5 },
+            { id: 6, estado: 'cerrado', fecha_apertura: '2026-09-26 12:00:00', fecha_cierre: '2026-09-26 22:00:00', abierto_por: '', pedidos: 12 }
+        ], []]);
+
+        const turnos = await ReportesService.listarTurnos(50);
+
+        expect(turnos).toHaveLength(2);
+        expect(turnos[0]).toMatchObject({ id: 7, en_curso: true, abierto_por: 'Juan Perez', pedidos: 5 });
+        expect(turnos[1]).toMatchObject({ id: 6, en_curso: false, abierto_por: 'N/D', pedidos: 12 });
+    });
+});
+
+describe('reportesService · ventasDelTurno', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    function mockearTurno5() {
+        db.query
+            .mockResolvedValueOnce([[ // cabecera del turno
+                { id: 5, estado: 'abierto', fecha_apertura: '2026-09-27 12:00:00', fecha_cierre: null, monto_apertura: 100, abierto_por: 'Juan Perez', cerrado_por: '' }
+            ], []])
+            .mockResolvedValueOnce([[ // resumen por estado de pago
+                { estado_pago: 'pagado', estado_pedido: 'entregado', cuentas: 8, ventas: 1000, subtotal: 950, descuentos: 50, propinas: 80, comensales: 16 },
+                { estado_pago: 'facturado', estado_pedido: 'entregado', cuentas: 2, ventas: 400, subtotal: 400, descuentos: 0, propinas: 0, comensales: 4 },
+                { estado_pago: 'cortesia', estado_pedido: 'entregado', cuentas: 1, ventas: 0, subtotal: 120, descuentos: 0, propinas: 0, comensales: 2 },
+                { estado_pago: 'pendiente', estado_pedido: 'preparando', cuentas: 3, ventas: 300, subtotal: 300, descuentos: 0, propinas: 0, comensales: 5 },
+                { estado_pago: 'pendiente', estado_pedido: 'cancelado', cuentas: 1, ventas: 60, subtotal: 60, descuentos: 0, propinas: 0, comensales: 1 }
+            ], []])
+            .mockResolvedValueOnce([[ // ranking de items
+                { id_platillo: 1, es_platillo_dia: 0, nombre: 'Cerveza', categoria: 'Bebidas', tipo: 'BEBIDAS', unidades: 20, ingreso: 200, unds_cortesia: 0, cuentas: 6 },
+                { id_platillo: 2, es_platillo_dia: 0, nombre: 'Pollo', categoria: 'Platos fuertes', tipo: 'COMESTIBLES', unidades: 10, ingreso: 800, unds_cortesia: 0, cuentas: 8 },
+                { id_platillo: 3, es_platillo_dia: 1, nombre: 'Sopa del día', categoria: 'Del día', tipo: 'COMESTIBLES', unidades: 5, ingreso: 0, unds_cortesia: 5, cuentas: 1 }
+            ], []])
+            .mockResolvedValueOnce([[ // por hora
+                { hora: 12, cuentas: 4, ventas: 500 },
+                { hora: 13, cuentas: 7, ventas: 900 }
+            ], []])
+            .mockResolvedValueOnce([[ // por mesero
+                { id: 5, mesero: 'Juan Perez ', rol: 'dependiente', cuentas: 11, cortesias: 1, ventas: 1400, propinas: 80, descuentos: 50 }
+            ], []])
+            .mockResolvedValueOnce([[ // por mesa
+                { id: 1, numero: 'M1', capacidad: 4, cuentas: 6, ventas: 900, comensales: 12 }
+            ], []])
+            .mockResolvedValueOnce([[ // cuentas abiertas
+                { id: 101, creado_en: new Date(Date.now() - 30 * 60000), total: 150, comensales: 2, estado_pedido: 'preparando', estado_pago: 'pendiente', mesa: 'M2', mesero: 'Ana', items: 4 }
+            ], []])
+            .mockResolvedValueOnce([[{ // cancelados
+                ordenes_canceladas: 1, items_cancelados: 2
+            }], []])
+            .mockResolvedValueOnce([[ // desglose de pagos (CajaService)
+                { metodo_pago: 'efectivo', codigo_moneda: 'CUP', nombre_moneda: 'Peso cubano', simbolo: '$', total_origen: 1000, total_local: 1000, total_transacciones: 8, es_zelle: 0, es_efectivo_caja: 1 },
+                { metodo_pago: 'tarjeta', codigo_moneda: 'CUP', nombre_moneda: 'Peso cubano', simbolo: '$', total_origen: 400, total_local: 400, total_transacciones: 2, es_zelle: 0, es_efectivo_caja: 0 }
+            ], []]);
+    }
+
+    it('analiza el turno: KPIs, ranking con ABC, splits y hora pico', async () => {
+        mockearTurno5();
+        const r = await ReportesService.ventasDelTurno(5);
+
+        expect(r.turno).toMatchObject({ id: 5, en_curso: true, abierto_por: 'Juan Perez' });
+        expect(r.turno.duracion).toMatch(/h|min/);
+        expect(r.totales).toMatchObject({
+            ventas: 1400, cuentas_cerradas: 11, cuentas_abiertas: 3,
+            ticket_promedio: 127.27, unidades: 35, items_distintos: 3,
+            consumo_en_curso: 300, cortesias: 1, cortesias_valor: 120,
+            unds_cortesia: 5, ordenes_canceladas: 1, items_cancelados: 2,
+            mesas_distintas: 1, rotacion: 11, cobrado_total: 1400, cobrado_caja: 1000
+        });
+        // Ranking ordenado por unidades con ABC por aporte al ingreso
+        expect(r.ranking.map(x => x.nombre)).toEqual(['Cerveza', 'Pollo', 'Sopa del día']);
+        expect(r.ranking[0]).toMatchObject({ clase_abc: 'C', precio_promedio: 10 });
+        expect(r.ranking[1]).toMatchObject({ clase_abc: 'A', precio_promedio: 80 });
+        expect(r.ranking[2]).toMatchObject({ clase_abc: 'C', precio_promedio: null, es_platillo_dia: true });
+        // Splits derivados del ranking
+        expect(r.tipos).toHaveLength(2);
+        expect(r.tipos.find(t => t.tipo === 'BEBIDAS')).toMatchObject({ unidades: 20, ingreso: 200 });
+        expect(r.tipos.find(t => t.tipo === 'COMESTIBLES')).toMatchObject({ unidades: 15, ingreso: 800 });
+        expect(r.categorias[0]).toMatchObject({ categoria: 'Platos fuertes', ingreso: 800 });
+        // Hora pico y desempeño
+        expect(r.horaPico).toMatchObject({ etiqueta: '13:00', ventas: 900 });
+        expect(r.maxHoraVentas).toBe(900);
+        expect(r.meseros[0]).toMatchObject({ ticket_promedio: 127.27, cortesias: 1 });
+        expect(r.mesas[0]).toMatchObject({ numero: 'M1', ticket_promedio: 150 });
+        // Cuenta abierta con antigüedad aproximada
+        expect(r.abiertas).toHaveLength(1);
+        expect(r.abiertas[0].antiguedad_min).toBeGreaterThanOrEqual(29);
+        expect(r.abiertas[0].antiguedad_min).toBeLessThanOrEqual(31);
+    });
+
+    it('ids inválidos devuelven null sin consultar la BD', async () => {
+        for (const malo of ['x', 0, -3, null, undefined]) {
+            jest.clearAllMocks();
+            await expect(ReportesService.ventasDelTurno(malo)).resolves.toBeNull();
+            expect(db.query).not.toHaveBeenCalled();
+        }
+    });
+
+    it('turno inexistente devuelve null tras la cabecera', async () => {
+        db.query.mockResolvedValueOnce([[], []]);
+        await expect(ReportesService.ventasDelTurno(999)).resolves.toBeNull();
+        expect(db.query).toHaveBeenCalledTimes(1);
+    });
+
+    it('turno sin movimiento devuelve estructuras vacías y ceros', async () => {
+        db.query
+            .mockResolvedValueOnce([[{ id: 9, estado: 'cerrado', fecha_apertura: '2026-09-20 12:00:00', fecha_cierre: '2026-09-20 18:00:00', monto_apertura: 0, abierto_por: 'Root', cerrado_por: 'Root' }], []])
+            .mockResolvedValueOnce([[], []])
+            .mockResolvedValueOnce([[], []])
+            .mockResolvedValueOnce([[], []])
+            .mockResolvedValueOnce([[], []])
+            .mockResolvedValueOnce([[], []])
+            .mockResolvedValueOnce([[], []])
+            .mockResolvedValueOnce([[{ ordenes_canceladas: 0, items_cancelados: 0 }], []])
+            .mockResolvedValueOnce([[], []]);
+        const r = await ReportesService.ventasDelTurno(9);
+        expect(r.turno.en_curso).toBe(false);
+        expect(r.ranking).toEqual([]);
+        expect(r.horaPico).toBeNull();
+        expect(r.totales).toMatchObject({ ventas: 0, unidades: 0, ticket_promedio: 0, rotacion: 0 });
+    });
+});
+
+describe('reportesService · ventasTurnoACSV', () => {
+    it('exporta el turno por secciones con formato Excel (BOM, punto y coma, coma decimal)', () => {
+        const reporte = {
+            turno: { id: 5, en_curso: true, abierto_por: 'Juan Perez' },
+            ranking: [
+                { nombre: 'Cerveza', es_platillo_dia: false, tipo: 'BEBIDAS', categoria: 'Bebidas', cuentas: 6, unidades: 20, pct_unidades: 57.1, ingreso: 200, pct_ingreso: 20, precio_promedio: 10, clase_abc: 'C' }
+            ],
+            tipos: [{ etiqueta: 'Bebidas', items: 1, unidades: 20, pct_unidades: 100, ingreso: 200, pct_ingreso: 100 }],
+            categorias: [{ categoria: 'Bebidas', items: 1, unidades: 20, ingreso: 200, pct_ingreso: 100 }],
+            horas: [{ etiqueta: '13:00', cuentas: 7, ventas: 900, pct_ventas: 100 }],
+            meseros: [{ mesero: 'Juan', rol: 'dependiente', cuentas: 11, cortesias: 1, ventas: 1400, ticket_promedio: 127.27, propinas: 80, descuentos: 50 }],
+            mesas: [{ numero: 'M1', capacidad: 4, cuentas: 6, ventas: 900, comensales: 12, ticket_promedio: 150 }],
+            pagos: [{ metodo_pago: 'efectivo', codigo_moneda: 'CUP', nombre_moneda: 'Peso cubano', total_transacciones: 8, total_origen: 1000, total_local: 1000 }],
+            abiertas: [{ id: 101, mesa: 'M2', mesero: 'Ana', items: 4, total: 150, antiguedad_min: 30 }],
+            totales: {
+                ventas: 1400, cuentas_cerradas: 11, ticket_promedio: 127.27, unidades: 35,
+                items_distintos: 1, consumo_en_curso: 300, cuentas_abiertas: 1, propinas: 80,
+                descuentos: 50, cortesias: 1, cortesias_valor: 120, ordenes_canceladas: 1,
+                items_cancelados: 2, mesas_distintas: 1, rotacion: 11
+            }
+        };
+        const csv = ReportesService.ventasTurnoACSV(reporte);
+        expect(csv.charCodeAt(0)).toBe(0xFEFF);
+        for (const seccion of ['Ventas del turno;#5;EN CURSO', 'RESUMEN', 'RANKING DE PLATILLOS Y BEBIDAS', 'COMESTIBLES VS BEBIDAS', 'POR CATEGORIA', 'POR HORA', 'POR MESERO', 'POR MESA', 'METODOS DE PAGO', 'CUENTAS ABIERTAS']) {
+            expect(csv).toContain(seccion);
+        }
+        expect(csv).toContain('Cerveza;No;BEBIDAS;Bebidas;6;20;57,1;200,00;20,0;10,00;C');
+    });
+});

@@ -13,6 +13,7 @@
 
 const db = require('../config/db');
 const Costeo = require('./costeoService');
+const CajaService = require('./cajaService');
 const { TIPOS_ENTRADA, TIPOS_SALIDA, ETIQUETAS_MOVIMIENTO } = require('./kardexService');
 
 /** Signo de un tipo de movimiento: +1 entrada, -1 salida, 0 informativo. */
@@ -499,6 +500,405 @@ async function ventasPorHoras(rango) {
     };
 }
 
+// ── Ventas del turno ─────────────────────────────────────────────────────
+const PAGOS_CERRADOS = ['pagado', 'facturado', 'cortesia'];
+const PAGOS_ABIERTOS = ['pendiente', 'pendiente_pago'];
+
+/**
+ * Turnos de servicio para el selector del reporte: cualquiera puede
+ * analizarse, incluido el abierto (en curso). Orden: más reciente primero.
+ */
+async function listarTurnos(limite = 50) {
+    const top = Math.max(1, Math.min(200, Math.floor(Number(limite)) || 50));
+    const [filas] = await db.query(`
+        SELECT ts.id, ts.estado, ts.fecha_apertura, ts.fecha_cierre,
+               TRIM(CONCAT(COALESCE(ua.nombre, ''), ' ', COALESCE(ua.apellidos, ''))) AS abierto_por,
+               (SELECT COUNT(*) FROM pedidos p WHERE p.turno_servicio_id = ts.id) AS pedidos
+        FROM turnos_servicio ts
+        LEFT JOIN usuarios ua ON ts.usuario_apertura_id = ua.id
+        ORDER BY ts.id DESC
+        LIMIT ?
+    `, [top]);
+    return filas.map(f => ({
+        id: Number(f.id),
+        estado: f.estado,
+        en_curso: f.estado === 'abierto',
+        fecha_apertura: f.fecha_apertura,
+        fecha_cierre: f.fecha_cierre,
+        abierto_por: String(f.abierto_por || '').trim() || 'N/D',
+        pedidos: num(f.pedidos)
+    }));
+}
+
+/** Duración legible del turno ("6 h 25 min"); si sigue abierto, hasta ahora. */
+function duracionTurno(desde, hasta) {
+    const ini = new Date(desde).getTime();
+    const fin = hasta ? new Date(hasta).getTime() : Date.now();
+    if (!Number.isFinite(ini) || !Number.isFinite(fin) || fin < ini) return '—';
+    const min = Math.floor((fin - ini) / 60000);
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h <= 0) return `${m} min`;
+    if (m <= 0) return `${h} h`;
+    return `${h} h ${m} min`;
+}
+
+/**
+ * Análisis de ventas de un turno específico (cerrado o en curso):
+ * ranking de platillos y bebidas más vendidos con clasificación ABC por
+ * aporte al ingreso, split comestibles vs bebidas, ventas por categoría,
+ * hora, mesero y mesa, métodos de pago y cuentas abiertas en curso.
+ *
+ * Criterio: las cuentas cerradas (pagadas, facturadas y cortesías) forman
+ * las ventas; las cortesías suman unidades pero $0 al ingreso; lo
+ * cancelado queda fuera salvo conteo aparte. Devuelve null si no existe.
+ */
+async function ventasDelTurno(turnoId) {
+    const id = Math.floor(Number(turnoId));
+    if (!Number.isFinite(id) || id <= 0) return null;
+
+    const [cab] = await db.query(`
+        SELECT ts.id, ts.estado, ts.fecha_apertura, ts.fecha_cierre,
+               COALESCE(ts.monto_apertura, 0) AS monto_apertura,
+               TRIM(CONCAT(COALESCE(ua.nombre, ''), ' ', COALESCE(ua.apellidos, ''))) AS abierto_por,
+               TRIM(CONCAT(COALESCE(uc.nombre, ''), ' ', COALESCE(uc.apellidos, ''))) AS cerrado_por
+        FROM turnos_servicio ts
+        LEFT JOIN usuarios ua ON ts.usuario_apertura_id = ua.id
+        LEFT JOIN usuarios uc ON ts.usuario_cierre_id = uc.id
+        WHERE ts.id = ?
+    `, [id]);
+    if (!cab.length) return null;
+    const turno = cab[0];
+    const enCurso = turno.estado === 'abierto';
+
+    // Consultas independientes en paralelo; orden fijo (los tests lo usan).
+    const [qResumen, qItems, qHoras, qMeseros, qMesas, qAbiertas, qCancel] = await Promise.all([
+        db.query(`
+            SELECT p.estado_pago, p.estado_pedido,
+                   COUNT(*) AS cuentas,
+                   COALESCE(SUM(p.total), 0) AS ventas,
+                   COALESCE(SUM(p.subtotal), 0) AS subtotal,
+                   COALESCE(SUM(p.descuento), 0) AS descuentos,
+                   COALESCE(SUM(p.propina), 0) AS propinas,
+                   COALESCE(SUM(p.comensales), 0) AS comensales
+            FROM pedidos p
+            WHERE p.turno_servicio_id = ?
+            GROUP BY p.estado_pago, p.estado_pedido
+        `, [id]),
+        db.query(`
+            SELECT dp.id_platillo, dp.es_platillo_dia,
+                   COALESCE(pm.nombre, pd.nombre, 'Platillo') AS nombre,
+                   COALESCE(cp.nombre, CASE WHEN dp.es_platillo_dia = 1 THEN 'Del día' ELSE 'Sin categoría' END) AS categoria,
+                   CASE WHEN dp.es_platillo_dia = 1 THEN pd.tipo ELSE COALESCE(cp.tipo, 'SIN_CLASIFICAR') END AS tipo,
+                   SUM(dp.cantidad) AS unidades,
+                   SUM(CASE WHEN p.estado_pago = 'cortesia' THEN 0 ELSE dp.cantidad * dp.precio_unitario END) AS ingreso,
+                   SUM(CASE WHEN p.estado_pago = 'cortesia' THEN dp.cantidad ELSE 0 END) AS unds_cortesia,
+                   COUNT(DISTINCT p.id) AS cuentas
+            FROM detalles_pedido dp
+            INNER JOIN pedidos p ON p.id = dp.id_pedido
+            LEFT JOIN platillos_menu pm
+                ON dp.id_platillo = pm.id AND (dp.es_platillo_dia = 0 OR dp.es_platillo_dia IS NULL)
+            LEFT JOIN platillos_dia pd ON dp.id_platillo = pd.id AND dp.es_platillo_dia = 1
+            LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
+            WHERE p.turno_servicio_id = ?
+              AND p.estado_pedido != 'cancelado'
+              AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+              AND dp.estado_item != 'cancelado'
+            GROUP BY dp.id_platillo, dp.es_platillo_dia,
+                     COALESCE(pm.nombre, pd.nombre, 'Platillo'),
+                     COALESCE(cp.nombre, CASE WHEN dp.es_platillo_dia = 1 THEN 'Del día' ELSE 'Sin categoría' END),
+                     CASE WHEN dp.es_platillo_dia = 1 THEN pd.tipo ELSE COALESCE(cp.tipo, 'SIN_CLASIFICAR') END
+            ORDER BY unidades DESC, ingreso DESC
+            LIMIT 200
+        `, [id]),
+        db.query(`
+            SELECT HOUR(p.creado_en) AS hora,
+                   COUNT(*) AS cuentas,
+                   COALESCE(SUM(CASE WHEN p.estado_pago = 'cortesia' THEN 0 ELSE p.total END), 0) AS ventas
+            FROM pedidos p
+            WHERE p.turno_servicio_id = ?
+              AND p.estado_pedido != 'cancelado'
+              AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+            GROUP BY HOUR(p.creado_en)
+            ORDER BY hora ASC
+        `, [id]),
+        db.query(`
+            SELECT u.id,
+                   CONCAT(u.nombre, ' ', COALESCE(u.apellidos, '')) AS mesero,
+                   u.rol,
+                   COUNT(p.id) AS cuentas,
+                   SUM(CASE WHEN p.estado_pago = 'cortesia' THEN 1 ELSE 0 END) AS cortesias,
+                   COALESCE(SUM(CASE WHEN p.estado_pago = 'cortesia' THEN 0 ELSE p.total END), 0) AS ventas,
+                   COALESCE(SUM(p.propina), 0) AS propinas,
+                   COALESCE(SUM(p.descuento), 0) AS descuentos
+            FROM usuarios u
+            INNER JOIN pedidos p ON p.id_usuario_mesero = u.id
+                AND p.turno_servicio_id = ?
+                AND p.estado_pedido != 'cancelado'
+                AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+            GROUP BY u.id, u.nombre, u.apellidos, u.rol
+            ORDER BY ventas DESC, cuentas DESC
+        `, [id]),
+        db.query(`
+            SELECT m.id, m.numero, m.capacidad,
+                   COUNT(p.id) AS cuentas,
+                   COALESCE(SUM(CASE WHEN p.estado_pago = 'cortesia' THEN 0 ELSE p.total END), 0) AS ventas,
+                   COALESCE(SUM(p.comensales), 0) AS comensales
+            FROM mesas m
+            INNER JOIN pedidos p ON p.id_mesa = m.id
+                AND p.turno_servicio_id = ?
+                AND p.estado_pedido != 'cancelado'
+                AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+            GROUP BY m.id, m.numero, m.capacidad
+            ORDER BY ventas DESC, cuentas DESC
+        `, [id]),
+        db.query(`
+            SELECT p.id, p.creado_en, p.total, p.comensales, p.estado_pedido, p.estado_pago,
+                   m.numero AS mesa,
+                   TRIM(CONCAT(COALESCE(u.nombre, ''), ' ', COALESCE(u.apellidos, ''))) AS mesero,
+                   (SELECT COALESCE(SUM(dp.cantidad), 0)
+                    FROM detalles_pedido dp
+                    WHERE dp.id_pedido = p.id AND dp.estado_item != 'cancelado') AS items
+            FROM pedidos p
+            INNER JOIN mesas m ON m.id = p.id_mesa
+            LEFT JOIN usuarios u ON u.id = p.id_usuario_mesero
+            WHERE p.turno_servicio_id = ?
+              AND p.estado_pedido != 'cancelado'
+              AND p.estado_pago IN ('pendiente', 'pendiente_pago')
+            ORDER BY p.creado_en ASC
+        `, [id]),
+        db.query(`
+            SELECT (SELECT COUNT(*) FROM pedidos p
+                    WHERE p.turno_servicio_id = ? AND p.estado_pedido = 'cancelado') AS ordenes_canceladas,
+                   (SELECT COALESCE(SUM(dp.cantidad), 0)
+                    FROM detalles_pedido dp
+                    INNER JOIN pedidos p ON p.id = dp.id_pedido
+                    WHERE p.turno_servicio_id = ? AND dp.estado_item = 'cancelado') AS items_cancelados
+        `, [id, id])
+    ]);
+    const [resumenPagos] = qResumen;
+    const [items] = qItems;
+    const [horas] = qHoras;
+    const [meseros] = qMeseros;
+    const [mesas] = qMesas;
+    const [abiertas] = qAbiertas;
+    const [cancel] = qCancel;
+    const pagos = await CajaService.obtenerDesglosePagos(id);
+
+    // 1) Resumen por estado: cerradas (cobro), abiertas (en curso), cortesías.
+    let cuentasCerradas = 0, cuentasAbiertas = 0, ventas = 0, subtotal = 0;
+    let descuentos = 0, propinas = 0, comensales = 0, consumoEnCurso = 0;
+    let cortesias = 0, cortesiasValor = 0;
+    for (const f of resumenPagos) {
+        if (f.estado_pedido === 'cancelado') continue; // se cuenta aparte
+        const n = num(f.cuentas);
+        if (PAGOS_CERRADOS.includes(f.estado_pago)) {
+            cuentasCerradas += n;
+            if (f.estado_pago === 'cortesia') {
+                cortesias += n;
+                cortesiasValor += Number(f.subtotal || 0);
+            } else {
+                ventas += Number(f.ventas || 0);
+            }
+            subtotal += Number(f.subtotal || 0);
+            descuentos += Number(f.descuentos || 0);
+            propinas += Number(f.propinas || 0);
+            comensales += Number(f.comensales || 0);
+        } else if (PAGOS_ABIERTOS.includes(f.estado_pago)) {
+            cuentasAbiertas += n;
+            consumoEnCurso += Number(f.ventas || 0);
+        }
+    }
+
+    // 2) Ranking + clasificación ABC por aporte al ingreso (Pareto 80/95).
+    const claveItem = (it) => `${Number(it.es_platillo_dia) === 1 ? 'D' : 'M'}:${it.id_platillo}`;
+    const ingresoItems = items.reduce((s, it) => s + Number(it.ingreso || 0), 0);
+    const porIngreso = [...items].sort((a, b) => Number(b.ingreso || 0) - Number(a.ingreso || 0));
+    let acumulado = 0;
+    const claseABC = new Map();
+    for (const it of porIngreso) {
+        acumulado += Number(it.ingreso || 0);
+        const pct = ingresoItems > 0 ? (acumulado / ingresoItems) * 100 : 100;
+        claseABC.set(claveItem(it), pct <= 80 ? 'A' : pct <= 95 ? 'B' : 'C');
+    }
+
+    let totUnidades = 0, totCortesiaUnds = 0;
+    const ranking = items.map(it => {
+        const unidades = num(it.unidades);
+        const undsCortesia = num(it.unds_cortesia);
+        const ingreso = num(it.ingreso, 2);
+        const dePago = unidades - undsCortesia;
+        totUnidades += unidades;
+        totCortesiaUnds += undsCortesia;
+        return {
+            id_platillo: it.id_platillo,
+            es_platillo_dia: Number(it.es_platillo_dia) === 1,
+            nombre: it.nombre || 'Platillo',
+            categoria: it.categoria || 'Sin categoría',
+            tipo: it.tipo || 'SIN_CLASIFICAR',
+            cuentas: num(it.cuentas),
+            unidades,
+            unds_cortesia: undsCortesia,
+            ingreso,
+            precio_promedio: dePago > 0 ? num(ingreso / dePago, 2) : null,
+            clase_abc: claseABC.get(claveItem(it)) || 'C'
+        };
+    }).sort((a, b) => (b.unidades - a.unidades) || (b.ingreso - a.ingreso));
+    for (const r of ranking) {
+        r.pct_unidades = totUnidades > 0 ? num((r.unidades / totUnidades) * 100, 1) : 0;
+        r.pct_ingreso = ingresoItems > 0 ? num((r.ingreso / ingresoItems) * 100, 1) : 0;
+    }
+
+    // 3) Split comestibles vs bebidas + ventas por categoría (del ranking).
+    const ETIQ_TIPO = { COMESTIBLES: 'Comestibles', BEBIDAS: 'Bebidas', SIN_CLASIFICAR: 'Sin clasificar' };
+    const tipos = {};
+    const porCat = new Map();
+    for (const r of ranking) {
+        const k = ETIQ_TIPO[r.tipo] ? r.tipo : 'SIN_CLASIFICAR';
+        const t = tipos[k] || (tipos[k] = { tipo: k, etiqueta: ETIQ_TIPO[k], items: 0, unidades: 0, ingreso: 0 });
+        t.items += 1;
+        t.unidades += r.unidades;
+        t.ingreso = num(t.ingreso + r.ingreso, 2);
+        const c = porCat.get(r.categoria) || { categoria: r.categoria, items: 0, unidades: 0, ingreso: 0 };
+        c.items += 1;
+        c.unidades += r.unidades;
+        c.ingreso = num(c.ingreso + r.ingreso, 2);
+        porCat.set(r.categoria, c);
+    }
+    const splitTipos = Object.values(tipos).map(t => ({
+        ...t,
+        pct_unidades: totUnidades > 0 ? num((t.unidades / totUnidades) * 100, 1) : 0,
+        pct_ingreso: ingresoItems > 0 ? num((t.ingreso / ingresoItems) * 100, 1) : 0
+    })).sort((a, b) => b.ingreso - a.ingreso);
+    const categorias = [...porCat.values()].map(c => ({
+        ...c,
+        pct_ingreso: ingresoItems > 0 ? num((c.ingreso / ingresoItems) * 100, 1) : 0
+    })).sort((a, b) => b.ingreso - a.ingreso);
+
+    // 4) Distribución por hora de apertura de cuenta + hora pico.
+    const totVentasHoras = horas.reduce((s, h) => s + Number(h.ventas || 0), 0);
+    const porHora = horas.map(h => ({
+        hora: num(h.hora),
+        etiqueta: `${String(h.hora).padStart(2, '0')}:00`,
+        cuentas: num(h.cuentas),
+        ventas: num(h.ventas, 2),
+        pct_ventas: totVentasHoras > 0 ? num((Number(h.ventas || 0) / totVentasHoras) * 100, 1) : 0
+    }));
+    const maxHoraVentas = porHora.reduce((m, h) => Math.max(m, h.ventas), 0);
+    const horaPico = porHora.reduce((a, b) => (b.ventas > (a ? a.ventas : -1) ? b : a), null);
+
+    // 5) Desempeño por mesero y por mesa dentro del turno.
+    const porMesero = meseros.map(f => {
+        const cuentas = num(f.cuentas);
+        const v = num(f.ventas, 2);
+        return {
+            id: f.id,
+            mesero: String(f.mesero || '').trim() || 'Mesero',
+            rol: f.rol,
+            cuentas,
+            cortesias: num(f.cortesias),
+            ventas: v,
+            propinas: num(f.propinas, 2),
+            descuentos: num(f.descuentos, 2),
+            ticket_promedio: cuentas > 0 ? num(v / cuentas, 2) : 0
+        };
+    });
+    const porMesa = mesas.map(f => {
+        const cuentas = num(f.cuentas);
+        const v = num(f.ventas, 2);
+        return {
+            id: f.id,
+            numero: f.numero,
+            capacidad: num(f.capacidad),
+            cuentas,
+            ventas: v,
+            comensales: num(f.comensales),
+            ticket_promedio: cuentas > 0 ? num(v / cuentas, 2) : 0
+        };
+    });
+
+    // 6) Cuentas abiertas (turno en curso): consumo pendiente de cobro.
+    const ahora = Date.now();
+    const detalleAbiertas = abiertas.map(f => {
+        const ts = new Date(f.creado_en).getTime();
+        return {
+            id: f.id,
+            mesa: f.mesa,
+            mesero: String(f.mesero || '').trim() || '—',
+            items: num(f.items),
+            total: num(f.total, 2),
+            comensales: num(f.comensales),
+            estado_pedido: f.estado_pedido,
+            estado_pago: f.estado_pago,
+            creado_en: f.creado_en,
+            antiguedad_min: Number.isFinite(ts) ? Math.max(0, Math.round((ahora - ts) / 60000)) : null
+        };
+    });
+
+    // 7) Métodos de pago (mismo desglose del arqueo) + cancelados.
+    const metodosPago = (pagos || []).map(p => ({
+        metodo_pago: p.metodo_pago,
+        codigo_moneda: p.codigo_moneda,
+        nombre_moneda: p.nombre_moneda,
+        simbolo: p.simbolo,
+        total_origen: num(p.total_origen, 2),
+        total_local: num(p.total_local, 2),
+        total_transacciones: num(p.total_transacciones),
+        es_zelle: Number(p.es_zelle || 0) === 1,
+        es_efectivo_caja: Number(p.es_efectivo_caja || 0) === 1
+    }));
+    const cobradoTotal = metodosPago.reduce((s, p) => s + p.total_local, 0);
+    const cobradoCaja = metodosPago.filter(p => p.es_efectivo_caja).reduce((s, p) => s + p.total_local, 0);
+    const canc = (cancel && cancel[0]) || {};
+
+    return {
+        turno: {
+            id,
+            estado: turno.estado,
+            en_curso: enCurso,
+            fecha_apertura: turno.fecha_apertura,
+            fecha_cierre: turno.fecha_cierre,
+            duracion: duracionTurno(turno.fecha_apertura, turno.fecha_cierre),
+            abierto_por: String(turno.abierto_por || '').trim() || 'N/D',
+            cerrado_por: enCurso ? null : (String(turno.cerrado_por || '').trim() || 'N/D'),
+            monto_apertura: num(turno.monto_apertura, 2)
+        },
+        ranking,
+        tipos: splitTipos,
+        categorias,
+        horas: porHora,
+        horaPico: horaPico || null,
+        maxHoraVentas: num(maxHoraVentas, 2),
+        meseros: porMesero,
+        mesas: porMesa,
+        pagos: metodosPago,
+        abiertas: detalleAbiertas,
+        totales: {
+            ventas: num(ventas, 2),
+            cuentas_cerradas: cuentasCerradas,
+            cuentas_abiertas: cuentasAbiertas,
+            ticket_promedio: cuentasCerradas > 0 ? num(ventas / cuentasCerradas, 2) : 0,
+            unidades: totUnidades,
+            ingreso_items: num(ingresoItems, 2),
+            items_distintos: ranking.length,
+            subtotal: num(subtotal, 2),
+            descuentos: num(descuentos, 2),
+            propinas: num(propinas, 2),
+            comensales,
+            consumo_en_curso: num(consumoEnCurso, 2),
+            cortesias,
+            cortesias_valor: num(cortesiasValor, 2),
+            unds_cortesia: totCortesiaUnds,
+            ordenes_canceladas: num(canc.ordenes_canceladas),
+            items_cancelados: num(canc.items_cancelados),
+            mesas_distintas: porMesa.length,
+            rotacion: porMesa.length > 0 ? num(cuentasCerradas / porMesa.length, 1) : 0,
+            cobrado_total: num(cobradoTotal, 2),
+            cobrado_caja: num(cobradoCaja, 2)
+        }
+    };
+}
+
 // ── Generadores de CSV ───────────────────────────────────────────────────
 // Mismo formato que el kardex: separador ';', decimales con coma y BOM
 // UTF-8 para que Excel lo abra directamente.
@@ -648,17 +1048,113 @@ function ventasHorasACSV(reporte) {
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
+/** CSV del análisis de ventas del turno, por secciones. */
+function ventasTurnoACSV(reporte) {
+    const filas = [];
+    const t = reporte.turno;
+    const tot = reporte.totales;
+    filas.push(`Ventas del turno;#${t.id};${t.en_curso ? 'EN CURSO' : 'Cerrado'};Abierto por ${csvTexto(t.abierto_por)}`);
+    filas.push('');
+    filas.push('RESUMEN');
+    filas.push('Indicador;Valor');
+    filas.push(`Ventas cobradas;${csvNum(tot.ventas)}`);
+    filas.push(`Cuentas cerradas;${csvNum(tot.cuentas_cerradas, 0)}`);
+    filas.push(`Ticket promedio;${csvNum(tot.ticket_promedio)}`);
+    filas.push(`Unidades vendidas;${csvNum(tot.unidades, 0)}`);
+    filas.push(`Platos/bebidas distintos;${csvNum(tot.items_distintos, 0)}`);
+    filas.push(`Consumo en curso;${csvNum(tot.consumo_en_curso)}`);
+    filas.push(`Cuentas abiertas;${csvNum(tot.cuentas_abiertas, 0)}`);
+    filas.push(`Propinas;${csvNum(tot.propinas)}`);
+    filas.push(`Descuentos;${csvNum(tot.descuentos)}`);
+    filas.push(`Cortesias;${csvNum(tot.cortesias, 0)}`);
+    filas.push(`Valor cortesias;${csvNum(tot.cortesias_valor)}`);
+    filas.push(`Ordenes canceladas;${csvNum(tot.ordenes_canceladas, 0)}`);
+    filas.push(`Items cancelados;${csvNum(tot.items_cancelados, 0)}`);
+    filas.push(`Mesas distintas;${csvNum(tot.mesas_distintas, 0)}`);
+    filas.push(`Rotacion (cuentas/mesa);${csvNum(tot.rotacion, 1)}`);
+    filas.push('');
+    filas.push('RANKING DE PLATILLOS Y BEBIDAS');
+    filas.push('Pos;Platillo;Del dia;Tipo;Categoria;Cuentas;Unidades;% unds.;Ingreso;% ingr.;Precio prom.;Clase ABC');
+    reporte.ranking.forEach((r, i) => {
+        filas.push([
+            i + 1, csvTexto(r.nombre), r.es_platillo_dia ? 'Si' : 'No',
+            csvTexto(r.tipo), csvTexto(r.categoria), csvNum(r.cuentas, 0),
+            csvNum(r.unidades, 0), csvNum(r.pct_unidades, 1), csvNum(r.ingreso),
+            csvNum(r.pct_ingreso, 1),
+            r.precio_promedio != null ? csvNum(r.precio_promedio) : '', r.clase_abc
+        ].join(';'));
+    });
+    filas.push('');
+    filas.push('COMESTIBLES VS BEBIDAS');
+    filas.push('Tipo;Items;Unidades;% unds.;Ingreso;% ingr.');
+    for (const tp of reporte.tipos) {
+        filas.push(`${csvTexto(tp.etiqueta)};${csvNum(tp.items, 0)};${csvNum(tp.unidades, 0)};${csvNum(tp.pct_unidades, 1)};${csvNum(tp.ingreso)};${csvNum(tp.pct_ingreso, 1)}`);
+    }
+    filas.push('');
+    filas.push('POR CATEGORIA');
+    filas.push('Categoria;Items;Unidades;Ingreso;% ingr.');
+    for (const c of reporte.categorias) {
+        filas.push(`${csvTexto(c.categoria)};${csvNum(c.items, 0)};${csvNum(c.unidades, 0)};${csvNum(c.ingreso)};${csvNum(c.pct_ingreso, 1)}`);
+    }
+    filas.push('');
+    filas.push('POR HORA');
+    filas.push('Hora;Cuentas;Ventas;% ventas');
+    for (const h of reporte.horas) {
+        filas.push(`${h.etiqueta};${csvNum(h.cuentas, 0)};${csvNum(h.ventas)};${csvNum(h.pct_ventas, 1)}`);
+    }
+    filas.push('');
+    filas.push('POR MESERO');
+    filas.push('Mesero;Rol;Cuentas;Cortesias;Ventas;Ticket promedio;Propinas;Descuentos');
+    for (const m of reporte.meseros) {
+        filas.push([
+            csvTexto(m.mesero), csvTexto(m.rol), csvNum(m.cuentas, 0),
+            csvNum(m.cortesias, 0), csvNum(m.ventas), csvNum(m.ticket_promedio),
+            csvNum(m.propinas), csvNum(m.descuentos)
+        ].join(';'));
+    }
+    filas.push('');
+    filas.push('POR MESA');
+    filas.push('Mesa;Capacidad;Cuentas;Ventas;Comensales;Ticket promedio');
+    for (const m of reporte.mesas) {
+        filas.push([
+            csvTexto(m.numero), csvNum(m.capacidad, 0), csvNum(m.cuentas, 0),
+            csvNum(m.ventas), csvNum(m.comensales, 0), csvNum(m.ticket_promedio)
+        ].join(';'));
+    }
+    filas.push('');
+    filas.push('METODOS DE PAGO');
+    filas.push('Metodo;Moneda;Transacciones;Total origen;Total (moneda local)');
+    for (const p of reporte.pagos) {
+        filas.push([
+            csvTexto(p.metodo_pago), csvTexto(`${p.codigo_moneda} ${p.nombre_moneda || ''}`.trim()),
+            csvNum(p.total_transacciones, 0), csvNum(p.total_origen), csvNum(p.total_local)
+        ].join(';'));
+    }
+    if (reporte.abiertas.length) {
+        filas.push('');
+        filas.push('CUENTAS ABIERTAS');
+        filas.push('Pedido;Mesa;Mesero;Items;Total;Antiguedad (min)');
+        for (const a of reporte.abiertas) {
+            filas.push(`${a.id};${csvTexto(a.mesa)};${csvTexto(a.mesero)};${csvNum(a.items, 0)};${csvNum(a.total)};${a.antiguedad_min != null ? csvNum(a.antiguedad_min, 0) : ''}`);
+        }
+    }
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
 module.exports = {
     saludInventario,
     margenPorPlatillo,
     ventasPorMesero,
     consumoPorInsumo,
     ventasPorHoras,
+    listarTurnos,
+    ventasDelTurno,
     normalizarRango,
     margenACSV,
     saludACSV,
     explosionACSV,
     ventasMeseroACSV,
     consumoInsumosACSV,
-    ventasHorasACSV
+    ventasHorasACSV,
+    ventasTurnoACSV
 };

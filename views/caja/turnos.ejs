@@ -276,6 +276,12 @@
                                                 </td>
 
                                                 <td class="text-center">
+                                                <% const puedeVerReportesTurno = (typeof user !== 'undefined' && user && ['superadministrador', 'administrador', 'economico'].includes(user.rol)); %>
+                                                <% if (puedeVerReportesTurno) { %>
+                                                    <a href="/admin/reportes/ventas-turno?turno=<%= t.id %>" class="btn btn-sm btn-outline-secondary border-0" title="Análisis de ventas del turno">
+                                                        <i class="fa-solid fa-chart-column fs-6 text-dark"></i>
+                                                    </a>
+                                                <% } %>
                                                     <button class="btn btn-sm btn-outline-secondary border-0 btn-auditar-turno"
                                                             title="Ver Detalles de Auditoría"
                                                             data-id="<%= t.id %>"

@@ -94,6 +94,15 @@ const ENLACES = [
         badge: 'NUEVO'
     },
     {
+        id: 'ventas-turno',
+        titulo: 'Ventas del turno',
+        descripcion: 'Análisis de un turno (cerrado o en curso): platos y bebidas más vendidos, categorías, horas pico, meseros, mesas y pagos. Exportable a CSV.',
+        icono: 'fa-solid fa-utensils',
+        url: '/admin/reportes/ventas-turno',
+        grupo: 'Control financiero',
+        badge: 'NUEVO'
+    },
+    {
         id: 'cierre',
         titulo: 'Cierre del día',
         descripcion: 'Cuadre de caja del día: ventas por método de pago, propinas y arqueos.',
@@ -404,5 +413,50 @@ exports.viewExplosionRecetas = async (req, res) => {
     } catch (error) {
         console.error('Error al cargar la explosión de recetas:', error);
         return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+exports.viewVentasTurno = async (req, res) => {
+    try {
+        const turnos = await ReportesService.listarTurnos(50);
+        // Cualquier turno puede analizarse, incluido el abierto. Por
+        // defecto: el que sigue abierto, o el más reciente.
+        let turnoId = parseInt(req.query.turno, 10) || null;
+        if (!turnos.some(t => t.id === turnoId)) {
+            const enCurso = turnos.find(t => t.en_curso);
+            turnoId = enCurso ? enCurso.id : (turnos.length ? turnos[0].id : null);
+        }
+        const reporte = turnoId ? await ReportesService.ventasDelTurno(turnoId) : null;
+        return res.render('reportes/ventas_turno', {
+            title: 'Ventas del Turno - Restaurante Bahía',
+            view: 'ventas_turno',
+            turnos,
+            turnoSeleccionado: turnoId,
+            reporte,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar las ventas del turno:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.exportarVentasTurno = async (req, res) => {
+    try {
+        const turnos = await ReportesService.listarTurnos(50);
+        let turnoId = parseInt(req.query.turno, 10) || null;
+        if (!turnos.some(t => t.id === turnoId)) {
+            const enCurso = turnos.find(t => t.en_curso);
+            turnoId = enCurso ? enCurso.id : (turnos.length ? turnos[0].id : null);
+        }
+        if (!turnoId) return res.redirect('/admin/reportes/ventas-turno');
+        const reporte = await ReportesService.ventasDelTurno(turnoId);
+        if (!reporte) return res.redirect('/admin/reportes/ventas-turno');
+        return responderCSV(req, res, `ventas_turno_${turnoId}`,
+            ReportesService.ventasTurnoACSV(reporte), reporte.ranking.length);
+    } catch (error) {
+        console.error('Error al exportar las ventas del turno:', error);
+        return res.redirect('/admin/reportes/ventas-turno');
     }
 };

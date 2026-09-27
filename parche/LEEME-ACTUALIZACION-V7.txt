@@ -1,0 +1,56 @@
+ACTUALIZACIÓN V7 — Nuevo reporte "Ventas del turno"
+Restaurante Bahía · 2026-09-27 · Aplica sobre el parche de leyenda (5a2a709)
+====================================================================
+
+QUÉ RESUELVE
+------------
+No existía ningún reporte con la cantidad de platillos y/o bebidas
+vendidos en un turno específico: el módulo de turnos solo muestra
+finanzas (fondo, esperado vs real, diferencia) y los reportes de
+ventas trabajan por rango de fechas, sin selector de turno.
+
+QUÉ TRAE
+--------
+Nuevo reporte "Ventas del turno" (/admin/reportes/ventas-turno, con
+tarjeta en el Centro de Reportes):
+- Selector de CUALQUIER turno, incluido el abierto (en curso aunque no
+  se haya cerrado). Por defecto abre el turno en curso.
+- Ficha del turno: estado, quién abrió/cerró, fechas, duración y fondo.
+- 8 KPIs: ventas cobradas, ticket promedio, unidades vendidas,
+  consumo en curso, propinas, descuentos, cortesías y cancelados.
+- Ranking de platillos y bebidas más vendidos (unidades, ingreso, %,
+  precio promedio) con clasificación ABC por aporte al ingreso.
+- Split comestibles vs bebidas y ventas por categoría.
+- Distribución por hora con hora pico, ventas por mesero y por mesa
+  (con rotación cuentas/mesa), métodos de pago (mismo desglose del
+  arqueo) y cuentas abiertas con antigüedad si el turno sigue abierto.
+- Exportación CSV por secciones + impresión.
+- Criterio explícito en pantalla: las cortesías suman unidades pero
+  $0 al ingreso; lo cancelado queda fuera salvo conteo aparte.
+- Integración: cada fila del historial de turnos tiene un botón de
+  análisis que abre este reporte (visible solo para roles con acceso
+  a reportes). El menú lateral ahora resalta todos los reportes.
+
+ARCHIVOS INCLUIDOS (7)
+-----------------------
+services/reportesService.js        +listarTurnos, +ventasDelTurno, +CSV
+services/reportesService.test.js   +6 pruebas (listado, análisis, CSV, vacíos)
+controllers/reportesController.js  tarjeta hub + vista + exportación
+routes/reporteRoutes.js            2 rutas (vista y exportar)
+views/reportes/ventas_turno.ejs    NUEVA vista del reporte
+views/caja/turnos.ejs              botón de análisis por turno (según rol)
+views/includes/sideBarMenu.ejs     resaltado de reportes en el menú
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Descomprima el zip en la RAÍZ del proyecto conservando las carpetas.
+2. No requiere migración SQL (solo lecturas sobre tablas existentes).
+3. Reinicie el servidor (pm2/node) y recargue con Ctrl+F5.
+4. Verificación rápida:
+   a) Centro de Reportes → tarjeta "Ventas del turno".
+   b) Con un turno abierto: debe salir seleccionado, mostrar el badge
+      EN CURSO y listar las cuentas abiertas con su antigüedad.
+   c) Cambie a un turno cerrado: badge Cerrado, hora pico y ranking.
+   d) Exporte el CSV y ábralo en Excel (BOM + punto y coma).
+   e) Turnos de servicio → icono de análisis en cada fila del
+      historial (no visible para el cajero).

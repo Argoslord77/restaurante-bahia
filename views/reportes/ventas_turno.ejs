@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Ventas del Turno - Restaurante Bahía' %></title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Ventas del Turno', desc_pagina: 'Análisis de un turno (cerrado o en curso): platos y bebidas más vendidos, categorías, horas pico, meseros, mesas y pagos.', add_btn: false}) %>
+
+                <% const fmt$ = (v) => '$' + Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); %>
+                <% const fmtN = (v) => Number(v || 0).toLocaleString('es-ES'); %>
+                <% const fmtF = (v) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString(); }; %>
+                <% const fmtAntig = (min) => { if (min == null) return '—'; const m = Math.max(0, Math.round(min)); const h = Math.floor(m / 60); return h > 0 ? `${h} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`; }; %>
+                <% const ETIQ_TIPO = { BEBIDAS: 'Bebida', COMESTIBLES: 'Comestible', SIN_CLASIFICAR: 'Sin clasificar' }; %>
+                <% const COLOR_TIPO = { BEBIDAS: 'text-bg-info', COMESTIBLES: 'text-bg-success', SIN_CLASIFICAR: 'text-bg-secondary' }; %>
+                <% const COLOR_ABC = { A: 'text-bg-success', B: 'text-bg-warning', C: 'text-bg-secondary' }; %>
+
+                <!-- Selector de turno -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-4 bg-white">
+                    <form method="get" action="/admin/reportes/ventas-turno" class="row g-2 align-items-end">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small text-muted fw-semibold mb-1">Turno de servicio</label>
+                            <select name="turno" class="form-select form-select-sm">
+                                <% turnos.forEach(t => { %>
+                                    <option value="<%= t.id %>" <%= turnoSeleccionado === t.id ? 'selected' : '' %>>
+                                        Turno #<%= t.id %> · <%= t.abierto_por %> · <%= fmtF(t.fecha_apertura) %> · <%= t.pedidos %> pedido(s)<%= t.en_curso ? ' · EN CURSO' : '' %>
+                                    </option>
+                                <% }) %>
+                                <% if (turnos.length === 0) { %>
+                                    <option value="">Sin turnos registrados</option>
+                                <% } %>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2 d-grid">
+                            <button type="submit" class="btn btn-dark btn-sm fw-semibold py-2">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Consultar
+                            </button>
+                        </div>
+                        <div class="col-12 col-md-4 d-flex justify-content-md-end gap-2">
+                            <a href="/admin/reportes/ventas-turno/exportar<%= turnoSeleccionado ? '?turno=' + turnoSeleccionado : '' %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
+                            </a>
+                            <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <% if (!reporte) { %>
+                    <div class="alert alert-info border-0 shadow-sm rounded p-4 text-center" role="alert">
+                        <i class="fa-solid fa-circle-info fs-4 d-block mb-2"></i>
+                        Aún no hay turnos de servicio registrados para analizar.
+                    </div>
+                <% } else { %>
+
+                <!-- Ficha del turno -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-4 bg-white">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <h5 class="fw-bold mb-0">Turno #<%= reporte.turno.id %></h5>
+                        <% if (reporte.turno.en_curso) { %>
+                            <span class="badge text-bg-primary"><i class="fa-solid fa-spinner fa-spin me-1"></i>EN CURSO</span>
+                        <% } else { %>
+                            <span class="badge text-bg-secondary">Cerrado</span>
+                        <% } %>
+                        <span class="text-muted small ms-auto"><i class="fa-solid fa-clock me-1"></i>Duración: <strong><%= reporte.turno.duracion %></strong></span>
+                    </div>
+                    <div class="row g-2 mt-2 small">
+                        <div class="col-12 col-md-4">
+                            <span class="text-muted">Apertura:</span>
+                            <strong><%= reporte.turno.abierto_por %></strong>
+                            <span class="text-muted">· <%= fmtF(reporte.turno.fecha_apertura) %></span>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <span class="text-muted">Cierre:</span>
+                            <% if (reporte.turno.en_curso) { %>
+                                <strong class="text-primary">Pendiente (turno abierto)</strong>
+                            <% } else { %>
+                                <strong><%= reporte.turno.cerrado_por %></strong>
+                                <span class="text-muted">· <%= fmtF(reporte.turno.fecha_cierre) %></span>
+                            <% } %>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <span class="text-muted">Fondo de apertura:</span>
+                            <strong><%= fmt$(reporte.turno.monto_apertura) %></strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPIs principales -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-success border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Ventas cobradas</h6>
+                            <h3 class="fw-bold mb-0 text-success"><%= fmt$(reporte.totales.ventas) %></h3>
+                            <small class="text-muted"><%= fmtN(reporte.totales.cuentas_cerradas) %> cuentas cerradas</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-primary border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Ticket promedio</h6>
+                            <h3 class="fw-bold mb-0 text-primary"><%= fmt$(reporte.totales.ticket_promedio) %></h3>
+                            <small class="text-muted">Por cuenta cerrada</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-dark border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Unidades vendidas</h6>
+                            <h3 class="fw-bold mb-0 text-dark"><%= fmtN(reporte.totales.unidades) %></h3>
+                            <small class="text-muted"><%= fmtN(reporte.totales.items_distintos) %> platos/bebidas distintos</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-warning border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Consumo en curso</h6>
+                            <h3 class="fw-bold mb-0 text-warning"><%= fmt$(reporte.totales.consumo_en_curso) %></h3>
+                            <small class="text-muted"><%= reporte.totales.cuentas_abiertas > 0 ? fmtN(reporte.totales.cuentas_abiertas) + ' cuenta(s) abierta(s)' : 'Sin cuentas abiertas' %></small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPIs secundarios -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Propinas</h6>
+                            <h4 class="fw-bold mb-0 text-success"><%= fmt$(reporte.totales.propinas) %></h4>
+                            <small class="text-muted">Acumuladas en el turno</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Descuentos</h6>
+                            <h4 class="fw-bold mb-0 text-secondary"><%= fmt$(reporte.totales.descuentos) %></h4>
+                            <small class="text-muted">Otorgados en cuentas cerradas</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Cortesías</h6>
+                            <h4 class="fw-bold mb-0 text-warning"><%= fmtN(reporte.totales.cortesias) %> <small class="fs-7 fw-semibold">· <%= fmt$(reporte.totales.cortesias_valor) %></small></h4>
+                            <small class="text-muted"><%= fmtN(reporte.totales.unds_cortesia) %> unidad(es) de cortesía</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Cancelados</h6>
+                            <h4 class="fw-bold mb-0 text-danger"><%= fmtN(reporte.totales.ordenes_canceladas) %> <small class="fs-7 fw-semibold">órdenes · <%= fmtN(reporte.totales.items_cancelados) %> ítems</small></h4>
+                            <small class="text-muted">Fuera de las ventas</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ranking de más vendidos -->
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2 flex-wrap">
+                        <i class="fa-solid fa-ranking-star text-warning"></i>
+                        <h6 class="fw-bold mb-0">Platillos y bebidas más vendidos</h6>
+                        <span class="badge text-bg-light border text-secondary ms-auto" title="Clasificación ABC por aporte al ingreso: A ≈ 80% del ingreso, B hasta 95%, C el resto">ABC por ingreso</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">#</th>
+                                    <th class="py-3">Platillo / Bebida</th>
+                                    <th class="py-3">Tipo</th>
+                                    <th class="py-3">Categoría</th>
+                                    <th class="py-3 text-end">Cuentas</th>
+                                    <th class="py-3 text-end">Unidades</th>
+                                    <th class="py-3 text-end">Ingreso</th>
+                                    <th class="py-3 text-end">Precio prom.</th>
+                                    <th class="py-3 text-end pe-4">ABC</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% reporte.ranking.forEach((r, i) => { %>
+                                <tr>
+                                    <td class="ps-4 text-muted"><%= i + 1 %></td>
+                                    <td>
+                                        <span class="fw-semibold"><%= r.nombre %></span>
+                                        <% if (r.es_platillo_dia) { %><span class="badge text-bg-dark ms-1" style="font-size:.6rem">del día</span><% } %>
+                                        <% if (r.unds_cortesia > 0) { %><small class="text-warning d-block"><%= r.unds_cortesia %> de cortesía</small><% } %>
+                                    </td>
+                                    <td><span class="badge <%= COLOR_TIPO[r.tipo] || 'text-bg-secondary' %>"><%= ETIQ_TIPO[r.tipo] || r.tipo %></span></td>
+                                    <td class="text-muted"><%= r.categoria %></td>
+                                    <td class="text-end"><%= r.cuentas %></td>
+                                    <td class="text-end fw-semibold"><%= fmtN(r.unidades) %><small class="text-muted d-block"><%= r.pct_unidades %>%</small></td>
+                                    <td class="text-end fw-semibold"><%= fmt$(r.ingreso) %><small class="text-muted d-block"><%= r.pct_ingreso %>%</small></td>
+                                    <td class="text-end"><%= r.precio_promedio != null ? fmt$(r.precio_promedio) : '—' %></td>
+                                    <td class="text-end pe-4"><span class="badge <%= COLOR_ABC[r.clase_abc] || 'text-bg-secondary' %>"><%= r.clase_abc %></span></td>
+                                </tr>
+                                <% }) %>
+                                <% if (reporte.ranking.length === 0) { %>
+                                <tr><td colspan="9" class="text-center text-muted py-4">Sin ventas cerradas en este turno.</td></tr>
+                                <% } %>
+                            </tbody>
+                            <% if (reporte.ranking.length) { %>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td colspan="5" class="ps-4">TOTAL (<%= fmtN(reporte.totales.items_distintos) %> distintos)</td>
+                                    <td class="text-end"><%= fmtN(reporte.totales.unidades) %></td>
+                                    <td class="text-end"><%= fmt$(reporte.totales.ingreso_items) %></td>
+                                    <td colspan="2" class="pe-4"></td>
+                                </tr>
+                            </tfoot>
+                            <% } %>
+                        </table>
+                    </div>
+                    <% if (reporte.ranking.length >= 200) { %>
+                    <div class="card-footer bg-white border-0 small text-muted">Mostrando los primeros 200 ítems del turno.</div>
+                    <% } %>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <!-- Comestibles vs bebidas -->
+                    <div class="col-12 col-xl-6">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-scale-balanced text-dark"></i>
+                                <h6 class="fw-bold mb-0">Comestibles vs bebidas</h6>
+                            </div>
+                            <div class="card-body px-4 pt-0">
+                                <% if (reporte.tipos.length === 0) { %>
+                                <p class="text-muted small mb-0">Sin ventas cerradas en este turno.</p>
+                                <% } %>
+                                <% reporte.tipos.forEach(t => { %>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-baseline">
+                                        <span class="fw-semibold"><span class="badge <%= COLOR_TIPO[t.tipo] || 'text-bg-secondary' %> me-1"><%= t.etiqueta %></span></span>
+                                        <span class="small text-muted"><%= fmtN(t.unidades) %> unds. · <strong class="text-dark"><%= fmt$(t.ingreso) %></strong></span>
+                                    </div>
+                                    <div class="progress mt-1" style="height: 18px;">
+                                        <div class="progress-bar <%= t.tipo === 'BEBIDAS' ? 'bg-info' : (t.tipo === 'COMESTIBLES' ? 'bg-success' : 'bg-secondary') %>" role="progressbar" style="width: <%= Math.min(t.pct_ingreso, 100) %>%;" aria-valuenow="<%= t.pct_ingreso %>" aria-valuemin="0" aria-valuemax="100"><%= t.pct_ingreso %>% del ingreso</div>
+                                    </div>
+                                    <small class="text-muted"><%= t.items %> distinto(s) · <%= t.pct_unidades %>% de las unidades</small>
+                                </div>
+                                <% }) %>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Por categoría -->
+                    <div class="col-12 col-xl-6">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-tags text-dark"></i>
+                                <h6 class="fw-bold mb-0">Ventas por categoría</h6>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Categoría</th>
+                                            <th class="py-3 text-end">Ítems</th>
+                                            <th class="py-3 text-end">Unidades</th>
+                                            <th class="py-3 text-end">Ingreso</th>
+                                            <th class="py-3 text-end pe-4" style="min-width:120px">Peso</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% reporte.categorias.forEach(c => { %>
+                                        <tr>
+                                            <td class="ps-4 fw-semibold"><%= c.categoria %></td>
+                                            <td class="text-end text-muted"><%= c.items %></td>
+                                            <td class="text-end"><%= fmtN(c.unidades) %></td>
+                                            <td class="text-end fw-semibold"><%= fmt$(c.ingreso) %></td>
+                                            <td class="pe-4">
+                                                <div class="progress" style="height: 14px;">
+                                                    <div class="progress-bar bg-dark" role="progressbar" style="width: <%= Math.min(c.pct_ingreso, 100) %>%;" aria-valuenow="<%= c.pct_ingreso %>" aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <small class="text-muted"><%= c.pct_ingreso %>%</small>
+                                            </td>
+                                        </tr>
+                                        <% }) %>
+                                        <% if (reporte.categorias.length === 0) { %>
+                                        <tr><td colspan="5" class="text-center text-muted py-4">Sin ventas cerradas en este turno.</td></tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <!-- Por hora -->
+                    <div class="col-12 col-xl-6">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-clock text-dark"></i>
+                                <h6 class="fw-bold mb-0">Distribución por hora</h6>
+                                <span class="badge text-bg-dark ms-auto">apertura de la cuenta</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Hora</th>
+                                            <th class="py-3 text-end">Cuentas</th>
+                                            <th class="py-3 text-end">Ventas</th>
+                                            <th class="py-3 text-end pe-4" style="min-width:140px">Peso</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% reporte.horas.forEach(h => { %>
+                                            <% const pctH = reporte.maxHoraVentas > 0 ? (h.ventas / reporte.maxHoraVentas * 100) : 0; %>
+                                            <% const esPico = reporte.horaPico && h.hora === reporte.horaPico.hora; %>
+                                        <tr class="<%= esPico ? 'table-primary' : '' %>">
+                                            <td class="ps-4 fw-semibold"><%= h.etiqueta %><% if (esPico) { %> <span class="badge text-bg-primary ms-1">pico</span><% } %></td>
+                                            <td class="text-end"><%= h.cuentas %></td>
+                                            <td class="text-end fw-semibold"><%= fmt$(h.ventas) %></td>
+                                            <td class="pe-4">
+                                                <div class="progress" style="height: 14px;">
+                                                    <div class="progress-bar bg-<%= esPico ? 'primary' : 'secondary' %>" role="progressbar" style="width: <%= Math.min(pctH, 100) %>%;" aria-valuenow="<%= pctH.toFixed(0) %>" aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <small class="text-muted"><%= h.pct_ventas %>%</small>
+                                            </td>
+                                        </tr>
+                                        <% }) %>
+                                        <% if (reporte.horas.length === 0) { %>
+                                        <tr><td colspan="4" class="text-center text-muted py-4">Sin ventas cerradas en este turno.</td></tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Métodos de pago -->
+                    <div class="col-12 col-xl-6">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-cash-register text-dark"></i>
+                                <h6 class="fw-bold mb-0">Métodos de pago</h6>
+                                <span class="badge text-bg-light border text-secondary ms-auto">mismo desglose del arqueo</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Método</th>
+                                            <th class="py-3">Moneda</th>
+                                            <th class="py-3 text-end">Trans.</th>
+                                            <th class="py-3 text-end pe-4">Total (moneda local)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% reporte.pagos.forEach(p => { %>
+                                        <tr>
+                                            <td class="ps-4 fw-semibold text-capitalize">
+                                                <%= p.metodo_pago %>
+                                                <% if (p.es_zelle) { %><span class="badge text-bg-info ms-1" style="font-size:.6rem">Zelle</span><% } %>
+                                                <% if (p.es_efectivo_caja) { %><span class="badge text-bg-success ms-1" style="font-size:.6rem">caja</span><% } %>
+                                            </td>
+                                            <td class="text-muted"><%= p.codigo_moneda %> <small><%= p.nombre_moneda || '' %></small></td>
+                                            <td class="text-end"><%= p.total_transacciones %></td>
+                                            <td class="text-end pe-4 fw-semibold"><%= fmt$(p.total_local) %></td>
+                                        </tr>
+                                        <% }) %>
+                                        <% if (reporte.pagos.length === 0) { %>
+                                        <tr><td colspan="4" class="text-center text-muted py-4">Sin cobros registrados en este turno.</td></tr>
+                                        <% } %>
+                                    </tbody>
+                                    <% if (reporte.pagos.length) { %>
+                                    <tfoot class="table-light fw-bold">
+                                        <tr>
+                                            <td colspan="3" class="ps-4">TOTAL cobrado <small class="fw-normal text-muted">(caja: <%= fmt$(reporte.totales.cobrado_caja) %>)</small></td>
+                                            <td class="text-end pe-4"><%= fmt$(reporte.totales.cobrado_total) %></td>
+                                        </tr>
+                                    </tfoot>
+                                    <% } %>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <!-- Por mesero -->
+                    <div class="col-12 col-xl-6">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-user-tie text-dark"></i>
+                                <h6 class="fw-bold mb-0">Ventas por mesero</h6>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Mesero</th>
+                                            <th class="py-3 text-end">Cuentas</th>
+                                            <th class="py-3 text-end">Ventas</th>
+                                            <th class="py-3 text-end">Ticket</th>
+                                            <th class="py-3 text-end pe-4">Propinas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% reporte.meseros.forEach(m => { %>
+                                        <tr>
+                                            <td class="ps-4">
+                                                <span class="fw-semibold"><%= m.mesero %></span>
+                                                <% if (m.rol) { %><small class="text-muted d-block"><%= m.rol %></small><% } %>
+                                                <% if (m.cortesias > 0) { %><small class="text-warning"><%= m.cortesias %> cortesía(s)</small><% } %>
+                                            </td>
+                                            <td class="text-end fw-semibold"><%= m.cuentas %></td>
+                                            <td class="text-end fw-semibold"><%= fmt$(m.ventas) %></td>
+                                            <td class="text-end"><%= fmt$(m.ticket_promedio) %></td>
+                                            <td class="text-end pe-4 text-success"><%= fmt$(m.propinas) %></td>
+                                        </tr>
+                                        <% }) %>
+                                        <% if (reporte.meseros.length === 0) { %>
+                                        <tr><td colspan="5" class="text-center text-muted py-4">Sin ventas cerradas en este turno.</td></tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Por mesa -->
+                    <div class="col-12 col-xl-6">
+                        <div class="card border-0 shadow-sm rounded bg-white h-100">
+                            <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2 flex-wrap">
+                                <i class="fa-solid fa-chair text-dark"></i>
+                                <h6 class="fw-bold mb-0">Ventas por mesa</h6>
+                                <span class="badge text-bg-light border text-secondary ms-auto"><%= fmtN(reporte.totales.mesas_distintas) %> mesa(s) · rotación <%= reporte.totales.rotacion %></span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Mesa</th>
+                                            <th class="py-3 text-end">Cuentas</th>
+                                            <th class="py-3 text-end">Ventas</th>
+                                            <th class="py-3 text-end">Comens.</th>
+                                            <th class="py-3 text-end pe-4">Ticket</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% reporte.mesas.forEach(m => { %>
+                                        <tr>
+                                            <td class="ps-4 fw-semibold"><%= m.numero %><% if (m.capacidad > 0) { %> <small class="text-muted fw-normal">(cap. <%= m.capacidad %>)</small><% } %></td>
+                                            <td class="text-end fw-semibold"><%= m.cuentas %></td>
+                                            <td class="text-end fw-semibold"><%= fmt$(m.ventas) %></td>
+                                            <td class="text-end"><%= m.comensales %></td>
+                                            <td class="text-end pe-4"><%= fmt$(m.ticket_promedio) %></td>
+                                        </tr>
+                                        <% }) %>
+                                        <% if (reporte.mesas.length === 0) { %>
+                                        <tr><td colspan="5" class="text-center text-muted py-4">Sin ventas cerradas en este turno.</td></tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cuentas abiertas (turno en curso) -->
+                <% if (reporte.abiertas.length > 0) { %>
+                <div class="card border-0 shadow-sm rounded bg-white mb-4">
+                    <div class="card-header bg-white border-0 pt-3 px-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-hourglass-half text-warning"></i>
+                        <h6 class="fw-bold mb-0">Cuentas abiertas <span class="text-muted fw-normal fs-7">(pendientes de cobro)</span></h6>
+                        <span class="badge text-bg-warning ms-auto"><%= fmt$(reporte.totales.consumo_en_curso) %> en curso</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4 py-3">Pedido</th>
+                                    <th class="py-3">Mesa</th>
+                                    <th class="py-3">Mesero</th>
+                                    <th class="py-3 text-end">Ítems</th>
+                                    <th class="py-3 text-end">Total actual</th>
+                                    <th class="py-3 text-end">Antigüedad</th>
+                                    <th class="py-3 text-end pe-4">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% reporte.abiertas.forEach(a => { %>
+                                <tr>
+                                    <td class="ps-4 font-monospace">#<%= a.id %></td>
+                                    <td class="fw-semibold"><%= a.mesa %></td>
+                                    <td><%= a.mesero %></td>
+                                    <td class="text-end"><%= a.items %></td>
+                                    <td class="text-end fw-semibold"><%= fmt$(a.total) %></td>
+                                    <td class="text-end"><%= fmtAntig(a.antiguedad_min) %></td>
+                                    <td class="text-end pe-4"><span class="badge text-bg-light border text-secondary text-capitalize"><%= (a.estado_pedido || '').replace(/_/g, ' ') %></span></td>
+                                </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <% } %>
+
+                <div class="alert alert-light border shadow-sm rounded py-2 px-3 mb-4 small text-muted" role="note">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    Las <strong>ventas</strong> son cuentas cerradas (pagadas y facturadas). Las <strong>cortesías</strong> suman unidades pero $0 al ingreso. Lo <strong>cancelado</strong> queda fuera salvo conteo aparte. El <strong>consumo en curso</strong> son cuentas abiertas pendientes de cobro. La <strong>clase ABC</strong> ordena por aporte al ingreso: A ≈ 80% del ingreso, B hasta el 95%, C el resto.
+                </div>
+
+                <% } %>
+
+                <%- include('../includes/footer') %>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>
