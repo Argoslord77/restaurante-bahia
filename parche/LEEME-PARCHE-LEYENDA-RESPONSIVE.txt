@@ -1,0 +1,23 @@
+PARCHE — Leyenda de estados responsive (dashboard dependiente)
+Restaurante Bahía · 2026-09-27 · Aplica sobre la V6
+====================================================================
+
+QUÉ RESUELVE
+------------
+En el móvil, las etiquetas de la leyenda de estados de mesa (Libres,
+Pendientes, Ocupadas) se desbordaban de la tarjeta del salón porque el
+contenedor no permitía el salto de línea.
+
+QUÉ CAMBIA
+-----------
+views/dependiente/dashboard.ejs (único archivo):
+- La leyenda admite flex-wrap: en pantallas estrechas las etiquetas
+  bajan a una segunda línea en vez de desbordarse.
+- En móvil (<=576px) la leyenda ocupa todo el ancho bajo el título y
+  las etiquetas se compactan un poco (fuente y relleno reducidos).
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Descomprima el zip en la RAÍZ del proyecto conservando las carpetas.
+2. No requiere migración SQL ni reinicio especial (es solo vista EJS;
+   reinicie el servidor si lo sirve cacheado y recargue con Ctrl+F5).

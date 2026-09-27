@@ -166,6 +166,13 @@
 
         .btn-monitor-qr { background-color: #7c3aed; color: #ffffff; }
         .btn-monitor-qr:hover { background-color: #6d28d9; color: #ffffff; }
+
+        /* Leyenda de estados del salon: responsive en movil estrecho. */
+        .legend-estados-mesas { max-width: 100%; row-gap: .5rem; }
+        @media (max-width: 575.98px) {
+            .legend-estados-mesas { width: 100%; justify-content: flex-start; }
+            .legend-estados-mesas .badge { font-size: .72rem; padding: .3rem .6rem; }
+        }
     </style>
 </head>
 <body>
@@ -245,7 +252,7 @@
                         <h5 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
                             <i class="fa-solid fa-map text-secondary fs-5"></i>Salón de Mesas Asignadas
                         </h5>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 flex-wrap legend-estados-mesas">
                             <span class="badge text-dark bg-light border px-2.5 py-1.5 rounded-pill small fw-medium">
                                 <i class="fa-solid fa-circle text-success me-1 small"></i> Libres
                             </span>
