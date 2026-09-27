@@ -669,6 +669,10 @@ module.exports = {
             if (es_pendiente_pago) estadoPago = 'pendiente_pago';
             if (es_factura_credito) estadoPago = 'facturado';
             if (es_cortesia) estadoPago = 'cortesia';
+            // Propina final del pedido: la explícita más el excedente del
+            // cobro (si lo hay). Ver cálculo dentro del bloque de pagado.
+            let propFinal = prop;
+            let excedente = 0;
 
             const pagosNormalizados = [];
             if (estadoPago === 'pagado') {
@@ -749,6 +753,19 @@ module.exports = {
                         message: `El pago es insuficiente. Faltan ${Math.abs(diferencia).toFixed(2)} ${pricingContext.moneda_codigo}.`
                     });
                 }
+                // Excedente del cobro (lo pagado de más sobre orden + propina
+                // explícita): queda registrado como propina en el pedido. Sin
+                // esto el dinero entraba a caja (los abonos se guardan
+                // íntegros) pero ningún reporte lo veía y el cuadre quedaba
+                // por debajo de la gaveta física.
+                // En carta ZELLE la diferencia viene en moneda origen y se
+                // convierte a local con la tasa del contexto de cobro.
+                const excedenteBruto = Math.max(0, diferencia);
+                const factorExcedente = pricingContext.es_zelle
+                    ? (Number(pricingContext.factor_cambio) || 1)
+                    : 1;
+                excedente = Number((excedenteBruto * factorExcedente).toFixed(2));
+                propFinal = Number((prop + excedente).toFixed(2));
             }
 
             connection = await pool.getConnection();
@@ -760,14 +777,14 @@ module.exports = {
                         id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?,
                         cortesia_autorizada_por = ?, cortesia_motivo = ?, cortesia_autorizada_en = NOW()
                     WHERE id = ?
-                `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, cortesiaAutorizadaPor, cortesiaMotivo, pedidoId]);
+                `, [estadoPago, cajeroId, desc, impuesto, propFinal, totalOrden, cortesiaAutorizadaPor, cortesiaMotivo, pedidoId]);
             } else {
                 await connection.query(`
                     UPDATE pedidos
                     SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
                         id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
                     WHERE id = ?
-                `, [estadoPago, cajeroId, desc, impuesto, prop, totalOrden, pedidoId]);
+                `, [estadoPago, cajeroId, desc, impuesto, propFinal, totalOrden, pedidoId]);
             }
             await connection.query(`
                 UPDATE detalles_pedido SET estado_item = 'entregado'
@@ -802,7 +819,8 @@ module.exports = {
                 moneda_codigo: pricingContext.moneda_codigo,
                 total: totalFinal,
                 total_orden: totalOrden,
-                propina: prop,
+                propina: propFinal,
+                excedente,
                 cortesia_autorizada_por: es_cortesia ? cortesiaAutorizadaPor : null,
                 message: es_cortesia ? 'Cortesía autorizada: mesa liberada con éxito' : 'Mesa cobrada y liberada con éxito'
             });

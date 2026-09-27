@@ -95,7 +95,14 @@ function calcularResumenFinanciero(pedidos, desglosePagos, fondoApertura = 0) {
         .reduce((sum, pago) => sum + Number(pago.total_local || 0), 0);
 
     const fondo = Number(fondoApertura || 0);
-    const totalEfectivoCaja = efectivo + totalPropinas;
+    // El efectivo de caja son los abonos en efectivo TAL CUAL: ya traen
+    // dentro las propinas pagadas en efectivo (el cobro exige abonos >=
+    // orden + propina), así que sumar totalPropinas aquí las contaría
+    // doble. Y las propinas con tarjeta/transferencia/ZELLE nunca entran
+    // a la gaveta física: no pertenecen a este esperado.
+    // Invariante del cobro: Σ abonos = total + propina (el excedente
+    // queda registrado como propina en el pedido).
+    const totalEfectivoCaja = efectivo;
     return {
         total_cobrado_caja: efectivo,
         total_efectivo_total_caja: totalEfectivoCaja,

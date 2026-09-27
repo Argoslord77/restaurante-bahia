@@ -1,0 +1,67 @@
+ACTUALIZACIÓN V8 — Excedente del cobro registrado como propina
+Restaurante Bahía · 2026-09-27 · Aplica sobre la V7 (3670076)
+====================================================================
+
+DIAGNÓSTICO
+-----------
+1) CONFIRMADO: el excedente NO se registraba en el pedido. El POS lo
+   calculaba (abonos − orden − propina explícita), lo mostraba en verde
+   y lo descartaba; el backend lo recalculaba solo para validar que el
+   pago alcanzara, y también lo descartaba. Solo la propina escrita a
+   mano llegaba a pedidos.propina. Consecuencias: los reportes
+   (cierre del día, ticket, ventas por mesero/turno) no veían ese
+   dinero, el cuadre quedaba por debajo de la gaveta física y el
+   desglose de pagos no cuadraba con totales + propinas.
+2) Los reportes SÍ leen el valor correcto (pedidos.propina): no hubo
+   que tocarlos; quedan corregidos automáticamente.
+3) HALLAZGO LATENTE (corregido junto): CajaService sumaba las propinas
+   ENCIMA de los abonos en efectivo para el esperado del cierre de
+   turno, pero los abonos ya traen la propina dentro (el cobro exige
+   abonos >= orden + propina). Eso contaba cada propina dos veces y,
+   peor, metía en la gaveta propinas de tarjeta/transferencia/ZELLE
+   que nunca entraron en efectivo. Estaba enmascarado porque casi no
+   se usaba la propina explícita; al registrar excedentes habría
+   generado faltantes fantasma en cada cierre.
+
+QUÉ CAMBIA
+----------
+- Cobro POS: el excedente (incl. conversión a local en carta ZELLE)
+  se suma a la propina del pedido; la respuesta trae `excedente` y el
+  POS avisa ("Se suma a la propina" bajo la etiqueta + mensaje final
+  con el monto registrado). Invariante: Σ abonos = total + propina.
+- Liquidar factura/pendiente: misma regla para lo pagado de más.
+- Cierre de turno: esperado = fondo + abonos en efectivo (sin
+  re-sumar propinas). Las propinas siguen informándose aparte.
+- 14 pruebas nuevas (cobro 6, caja 4, liquidación 4).
+
+REGLA DE OPERACIÓN (importante)
+-------------------------------
+Todo lo que el cliente pague de más QUEDA registrado como propina del
+pedido. El sistema no tiene campo de "cambio devuelto": si en su
+operación se devuelve cambio en efectivo al cliente, avíseme y se
+agrega ese flujo (input + columna + ajuste al esperado).
+
+ARCHIVOS INCLUIDOS (7)
+-----------------------
+controllers/posController.js       excedente -> propina + respuesta
+controllers/posController.test.js  +6 pruebas del cobro
+controllers/cierreDiaController.js excedente en liquidación
+controllers/cierreDiaController.test.js  NUEVO: 4 pruebas
+services/cajaService.js            sin doble conteo en el esperado
+services/cajaService.test.js       NUEVO: 4 pruebas
+views/pos.ejs                      nota visible + aviso del excedente
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Descomprima el zip en la RAÍZ del proyecto conservando las carpetas.
+2. No requiere migración SQL (usa la columna propina existente).
+3. Reinicie el servidor (pm2/node) y recargue el POS con Ctrl+F5.
+4. Verificación rápida:
+   a) Cobre una cuenta de $100 con $120 en efectivo y propina $0:
+      debe avisar "Excedente de $20.00 registrado como propina".
+   b) Cierre del día: la orden muestra +$20 propina y el cobrado
+      cuadra con el desglose ($120).
+   c) Cierre el turno: el esperado debe ser fondo + abonos en
+      efectivo, sin duplicar propinas (compare con el real).
+   d) Nota: los cierres YA guardados conservan su snapshot anterior;
+      la corrección aplica a los cierres nuevos.

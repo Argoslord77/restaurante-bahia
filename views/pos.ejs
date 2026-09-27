@@ -2439,6 +2439,7 @@
                             <div>
                                 <small class="text-muted d-block font-semibold">Excedente</small>
                                 <strong class="font-digits fs-6 text-success" id="lbl-excedente">$0.00</strong>
+                                <small class="text-success d-block" id="lbl-excedente-nota" style="font-size:.65rem"></small>
                             </div>
                         </div>
 
@@ -2584,12 +2585,15 @@
                         const totalAbonadoLocal = listaPagos.reduce((s, p) => s + p.monto_equivalente_local, 0);
                         const diferencia = totalAbonadoLocal - totalRequerido;
 
+                        const lblExcedenteNota = document.getElementById('lbl-excedente-nota');
                         if (diferencia >= 0) {
                             if (lblRestante) lblRestante.textContent = `$0.00`;
                             if (lblExcedente) lblExcedente.textContent = `$${diferencia.toFixed(2)}`;
+                            if (lblExcedenteNota) lblExcedenteNota.textContent = diferencia > 0 ? 'Se suma a la propina' : '';
                         } else {
                             if (lblRestante) lblRestante.textContent = `$${Math.abs(diferencia).toFixed(2)}`;
                             if (lblExcedente) lblExcedente.textContent = `$0.00`;
+                            if (lblExcedenteNota) lblExcedenteNota.textContent = '';
                         }
 
                         if (!tbody) return;
@@ -2777,10 +2781,12 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    const excedenteCobro = Number(data.excedente || 0);
                     Swal.fire({
                         icon: 'success',
                         title: 'Mesa Cobrada y Liberada',
-                        timer: 2000,
+                        text: excedenteCobro > 0 ? `Excedente de $${excedenteCobro.toFixed(2)} registrado como propina.` : undefined,
+                        timer: excedenteCobro > 0 ? 3500 : 2000,
                         showConfirmButton: false
                     }).then(() => {
                         window.location.href = POS_DASHBOARD_URL;

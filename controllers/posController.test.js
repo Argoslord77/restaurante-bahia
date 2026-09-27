@@ -15,7 +15,7 @@ jest.mock('../services/precioService', () => ({
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
-const { viewPOS, initOrderManual, abrirOObtenerPedidoMesa, initOrderQR, apiSaveOrder, obtenerAlertasPendientes } = require('./posController');
+const { viewPOS, initOrderManual, abrirOObtenerPedidoMesa, initOrderQR, apiSaveOrder, obtenerAlertasPendientes, procesarCobroAvanzado } = require('./posController');
 
 function crearReqRes({ url = '/pos/15', query = {}, params = {} } = {}) {
     const req = { url, query, params, user: { id: 1, rol: 'administrador', nombre: 'Admin' } };
@@ -392,5 +392,109 @@ describe('posController.obtenerAlertasPendientes · ítems listos (V5)', () => {
 
         expect(llamadaListos()).toBeUndefined();
         expect(res.json.mock.calls[0][0].alertas.itemsListos).toEqual([]);
+    });
+});
+describe('posController.procesarCobroAvanzado · excedente del cobro', () => {
+    const PEDIDO = { id: 15, id_mesa: 3, turno_servicio_id: 7, carta: 'CUP', numero_mesa: '5' };
+    let conexion;
+
+    function pagoAbono(monto) {
+        return { metodo_pago: 'efectivo', moneda_id: 1, monto_moneda_origen: monto, referencia_transaccion: '' };
+    }
+
+    function cobroReqRes(body) {
+        const req = { params: { id_pedido: '15' }, body, user: { id: 2, rol: 'cajero' } };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+        return { req, res };
+    }
+
+    function paramsDe(sqlFragmento) {
+        const llamada = conexion.query.mock.calls.find(([sql]) => String(sql).includes(sqlFragmento));
+        return llamada ? llamada[1] : null;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        SettingService.get.mockResolvedValue(0); // factura_impuesto
+        PrecioService.obtenerContextoCobro.mockResolvedValue({
+            carta: 'CUP', es_zelle: false, moneda_codigo: 'CUP', moneda_id: 1, factor_cambio: 1
+        });
+        conexion = {
+            query: jest.fn(async () => [[], []]),
+            beginTransaction: jest.fn(),
+            commit: jest.fn(),
+            rollback: jest.fn(),
+            release: jest.fn()
+        };
+        pool.getConnection.mockResolvedValue(conexion);
+        pool.query.mockImplementation(async (sql) => {
+            const texto = String(sql);
+            if (texto.includes('numero_mesa')) return [[{ ...PEDIDO }], []];
+            if (texto.includes('SUM(cantidad * precio_unitario)')) return [[{ subtotal: 100 }], []];
+            if (texto.includes('FROM monedas m')) return [[{ id: 1, codigo: 'CUP', simbolo: '$', factor_cambio: 1 }], []];
+            if (texto.includes('UPDATE mesas')) return [[], []];
+            return [[{ total: 0 }], []]; // pendientes de entrega
+        });
+    });
+
+    it('sobrepago sin propina explícita: el excedente queda como propina', async () => {
+        const { req, res } = cobroReqRes({ pagos: [pagoAbono(120)], descuento: 0, recargo: 0, propina: 0 });
+
+        await procesarCobroAvanzado(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 20, propina: 20 }));
+        expect(paramsDe('UPDATE pedidos')[4]).toBe(20); // propina guardada
+        expect(paramsDe('INSERT INTO pagos_pedido').slice(4, 6)).toEqual([120, 120]); // abono íntegro
+    });
+
+    it('pago exacto con propina explícita no genera excedente', async () => {
+        const { req, res } = cobroReqRes({ pagos: [pagoAbono(110)], descuento: 0, recargo: 0, propina: 10 });
+
+        await procesarCobroAvanzado(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 0, propina: 10 }));
+        expect(paramsDe('UPDATE pedidos')[4]).toBe(10);
+    });
+
+    it('propina explícita más excedente se acumulan', async () => {
+        const { req, res } = cobroReqRes({ pagos: [pagoAbono(125)], descuento: 0, recargo: 0, propina: 10 });
+
+        await procesarCobroAvanzado(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 15, propina: 25 }));
+        expect(paramsDe('UPDATE pedidos')[4]).toBe(25);
+    });
+
+    it('pago insuficiente se rechaza y no toca el pedido', async () => {
+        const { req, res } = cobroReqRes({ pagos: [pagoAbono(90)], descuento: 0, recargo: 0, propina: 0 });
+
+        await procesarCobroAvanzado(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+        expect(paramsDe('UPDATE pedidos')).toBeNull();
+    });
+
+    it('factura a crédito conserva la propina explícita sin excedente', async () => {
+        const { req, res } = cobroReqRes({ es_factura_credito: true, descuento: 0, recargo: 0, propina: 5 });
+
+        await procesarCobroAvanzado(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 0, propina: 5 }));
+        const params = paramsDe('UPDATE pedidos');
+        expect(params[0]).toBe('facturado');
+        expect(params[4]).toBe(5);
+    });
+
+    it('en carta ZELLE el excedente se convierte a moneda local', async () => {
+        PrecioService.obtenerContextoCobro.mockResolvedValue({
+            carta: 'ZELLE', es_zelle: true, moneda_codigo: 'ZELLE', moneda_id: 2, factor_cambio: 2
+        });
+        const { req, res } = cobroReqRes({ pagos: [{ metodo_pago: 'transferencia', moneda_id: 2, monto_moneda_origen: 110, referencia_transaccion: '' }], descuento: 0, recargo: 0, propina: 0 });
+
+        await procesarCobroAvanzado(req, res);
+
+        // Diferencia 10 en origen x tasa 2 = 20 locales de propina.
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 20, propina: 20 }));
     });
 });

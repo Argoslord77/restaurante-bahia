@@ -222,6 +222,13 @@ const CierreDiaController = {
             const factor = parseFloat(factor_cambio || 1.0000);
             const montoOrig = parseFloat(monto_origen || pedido.total);
             const montoEquivLocal = montoOrig * factor;
+            // Excedente de la liquidación (lo pagado de más sobre orden +
+            // propina ya registrada): queda como propina, igual que en el
+            // cobro del POS. Sin esto entraba a caja sin verse en reportes.
+            const propinaActual = parseFloat(pedido.propina || 0);
+            const totalEsperadoLiq = parseFloat(pedido.total || 0) + propinaActual;
+            const excedenteLiq = Math.max(0, Number((montoEquivLocal - totalEsperadoLiq).toFixed(2)));
+            const propinaFinalLiq = Number((propinaActual + excedenteLiq).toFixed(2));
 
             const refCompleta = `[LIQUIDACIÓN en Turno #${turnoCobroId}] ${referencia || ''}`.trim();
 
@@ -246,15 +253,17 @@ const CierreDiaController = {
                 SET estado_pago = 'pagado',
                     id_usuario_cajero = ?,
                     turno_servicio_id = ?,
+                    propina = ?,
                     fecha_cierre = NOW()
                 WHERE id = ?
-            `, [id_cajero, turnoCobroId, id_pedido]);
+            `, [id_cajero, turnoCobroId, propinaFinalLiq, id_pedido]);
 
             await connection.commit();
 
             return res.json({
                 success: true,
-                message: `Comanda #${id_pedido} cobrada con éxito. El monto ($${montoEquivLocal.toFixed(2)}) ingresó a la caja del Turno #${turnoCobroId}.`
+                excedente: excedenteLiq,
+                message: `Comanda #${id_pedido} cobrada con éxito. El monto ($${montoEquivLocal.toFixed(2)}) ingresó a la caja del Turno #${turnoCobroId}.` + (excedenteLiq > 0 ? ` Excedente de $${excedenteLiq.toFixed(2)} registrado como propina.` : '')
             });
 
         } catch (error) {
