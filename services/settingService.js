@@ -100,6 +100,20 @@ class SettingService {
                     descripcion: 'Roles que pueden autorizar cortesías (separados por coma)',
                     grupo: 'general',
                     tipo: 'string'
+                },
+                {
+                    clave: 'precio_control_activo',
+                    valor: '0',
+                    descripcion: 'Control de precios de cartas: solo el usuario designado puede modificar precios',
+                    grupo: 'general',
+                    tipo: 'boolean'
+                },
+                {
+                    clave: 'precio_control_usuario_id',
+                    valor: '',
+                    descripcion: 'Usuario designado para modificar precios de cartas (control de precios)',
+                    grupo: 'general',
+                    tipo: 'number'
                 }
             ];
 
@@ -205,7 +219,9 @@ class SettingService {
             habilitar_monitores_elaboracion: { nombre: 'Habilitar monitores de elaboración en el Servicio', valor: '1' },
             pos_quien_toma_ordenes: { nombre: 'Quién puede tomar órdenes en el POS', valor: 'todos' },
             cortesia_requiere_autorizacion: { nombre: 'Las cortesías requieren autorización de un supervisor', valor: '1' },
-            cortesia_roles_autorizan: { nombre: 'Roles que pueden autorizar cortesías', valor: 'superadministrador,administrador,capitan' }
+            cortesia_roles_autorizan: { nombre: 'Roles que pueden autorizar cortesías', valor: 'superadministrador,administrador,capitan' },
+            precio_control_activo: { nombre: 'Control de precios de cartas por usuario designado', valor: '0' },
+            precio_control_usuario_id: { nombre: 'Usuario designado para modificar precios de cartas', valor: '' }
         };
 
         if (!pool) return defaults;

@@ -1,6 +1,47 @@
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
 const UbicacionMesaModel = require('../models/ubicacionMesaModel');
+const PrecioControlService = require('../services/precioControlService');
+const AuditLogService = require('../services/auditLogService');
+const { CATEGORIAS, SEVERIDADES } = require('../config/auditoriaCatalogo');
+
+// Actor de auditoría desde la solicitud autenticada.
+function actorDeAuditoria(req) {
+    const u = req.user || (req.session && req.session.user) || {};
+    const nombre = `${u.nombre || ''} ${u.apellidos || ''}`.trim() || u.usuario || '—';
+    return { id: u.id || null, nombre, rol: u.rol || null };
+}
+
+// Asiento explícito para cambios del control de precios (críticos): anterior,
+// nuevo y quién lo hizo. Si omitir=true (sin cambios) no registra nada.
+async function auditarControlPrecios(req, { accion, clave, anterior, nuevo, omitir = false, extra = {} }) {
+    if (omitir) return;
+    try {
+        const actor = actorDeAuditoria(req);
+        await AuditLogService.registrar({
+            usuario_id: actor.id,
+            usuario_nombre: actor.nombre,
+            usuario_rol: actor.rol,
+            metodo_http: req.method || 'POST',
+            ruta: String(req.originalUrl || req.url || '/admin/configuracion').split('?')[0],
+            url: req.originalUrl || req.url || null,
+            accion,
+            entidad: 'configuracion',
+            entidad_id: clave,
+            modulo: 'Configuración',
+            categoria: CATEGORIAS.SEGURIDAD,
+            severidad: SEVERIDADES.CRITICO,
+            estado_http: 200,
+            operacion_exitosa: true,
+            ip_origen: req.ip || (req.headers && req.headers['x-forwarded-for']) || null,
+            user_agent: (req.headers && req.headers['user-agent']) || null,
+            sesion_id: req.sessionID || null,
+            datos_operacion: { clave, valor_anterior: anterior, valor_nuevo: nuevo, ...extra }
+        });
+    } catch (error) {
+        console.error('Error al auditar control de precios:', error);
+    }
+}
 
 module.exports = {
     // Vista de Configuración del Sistema
@@ -10,6 +51,7 @@ module.exports = {
             let categorias = [];
             let almacenes = [];
             let ubicaciones = [];
+            let usuariosControl = [];
 
             if (pool) {
                 try {
@@ -51,6 +93,17 @@ module.exports = {
                 } catch (ubiErr) {
                     console.warn('Ubicaciones de mesa no encontradas:', ubiErr.message);
                 }
+                try {
+                    const [usrRows] = await pool.query(`
+                        SELECT id, usuario, nombre, apellidos, rol
+                        FROM usuarios
+                        WHERE activo = 1 AND rol IN ('superadministrador', 'administrador')
+                        ORDER BY nombre ASC, apellidos ASC
+                    `);
+                    usuariosControl = usrRows || [];
+                } catch (usrErr) {
+                    console.warn('Usuarios para control de precios no encontrados:', usrErr.message);
+                }
             }
 
             res.render('admin/settings', {
@@ -60,6 +113,7 @@ module.exports = {
                 categorias,
                 almacenes,
                 ubicaciones,
+                usuariosControl,
                 user: req.user || null,
                 success_msg: req.flash ? req.flash('success_msg') : null,
                 error_msg: req.flash ? req.flash('error_msg') : null
@@ -150,6 +204,43 @@ module.exports = {
                 );
             }
 
+            // Control de precios de cartas (también aceptado en guardado
+            // masivo). Cambios críticos: validados y auditados con anterior/nuevo.
+            const { precio_control_activo, precio_control_usuario_id } = req.body;
+            if (precio_control_usuario_id !== undefined || precio_control_activo !== undefined) {
+                try {
+                    // Primero el designado y luego el interruptor, para que
+                    // activarlo y designarlo en el mismo guardado funcione.
+                    if (precio_control_usuario_id !== undefined) {
+                        const resUsuario = await PrecioControlService.guardarUsuarioDesignado(precio_control_usuario_id);
+                        await auditarControlPrecios(req, {
+                            accion: 'Control de precios: designar usuario',
+                            clave: PrecioControlService.CLAVE_USUARIO,
+                            anterior: resUsuario.anterior,
+                            nuevo: resUsuario.nuevo,
+                            omitir: resUsuario.sinCambios,
+                            extra: resUsuario.usuario ? { usuario: resUsuario.usuario } : {}
+                        });
+                    }
+                    if (precio_control_activo !== undefined) {
+                        const resActivo = await PrecioControlService.guardarActivo(precio_control_activo);
+                        await auditarControlPrecios(req, {
+                            accion: resActivo.nuevo ? 'Control de precios: activar' : 'Control de precios: desactivar',
+                            clave: PrecioControlService.CLAVE_ACTIVO,
+                            anterior: resActivo.anterior,
+                            nuevo: resActivo.nuevo,
+                            omitir: resActivo.sinCambios
+                        });
+                    }
+                } catch (errorPrecios) {
+                    if (req.xhr || req.headers.accept?.includes('json') || req.headers['content-type']?.includes('json')) {
+                        return res.status(errorPrecios.httpStatus || 500).json({ success: false, message: errorPrecios.message });
+                    }
+                    if (req.flash) req.flash('error_msg', errorPrecios.message);
+                    return res.redirect('/admin/settings');
+                }
+            }
+
             if (req.xhr || req.headers.accept?.includes('json') || req.headers['content-type']?.includes('json')) {
                 return res.json({ success: true, message: 'Ajustes del sistema guardados correctamente.' });
             }
@@ -191,6 +282,48 @@ module.exports = {
             }
             if (clave === 'cortesia_requiere_autorizacion') {
                 tipoSetting = 'boolean';
+            }
+
+            // Control de precios de cartas: claves críticas con validación y
+            // auditoría propias (no pasan por el guardado genérico).
+            if (clave === PrecioControlService.CLAVE_ACTIVO || clave === PrecioControlService.CLAVE_USUARIO) {
+                try {
+                    if (clave === PrecioControlService.CLAVE_ACTIVO) {
+                        const resActivo = await PrecioControlService.guardarActivo(valorParsed);
+                        await auditarControlPrecios(req, {
+                            accion: resActivo.nuevo ? 'Control de precios: activar' : 'Control de precios: desactivar',
+                            clave,
+                            anterior: resActivo.anterior,
+                            nuevo: resActivo.nuevo,
+                            omitir: resActivo.sinCambios
+                        });
+                        return res.json({
+                            success: true,
+                            clave,
+                            valor: resActivo.nuevo ? '1' : '0',
+                            message: resActivo.nuevo ? 'Control de precios activado.' : 'Control de precios desactivado.'
+                        });
+                    }
+                    const resUsuario = await PrecioControlService.guardarUsuarioDesignado(valor);
+                    await auditarControlPrecios(req, {
+                        accion: 'Control de precios: designar usuario',
+                        clave,
+                        anterior: resUsuario.anterior,
+                        nuevo: resUsuario.nuevo,
+                        omitir: resUsuario.sinCambios,
+                        extra: resUsuario.usuario ? { usuario: resUsuario.usuario } : {}
+                    });
+                    return res.json({
+                        success: true,
+                        clave,
+                        valor: resUsuario.nuevo === null ? '' : String(resUsuario.nuevo),
+                        message: resUsuario.nuevo === null
+                            ? 'Usuario designado retirado del control de precios.'
+                            : `Usuario designado: ${resUsuario.usuario ? resUsuario.usuario.nombre : resUsuario.nuevo}.`
+                    });
+                } catch (errorPrecio) {
+                    return res.status(errorPrecio.httpStatus || 500).json({ success: false, message: errorPrecio.message });
+                }
             }
 
             const success = await SettingService.set(clave, valorParsed, '', 'general', tipoSetting);

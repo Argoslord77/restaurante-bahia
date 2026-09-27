@@ -1,0 +1,53 @@
+ACTUALIZACIÓN V6 — Control de precios de cartas por usuario designado
+Restaurante Bahía · 2026-09-10 · Aplica sobre la V5
+====================================================================
+
+QUÉ TRAE
+--------
+Nueva sección en Configuración → Opciones generales: "Control de precios
+de cartas". Con el control ACTIVO, solo el usuario DESIGNADO puede crear
+o editar precios de las cartas (menú y platillos del día, incluyendo
+reutilizar del histórico). Cualquier otro usuario que intente guardar
+recibe error 403 "Solo <designado> está autorizado…" y no se escribe nada
+(si subió foto, se elimina la temporal).
+
+- Interruptor "sujeto a control por un usuario" + selector del designado
+  (solo superadministradores/administradores activos). Guardado inmediato
+  por AJAX con confirmación y reversión si el servidor rechaza.
+- Para activar primero hay que seleccionar al usuario; con el control
+  activo no se puede retirar al designado (hay que desactivar primero).
+- Todo cambio (activar/desactivar/designar) queda en auditoría como
+  asiento CRÍTICO de SEGURIDAD con valor anterior y nuevo.
+- En Gestión del Menú aparece un banner avisando del control y los
+  botones de guardado se deshabilitan para quien no esté autorizado.
+  La protección real está en el servidor (5 escrituras vigiladas);
+  eliminar platillos NO está restringido.
+
+ARCHIVOS INCLUIDOS (9)
+-----------------------
+services/precioControlService.js       NUEVO: reglas del control (fail-closed)
+services/precioControlService.test.js  NUEVO: 13 pruebas
+controllers/settingController.js       validación + auditoría crítica (rápido y masivo)
+controllers/settingController.test.js  NUEVO: 7 pruebas
+controllers/menuController.js          puerta 403 en las 5 escrituras + datos a vista
+controllers/menuController.test.js     NUEVO: 7 pruebas
+services/settingService.js             semillas y valores de las 2 claves nuevas
+views/admin/settings.ejs               Opción 5 en Opciones generales + JS inmediato
+views/admin/menu.ejs                   banner + botones deshabilitados
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Descomprima el zip en la RAÍZ del proyecto conservando las carpetas.
+2. No requiere migración SQL: las 2 claves se crean solas al arrancar
+   (precio_control_activo=0 apagado, precio_control_usuario_id vacío).
+3. Reinicie el servidor (pm2/node). Recargue Configuración y Menú con
+   Ctrl+F5 si el navegador cachea las vistas.
+4. Verificación rápida:
+   a) Configuración → Opciones generales → seleccione un administrador
+      y active el interruptor (pide confirmación).
+   b) Gestión del Menú con OTRO usuario: debe ver el banner y los
+      botones de guardado deshabilitados; si intenta guardar por
+      consola/API recibe 403 con código PRECIO_NO_AUTORIZADO.
+   c) Con el designado, todo guarda normal.
+   d) Auditoría: los cambios aparecen como SEGURIDAD/CRÍTICO con
+      valor anterior y nuevo.

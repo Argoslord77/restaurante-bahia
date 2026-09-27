@@ -91,6 +91,24 @@
                     modal: "modalCrearPlatillo"
                 }) %>
 
+                <%
+                    const controlPreciosCfg = (typeof controlPrecios !== 'undefined' && controlPrecios) || { activo: false, puedeModificar: true, usuarioControl: null };
+                %>
+                <% if (controlPreciosCfg.activo) { %>
+                <div class="alert <%= controlPreciosCfg.puedeModificar ? 'alert-info' : 'alert-warning' %> d-flex align-items-center gap-2 mt-3 mb-0" role="alert">
+                    <i class="fa-solid fa-lock"></i>
+                    <div>
+                        <strong>Control de precios activo.</strong>
+                        <% if (controlPreciosCfg.usuarioControl) { %>
+                        Solo <strong><%= controlPreciosCfg.usuarioControl.nombre %></strong> puede crear o editar precios de las cartas.
+                        <% if (!controlPreciosCfg.puedeModificar) { %> Los botones de guardado están deshabilitados para su usuario.<% } %>
+                        <% } else { %>
+                        No hay un usuario designado válido: nadie puede guardar precios hasta corregirlo en Configuración → Opciones generales.
+                        <% } %>
+                    </div>
+                </div>
+                <% } %>
+
                 <!-- SECCIÓN: PLATILLOS Y TRAGOS DEL DÍA (TURNO ACTIVO) -->
                 <% 
                     const listaActivos = (typeof platillosDiaActivos !== 'undefined' && Array.isArray(platillosDiaActivos)) ? platillosDiaActivos : 
@@ -337,7 +355,7 @@
                     </div>
                     <div class="modal-footer bg-light border-top-0 py-2">
                         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Guardar en Turno</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold"<%- controlPreciosCfg.puedeModificar ? '' : ' disabled title="Solo el usuario designado puede guardar precios"' %>>Guardar en Turno</button>
                     </div>
                 </form>
             </div>
@@ -392,7 +410,7 @@
                     </div>
                     <div class="modal-footer bg-light border-top-0 py-2">
                         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-success btn-sm px-4 fw-bold">Actualizar Oferta</button>
+                        <button type="submit" class="btn btn-success btn-sm px-4 fw-bold"<%- controlPreciosCfg.puedeModificar ? '' : ' disabled title="Solo el usuario designado puede guardar precios"' %>>Actualizar Oferta</button>
                     </div>
                 </form>
             </div>
@@ -457,7 +475,7 @@
                                                         <i class="fa-solid fa-check text-success"></i> Ya en turno
                                                     </button>
                                                 <% } else { %>
-                                                    <button class="btn btn-sm btn-primary btn-reutilizar-platillo-dia" data-id="<%= item.id %>" data-nombre="<%= item.nombre %>">
+                                                    <button class="btn btn-sm btn-primary btn-reutilizar-platillo-dia" data-id="<%= item.id %>" data-nombre="<%= item.nombre %>"<%- controlPreciosCfg.puedeModificar ? '' : ' disabled title="Solo el usuario designado puede guardar precios"' %>>
                                                         <i class="fa-solid fa-plus"></i> Reutilizar
                                                     </button>
                                                 <% } %>
@@ -526,7 +544,7 @@
                     </div>
                     <div class="modal-footer bg-light border-top-0">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary px-4">Guardar Platillo</button>
+                        <button type="submit" class="btn btn-primary px-4"<%- controlPreciosCfg.puedeModificar ? '' : ' disabled title="Solo el usuario designado puede guardar precios"' %>>Guardar Platillo</button>
                     </div>
                 </form>
             </div>
@@ -591,7 +609,7 @@
                     </div>
                     <div class="modal-footer bg-light border-top-0">
                         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-success btn-sm px-4">Actualizar Platillo</button>
+                        <button type="submit" class="btn btn-success btn-sm px-4"<%- controlPreciosCfg.puedeModificar ? '' : ' disabled title="Solo el usuario designado puede guardar precios"' %>>Actualizar Platillo</button>
                     </div>
                 </form>
             </div>

@@ -2,6 +2,7 @@
 const menuService = require('../services/menuService');
 const platilloDiaModel = require('../models/platilloDiaModel');
 const turnoService = require('../services/turnoService');
+const PrecioControlService = require('../services/precioControlService');
 const fs = require('fs');
 const path = require('path');
 
@@ -21,10 +22,25 @@ module.exports = {
             const platillosDiaActivos = turnoId ? await platilloDiaModel.getByTurno(turnoId) : [];
             const platillosDiaHistoricos = await platilloDiaModel.getHistorico();
 
+            // Control de precios de cartas: la vista avisa y limita los
+            // botones de guardado; el servidor revalida en cada escritura.
+            let controlPrecios = { activo: false, puedeModificar: true, usuarioControl: null };
+            try {
+                const gatePrecios = await PrecioControlService.puedeModificarPrecios(req.user && req.user.id);
+                controlPrecios = {
+                    activo: !!gatePrecios.controlActivo,
+                    puedeModificar: !!gatePrecios.permitido,
+                    usuarioControl: gatePrecios.usuarioControl || null
+                };
+            } catch (errorGate) {
+                console.error('Error al evaluar control de precios:', errorGate);
+            }
+
             res.render('admin/menu', {
                 platillos,
                 categorias,
                 user: req.user,
+                controlPrecios,
                 pageTitle: 'Gestión de Menú y Platillos del Día',
                 view: 'dishes',
                 turnoActivo,
@@ -45,6 +61,17 @@ module.exports = {
     createDish: async (req, res) => {
         const { nombre, descripcion, precio, categoria, precio_alt, precio_usd } = req.body;
         const foto = req.file ? req.file.filename : null;
+        // Control de precios de cartas (Configuración → Opciones generales):
+        // con el control activo solo el usuario designado puede guardar precios.
+        const gatePrecios = await PrecioControlService.puedeModificarPrecios(
+            (req.user && req.user.id) || (req.session && req.session.user && req.session.user.id) || null
+        );
+        if (!gatePrecios.permitido) {
+            if (req.file) {
+                fs.unlink(path.join(__dirname, '../public/uploads', req.file.filename), () => {});
+            }
+            return res.status(403).json({ success: false, codigo: 'PRECIO_NO_AUTORIZADO', message: gatePrecios.mensaje });
+        }
 
         try {
             const finalPrecioAlt = precio_alt && precio_alt.trim() !== '' ? parseFloat(precio_alt) : null;
@@ -80,6 +107,17 @@ module.exports = {
         const { id } = req.params;
         const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, fotoActual } = req.body;
         const foto = req.file ? req.file.filename : (fotoActual && fotoActual !== 'null' ? fotoActual.trim() : null);
+        // Control de precios de cartas (Configuración → Opciones generales):
+        // con el control activo solo el usuario designado puede guardar precios.
+        const gatePrecios = await PrecioControlService.puedeModificarPrecios(
+            (req.user && req.user.id) || (req.session && req.session.user && req.session.user.id) || null
+        );
+        if (!gatePrecios.permitido) {
+            if (req.file) {
+                fs.unlink(path.join(__dirname, '../public/uploads', req.file.filename), () => {});
+            }
+            return res.status(403).json({ success: false, codigo: 'PRECIO_NO_AUTORIZADO', message: gatePrecios.mensaje });
+        }
 
         try {
             const finalPrecioAlt = precio_alt && precio_alt.trim() !== '' ? parseFloat(precio_alt) : null;
@@ -142,6 +180,17 @@ module.exports = {
     createPlatilloDia: async (req, res) => {
         const { nombre, descripcion, precio, precio_alt, precio_usd, tipo } = req.body;
         const foto = req.file ? req.file.filename : null;
+        // Control de precios de cartas (Configuración → Opciones generales):
+        // con el control activo solo el usuario designado puede guardar precios.
+        const gatePrecios = await PrecioControlService.puedeModificarPrecios(
+            (req.user && req.user.id) || (req.session && req.session.user && req.session.user.id) || null
+        );
+        if (!gatePrecios.permitido) {
+            if (req.file) {
+                fs.unlink(path.join(__dirname, '../public/uploads', req.file.filename), () => {});
+            }
+            return res.status(403).json({ success: false, codigo: 'PRECIO_NO_AUTORIZADO', message: gatePrecios.mensaje });
+        }
 
         try {
             const turnoActivo = await turnoService.obtenerTurnoActivo();
@@ -186,6 +235,17 @@ module.exports = {
         const { id } = req.params;
         const { nombre, descripcion, precio, precio_alt, precio_usd, tipo, fotoActual } = req.body;
         const foto = req.file ? req.file.filename : (fotoActual && fotoActual !== 'null' ? fotoActual.trim() : null);
+        // Control de precios de cartas (Configuración → Opciones generales):
+        // con el control activo solo el usuario designado puede guardar precios.
+        const gatePrecios = await PrecioControlService.puedeModificarPrecios(
+            (req.user && req.user.id) || (req.session && req.session.user && req.session.user.id) || null
+        );
+        if (!gatePrecios.permitido) {
+            if (req.file) {
+                fs.unlink(path.join(__dirname, '../public/uploads', req.file.filename), () => {});
+            }
+            return res.status(403).json({ success: false, codigo: 'PRECIO_NO_AUTORIZADO', message: gatePrecios.mensaje });
+        }
 
         try {
             const finalPrecioAlt = precio_alt && precio_alt.trim() !== '' ? parseFloat(precio_alt) : null;
@@ -224,6 +284,14 @@ module.exports = {
     reutilizarPlatilloDia: async (req, res) => {
         try {
             const { id } = req.params;
+            // Control de precios de cartas: reutilizar fija los precios del
+            // turno, así que también exige al usuario designado.
+            const gatePrecios = await PrecioControlService.puedeModificarPrecios(
+                (req.user && req.user.id) || (req.session && req.session.user && req.session.user.id) || null
+            );
+            if (!gatePrecios.permitido) {
+                return res.status(403).json({ success: false, codigo: 'PRECIO_NO_AUTORIZADO', message: gatePrecios.mensaje });
+            }
             const turnoActivo = await turnoService.obtenerTurnoActivo();
 
             if (!turnoActivo) {

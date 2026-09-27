@@ -393,6 +393,46 @@
                                             </div>
                                         </div>
 
+                                        <!-- Opción 5: Control de precios de cartas por usuario designado -->
+                                        <%
+                                            const precioControlCfg = settings.precio_control_activo && (settings.precio_control_activo.valor === '1' || settings.precio_control_activo.valor === 1 || settings.precio_control_activo.valor === true);
+                                            const precioControlUsuarioCfg = settings.precio_control_usuario_id ? String(settings.precio_control_usuario_id.valor || '') : '';
+                                            const usuariosControlCfg = (typeof usuariosControl !== 'undefined' && Array.isArray(usuariosControl)) ? usuariosControl : [];
+                                        %>
+                                        <div class="col-12 col-md-10">
+                                            <div class="p-3 border rounded shadow-sm bg-light">
+                                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                                    <h6 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                                                        <i class="fa-solid fa-tags text-warning"></i>
+                                                        <%= settings.precio_control_activo ? settings.precio_control_activo.nombre : 'Control de precios de cartas' %>
+                                                    </h6>
+                                                    <span id="lbl_status_precio_control" class="badge <%= precioControlCfg ? 'bg-warning-subtle text-warning-emphasis border border-warning px-2.5 py-1.5 font-bold' : 'bg-success-subtle text-success border border-success px-2.5 py-1.5 font-bold' %>">
+                                                        <%= precioControlCfg ? 'Controlado' : 'Sin control' %>
+                                                    </span>
+                                                </div>
+                                                <small class="text-muted d-block mb-2">
+                                                    Con el control activo, <strong>solo el usuario designado</strong> puede crear o editar precios
+                                                    de las cartas (menú y platillos del día). Todo cambio en esta sección queda en la auditoría.
+                                                </small>
+                                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                                    <div class="form-check form-switch m-0 fs-4">
+                                                        <input class="form-check-input role-switch" type="checkbox" id="cfg_precio_control_activo" role="switch"
+                                                               <%= precioControlCfg ? 'checked' : '' %>>
+                                                    </div>
+                                                    <select id="cfg_precio_control_usuario_id" class="form-select form-select-sm fw-semibold" style="max-width: 340px;" title="Usuario designado para modificar precios">
+                                                        <option value="">— Seleccionar usuario —</option>
+                                                        <% usuariosControlCfg.forEach(function(u) { %>
+                                                               <option value="<%= u.id %>" <%= String(u.id) === precioControlUsuarioCfg ? 'selected' : '' %>><%= u.nombre %> <%= u.apellidos || '' %> (<%= u.usuario %> · <%= u.rol %>)</option>
+                                                        <% }) %>
+                                                    </select>
+                                                </div>
+                                                <div class="form-text text-muted fs-7 mt-2">
+                                                    <i class="fa-solid fa-circle-info me-1"></i>
+                                                    Solo usuarios administradores activos. Para activar primero seleccione al usuario.
+                                                </div>
+                                            </div>
+                                        </div>
+
                                     </div>
                                 </div>
 
@@ -737,6 +777,90 @@
                 Swal.fire('Error', 'No se pudo conectar con el servidor para actualizar la opción.', 'error');
             });
         });
+
+        // Control de precios de cartas (Opciones generales): aplicación inmediata.
+        // Cambio crítico: confirma antes de aplicar y revierte si el servidor rechaza.
+        document.getElementById('cfg_precio_control_activo').addEventListener('change', function() {
+            const isChecked = this.checked;
+            const badgeLabel = document.getElementById('lbl_status_precio_control');
+            const aplicar = () => {
+                fetch('/admin/configuracion/opcion-rapida', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clave: 'precio_control_activo', valor: isChecked ? '1' : '0' })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        if (isChecked) {
+                            badgeLabel.textContent = 'Controlado';
+                            badgeLabel.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning px-2.5 py-1.5 font-bold';
+                        } else {
+                            badgeLabel.textContent = 'Sin control';
+                            badgeLabel.className = 'badge bg-success-subtle text-success border border-success px-2.5 py-1.5 font-bold';
+                        }
+                        Swal.fire({
+                            icon: isChecked ? 'warning' : 'success',
+                            title: isChecked ? '¡Control de precios activado!' : '¡Control de precios desactivado!',
+                            text: isChecked
+                                ? 'Solo el usuario designado podrá modificar precios de las cartas. Cambio registrado en auditoría.'
+                                : 'Cualquier administrador podrá modificar precios. Cambio registrado en auditoría.',
+                            timer: 2400,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        this.checked = !isChecked;
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                })
+                .catch(() => {
+                    this.checked = !isChecked;
+                    Swal.fire('Error', 'No se pudo conectar con el servidor para actualizar la opción.', 'error');
+                });
+            };
+            Swal.fire({
+                title: isChecked ? '¿Activar el control de precios?' : '¿Desactivar el control de precios?',
+                text: isChecked
+                    ? 'Solo el usuario designado podrá modificar precios de las cartas.'
+                    : 'Cualquier administrador podrá modificar precios de las cartas.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, aplicar',
+                cancelButtonText: 'Cancelar'
+            }).then((choice) => {
+                if (choice.isConfirmed) { aplicar(); }
+                else { this.checked = !isChecked; }
+            });
+        });
+
+        // Usuario designado para modificar precios (Opciones generales).
+        const selPrecioUsuario = document.getElementById('cfg_precio_control_usuario_id');
+        if (selPrecioUsuario) {
+            selPrecioUsuario.addEventListener('change', function() {
+                const previo = this.getAttribute('data-previo') || '';
+                const nuevoValor = this.value;
+                fetch('/admin/configuracion/opcion-rapida', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clave: 'precio_control_usuario_id', valor: nuevoValor, tipo: 'number' })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        this.setAttribute('data-previo', nuevoValor);
+                        Swal.fire({ icon: 'success', title: '¡Usuario designado actualizado!', text: data.message, timer: 2200, showConfirmButton: false });
+                    } else {
+                        this.value = previo;
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                })
+                .catch(() => {
+                    this.value = previo;
+                    Swal.fire('Error', 'No se pudo conectar con el servidor para actualizar la opción.', 'error');
+                });
+            });
+            selPrecioUsuario.setAttribute('data-previo', selPrecioUsuario.value);
+        }
 
         const modalCategoriaBs = new bootstrap.Modal(document.getElementById('modalCategoria'));
         const modalUbicacionBs = new bootstrap.Modal(document.getElementById('modalUbicacion'));
