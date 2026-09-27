@@ -505,20 +505,34 @@ const PAGOS_CERRADOS = ['pagado', 'facturado', 'cortesia'];
 const PAGOS_ABIERTOS = ['pendiente', 'pendiente_pago'];
 
 /**
- * Turnos de servicio para el selector del reporte: cualquiera puede
- * analizarse, incluido el abierto (en curso). Orden: más reciente primero.
+ * Turnos para el selector del reporte: el que sigue abierto (si lo hay) más
+ * los últimos 9 cerrados. Orden: más reciente primero (el abierto, que por
+ * definición es el de mayor id, queda de primero).
  */
-async function listarTurnos(limite = 50) {
-    const top = Math.max(1, Math.min(200, Math.floor(Number(limite)) || 50));
+async function listarTurnos() {
     const [filas] = await db.query(`
-        SELECT ts.id, ts.estado, ts.fecha_apertura, ts.fecha_cierre,
-               TRIM(CONCAT(COALESCE(ua.nombre, ''), ' ', COALESCE(ua.apellidos, ''))) AS abierto_por,
-               (SELECT COUNT(*) FROM pedidos p WHERE p.turno_servicio_id = ts.id) AS pedidos
-        FROM turnos_servicio ts
-        LEFT JOIN usuarios ua ON ts.usuario_apertura_id = ua.id
-        ORDER BY ts.id DESC
-        LIMIT ?
-    `, [top]);
+        (
+            SELECT ts.id, ts.estado, ts.fecha_apertura, ts.fecha_cierre,
+                   TRIM(CONCAT(COALESCE(ua.nombre, ''), ' ', COALESCE(ua.apellidos, ''))) AS abierto_por,
+                   (SELECT COUNT(*) FROM pedidos p WHERE p.turno_servicio_id = ts.id) AS pedidos
+            FROM turnos_servicio ts
+            LEFT JOIN usuarios ua ON ts.usuario_apertura_id = ua.id
+            WHERE ts.estado = 'abierto'
+            LIMIT 1
+        )
+        UNION ALL
+        (
+            SELECT ts.id, ts.estado, ts.fecha_apertura, ts.fecha_cierre,
+                   TRIM(CONCAT(COALESCE(ua.nombre, ''), ' ', COALESCE(ua.apellidos, ''))) AS abierto_por,
+                   (SELECT COUNT(*) FROM pedidos p WHERE p.turno_servicio_id = ts.id) AS pedidos
+            FROM turnos_servicio ts
+            LEFT JOIN usuarios ua ON ts.usuario_apertura_id = ua.id
+            WHERE ts.estado = 'cerrado'
+            ORDER BY ts.id DESC
+            LIMIT 9
+        )
+        ORDER BY id DESC
+    `);
     return filas.map(f => ({
         id: Number(f.id),
         estado: f.estado,

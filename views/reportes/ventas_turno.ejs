@@ -6,10 +6,15 @@
     <title><%= title || 'Ventas del Turno - Restaurante Bahía' %></title>
     <link rel="stylesheet" href="/css/jquery-ui.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/select2.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css">
     <style>
+        /* Altura compacta del Select2 para alinearlo con los form-select-sm */
+        #turno-select + .select2-container .select2-selection--single { height: 31px; }
+        #turno-select + .select2-container .select2-selection__rendered { line-height: 29px; }
+        #turno-select + .select2-container .select2-selection__arrow { height: 29px; }
         @media print {
             #sidebarMenu, .content-header-responsive, .btn { display: none !important; }
             main { width: 100% !important; margin: 0 !important; }
@@ -42,7 +47,12 @@
                     <form method="get" action="/admin/reportes/ventas-turno" class="row g-2 align-items-end">
                         <div class="col-12 col-md-6">
                             <label class="form-label small text-muted fw-semibold mb-1">Turno de servicio</label>
-                            <select name="turno" class="form-select form-select-sm">
+                            <select name="turno" id="turno-select" class="form-select form-select-sm">
+                                <% if (turnoSeleccionado && !turnos.some(t => t.id === turnoSeleccionado) && reporte) { %>
+                                    <option value="<%= reporte.turno.id %>" selected>
+                                        Turno #<%= reporte.turno.id %> · <%= reporte.turno.abierto_por %> · <%= fmtF(reporte.turno.fecha_apertura) %><%= reporte.turno.en_curso ? ' · EN CURSO' : '' %>
+                                    </option>
+                                <% } %>
                                 <% turnos.forEach(t => { %>
                                     <option value="<%= t.id %>" <%= turnoSeleccionado === t.id ? 'selected' : '' %>>
                                         Turno #<%= t.id %> · <%= t.abierto_por %> · <%= fmtF(t.fecha_apertura) %> · <%= t.pedidos %> pedido(s)<%= t.en_curso ? ' · EN CURSO' : '' %>
@@ -531,5 +541,21 @@
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
+    <script src="/js/libs/select2.min.js"></script>
+    <script src="/js/select2-busqueda-instantanea.js"></script>
+    <script>
+        // Selector de turno con búsqueda (Select2): permite localizar por
+        // número, responsable o fecha escribiendo en el propio campo.
+        $(function () {
+            $('#turno-select').select2({
+                placeholder: 'Buscar turno…',
+                width: '100%',
+                language: {
+                    noResults: function () { return 'Sin resultados'; },
+                    searching: function () { return 'Buscando…'; }
+                }
+            });
+        });
+    </script>
 </body>
 </html>

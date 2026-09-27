@@ -415,16 +415,26 @@ exports.viewExplosionRecetas = async (req, res) => {
         return res.status(500).send('Error interno al generar el reporte');
     }
 };
+// Turno a analizar: el pedido en la URL si es válido (aunque quede fuera
+// de los 10 del selector, p. ej. enlaces desde el historial de turnos);
+// por defecto, el que sigue abierto y, si no hay, el más reciente.
+async function resolverTurnoSeleccionado(query = {}) {
+    const turnos = await ReportesService.listarTurnos();
+    const pedido = parseInt(query.turno, 10) || null;
+    if (pedido && turnos.some(t => t.id === pedido)) return { turnos, turnoId: pedido };
+    if (pedido) {
+        const [rows] = await db.query(
+            'SELECT id FROM turnos_servicio WHERE id = ? LIMIT 1', [pedido]
+        ).catch(() => [[]]);
+        if (rows && rows.length) return { turnos, turnoId: pedido };
+    }
+    const enCurso = turnos.find(t => t.en_curso);
+    return { turnos, turnoId: enCurso ? enCurso.id : (turnos.length ? turnos[0].id : null) };
+}
+
 exports.viewVentasTurno = async (req, res) => {
     try {
-        const turnos = await ReportesService.listarTurnos(50);
-        // Cualquier turno puede analizarse, incluido el abierto. Por
-        // defecto: el que sigue abierto, o el más reciente.
-        let turnoId = parseInt(req.query.turno, 10) || null;
-        if (!turnos.some(t => t.id === turnoId)) {
-            const enCurso = turnos.find(t => t.en_curso);
-            turnoId = enCurso ? enCurso.id : (turnos.length ? turnos[0].id : null);
-        }
+        const { turnos, turnoId } = await resolverTurnoSeleccionado(req.query);
         const reporte = turnoId ? await ReportesService.ventasDelTurno(turnoId) : null;
         return res.render('reportes/ventas_turno', {
             title: 'Ventas del Turno - Restaurante Bahía',
@@ -444,12 +454,7 @@ exports.viewVentasTurno = async (req, res) => {
 
 exports.exportarVentasTurno = async (req, res) => {
     try {
-        const turnos = await ReportesService.listarTurnos(50);
-        let turnoId = parseInt(req.query.turno, 10) || null;
-        if (!turnos.some(t => t.id === turnoId)) {
-            const enCurso = turnos.find(t => t.en_curso);
-            turnoId = enCurso ? enCurso.id : (turnos.length ? turnos[0].id : null);
-        }
+        const { turnoId } = await resolverTurnoSeleccionado(req.query);
         if (!turnoId) return res.redirect('/admin/reportes/ventas-turno');
         const reporte = await ReportesService.ventasDelTurno(turnoId);
         if (!reporte) return res.redirect('/admin/reportes/ventas-turno');

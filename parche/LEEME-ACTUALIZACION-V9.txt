@@ -1,0 +1,43 @@
+ACTUALIZACIÓN V9 — Selector de turno con búsqueda en Ventas del Turno
+Restaurante Bahía · 2026-09-27 · Aplica sobre la V8 (5acb093)
+====================================================================
+
+QUÉ CAMBIA
+----------
+- El selector de turno del reporte Ventas del Turno ahora usa Select2
+  (el mismo buscador de recetas/transferencias): se escribe el número,
+  el responsable o la fecha y filtra al instante.
+- El selector trae el turno EN CURSO (si hay uno abierto) más los
+  últimos 9 turnos cerrados. Antes traía los últimos 50 sin orden
+  garantizado de prioridad.
+- Al abrir el reporte sin elegir turno se analiza el que sigue
+  abierto; si no hay ninguno abierto, el más reciente. Igual que
+  antes, pero ahora explícito y compartido con la exportación.
+- Los enlaces profundos a turnos viejos (p. ej. desde el historial de
+  15 turnos de Caja) siguen funcionando: si el turno existe se
+  analiza y aparece como opción marcada aunque no esté en la lista
+  de 10; si no existe, se cae al valor por defecto.
+- Textos del buscador en español ("Buscar turno…", "Sin
+  resultados"); altura compacta alineada con el resto del formulario.
+
+ARCHIVOS INCLUIDOS (5)
+-----------------------
+controllers/reportesController.js      selección centralizada
+controllers/reportesController.test.js NUEVO: 6 pruebas
+services/reportesService.js            lista = abierto + 9 cerrados
+services/reportesService.test.js       +assert UNION/LIMIT 9
+views/reportes/ventas_turno.ejs        Select2 + opción fuera de lista
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Descomprima el zip en la RAÍZ del proyecto conservando las carpetas.
+2. No requiere migración SQL ni npm install (Select2 ya viene en el
+   proyecto: public/css/select2.min.css y public/js/libs/select2.min.js).
+3. Reinicie el servidor (pm2/node) y recargue con Ctrl+F5.
+4. Verificación rápida:
+   a) Abra Reportes > Ventas del Turno: debe mostrar el turno en
+      curso (o el último cerrado si no hay abierto).
+   b) Escriba parte del nombre del responsable en el selector: debe
+      filtrar la lista al instante.
+   c) Exporte (Imprimir/Excel/PDF): debe salir el mismo turno que ve
+      en pantalla.

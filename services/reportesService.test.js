@@ -330,11 +330,15 @@ describe('reportesService · listarTurnos', () => {
             { id: 6, estado: 'cerrado', fecha_apertura: '2026-09-26 12:00:00', fecha_cierre: '2026-09-26 22:00:00', abierto_por: '', pedidos: 12 }
         ], []]);
 
-        const turnos = await ReportesService.listarTurnos(50);
+        const turnos = await ReportesService.listarTurnos();
 
         expect(turnos).toHaveLength(2);
         expect(turnos[0]).toMatchObject({ id: 7, en_curso: true, abierto_por: 'Juan Perez', pedidos: 5 });
         expect(turnos[1]).toMatchObject({ id: 6, en_curso: false, abierto_por: 'N/D', pedidos: 12 });
+        // El selector trae el abierto + los últimos 9 cerrados.
+        const sql = db.query.mock.calls[0][0];
+        expect(sql).toContain('UNION ALL');
+        expect(sql).toContain('LIMIT 9');
     });
 });
 
