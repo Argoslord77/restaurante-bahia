@@ -142,7 +142,7 @@ UPDATE platillos_menu SET precio_usd = 5.80 WHERE nombre = 'Escalope de Cerdo Gr
 
 -- ----- Pescados y Mariscos -----
 -- Carta: Filete de Pescado Grille Maitre D' Hotel .... $5.00
-UPDATE platillos_menu SET precio_usd = 5.00 WHERE nombre = 'Filete de Pescado Grille Maitre D'''' Hotel';
+UPDATE platillos_menu SET precio_usd = 5.00 WHERE nombre = 'Filete de Pescado Grille Maitre D'' Hotel';
 
 -- Carta: Filete de Pescado en salsa Limón .... $6.00
 UPDATE platillos_menu SET precio_usd = 6.00 WHERE nombre = 'Filete de Pescado en Salsa de Limòn';
