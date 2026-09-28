@@ -1,0 +1,69 @@
+CONCILIACIÓN FASE 2 + V14 — Restaurante Bahía (2026-09-28)
+============================================================
+Para quien aplicó V11 → V12 → V13 → V14 y se saltó la "GUÍA DE
+DESPLIEGUE — FASE 2 (acumulado)". Zip:
+  parche/restaurante-bahia-conciliacion-FASE2-V14-2026-09-28.zip
+
+VEREDICTO: NO ES GRAVE. No falta nada de código.
+-----------------------------------------------
+1. La propia guía Fase 2 ofrecía DOS caminos equivalentes: A) aplicar
+   V11, V12 y V13 en orden (lo que usted hizo), o B) el acumulado.
+   Verificado byte a byte: el acumulado trae EXACTAMENTE los mismos
+   54 archivos que V11+V12+V13 en orden, más 2 extras (la guía y el
+   verificador). Cero diferencias de código.
+2. El "pulido Fase 2" no tocó ni una línea de código de producción
+   (solo el verificador, la guía y un ajuste de tests).
+3. La V14 se construyó ENCIMA de Fase 2, así que ya la incluye todo.
+4. Las 3 migraciones BD venían como OBLIGATORIAS en cada LEEME
+   individual (V11/V12/V13): si siguió cada guía, su BD está completa.
+   De todos modos abajo se re-aplican (son idempotentes: repetirlas
+   no hace daño).
+
+Lo único que le faltaba en producción: el script verificador
+(nunca validó el despliegue) y la guía en papel. Este zip los trae,
+más un verificador nuevo de V14.
+
+ADVERTENCIA IMPORTANTE — NO haga esto:
+--------------------------------------
+NO descomprima ahora el acumulado Fase2 ENCIMA de la V14: trae 6
+archivos VIEJOS con los errores que usted reportó y V14 corrigió
+(calendario, monitores, puerta de apertura). Los pisaría y los
+errores volverían. Esos 6: controllers/reservaController.js,
+routes/reservaRoutes.js, services/reservaService.js (+test),
+views/admin/reservas.ejs y views/monitor.ejs.
+Si ya lo hizo por error: re-aplique el zip V14 encima y reinicie.
+
+HALLAZGO Y CORRECCIÓN (error mío, ya resuelto):
+----------------------------------------------
+Al auditar su caso detecté que 2 de las 5 guardias de la V14 no
+habían quedado grabadas en los archivos entregados (fallo de
+edición por mi parte, detectado por el verificador V14):
+  * services/pedidoService.js — puerta en crearNuevoPedido.
+  * services/reservaService.js — Sentar exige distribución del día.
+Este zip trae ambos archivos CORREGIDOS (completan los 5 puntos).
+El resto de la V14 sí estaba bien (verificado marcador por
+marcador: POS, tablero, calendario, monitores, SQL Zelle).
+
+PASOS EN LA PC DE PRODUCCIÓN (10 minutos)
+------------------------------------------
+1. Parar la app (Ctrl+C o pm2 stop bahia).
+2. Respaldo preventivo (Configuración → Respaldo).
+3. Descomprimir ESTE zip en la RAÍZ (conserva carpetas). Son solo:
+   2 servicios corregidos + 2 verificadores + guías. No pisa nada
+   de V14 con versiones viejas (verificado).
+4. Confirmar BD (idempotente, seguro repetir):
+     mysql -u USUARIO -p restaurante_db < scripts/migracion_retiros_efectivo.sql
+     mysql -u USUARIO -p restaurante_db < scripts/migracion_reservas_cuentas.sql
+     mysql -u USUARIO -p restaurante_db < scripts/migracion_proveedores_compras.sql
+5. Confirmar carta Zelle (SOLO si aún no la aplicó; rev.2, también
+   re-ejecutable):
+     mysql -u USUARIO -p restaurante_db < scripts/actualizar_precios_zelle_carta.sql
+   (Copiar archivos NO aplica precios: hay que correr el .sql.)
+6. Validar ANTES de arrancar (lo que le faltaba del camino Fase 2):
+     bash scripts/verificar_fase2.sh    → debe decir 30 OK
+     bash scripts/verificar_v14.sh     → debe decir 19 OK
+7. Arrancar y abrir https://servidor/salud → "ok": true.
+8. Ctrl+F5 en móviles/tablets/monitores.
+
+RESULTADO: producción conserva Fase 2 íntegra + V14 íntegra, sin
+ninguno de los errores reportados. Nada que fusionar a mano.

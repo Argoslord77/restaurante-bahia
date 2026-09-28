@@ -213,6 +213,10 @@ const reservaService = {
             }
             const turno = await TurnoService.obtenerTurnoActivo();
             if (!turno) throw new Error('No hay un turno abierto: abra el turno antes de sentar.');
+            // Sentar abre un pedido: también exige la distribución del día.
+            if (!(await AperturaMesaService.hayDistribucion(turno.id, connection))) {
+                throw new Error('Aún no se ha hecho la distribución del día: asigne las mesas antes de sentar.');
+            }
             const mesa = await cargarMesa(connection, reserva.id_mesa);
             if (!mesa) throw new Error('La mesa de la reserva ya no existe.');
             if (mesa.estado === STATUS.MESA.OCUPADA) {

@@ -115,14 +115,22 @@ const pedidoService = {
             throw new Error('No hay un turno de servicio activo para asociar el pedido.');
         }
 
-        const connection = await db.getConnection();
-        const [mesa] = await connection.query(`SELECT estado FROM mesas WHERE id=?`, [id_mesa]);
+        // Puerta de apertura: exige distribución del turno y mesa libre.
+        // Una mesa RESERVADA solo se abre desde Reservas (llegada/Sentar).
+        await AperturaMesaService.autorizarApertura(id_mesa, turno_servicio_id);
 
-        if (mesa.length === 0) throw new Error('Mesa inexistente');
-        if (mesa[0].estado !== STATUS.MESA.LIBRE) throw new Error('La mesa ya posee un pedido activo.');
+        const connection = await db.getConnection();
 
         try {
             await connection.beginTransaction();
+            // Revalidar el estado dentro de la transacción: dos aperturas
+            // concurrentes no pueden quedarse con la misma mesa.
+            const [mesaTx] = await connection.query(
+                'SELECT estado FROM mesas WHERE id = ? FOR UPDATE', [id_mesa]);
+            if (mesaTx.length === 0) throw new Error('Mesa inexistente');
+            if (mesaTx[0].estado !== STATUS.MESA.LIBRE) {
+                throw new Error('La mesa ya posee un pedido activo.');
+            }
             // FIX: se usa PedidoModel.create(), que ya insertaba correctamente
             // (id_mesa, id_usuario_mesero, turno_servicio_id, creado_en) según el
             // esquema real de la tabla `pedidos`. El INSERT manual anterior usaba

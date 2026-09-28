@@ -93,7 +93,19 @@ describe('reservaService.crear (C2)', () => {
 });
 
 describe('reservaService.llegada (C2)', () => {
+    it('exige distribución del día antes de sentar', async () => {
+        TurnoService.obtenerTurnoActivo.mockResolvedValue({ id: 3 });
+        AperturaMesaService.hayDistribucion.mockResolvedValue(false);
+        const conn = conexionCon([
+            ['FROM reservas', [[{ id: 1, id_mesa: 5, estado: 'pendiente', comensales: 2 }], []]]
+        ]);
+        db.getConnection.mockResolvedValue(conn);
+        await expect(ReservaService.llegada(1, 7)).rejects.toThrow('distribución del día');
+        expect(conn.rollback).toHaveBeenCalled();
+    });
+
     it('exige turno abierto y mesa disponible', async () => {
+        AperturaMesaService.hayDistribucion.mockResolvedValue(true);
         TurnoService.obtenerTurnoActivo.mockResolvedValue(null);
         const conn = conexionCon([
             ['FROM reservas', [[{ id: 1, id_mesa: 5, estado: 'pendiente', comensales: 2 }], []]]
