@@ -1,0 +1,69 @@
+ACTUALIZACIÓN V14 — Restaurante Bahía (2026-09-28)
+================================================
+Contenido: restaurante-bahia-actualizacion-V14-2026-09-28.zip (16 archivos)
+
+QUÉ TRAE
+--------
+1. PUERTA DE APERTURA DE MESAS (backend, general)
+   - Nadie (dependiente, capitán, POS, QR) puede abrir un pedido en
+     NINGUNA mesa si no se ha hecho la distribución del día. Mensaje:
+     "Aún no se ha hecho la distribución del día…".
+   - Una mesa RESERVADA no se abre desde el móvil/POS: solo desde el
+     módulo Reservas con el botón Sentar (llegada). El mensaje indica
+     el cliente, la hora y a dónde ir.
+   - Archivo nuevo: services/aperturaMesaService.js (+ su test).
+
+2. TABLERO DEL DEPENDIENTE/CAPITÁN (móvil)
+   - La tarjeta de cada mesa reservada muestra quién la apartó, día/hora
+     y comensales, con insignia violeta "RESERVADA".
+   - Sin distribución: banner de aviso y apertura deshabilitada.
+
+3. RESERVAS: CALENDARIO semana/mes/día
+   - Vista Semana por defecto; botones para Mes, Día y Lista.
+   - Pulsar un día abre el formulario de Nueva reserva con esa fecha.
+   - Pulsar una reserva muestra el detalle (y Sentar si procede).
+   - Endpoint nuevo: GET /admin/reservas/rango (solo lectura).
+
+4. POS EN MÓVIL (visual)
+   - El botón flotante "ir arriba" se oculta mientras el carrito está
+     abierto (ya no tapa Cobrar/Enviar a Cocina).
+   - Modal de notas del ítem centrado y responsive (sin cortes raros).
+   - Ficha del ítem reorganizada en pares: nombre+precio / cantidad+
+     importe; el botón de eliminar nunca sale de la caja.
+
+5. MONITORES COCINA/BAR (visual)
+   - Alerta de tiempo excedido legible: fondo rojo + texto blanco
+     (antes salía blanco sobre blanco).
+   - El nombre de la mesa no se corta en dos líneas.
+
+6. CARTA ZELLE rev.2 (scripts/actualizar_precios_zelle_carta.sql)
+   - 56 UPDATEs por nombre exacto (solo donde el plato existe).
+   - 3 INSERTs PROTEGIDOS (WHERE NOT EXISTS) para los platos que no
+     están en la tabla: se crean solos, sin duplicar.
+   - CERO borrados; se puede correr varias veces sin daño.
+
+CÓMO ACTUALIZAR LA PC DE PRODUCCIÓN
+-----------------------------------
+1. Detenga la aplicación (Ctrl+C en la ventana del servidor).
+2. Descomprima el .zip SOBRE la carpeta del proyecto, conservando las
+   rutas (controllers/, routes/, services/, views/, scripts/).
+3. (Opcional, solo BD) Aplique la carta Zelle:
+     mysql -u SU_USUARIO -p restaurante_db < scripts/actualizar_precios_zelle_carta.sql
+4. Arranque la aplicación como siempre.
+5. En los móviles basta recargar la página (el código va en el
+   servidor, no hay caché que limpiar).
+
+NO requiere migración de base de datos: usa tablas existentes
+(reservas, asignaciones_diarias, detalle_asignacion_mesa, mesas).
+
+CÓMO VERIFICAR
+--------------
+- Reservas → debe verse el calendario en Semana con botones Mes/Día.
+- Tablero móvil → mesas reservadas con tarjeta violeta e info.
+- Sin distribución del día → al intentar abrir mesa sale el aviso.
+- Mesa reservada → desde el móvil NO abre; desde Reservas → Sentar SÍ.
+- POS móvil → carrito abierto sin botón flotante encima; ítems de
+  4-5 cifras con el basurero dentro de la caja.
+- Monitor → comandas retrasadas con alerta roja legible.
+- Opcional: npx jest (suite verde salvo 2 suites preexistentes que
+  requieren módulos winston/supertest no instalados aquí).
