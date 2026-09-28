@@ -47,6 +47,18 @@
                 <i class="fa-solid fa-table-cells me-2 text-dark"></i> Monitoreo de Mesas
             </a>
         </li>
+        <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'reservas'){ %> active<% } %>" href="/admin/reservas">
+                <i class="fa-solid fa-bookmark me-2 text-dark"></i> Reservas
+            </a>
+        </li>
+        <% if (locals.user && ['superadministrador', 'administrador', 'capitan', 'cajero'].indexOf(locals.user.rol) !== -1) { %>
+        <li class="nav-item">
+            <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'cuentas'){ %> active<% } %>" href="/admin/cuentas">
+                <i class="fa-solid fa-file-invoice-dollar me-2 text-dark"></i> Cuentas abiertas
+            </a>
+        </li>
+        <% } %>
         <% if (locals.user && (locals.user.rol === 'superadministrador' || locals.user.rol === 'administrador')) { %>
             <li class="nav-item">
                 <a class="nav-link p-2<% if(locals.view !== undefined && locals.view == 'pos_mesero'){ %> active<% } %>" href="/admin/pos-mesero">

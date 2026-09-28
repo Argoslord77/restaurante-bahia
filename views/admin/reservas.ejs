@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservas - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                <div class="flex-grow-1">
+                    <% const puedeOperar = user && ['superadministrador', 'administrador', 'capitan', 'cajero'].indexOf(user.rol) !== -1; %>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+                        <div>
+                            <h1 class="h3 mb-1">Reservas de mesa</h1>
+                            <p class="text-muted mb-0">Apartados próximos e historial. A la llegada del cliente se abre su cuenta.</p>
+                        </div>
+                        <% if (puedeOperar) { %>
+                        <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#modalReserva">
+                            <i class="fa-solid fa-plus me-1"></i> Nueva reserva
+                        </button>
+                        <% } %>
+                    </div>
+
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-white">
+                            <strong>Próximas</strong>
+                            <span class="badge bg-primary-subtle text-primary ms-1"><%= proximas.length %></span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fecha y hora</th>
+                                        <th>Mesa</th>
+                                        <th>Cliente</th>
+                                        <th>Teléfono</th>
+                                        <th class="text-center">Comens.</th>
+                                        <th>Estado</th>
+                                        <th>Registró</th>
+                                        <% if (puedeOperar) { %><th class="text-end">Acciones</th><% } %>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!proximas.length) { %>
+                                    <tr><td colspan="8" class="text-center text-muted py-4">Sin reservas próximas.</td></tr>
+                                    <% } %>
+                                    <% proximas.forEach(function(r) { %>
+                                    <tr class="<%= r.vencida ? 'table-warning' : '' %>">
+                                        <td data-fecha="<%= r.fechaReserva %>"><%= r.fechaReserva %></td>
+                                        <td><strong><%= r.mesaNumero %></strong> <span class="text-muted small">(<%= r.mesaCapacidad %>p)</span></td>
+                                        <td><%= r.nombre %></td>
+                                        <td><%= r.telefono || '—' %></td>
+                                        <td class="text-center"><%= r.comensales %></td>
+                                        <td>
+                                            <% if (r.vencida) { %>
+                                            <span class="badge bg-warning-subtle text-warning-emphasis">Hora pasada</span>
+                                            <% } else { %>
+                                            <span class="badge bg-primary-subtle text-primary">Pendiente</span>
+                                            <% } %>
+                                        </td>
+                                        <td class="small"><%= r.creadoPor %></td>
+                                        <% if (puedeOperar) { %>
+                                        <td class="text-end text-nowrap">
+                                            <button type="button" class="btn btn-sm btn-success" onclick="llegadaReserva(<%= r.id %>, '<%- r.nombre.replace(/'/g, "\\'") %>')" title="El cliente llegó: abrir su cuenta">
+                                                <i class="fa-solid fa-chair me-1"></i>Sentar
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="cerrarReserva(<%= r.id %>, 'cancelar', 'Cancelar la reserva de <%- r.nombre.replace(/'/g, "\\'") %>?')" title="Cancelar reserva">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="cerrarReserva(<%= r.id %>, 'no-show', 'Marcar NO-SHOW a <%- r.nombre.replace(/'/g, "\\'") %>?')" title="No se presentó">
+                                                No-show
+                                            </button>
+                                        </td>
+                                        <% } %>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white"><strong>Historial reciente</strong></div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fecha y hora</th>
+                                        <th>Mesa</th>
+                                        <th>Cliente</th>
+                                        <th class="text-center">Comens.</th>
+                                        <th>Estado</th>
+                                        <th>Registró</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!historial.length) { %>
+                                    <tr><td colspan="6" class="text-center text-muted py-4">Sin movimientos todavía.</td></tr>
+                                    <% } %>
+                                    <% historial.forEach(function(r) { %>
+                                    <tr>
+                                        <td data-fecha="<%= r.fechaReserva %>"><%= r.fechaReserva %></td>
+                                        <td><strong><%= r.mesaNumero %></strong></td>
+                                        <td><%= r.nombre %></td>
+                                        <td class="text-center"><%= r.comensales %></td>
+                                        <td>
+                                            <% if (r.estado === 'sentada') { %>
+                                            <span class="badge bg-success-subtle text-success">Sentada</span>
+                                            <% } else if (r.estado === 'no_show') { %>
+                                            <span class="badge bg-danger-subtle text-danger">No-show</span>
+                                            <% } else if (r.estado === 'cancelada') { %>
+                                            <span class="badge bg-secondary-subtle text-secondary">Cancelada</span>
+                                            <% } else { %>
+                                            <span class="badge bg-warning-subtle text-warning-emphasis">Pendiente</span>
+                                            <% } %>
+                                        </td>
+                                        <td class="small"><%= r.creadoPor %></td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <% if (puedeOperar) { %>
+    <div class="modal fade" id="modalReserva" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva reserva</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="resMesa">Mesa</label>
+                        <select class="form-select" id="resMesa">
+                            <% mesas.forEach(function(m) { %>
+                            <option value="<%= m.id %>"><%= m.numero %> — <%= m.capacidad %> personas<%= m.estado === 'reservada' ? ' (ya apartada)' : '' %><%= m.pendientes > 0 ? ' · ' + m.pendientes + ' pendiente(s)' : '' %></option>
+                            <% }); %>
+                        </select>
+                        <div class="form-text">Solo mesas libres o ya apartadas (sin traslape de horario).</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-7 mb-3">
+                            <label class="form-label" for="resNombre">Cliente</label>
+                            <input type="text" class="form-control" id="resNombre" maxlength="100" placeholder="Nombre y apellido">
+                        </div>
+                        <div class="col-md-5 mb-3">
+                            <label class="form-label" for="resTelefono">Teléfono</label>
+                            <input type="text" class="form-control" id="resTelefono" maxlength="30" placeholder="Opcional">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label class="form-label" for="resComensales">Comensales</label>
+                            <input type="number" class="form-control" id="resComensales" min="1" max="99" value="2">
+                        </div>
+                        <div class="col-md-7 mb-3">
+                            <label class="form-label" for="resFecha">Fecha y hora</label>
+                            <input type="datetime-local" class="form-control" id="resFecha">
+                        </div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label" for="resNotas">Notas</label>
+                        <input type="text" class="form-control" id="resNotas" maxlength="255" placeholder="Opcional: cumpleaños, terraza, etc.">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-dark" id="btnGuardarReserva" onclick="guardarReserva()">Guardar reserva</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <% } %>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        document.querySelectorAll('[data-fecha]').forEach(function(td) {
+            const f = new Date(td.getAttribute('data-fecha'));
+            if (!isNaN(f.getTime())) {
+                const p = function(n) { return String(n).padStart(2, '0'); };
+                td.textContent = p(f.getDate()) + '/' + p(f.getMonth() + 1) + ' ' + p(f.getHours()) + ':' + p(f.getMinutes());
+            }
+        });
+
+        function postJson(url, cuerpo) {
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cuerpo || {})
+            }).then(function(resp) { return resp.json().then(function(d) { return { ok: resp.ok, d: d }; }); });
+        }
+
+        function guardarReserva() {
+            const btn = document.getElementById('btnGuardarReserva');
+            const datos = {
+                mesaId: document.getElementById('resMesa').value,
+                nombre: document.getElementById('resNombre').value.trim(),
+                telefono: document.getElementById('resTelefono').value.trim(),
+                comensales: document.getElementById('resComensales').value,
+                fechaReserva: document.getElementById('resFecha').value,
+                notas: document.getElementById('resNotas').value.trim()
+            };
+            if (!datos.nombre) { Swal.fire('Falta el cliente', 'Escriba el nombre de quien reserva.', 'warning'); return; }
+            if (!datos.fechaReserva) { Swal.fire('Falta la fecha', 'Indique día y hora de la reserva.', 'warning'); return; }
+            btn.disabled = true;
+            postJson('/admin/reservas', datos).then(function(r) {
+                btn.disabled = false;
+                if (!r.ok || !r.d.success) {
+                    Swal.fire('No se pudo reservar', (r.d && r.d.message) || 'Error inesperado.', 'error');
+                    return;
+                }
+                bootstrap.Modal.getInstance(document.getElementById('modalReserva')).hide();
+                Swal.fire('Reserva guardada', 'Mesa ' + r.d.reserva.mesaNumero + ' apartada para ' + r.d.reserva.nombre + '.', 'success')
+                    .then(function() { location.reload(); });
+            }).catch(function() {
+                btn.disabled = false;
+                Swal.fire('Sin conexión', 'No se pudo contactar al servidor.', 'error');
+            });
+        }
+
+        function llegadaReserva(id, nombre) {
+            Swal.fire({
+                title: 'Sentar a ' + nombre + '?',
+                text: 'Se abrirá su cuenta en el turno activo.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, sentar',
+                cancelButtonText: 'Todavía no'
+            }).then(function(r) {
+                if (!r.isConfirmed) return;
+                postJson('/admin/reservas/' + id + '/llegada').then(function(x) {
+                    if (!x.ok || !x.d.success) {
+                        Swal.fire('No se pudo sentar', (x.d && x.d.message) || 'Error inesperado.', 'error');
+                        return;
+                    }
+                    Swal.fire('Cliente sentado', 'Mesa ' + x.d.mesaNumero + ' · cuenta #' + x.d.pedidoId + '.', 'success')
+                        .then(function() { location.reload(); });
+                });
+            });
+        }
+
+        function cerrarReserva(id, accion, pregunta) {
+            Swal.fire({
+                title: pregunta,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí',
+                cancelButtonText: 'Volver'
+            }).then(function(r) {
+                if (!r.isConfirmed) return;
+                postJson('/admin/reservas/' + id + '/' + accion).then(function(x) {
+                    if (!x.ok || !x.d.success) {
+                        Swal.fire('No se pudo', (x.d && x.d.message) || 'Error inesperado.', 'error');
+                        return;
+                    }
+                    Swal.fire('Listo', x.d.mesaLiberada ? 'Reserva cerrada y mesa liberada.' : 'Reserva cerrada.', 'success')
+                        .then(function() { location.reload(); });
+                });
+            });
+        }
+    </script>
+</body>
+</html>

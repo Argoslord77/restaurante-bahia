@@ -1,0 +1,76 @@
+ACTUALIZACIÓN V12 — Reservas y cuentas: apartar mesas, trasladar, unir, dividir (Fase 2.2)
+Restaurante Bahía · 2026-09-28 · Aplica sobre la V11 (d5b11b3)
+====================================================================
+
+QUÉ CAMBIA
+----------
+C2 RESERVAS DE MESA (nuevo: sala → Reservas)
+- Apartar mesa libre con cliente, teléfono, comensales, fecha/hora y
+  notas. La mesa queda marcada como reservada.
+- Anti-traslape: la misma mesa no acepta dos reservas con menos de
+  2 horas de diferencia (revalidado en transacción).
+- A la llegada ("Sentar") se abre la cuenta en el turno activo con
+  sus comensales; exige turno abierto y mesa disponible.
+- Cancelar y No-show cierran la reserva y liberan la mesa solo si
+  quedó sin más pendientes ni cuentas abiertas (nunca pisa una mesa
+  ocupada o en mantenimiento).
+- La vista separa Próximas (con aviso si ya pasó la hora) e
+  Historial reciente. Ver: sala; operar: encargados/caja.
+C3 TRASLADAR, UNIR Y DIVIDIR CUENTAS (nuevo: Cuentas abiertas)
+- TRASLADAR: mueve la cuenta completa a una mesa libre; la origen
+  se libera solo si no le quedan más cuentas.
+- UNIR: absorbe una cuenta en otra del MISMO turno (misma mesa o
+  distinta). La origen se cierra en ceros con estado 'fusionada':
+  no se puede cobrar, no sale en monitores y suma 0 en reportes.
+  Exige origen sin propina/descuento (quitarlos primero).
+- DIVIDIR: mueve ítems sueltos a una cuenta nueva (misma mesa,
+  mismo mesero y turno) o a otra abierta del turno. Si se lleva
+  todos los ítems, la origen se cierra en ceros.
+- Todo viaja en transacción con la cuenta bloqueada (sin carreras
+  con el cobro) y queda AUDITADO (quién movió qué, de dónde a
+  dónde). Si alguna cuenta tenía precuenta impresa, avisa para
+  reimprimirla. Solo operan cuentas abiertas pendientes.
+- 29 pruebas nuevas (414/414 OK; 3 suites de entorno igual que antes:
+  faltan winston/supertest en dev, sin efecto en producción).
+
+ARCHIVOS INCLUIDOS (17)
+-----------------------
+scripts/migracion_reservas_cuentas.sql  NUEVO: OBLIGATORIA (una vez)
+config/orderStatus.js                   PAGO + RESERVA (incl. 'fusionada')
+services/reservaService.js              NUEVO: C2
+services/reservaService.test.js         NUEVO: 9 pruebas
+services/cuentaService.js               NUEVO: C3 + auditoría
+services/cuentaService.test.js          NUEVO: 11 pruebas
+controllers/reservaController.js        NUEVO: vista + API C2
+controllers/reservaController.test.js   NUEVO: 4 pruebas
+controllers/cuentaController.js         NUEVO: vista + API C3
+controllers/cuentaController.test.js    NUEVO: 4 pruebas
+routes/reservaRoutes.js                 NUEVO: /admin/reservas*
+routes/cuentaRoutes.js                  NUEVO: /admin/cuentas*
+views/admin/reservas.ejs                NUEVO: próximas + historial
+views/caja/cuentas.ejs                  NUEVO: trasladar/unir/dividir
+app.js                                  monta las rutas nuevas
+views/includes/sideBarMenu.ejs          enlaces Reservas + Cuentas
+parche/RUNBOOK-OPERACION.txt            guía operativa actualizada (V12)
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Parar el servidor. Respaldo manual preventivo (Configuración).
+2. Descomprima el zip en la RAÍZ conservando las carpetas.
+3. OBLIGATORIO — tabla de reservas + estado fusionada (una sola vez):
+     mysql -u USUARIO -p restaurante_db < scripts/migracion_reservas_cuentas.sql
+   (Idempotente: si ya existe, no hace nada. Sin esto, /admin/reservas
+   da error y unir/dividir falla al cerrar la origen.)
+4. Sin variables nuevas: su .env NO se toca. Arranque y verifique
+   https://servidor/salud → "ok": true.
+5. Ctrl+F5 en navegadores/tablets.
+6. Verificación rápida:
+   a) Reservas: apartar una mesa libre a 1 hora; se marca reservada.
+      Intentar otra a 30 min → rechaza por traslape; a 3 h → acepta.
+   b) Sentar al cliente: abre la cuenta (#pedido) y ocupa la mesa.
+      Cancelar otra reserva libera su mesa.
+   c) Cuentas abiertas: trasladar una cuenta a una mesa libre
+      (origen se libera si quedó vacía).
+   d) Dividir 1 ítem a cuenta nueva: ambas cuadran (origen + nueva
+      = total anterior); unir de vuelta cierra la origen en ceros.
+   e) Auditoría registra TRASLADAR/UNIR/DIVIDIR con responsable.

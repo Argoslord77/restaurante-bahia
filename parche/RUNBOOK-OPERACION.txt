@@ -1,4 +1,4 @@
-RUNBOOK DE OPERACIÓN — Restaurante Bahía (V11)
+RUNBOOK DE OPERACIÓN — Restaurante Bahía (V12)
 ================================================
 Guía rápida para el administrador del servidor. Detalle de cada
 versión en su LEEME-ACTUALIZACION-V*.txt.
@@ -12,6 +12,8 @@ versión en su LEEME-ACTUALIZACION-V*.txt.
 - Cerrar turno a CIEGAS: contar y declarar sin ver el esperado;
   el sistema revela la comparación después de cerrar.
 - Revisar Reportes → Propinas del turno para el reparto.
+- Reservas: apartar con hora real; sentar a la llegada (abre la
+  cuenta) y cancelar/no-show si no viene (libera la mesa).
 - El respaldo de la BD es AUTOMÁTICO cada madrugada (ver §3).
 
 2) APLICAR UNA ACTUALIZACIÓN (zip V*)
@@ -68,6 +70,12 @@ versión en su LEEME-ACTUALIZACION-V*.txt.
 - Monitor sin tiempos o sin alerta: revisar Opción 6 (SLA) en
   Configuración y recargar con Ctrl+F5; el sonido necesita que
   el navegador permita audio (un clic en la página lo activa).
+- /admin/reservas da error o unir/dividir falla al cerrar: falta
+  scripts/migracion_reservas_cuentas.sql (V12 §3 del LEEME).
+- "menos de 2 horas de diferencia" al reservar: anti-traslape;
+  mover la hora o usar otra mesa.
+- No deja unir/dividir ("mismo turno"): las cuentas son de turnos
+  distintos; cóbrelas por separado.
 - Propinas en cero con ventas: normal si las cuentas siguen
   abiertas; el informe solo suma cuentas cerradas.
 - Pantalla lenta en tablets: verificar red local; los estáticos

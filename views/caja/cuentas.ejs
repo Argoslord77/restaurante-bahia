@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuentas abiertas - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                <div class="flex-grow-1">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+                        <div>
+                            <h1 class="h3 mb-1">Cuentas abiertas</h1>
+                            <p class="text-muted mb-0">Traslade cuentas de mesa, una dos cuentas o divida ítems. Todo queda auditado.</p>
+                        </div>
+                        <span class="badge bg-primary-subtle text-primary fs-6"><%= cuentas.length %> abiertas</span>
+                    </div>
+
+                    <div class="card shadow-sm">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Cuenta</th>
+                                        <th>Mesa</th>
+                                        <th>Mesero</th>
+                                        <th class="text-center">Ítems</th>
+                                        <th class="text-end">Total</th>
+                                        <th>Turno</th>
+                                        <th>Estado</th>
+                                        <th class="text-end">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!cuentas.length) { %>
+                                    <tr><td colspan="8" class="text-center text-muted py-4">Sin cuentas abiertas.</td></tr>
+                                    <% } %>
+                                    <% cuentas.forEach(function(c) { %>
+                                    <tr>
+                                        <td><strong>#<%= c.id %></strong></td>
+                                        <td><%= c.mesaNumero %></td>
+                                        <td><%= c.mesero %></td>
+                                        <td class="text-center"><%= c.lineas %></td>
+                                        <td class="text-end">$<%= Number(c.total).toFixed(2) %></td>
+                                        <td class="text-muted">#<%= c.turnoId %></td>
+                                        <td>
+                                            <% if (c.operable) { %>
+                                            <span class="badge bg-success-subtle text-success">Pendiente</span>
+                                            <% } else { %>
+                                            <span class="badge bg-secondary-subtle text-secondary"><%= c.estadoPago %></span>
+                                            <% } %>
+                                            <% if (c.precuenta) { %><span class="badge bg-warning-subtle text-warning-emphasis ms-1" title="Tiene precuenta impresa">Precuenta</span><% } %>
+                                        </td>
+                                        <td class="text-end text-nowrap">
+                                            <% if (c.operable) { %>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirTrasladar(<%= c.id %>, '<%- String(c.mesaNumero).replace(/'/g, "\\'") %>')">
+                                                <i class="fa-solid fa-arrow-right-arrow-left me-1"></i>Trasladar
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-dark" onclick="abrirUnir(<%= c.id %>)">
+                                                <i class="fa-solid fa-object-group me-1"></i>Unir
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="abrirDividir(<%= c.id %>)">
+                                                <i class="fa-solid fa-scissors me-1"></i>Dividir
+                                            </button>
+                                            <% } else { %>
+                                            <span class="text-muted small">—</span>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalTrasladar" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Trasladar cuenta <span id="traCuenta"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Mesa actual: <strong id="traMesaActual"></strong>. La cuenta completa se mueve a una mesa libre.</p>
+                    <label class="form-label" for="traDestino">Mesa destino</label>
+                    <select class="form-select" id="traDestino">
+                        <% mesasLibres.forEach(function(m) { %>
+                        <option value="<%= m.id %>"><%= m.numero %> — <%= m.capacidad %> personas</option>
+                        <% }); %>
+                    </select>
+                    <% if (!mesasLibres.length) { %><div class="alert alert-warning mt-3 mb-0">No hay mesas libres ahora mismo.</div><% } %>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" id="btnTrasladar" onclick="confirmarTrasladar()">Trasladar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalUnir" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Unir cuenta <span id="uniOrigen"></span> en otra</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Todos los ítems pasan a la cuenta destino, del <strong>mismo turno</strong>. La origen se cierra en ceros (no se cobra dos veces).</p>
+                    <label class="form-label" for="uniDestino">Cuenta destino</label>
+                    <select class="form-select" id="uniDestino"></select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-dark" id="btnUnir" onclick="confirmarUnir()">Unir cuentas</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDividir" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Dividir cuenta <span id="divOrigen"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Marque los ítems que se van. Si se lleva todos, la cuenta origen se cierra en ceros.</p>
+                    <div id="divLineas" class="list-group mb-3"></div>
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="text-muted small">Seleccionado: <strong id="divSeleccionado">$0.00</strong></span>
+                        <span class="text-muted small">Queda en origen: <strong id="divQueda">$0.00</strong></span>
+                    </div>
+                    <label class="form-label">Destino de los ítems</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="divDestinoTipo" id="divNueva" value="nueva" checked>
+                        <label class="form-check-label" for="divNueva">Cuenta nueva en la misma mesa</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="divDestinoTipo" id="divExistente" value="existente">
+                        <label class="form-check-label" for="divExistente">Otra cuenta abierta (mismo turno)</label>
+                    </div>
+                    <select class="form-select" id="divDestino" disabled></select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-dark" id="btnDividir" onclick="confirmarDividir()">Mover ítems</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        const CUENTAS = <%- JSON.stringify(cuentas.map(function(c) { return { id: c.id, mesa: c.mesaNumero, total: c.total, turno: c.turnoId, operable: c.operable }; })) %>;
+        let cuentaActiva = null;
+        let lineasActivas = [];
+
+        function postJson(url, cuerpo) {
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cuerpo || {})
+            }).then(function(resp) { return resp.json().then(function(d) { return { ok: resp.ok, d: d }; }); });
+        }
+
+        function mostrarResultado(titulo, lineas, avisos) {
+            let html = '<div class="text-start">' + lineas.map(function(l) {
+                return '<div>' + l + '</div>';
+            }).join('') + '</div>';
+            if (avisos && avisos.length) {
+                html += '<hr><div class="text-start text-warning-emphasis small">' + avisos.map(function(a) {
+                    return '<div>⚠ ' + a + '</div>';
+                }).join('') + '</div>';
+            }
+            Swal.fire({ title: titulo, html: html, icon: 'success' }).then(function() { location.reload(); });
+        }
+
+        function abrirTrasladar(id, mesa) {
+            cuentaActiva = id;
+            document.getElementById('traCuenta').textContent = '#' + id;
+            document.getElementById('traMesaActual').textContent = mesa;
+            document.getElementById('btnTrasladar').disabled = document.getElementById('traDestino').options.length === 0;
+            new bootstrap.Modal(document.getElementById('modalTrasladar')).show();
+        }
+
+        function confirmarTrasladar() {
+            const btn = document.getElementById('btnTrasladar');
+            btn.disabled = true;
+            postJson('/admin/cuentas/' + cuentaActiva + '/trasladar', {
+                mesaDestinoId: document.getElementById('traDestino').value
+            }).then(function(r) {
+                btn.disabled = false;
+                if (!r.ok || !r.d.success) {
+                    Swal.fire('No se pudo trasladar', (r.d && r.d.message) || 'Error inesperado.', 'error');
+                    return;
+                }
+                bootstrap.Modal.getInstance(document.getElementById('modalTrasladar')).hide();
+                mostrarResultado('Cuenta trasladada',
+                    ['Cuenta #' + r.d.pedidoId + ': ' + r.d.mesaOrigen + ' → <strong>' + r.d.mesaDestino + '</strong>',
+                     r.d.origenLiberada ? 'La mesa origen quedó libre.' : 'La mesa origen sigue ocupada (tiene más cuentas).'],
+                    r.d.aviso ? [r.d.aviso] : []);
+            }).catch(function() {
+                btn.disabled = false;
+                Swal.fire('Sin conexión', 'No se pudo contactar al servidor.', 'error');
+            });
+        }
+
+        function opcionesDestino(origenId, select) {
+            const origen = CUENTAS.find(function(c) { return c.id === origenId; });
+            select.innerHTML = '';
+            CUENTAS.filter(function(c) {
+                return c.operable && c.id !== origenId && (!origen || c.turno === origen.turno);
+            }).forEach(function(c) {
+                const o = document.createElement('option');
+                o.value = c.id;
+                o.textContent = '#' + c.id + ' · Mesa ' + c.mesa + ' · $' + Number(c.total).toFixed(2);
+                select.appendChild(o);
+            });
+            return select.options.length > 0;
+        }
+
+        function abrirUnir(id) {
+            cuentaActiva = id;
+            document.getElementById('uniOrigen').textContent = '#' + id;
+            const hay = opcionesDestino(id, document.getElementById('uniDestino'));
+            document.getElementById('btnUnir').disabled = !hay;
+            new bootstrap.Modal(document.getElementById('modalUnir')).show();
+        }
+
+        function confirmarUnir() {
+            const destinoId = document.getElementById('uniDestino').value;
+            Swal.fire({
+                title: 'Unir #' + cuentaActiva + ' en #' + destinoId + '?',
+                text: 'La cuenta origen se cierra en ceros.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, unir',
+                cancelButtonText: 'Volver'
+            }).then(function(r) {
+                if (!r.isConfirmed) return;
+                const btn = document.getElementById('btnUnir');
+                btn.disabled = true;
+                postJson('/admin/cuentas/' + cuentaActiva + '/unir', { destinoId: destinoId }).then(function(x) {
+                    btn.disabled = false;
+                    if (!x.ok || !x.d.success) {
+                        Swal.fire('No se pudo unir', (x.d && x.d.message) || 'Error inesperado.', 'error');
+                        return;
+                    }
+                    bootstrap.Modal.getInstance(document.getElementById('modalUnir')).hide();
+                    mostrarResultado('Cuentas unidas',
+                        ['#' + x.d.origenId + ' → <strong>#' + x.d.destinoId + '</strong>',
+                         x.d.lineasMovidas + ' ítem(s) · nuevo total: $' + Number(x.d.totalDestino).toFixed(2)],
+                        x.d.avisos);
+                }).catch(function() {
+                    btn.disabled = false;
+                    Swal.fire('Sin conexión', 'No se pudo contactar al servidor.', 'error');
+                });
+            });
+        }
+
+        function abrirDividir(id) {
+            cuentaActiva = id;
+            document.getElementById('divOrigen').textContent = '#' + id;
+            const cont = document.getElementById('divLineas');
+            cont.innerHTML = '<div class="text-muted p-3">Cargando ítems…</div>';
+            fetch('/admin/cuentas/' + id).then(function(resp) { return resp.json(); }).then(function(d) {
+                if (!d.success) {
+                    cont.innerHTML = '<div class="alert alert-danger mb-0">' + (d.message || 'Error.') + '</div>';
+                    return;
+                }
+                lineasActivas = d.cuenta.lineas;
+                cont.innerHTML = '';
+                lineasActivas.forEach(function(l) {
+                    const label = document.createElement('label');
+                    label.className = 'list-group-item d-flex align-items-center gap-2';
+                    label.innerHTML = '<input type="checkbox" class="form-check-input div-check" value="' + l.id + '" data-importe="' + l.importe + '">'
+                        + '<span class="flex-grow-1"><strong>' + l.cantidad + '×</strong> ' + l.nombre + '</span>'
+                        + '<span class="text-muted">$' + Number(l.importe).toFixed(2) + '</span>';
+                    cont.appendChild(label);
+                });
+                cont.querySelectorAll('.div-check').forEach(function(ch) {
+                    ch.addEventListener('change', actualizarSeleccion);
+                });
+                actualizarSeleccion();
+            }).catch(function() {
+                cont.innerHTML = '<div class="alert alert-danger mb-0">Sin conexión.</div>';
+            });
+            document.getElementById('divNueva').checked = true;
+            document.getElementById('divDestino').disabled = true;
+            opcionesDestino(id, document.getElementById('divDestino'));
+            new bootstrap.Modal(document.getElementById('modalDividir')).show();
+        }
+
+        function actualizarSeleccion() {
+            let sel = 0, total = 0;
+            document.querySelectorAll('.div-check').forEach(function(ch) {
+                const imp = Number(ch.getAttribute('data-importe')) || 0;
+                total += imp;
+                if (ch.checked) sel += imp;
+            });
+            document.getElementById('divSeleccionado').textContent = '$' + sel.toFixed(2);
+            document.getElementById('divQueda').textContent = '$' + (total - sel).toFixed(2);
+        }
+
+        document.querySelectorAll('input[name="divDestinoTipo"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                document.getElementById('divDestino').disabled = document.getElementById('divNueva').checked;
+            });
+        });
+
+        function confirmarDividir() {
+            const ids = Array.from(document.querySelectorAll('.div-check:checked')).map(function(ch) { return Number(ch.value); });
+            if (!ids.length) { Swal.fire('Sin selección', 'Marque al menos un ítem para mover.', 'warning'); return; }
+            const aExistente = document.getElementById('divExistente').checked;
+            const destinoId = aExistente ? document.getElementById('divDestino').value : null;
+            if (aExistente && !destinoId) { Swal.fire('Sin destino', 'No hay otra cuenta del mismo turno.', 'warning'); return; }
+            const btn = document.getElementById('btnDividir');
+            btn.disabled = true;
+            postJson('/admin/cuentas/' + cuentaActiva + '/dividir', { detalleIds: ids, destinoId: destinoId }).then(function(r) {
+                btn.disabled = false;
+                if (!r.ok || !r.d.success) {
+                    Swal.fire('No se pudo dividir', (r.d && r.d.message) || 'Error inesperado.', 'error');
+                    return;
+                }
+                bootstrap.Modal.getInstance(document.getElementById('modalDividir')).hide();
+                mostrarResultado('Cuenta dividida',
+                    [r.d.lineasMovidas + ' ítem(s) → ' + (r.d.pedidoNuevo ? 'cuenta nueva <strong>#' + r.d.destinoId + '</strong>' : 'cuenta <strong>#' + r.d.destinoId + '</strong>'),
+                     'Origen: $' + Number(r.d.totalOrigen).toFixed(2) + (r.d.origenCerrado ? ' (cerrada en ceros)' : ''),
+                     'Destino: $' + Number(r.d.totalDestino).toFixed(2)],
+                    r.d.avisos);
+            }).catch(function() {
+                btn.disabled = false;
+                Swal.fire('Sin conexión', 'No se pudo contactar al servidor.', 'error');
+            });
+        }
+    </script>
+</body>
+</html>
