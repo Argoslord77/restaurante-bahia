@@ -75,6 +75,20 @@ const errorHandler = (err, req, res, next) => {
     }
 
     // Respuesta de error
+    // A8: la navegación (GET que acepta text/html explícito) recibe la
+    // vista de error amable. La API y fetch/XHR (Accept */* o json)
+    // siguen recibiendo JSON para no romper res.json() del cliente.
+    const acepta = String((req.headers && req.headers.accept) || '');
+    if (req.method === 'GET' && acepta.includes('text/html')) {
+        return res.status(error.statusCode).render('error', {
+            message: error.statusCode === 404
+                ? 'La página que buscas no existe o fue movida.'
+                : (error.message || 'Error interno del servidor'),
+            error: process.env.NODE_ENV === 'development'
+                ? { status: error.statusCode, stack: err.stack }
+                : { status: error.statusCode }
+        });
+    }
     res.status(error.statusCode).json({
         success: false,
         code: error.code || ErrorCodes.INTERNAL_ERROR,

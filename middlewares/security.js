@@ -22,7 +22,19 @@ const apiLimiter = rateLimit({
     },
 });
 
+// B2: el circuito QR de cliente es público (sin login). Límite generoso
+// por IP: el dashboard de cliente no sondea, solo actúa por gesto.
+const clienteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 120, // 120 peticiones por IP y ventana
+    message: {
+        success: false,
+        message: 'Demasiadas solicitudes desde este dispositivo, por favor intenta más tarde.'
+    },
+});
+
 module.exports = {
     authLimiter,
-    apiLimiter
+    apiLimiter,
+    clienteLimiter
 };

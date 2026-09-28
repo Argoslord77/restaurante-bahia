@@ -5,6 +5,30 @@ const turnoService = require('../services/turnoService');
 const PrecioService = require('../services/precioService');
 const db = require('../config/db');
 
+// B2: anti-abuso del circuito público QR. Cooldowns en memoria por
+// mesa/pedido (mapa pequeño: una entrada por mesa activa) con purga
+// perezosa y barrido periódico. Impide spam de llamadas y preórdenes.
+const cooldowns = new Map();
+function segundosRestantes(clave) {
+    const vence = cooldowns.get(clave);
+    if (!vence) return 0;
+    if (vence <= Date.now()) { cooldowns.delete(clave); return 0; }
+    return Math.ceil((vence - Date.now()) / 1000);
+}
+function marcarCooldown(clave, ms) { cooldowns.set(clave, Date.now() + ms); }
+const barridoCooldowns = setInterval(() => {
+    const ahora = Date.now();
+    for (const [clave, vence] of cooldowns) {
+        if (vence <= ahora) cooldowns.delete(clave);
+    }
+}, 10 * 60 * 1000);
+if (barridoCooldowns.unref) barridoCooldowns.unref();
+
+async function mesaExiste(idMesa) {
+    const [rows] = await db.query('SELECT id FROM mesas WHERE id = ? LIMIT 1', [idMesa]);
+    return rows && rows.length > 0;
+}
+
 const ClienteController = {
   /**
    * Carga el dashboard principal del cliente con el menú, platillos del día y consumos
@@ -118,6 +142,17 @@ const ClienteController = {
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ success: false, message: 'No se enviaron ítems para procesar.' });
       }
+      // B2: topes anti-abuso (cada ítem genera consultas): 50 ítems máximo.
+      if (items.length > 50) {
+        return res.status(400).json({ success: false, message: 'Demasiados ítems en una sola pre-orden (máximo 50).' });
+      }
+      if (!(await mesaExiste(id_mesa))) {
+        return res.status(404).json({ success: false, message: 'La mesa indicada no existe.' });
+      }
+      const esperaPre = segundosRestantes(`preorden:${id_mesa}`);
+      if (esperaPre > 0) {
+        return res.status(429).json({ success: false, message: `Pre-orden ya enviada. Espera ${esperaPre} segundos antes de enviar otra.`, reintentar_en: esperaPre });
+      }
 
       const turnoActivo = await turnoService.obtenerTurnoActivo();
       const pricingContext = await PrecioService.obtenerContextoCobro({
@@ -130,8 +165,8 @@ const ClienteController = {
         const idPlatillo = item.id_platillo || item.id;
         const cantidad = parseInt(item.cantidad || 1, 10);
         const esDia = item.es_platillo_dia === true || item.es_platillo_dia === 1 || item.es_platillo_dia === '1' ? 1 : 0;
-        if (!idPlatillo || !Number.isInteger(cantidad) || cantidad <= 0) {
-          return res.status(400).json({ success: false, message: 'Cada ítem debe tener un platillo y cantidad válidos.' });
+        if (!idPlatillo || !Number.isInteger(cantidad) || cantidad <= 0 || cantidad > 20) {
+          return res.status(400).json({ success: false, message: 'Cada ítem debe tener un platillo y cantidad válidos (máximo 20).' });
         }
 
         let platillo;
@@ -164,6 +199,7 @@ const ClienteController = {
         values
       );
 
+      marcarCooldown(`preorden:${id_mesa}`, 15 * 1000);
       return res.json({
         success: true,
         message: 'Pre-pedido enviado correctamente. El dependiente revisará su orden.'
@@ -177,11 +213,23 @@ const ClienteController = {
   async callService(req, res) {
     try {
       const { id_mesa } = req.params;
+      if (!/^\d+$/.test(String(id_mesa || ''))) {
+        return res.status(400).json({ success: false, message: 'La mesa indicada no es válida.' });
+      }
+      if (!(await mesaExiste(id_mesa))) {
+        return res.status(404).json({ success: false, message: 'La mesa indicada no existe.' });
+      }
+      // B2: una llamada por minuto y mesa; el dependiente ya fue avisado.
+      const espera = segundosRestantes(`llamada:${id_mesa}`);
+      if (espera > 0) {
+        return res.status(429).json({ success: false, message: `El dependiente ya fue avisado. Puedes reintentar en ${espera} segundos.`, reintentar_en: espera });
+      }
       await db.query(
         `INSERT INTO notificaciones_mesero (id_mesa, tipo, mensaje, leido) 
          VALUES (?, 'LLAMADA_SERVICIO', 'El cliente solicita atención en la mesa', 0)`,
         [id_mesa]
       );
+      marcarCooldown(`llamada:${id_mesa}`, 60 * 1000);
       return res.json({ success: true, message: 'Llamado enviado al dependiente.' });
     } catch (error) {
       console.error('Error al llamar al servicio:', error);
@@ -192,9 +240,21 @@ const ClienteController = {
   async cerrarCuenta(req, res) {
     try {
       const { id_pedido } = req.params;
-      const [pedidos] = await db.query(`SELECT id_mesa FROM pedidos WHERE id = ?`, [id_pedido]);
+      if (!/^\d+$/.test(String(id_pedido || ''))) {
+        return res.status(400).json({ success: false, message: 'El pedido indicado no es válido.' });
+      }
+      const [pedidos] = await db.query(`SELECT id_mesa, fecha_cierre FROM pedidos WHERE id = ?`, [id_pedido]);
       if (pedidos.length === 0) {
         return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
+      }
+      // B2: solo se pide la cuenta de un pedido abierto, con pausa de
+      // 2 minutos entre solicitudes.
+      if (pedidos[0].fecha_cierre) {
+        return res.status(410).json({ success: false, message: 'Este pedido ya está cerrado.' });
+      }
+      const esperaCierre = segundosRestantes(`cierre:${id_pedido}`);
+      if (esperaCierre > 0) {
+        return res.status(429).json({ success: false, message: `La cuenta ya fue solicitada. Puedes reintentar en ${esperaCierre} segundos.`, reintentar_en: esperaCierre });
       }
       const id_mesa = pedidos[0].id_mesa;
       await db.query(
@@ -202,6 +262,7 @@ const ClienteController = {
          VALUES (?, ?, 'SOLICITUD_CIERRE', 'El cliente ha solicitado la cuenta', 0)`,
         [id_mesa, id_pedido]
       );
+      marcarCooldown(`cierre:${id_pedido}`, 120 * 1000);
       return res.json({ success: true, message: 'Solicitud de cierre enviada al dependiente.' });
     } catch (error) {
       console.error('Error al solicitar el cierre de cuenta:', error);
@@ -209,5 +270,8 @@ const ClienteController = {
     }
   }
 };
+
+// Solo pruebas: reinicia los cooldowns en memoria entre casos.
+ClienteController.__resetCooldowns = () => cooldowns.clear();
 
 module.exports = ClienteController;

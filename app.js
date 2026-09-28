@@ -23,7 +23,11 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Middleware para archivos estáticos (CSS/JS local de Bootstrap)
-app.use(express.static(path.join(__dirname, 'public')));
+// D3: cache de 1 día en navegador (las tablets de sala no re-descargan
+// Bootstrap en cada pantalla). Tras actualizar, Ctrl+F5 como siempre.
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d', etag: true }));
+// D3: gzip para HTML/JSON dinámicos (estáticos y descargas no se tocan).
+app.use(require('./middlewares/compress'));
 
 // ==========================================
 // SEGURIDAD - Helmet para headers de seguridad
@@ -78,12 +82,20 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 // ==========================================
 // 1. CONFIGURACIÓN DE SESIONES Y FLASH (Mover aquí arriba)
 // ==========================================
+// A2: sesiones persistentes en MySQL: sobreviven a reinicios y se
+// limpian solas (tabla `sesiones`, ver scripts/migracion_sesiones.sql).
+const MysqlSessionStore = require('./config/sessionStore');
+const sessionStore = new MysqlSessionStore(require('./config/db'), { ttlMs: 3600000 });
+sessionStore.iniciarLimpieza();
 app.use(session({ 
     secret: process.env.SESSION_SECRET, 
+    store: sessionStore,
     resave: false,                  
     saveUninitialized: false,       
     cookie: { 
-        secure: true,                
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax',
         maxAge: 3600000                 
     } 
 }));
@@ -110,6 +122,10 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
+// D2: healthcheck público para monitoreo/pm2. Va ANTES de la auditoría
+// para no ensuciar el registro con cada sonda (cada minuto).
+app.get('/salud', require('./controllers/healthController').estadoSalud);
+
 // 2.b AUDITORÍA GLOBAL DE OPERACIONES
 // ==========================================
 // Debe ir DESPUÉS de la sesión, Passport y checkRememberMe (para conocer al
@@ -169,7 +185,6 @@ app.use('/admin', recetaRoutes);
 app.use('/admin', transferenciaRoutes);
 app.use('/admin', salidaManualRoutes);
 app.use('/admin', settingRoutes);
-app.use('/admin', transferenciaRoutes);
 app.use('/admin', entradaRoutes);
 app.use('/admin', inventarioRoutes);
 app.use('/admin', reporteRoutes);
@@ -201,7 +216,7 @@ app.get('/', (req, res) => {
 // MIDDLEWARE DE MANEJO DE ERRORES (Siempre al final)
 // ==========================================
 // Manejo de rutas no encontradas
-// app.use(notFoundHandler);
+app.use(notFoundHandler);
 
 // Manejo centralizado de errores
 app.use(errorHandler);
@@ -213,6 +228,44 @@ const sslOptions = {
 };
 
 // 2. Crear el servidor HTTPS en lugar del HTTP normal
-https.createServer(sslOptions, app).listen(PORT, () => {
+const server = https.createServer(sslOptions, app).listen(PORT, () => {
   console.log(`Servidor HTTPS corriendo en: https://localhost:${PORT}`);
+});
+
+// A4: respaldo automático diario (hora/retención por .env).
+const respaldoAuto = require('./services/backupScheduler').iniciar();
+
+// A3: apagado limpio. pm2/docker mandan SIGTERM al reiniciar: se deja de
+// aceptar conexiones, se drena el pool MySQL y se paran los intervalos
+// antes de salir. Nada se corta a mitad de un cobro o un cierre.
+let cerrando = false;
+async function apagadoLimpio(origen) {
+    if (cerrando) return;
+    cerrando = true;
+    logger.info(`[apagado] señal ${origen}: cerrando limpio...`);
+    try {
+        respaldoAuto.detener();
+        sessionStore.detenerLimpieza();
+        await new Promise(resolve => server.close(resolve));
+        await require('./config/db').end();
+        logger.info('[apagado] listo.');
+    } catch (err) {
+        logger.error(`[apagado] ${err.message}`);
+    } finally {
+        process.exit(0);
+    }
+}
+function apagadoConFailsafe(origen) {
+    // Failsafe: si algo cuelga el cierre, salir de todos modos.
+    setTimeout(() => process.exit(1), 10000).unref();
+    apagadoLimpio(origen).catch(() => process.exit(1));
+}
+process.on('SIGTERM', () => apagadoConFailsafe('SIGTERM'));
+process.on('SIGINT', () => apagadoConFailsafe('SIGINT'));
+process.on('uncaughtException', err => {
+    logger.error(`[uncaughtException] ${err.stack || err.message}`);
+    apagadoConFailsafe('uncaughtException');
+});
+process.on('unhandledRejection', motivo => {
+    logger.error(`[unhandledRejection] ${(motivo && motivo.stack) || motivo}`);
 });

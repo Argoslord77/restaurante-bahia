@@ -49,10 +49,14 @@ const transports = [
         )
     }),
     
+    // A5: rotación por tamaño (5 x 5 MB por archivo): el disco no se
+    // llena aunque la app registre durante meses.
     // Archivo para errores
     new winston.transports.File({
         filename: path.join(__dirname, '../logs/error.log'),
         level: 'error',
+        maxsize: 5 * 1024 * 1024,
+        maxFiles: 5,
         format: winston.format.combine(
             winston.format.timestamp(),
             winston.format.json()
@@ -62,6 +66,8 @@ const transports = [
     // Archivo para todos los logs
     new winston.transports.File({
         filename: path.join(__dirname, '../logs/combined.log'),
+        maxsize: 5 * 1024 * 1024,
+        maxFiles: 5,
         format: winston.format.combine(
             winston.format.timestamp(),
             winston.format.json()

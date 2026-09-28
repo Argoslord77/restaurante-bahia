@@ -5,3 +5,11 @@ coverage
 .DS_Store
 public/uploads/*
 !public/uploads/.gitkeep
+
+# V10 (B1): secretos y datos fuera de git
+!.env.example
+certs/*.pem
+respaldo_*.sql
+respaldo_*.txt
+backups/
+logs/

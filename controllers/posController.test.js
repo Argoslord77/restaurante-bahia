@@ -420,7 +420,11 @@ describe('posController.procesarCobroAvanzado · excedente del cobro', () => {
             carta: 'CUP', es_zelle: false, moneda_codigo: 'CUP', moneda_id: 1, factor_cambio: 1
         });
         conexion = {
-            query: jest.fn(async () => [[], []]),
+            query: jest.fn(async (sql) => {
+                // A1: el candado FOR UPDATE re-lee el estado dentro de la tx.
+                if (String(sql).includes('FOR UPDATE')) return [[{ estado_pago: 'pendiente' }], []];
+                return [[], []];
+            }),
             beginTransaction: jest.fn(),
             commit: jest.fn(),
             rollback: jest.fn(),
@@ -496,5 +500,92 @@ describe('posController.procesarCobroAvanzado · excedente del cobro', () => {
 
         // Diferencia 10 en origen x tasa 2 = 20 locales de propina.
         expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 20, propina: 20 }));
+    });
+});
+
+describe('posController.procesarCobroAvanzado · candado anti doble-cobro (A1)', () => {
+    const PEDIDO = { id: 15, id_mesa: 3, turno_servicio_id: 7, carta: 'CUP', numero_mesa: '5' };
+    let conexion;
+
+    function cobroReqRes(body) {
+        const req = { params: { id_pedido: '15' }, body, user: { id: 2, rol: 'cajero' } };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+        return { req, res };
+    }
+
+    const bodyOk = () => ({
+        pagos: [{ metodo_pago: 'efectivo', moneda_id: 1, monto_moneda_origen: 100, referencia_transaccion: '' }],
+        descuento: 0, recargo: 0, propina: 0
+    });
+
+    function preparar(estadoBloqueo) {
+        jest.clearAllMocks();
+        SettingService.get.mockResolvedValue(0);
+        PrecioService.obtenerContextoCobro.mockResolvedValue({
+            carta: 'CUP', es_zelle: false, moneda_codigo: 'CUP', moneda_id: 1, factor_cambio: 1
+        });
+        conexion = {
+            query: jest.fn(async (sql) => {
+                if (String(sql).includes('FOR UPDATE')) return [[{ estado_pago: estadoBloqueo }], []];
+                return [[], []];
+            }),
+            beginTransaction: jest.fn(),
+            commit: jest.fn(),
+            rollback: jest.fn(),
+            release: jest.fn()
+        };
+        pool.getConnection.mockResolvedValue(conexion);
+        pool.query.mockImplementation(async (sql) => {
+            const texto = String(sql);
+            if (texto.includes('numero_mesa')) return [[{ ...PEDIDO }], []];
+            if (texto.includes('SUM(cantidad * precio_unitario)')) return [[{ subtotal: 100 }], []];
+            if (texto.includes('FROM monedas m')) return [[{ id: 1, codigo: 'CUP', simbolo: '$', factor_cambio: 1 }], []];
+            return [[{ total: 0 }], []]; // pendientes de entrega
+        });
+    }
+
+    it('bloquea la fila del pedido (FOR UPDATE) antes de cobrar', async () => {
+        preparar('pendiente');
+        const { req, res } = cobroReqRes(bodyOk());
+        await procesarCobroAvanzado(req, res);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+        const llamadas = conexion.query.mock.calls;
+        const sel = llamadas.find(([sql]) => String(sql).includes('FOR UPDATE'));
+        expect(sel).toBeTruthy();
+        const idxUpdate = llamadas.findIndex(([sql]) => String(sql).includes('UPDATE pedidos'));
+        expect(llamadas.indexOf(sel)).toBeLessThan(idxUpdate);
+    });
+
+    it('segundo cobro (ya pagado) → 409 sin duplicar pagos', async () => {
+        preparar('pagado');
+        const { req, res } = cobroReqRes(bodyOk());
+        await procesarCobroAvanzado(req, res);
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, ya_cobrado: true }));
+        expect(conexion.rollback).toHaveBeenCalled();
+        expect(conexion.commit).not.toHaveBeenCalled();
+        const inserts = conexion.query.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO pagos_pedido'));
+        expect(inserts).toHaveLength(0);
+    });
+
+    it('pendiente_pago/facturado/cortesia también se rechazan con 409', async () => {
+        for (const est of ['pendiente_pago', 'facturado', 'cortesia']) {
+            preparar(est);
+            const { req, res } = cobroReqRes(bodyOk());
+            await procesarCobroAvanzado(req, res);
+            expect(res.status).toHaveBeenCalledWith(409);
+        }
+    });
+
+    it('A6: la mesa se libera dentro de la transacción', async () => {
+        preparar('pendiente');
+        const { req, res } = cobroReqRes(bodyOk());
+        await procesarCobroAvanzado(req, res);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+        const mesaTx = conexion.query.mock.calls.find(([sql]) => String(sql).includes("UPDATE mesas SET estado = 'libre'"));
+        expect(mesaTx).toBeTruthy();
+        expect(conexion.commit).toHaveBeenCalled();
+        const mesaPool = pool.query.mock.calls.find(([sql]) => String(sql).includes('UPDATE mesas'));
+        expect(mesaPool).toBeFalsy();
     });
 });

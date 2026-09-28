@@ -770,6 +770,26 @@ module.exports = {
 
             connection = await pool.getConnection();
             await connection.beginTransaction();
+            // A1: candado anti doble-cobro. La fila se bloquea (FOR UPDATE)
+            // dentro de la transaccion: dos cobros concurrentes del mismo
+            // pedido se serializan y el segundo encuentra el estado ya
+            // cerrado. Solo un pedido 'pendiente' puede cobrarse.
+            const [bloqueo] = await connection.query(`
+                SELECT estado_pago FROM pedidos WHERE id = ? FOR UPDATE
+            `, [pedidoId]);
+            const estadoActual = bloqueo.length ? bloqueo[0].estado_pago : null;
+            if (estadoActual !== 'pendiente') {
+                await connection.rollback();
+                connection.release();
+                connection = null;
+                return res.status(409).json({
+                    success: false,
+                    ya_cobrado: true,
+                    message: estadoActual
+                        ? `Este pedido ya fue cobrado (estado: ${estadoActual}).`
+                        : 'Este pedido ya no existe.'
+                });
+            }
             if (es_cortesia && cortesiaAutorizadaPor && cortesiaColumnasOk) {
                 await connection.query(`
                     UPDATE pedidos
@@ -800,6 +820,9 @@ module.exports = {
                 `, [pedidoId, pago.metodo_pago, pago.moneda_id, pago.factor_cambio_aplicado,
                     pago.monto_moneda_origen, pago.monto_equivalente_local, pago.referencia_transaccion]);
             }
+            // A6: liberar la mesa es parte del cobro: viaja dentro de la
+            // transaccion para no dejar mesas ocupadas tras cobrar.
+            await connection.query(`UPDATE mesas SET estado = 'libre' WHERE id = ?`, [pedido.id_mesa]);
             await connection.commit();
             connection.release();
             connection = null;
@@ -811,7 +834,6 @@ module.exports = {
             } catch (invErr) {
                 console.warn('Advertencia al descontar inventario:', invErr.message);
             }
-            await pool.query("UPDATE mesas SET estado = 'libre' WHERE id = ?", [pedido.id_mesa]);
 
             return res.json({
                 success: true,

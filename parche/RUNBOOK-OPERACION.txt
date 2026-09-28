@@ -1,0 +1,84 @@
+RUNBOOK DE OPERACIÓN — Restaurante Bahía (V10)
+================================================
+Guía rápida para el administrador del servidor. Detalle de cada
+versión en su LEEME-ACTUALIZACION-V*.txt.
+
+1) RUTINA DIARIA
+----------------
+- Abrir turno con fondo de caja; asignar meseros a mesas.
+- Operar normal (POS, monitores, QR cliente, cierres de día).
+- Cerrar turno (esperado vs real) y cierre del día.
+- El respaldo de la BD es AUTOMÁTICO cada madrugada (ver §3).
+
+2) APLICAR UNA ACTUALIZACIÓN (zip V*)
+------------------------------------
+1. Parar el servidor (pm2 stop bahia  — o como se llame su proceso).
+2. Opcional pero recomendado: respaldo manual desde
+   Configuración → Respaldo, o copiar la carpeta backups/.
+3. Descomprimir el zip en la RAÍZ del proyecto (conserva carpetas).
+4. Si el LEEME pide migración SQL, aplicarla ANTES de arrancar:
+     mysql -u USUARIO -p restaurante_db < scripts/migracion_*.sql
+5. Si el LEEME trae variables nuevas, agregarlas a su .env (el zip
+   NUNCA sobrescribe su .env ni sus certs/).
+6. Arrancar (pm2 start / restart) y abrir https://servidor/salud:
+   debe decir "ok": true.
+7. Recargar navegadores/tablets con Ctrl+F5.
+
+3) RESPALDO AUTOMÁTICO (desde V10)
+---------------------------------
+- Corre solo, una vez al día a las 03:00 (hora del servidor).
+- Archivos: backups/auto_restaurante_bahia_*.sql (los últimos 7 días;
+  los viejos se borran solos).
+- Configuración en .env: RESPALDO_AUTO=1, RESPALDO_HORA=3,
+  RESPALDO_DIR=./backups, RESPALDO_DIAS=7.
+- Verificación: /salud muestra fecha/tamaño del último respaldo.
+- Si falla (ej. mysqldump no instalado), queda en logs/ y reintenta
+  al día siguiente. Instalar cliente MySQL si falta:
+     sudo apt install default-mysql-client
+- RESTAURAR (manual, con servidor detenido):
+     mysql -u USUARIO -p restaurante_db < backups/archivo.sql
+
+4) MONITOREO /salud
+-------------------
+- https://servidor/salud → JSON público (sin login) para pm2,
+  Uptime Kuma o revisión manual: BD (ms), memoria, disco libre,
+  uptime y último respaldo. Devuelve 503 si la BD no responde.
+
+5) QUÉ HACER SI…
+----------------
+- "Este pedido ya fue cobrado" (o 409): es el candado anti
+  doble-cobro. Un cobro del mismo pedido ya se registró; NO
+  reintentar: volver al panel y verificar la mesa liberada.
+- Cliente QR ve "reintentar en N segundos" (429): cooldown
+  anti-spam (llamada 60 s, cuenta 2 min, pre-orden 15 s). Normal.
+- Todos salen de sesión tras reiniciar: normal SOLO si falta
+  aplicar scripts/migracion_sesiones.sql. Los logs avisan:
+  "[sesiones] Falta la tabla `sesiones`…".
+- Disco lleno: revisar backups/ (retención) y logs/ (rotación
+  automática 5×5 MB). Los .log viejos pueden borrarse con la
+  app detenida.
+- "Ruta no encontrada" en página amable: URL mal escrita; el
+  botón vuelve al panel. Los errores de API siguen en JSON.
+- Pantalla lenta en tablets: verificar red local; los estáticos
+  se cachean 1 día (Ctrl+F5 tras actualizar).
+
+6) SECRETOS (importante, desde V10)
+-----------------------------------
+- El repo YA NO guarda .env, certs/*.pem ni volcados SQL. Los de
+  SU servidor no se tocaron: siguen donde estaban.
+- La PRIMERA vez tras V10, rote los secretos (estuvieron en git):
+  1. Genere valores nuevos:  openssl rand -hex 32   (dos veces)
+  2. SESSION_SECRET=<valor1> y COOKIE_SECRET=<valor2> en .env
+  3. Cambie la clave MySQL del usuario de la app y actualice
+     DB_PASS en .env (o pida a su técnico el cambio).
+  4. Regenere certs/ con mkcert (o sus certificados) y reinicie.
+  5. Todos deberán iniciar sesión de nuevo (esperado).
+- Nunca suba .env, certs/*.pem ni backups/*.sql a git.
+
+7) ARCHIVOS QUE PUEDEN BORRARSE (una vez, opcional)
+--------------------------------------------------
+Ya eliminados del repo; si existen en su servidor, bórrelos:
+  routes/transferenciaRoutes_.js
+  views/users/users_bckp.ejs
+  prototipo_menu_cliente.html
+  respaldo_20260828_*.sql / .txt  (mueva a backups/ si los quiere)

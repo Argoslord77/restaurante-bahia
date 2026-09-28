@@ -2771,6 +2771,13 @@
 
             if (!formValues) return;
 
+            // A1: un solo cobro en vuelo + botón bloqueado durante el POST.
+            // Evita el doble-clic en pantallas táctiles (el servidor además
+            // serializa con FOR UPDATE y responde 409 al perdedor).
+            if (window.__cobroEnCurso) return;
+            window.__cobroEnCurso = true;
+            const btnCobrar = document.getElementById('btn-checkout-order');
+            if (btnCobrar) btnCobrar.disabled = true;
             try {
                 const response = await fetch(`/pos/cobrar/${idPedido}`, {
                     method: 'POST',
@@ -2791,6 +2798,11 @@
                     }).then(() => {
                         window.location.href = POS_DASHBOARD_URL;
                     });
+                } else if (response.status === 409 || data.ya_cobrado) {
+                    // A1: otro cobro del mismo pedido ganó la carrera (o ya
+                    // estaba cobrado): se informa y se vuelve al panel.
+                    Swal.fire('Ya estaba cobrado', data.message || 'Este pedido ya fue cobrado.', 'info')
+                        .then(() => { window.location.href = POS_DASHBOARD_URL; });
                 } else {
                     Swal.fire(
                         data.requiere_autorizacion ? 'Cortesía no autorizada' : 'Error en el cobro',
@@ -2800,6 +2812,10 @@
                 }
             } catch (err) {
                 Swal.fire('Error de Red', 'Fallo al procesar el pago.', 'error');
+            } finally {
+                window.__cobroEnCurso = false;
+                const btnCobrarFin = document.getElementById('btn-checkout-order');
+                if (btnCobrarFin) btnCobrarFin.disabled = false;
             }
         }
 

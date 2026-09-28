@@ -1,0 +1,96 @@
+ACTUALIZACIÓN V10 — Blindaje: estabilidad + seguridad (Fase 1)
+Restaurante Bahía · 2026-09-28 · Aplica sobre la V9 (4ed9f40)
+====================================================================
+
+QUÉ CAMBIA (sin alterar la operativa diaria)
+--------------------------------------------
+ESTABILIDAD
+- A1 Cobro blindado contra doble envío: el pedido se bloquea en BD
+  (FOR UPDATE) y solo un pedido 'pendiente' puede cobrarse. Un
+  doble-clic/reintento recibe 409 "ya fue cobrado" en vez de
+  duplicar pagos. El botón del POS se bloquea durante el POST.
+- A2 Sesiones persistentes en MySQL (tabla `sesiones`): sobreviven
+  a reinicios y se limpian solas. Si la BD falla, degrada a
+  invitado en vez de dar 500.
+- A3 Apagado limpio: ante SIGTERM/SIGINT se cierra HTTPS, se drena
+  el pool y se paran intervalos. Failsafe de 10 s.
+- A4 Respaldo automático diario 03:00 en backups/ (retención 7
+  días, verificación de integridad). Reutiliza mysqldump sin
+  bloquear el restaurante. Configurable por .env.
+- A5 Rotación de logs (5 x 5 MB por archivo): el disco no se llena.
+- A6 La liberación de la mesa viaja DENTRO de la transacción del
+  cobro (antes podía quedar ocupada tras cobrar).
+- A7 Eliminado el montaje duplicado del router de transferencias.
+- A8 Reactivado el 404: el navegador ve página amable, la API
+  sigue en JSON (negociación por Accept).
+SEGURIDAD
+- B1 .env, certs/*.pem y volcados SQL FUERA de git (+ .gitignore).
+  SUS archivos locales NO se tocan. ROTAR secretos (ver §5 del
+  RUNBOOK): estuvieron en el historial.
+- B2 Circuito QR anti-abuso: valida mesa/pedido abierto, topes
+  (50 ítems, 20 uds), cooldowns (llamada 60 s, cuenta 2 min,
+  pre-orden 15 s) y rate-limit propio (120/15 min por IP).
+- B3 Cero CDN: entradas y salidas-manuales usan los assets locales
+  (select2 4.1.0-rc.0 idéntico). La app ya es 100% offline.
+HIGIENE
+- D1 Borrados: transferenciaRoutes_.js, users_bckp.ejs, prototipo,
+  volcados del repo (ver §7 del RUNBOOK para limpiar su servidor).
+- D2 GET /salud (público): BD, memoria, disco, uptime, respaldo.
+- D3 Estáticos con caché de 1 día + gzip en HTML/JSON (zlib nativo,
+  sin dependencias; descargas intactas).
+- D5 Nuevo RUNBOOK-OPERACION.txt (rutina, respaldo, monitoreo,
+  troubleshooting, secretos).
+- 39 pruebas nuevas (351/351 OK; 3 suites de entorno igual que antes).
+
+ARCHIVOS INCLUIDOS (24)
+-----------------------
+app.js                                  sesiones, cierre limpio, /salud, 404, gzip, caché
+config/logger.js                        rotación A5
+config/sessionStore.js                  NUEVO: store MySQL
+config/sessionStore.test.js             NUEVO: 7 pruebas
+controllers/posController.js            A1 candado + A6 mesa en tx
+controllers/posController.test.js       +4 pruebas (+mock A1)
+controllers/clienteController.js        B2 cooldowns y topes
+controllers/clienteController.test.js   NUEVO: 9 pruebas
+controllers/healthController.js         NUEVO: /salud
+controllers/healthController.test.js    NUEVO: 2 pruebas
+middlewares/errorHandler.js             A8 negociación HTML/JSON
+middlewares/errorHandler.test.js        NUEVO: 3 pruebas
+middlewares/security.js                 clienteLimiter B2
+middlewares/compress.js                 NUEVO: gzip
+middlewares/compress.test.js            NUEVO: 5 pruebas
+routes/clienteRoutes.js                 limiter en 4 rutas
+services/backupScheduler.js             NUEVO: respaldo auto
+services/backupScheduler.test.js        NUEVO: 9 pruebas
+scripts/migracion_sesiones.sql          NUEVO: OBLIGATORIA (una vez)
+views/pos.ejs                           botón anti doble-clic + 409
+views/inventarios/entradas.ejs          select2 local
+views/inventarios/salidas-manuales.ejs  FA + swal locales
+.env.example                            4 vars de respaldo (referencia)
+parche/RUNBOOK-OPERACION.txt            NUEVO: guía operativa
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Parar el servidor. Respaldo manual preventivo (Configuración).
+2. Descomprima el zip en la RAÍZ conservando las carpetas.
+3. OBLIGATORIO — crear la tabla de sesiones (una sola vez):
+     mysql -u USUARIO -p restaurante_db < scripts/migracion_sesiones.sql
+   (Sin esto, cada reinicio saca a los usuarios; el log avisa.)
+4. Opcional: agregar a su .env (ver .env.example):
+     RESPALDO_AUTO=1  RESPALDO_HORA=3  RESPALDO_DIR=./backups  RESPALDO_DIAS=7
+   (Sin esto usa esos mismos valores por defecto.)
+5. Su .env y sus certs/ NO se tocan con este zip. Pero ROTE los
+   secretos esta vez (RUNBOOK §6): estuvieron commiteados.
+6. Arranque y verifique https://servidor/salud → "ok": true.
+7. Ctrl+F5 en navegadores/tablets. Opcional: borre los archivos
+   muertos (RUNBOOK §7).
+8. Verificación rápida:
+   a) /salud en verde; backups/ recibe un .sql a las 03:00
+      (o ponga RESPALDO_HORA a la hora actual + reinicie y espere
+      hasta 5 min para verlo hoy mismo).
+   b) Cobre una mesa: funciona igual; reintentar el cobro de un
+      pedido ya cobrado informa sin duplicar (verifique en
+      cierre del día que el cobrado no se infla).
+   c) URL inexistente muestra página amable (no JSON crudo).
+   d) Desde un QR: llamar 2 veces seguidas → segundo aviso pide
+      esperar; funciona tras 60 s.
