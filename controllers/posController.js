@@ -4,6 +4,22 @@ const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
 const PosAutorizacionService = require('../services/posAutorizacionService');
 const MesaAsignacionService = require('../services/mesaAsignacionService');
+const AperturaMesaService = require('../services/aperturaMesaService');
+
+// Responde un bloqueo de apertura (sin distribución / mesa reservada u
+// ocupada) en el formato que espera cada camino (JSON o redirect).
+function responderBloqueoApertura(req, res, error, formato) {
+    if (formato === 'redirect') {
+        if (req.flash) req.flash('error_msg', error.message);
+        return res.redirect('/dependiente/dashboard');
+    }
+    const estado = error.codigo === 'SIN_DISTRIBUCION' || error.codigo === 'MESA_RESERVADA' ? 409 : 400;
+    return res.status(estado).json({ success: false, codigo: error.codigo || 'APERTURA_BLOQUEADA', message: error.message });
+}
+
+function esBloqueoApertura(error) {
+    return Boolean(error && error.codigo && Object.values(AperturaMesaService.CODIGOS).includes(error.codigo));
+}
 
 /**
  * Rol del empleado autenticado (Passport o sesión de respaldo).
@@ -379,6 +395,15 @@ module.exports = {
             }
 
             if (!pedidoExistente) {
+                // Puerta de apertura: exige distribución del turno y
+                // mesa libre. Una mesa RESERVADA solo se abre desde
+                // Reservas (llegada/Sentar).
+                try {
+                    await AperturaMesaService.autorizarApertura(idMesa, turnoId);
+                } catch (errorApertura) {
+                    if (!esBloqueoApertura(errorApertura)) throw errorApertura;
+                    return responderBloqueoApertura(req, res, errorApertura, 'json');
+                }
                 // Titularidad del salon: la orden se atribuye al dependiente
                 // asignado a la mesa en el turno (si lo hay), aunque quien la
                 // opere sea otro miembro del circuito (p. ej. un capitan).
@@ -911,6 +936,15 @@ module.exports = {
                 }
                 const [turnos] = await pool.query("SELECT id FROM turnos_servicio WHERE estado = 'abierto' ORDER BY id DESC LIMIT 1");
                 const turnoId = turnos.length > 0 ? turnos[0].id : 1;
+                // Puerta de apertura: exige distribución del turno y
+                // mesa libre. Una mesa RESERVADA solo se abre desde
+                // Reservas (llegada/Sentar).
+                try {
+                    await AperturaMesaService.autorizarApertura(idMesa, turnoId);
+                } catch (errorApertura) {
+                    if (!esBloqueoApertura(errorApertura)) throw errorApertura;
+                    return responderBloqueoApertura(req, res, errorApertura, 'redirect');
+                }
                 // Titularidad del salon: la orden se atribuye al dependiente
                 // asignado a la mesa en el turno (si lo hay), aunque quien la
                 // opere sea otro miembro del circuito (p. ej. un capitan).
@@ -935,8 +969,12 @@ module.exports = {
                 return res.redirect(`/pos/${nuevo.insertId}${prePedidoQuery}`);
             }
         } catch (err) {
+            if (esBloqueoApertura(err)) {
+                return responderBloqueoApertura(req, res, err, 'redirect');
+            }
             console.error('Error en abrirOObtenerPedidoMesa:', err);
-            res.redirect('/pos');
+            if (req.flash) req.flash('error_msg', err.message || 'No se pudo abrir la mesa.');
+            res.redirect('/dependiente/dashboard');
         }
     },
 
@@ -984,6 +1022,15 @@ module.exports = {
             if (existentes.length > 0) {
                 pedidoId = existentes[0].id;
             } else {
+                // Puerta de apertura: exige distribución del turno y
+                // mesa libre. Una mesa RESERVADA solo se abre desde
+                // Reservas (llegada/Sentar).
+                try {
+                    await AperturaMesaService.autorizarApertura(id_mesa, turnoId);
+                } catch (errorApertura) {
+                    if (!esBloqueoApertura(errorApertura)) throw errorApertura;
+                    return responderBloqueoApertura(req, res, errorApertura, 'json');
+                }
                 // Titularidad del salon: la orden se atribuye al dependiente
                 // asignado a la mesa en el turno (si lo hay), aunque quien la
                 // opere sea otro miembro del circuito (p. ej. un capitan).
@@ -1047,6 +1094,15 @@ module.exports = {
                 // La lectura QR que crea orden también toma la orden.
                 if (!(await PosAutorizacionService.puedeTomarOrdenes(rolEmpleado(req)))) {
                     return res.status(403).json({ success: false, codigo: 'ORDEN_NO_AUTORIZADA', message: MENSAJE_TOMA_NO_AUTORIZADA });
+                }
+                // Puerta de apertura: exige distribución del turno y
+                // mesa libre. Una mesa RESERVADA solo se abre desde
+                // Reservas (llegada/Sentar).
+                try {
+                    await AperturaMesaService.autorizarApertura(idMesa, turnoId);
+                } catch (errorApertura) {
+                    if (!esBloqueoApertura(errorApertura)) throw errorApertura;
+                    return responderBloqueoApertura(req, res, errorApertura, 'json');
                 }
                 // Titularidad del salon: la orden se atribuye al dependiente
                 // asignado a la mesa en el turno (si lo hay), aunque quien la

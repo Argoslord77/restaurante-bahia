@@ -5,6 +5,7 @@
 const db = require('../config/db');
 const PedidoModel = require('../models/pedidoModel');
 const TurnoService = require('./turnoService');
+const AperturaMesaService = require('./aperturaMesaService');
 const STATUS = require('../config/orderStatus');
 
 // Ventana anti-traslape: dos reservas de la misma mesa con menos de 2 h
@@ -156,6 +157,45 @@ const reservaService = {
             vencida: f.estado === STATUS.RESERVA.PENDIENTE
                 && normalizarFecha(f.fecha_reserva) !== null
                 && normalizarFecha(f.fecha_reserva).getTime() < Date.now()
+        }));
+    },
+
+    // Reservas dentro de un rango de días (calendario semana/mes/día).
+    // La fecha llega como texto 'AAAA-MM-DD HH:MM' para que el cliente la
+    // pinte sin corrimientos de zona horaria.
+    listarRango: async (desde, hasta) => {
+        const rx = /^\d{4}-\d{2}-\d{2}$/;
+        if (!rx.test(String(desde || '')) || !rx.test(String(hasta || ''))) {
+            throw new Error('Rango de fechas no válido (AAAA-MM-DD).');
+        }
+        if (desde > hasta) {
+            throw new Error('La fecha inicial no puede ser mayor que la final.');
+        }
+        const dias = Math.round((new Date(`${hasta}T00:00:00`) - new Date(`${desde}T00:00:00`)) / 86400000);
+        if (dias > 62) throw new Error('El rango no puede pasar de 62 días.');
+        const [filas] = await db.query(`
+            SELECT r.id, r.id_mesa, m.numero AS mesa_numero,
+                   r.cliente_nombre, r.cliente_telefono, r.comensales,
+                   DATE_FORMAT(r.fecha_reserva, '%Y-%m-%d %H:%i') AS fecha_texto,
+                   DATE_FORMAT(r.fecha_reserva, '%Y-%m-%d') AS dia,
+                   r.estado, r.notas
+            FROM reservas r
+            INNER JOIN mesas m ON r.id_mesa = m.id
+            WHERE DATE(r.fecha_reserva) BETWEEN ? AND ?
+            ORDER BY r.fecha_reserva ASC
+            LIMIT 500
+        `, [desde, hasta]);
+        return filas.map((f) => ({
+            id: f.id,
+            mesaId: f.id_mesa,
+            mesaNumero: f.mesa_numero,
+            nombre: f.cliente_nombre,
+            telefono: f.cliente_telefono,
+            comensales: Number(f.comensales),
+            fecha: f.fecha_texto,
+            dia: f.dia,
+            estado: f.estado,
+            notas: f.notas
         }));
     },
 

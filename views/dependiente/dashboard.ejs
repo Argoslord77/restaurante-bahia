@@ -111,6 +111,9 @@
         .status-monitor-libre { background-color: #d1fae5; color: #065f46; }
         .status-monitor-pendiente { background-color: var(--color-espera-bg); color: var(--color-espera-txt); }
         .status-monitor-ocupada { background-color: #fee2e2; color: #991b1b; }
+        .status-monitor-reservada { background-color: #ede9fe; color: #5b21b6; }
+        .status-monitor-desocupandose { background-color: #e0e7ff; color: #3730a3; }
+        .status-monitor-mantenimiento { background-color: #f3f4f6; color: #4b5563; }
 
         .monitor-mesa-body {
             padding: 16px 14px;
@@ -166,6 +169,18 @@
 
         .btn-monitor-qr { background-color: #7c3aed; color: #ffffff; }
         .btn-monitor-qr:hover { background-color: #6d28d9; color: #ffffff; }
+
+        .btn-monitor-reservada { background-color: #ede9fe; color: #5b21b6; border: 1px dashed #a78bfa; cursor: not-allowed; }
+
+        /* Línea de reserva pendiente dentro de la tarjeta (no se desborda). */
+        .reserva-info-linea {
+            background-color: #f5f3ff;
+            border: 1px solid #ddd6fe;
+            border-radius: 8px;
+            padding: 6px 8px;
+            font-size: 12px;
+            color: #5b21b6;
+        }
 
         /* Leyenda de estados del salon: responsive en movil estrecho. */
         .legend-estados-mesas { max-width: 100%; row-gap: .5rem; }
@@ -244,6 +259,17 @@
             </div>
         <% } %>
 
+        <% const distribucionHecha = (typeof hayDistribucion === 'undefined') ? true : Boolean(hayDistribucion); %>
+        <% if (!distribucionHecha) { %>
+            <div class="alert alert-warning d-flex align-items-center gap-2 shadow-sm" role="alert">
+                <i class="fa-solid fa-triangle-exclamation fs-5"></i>
+                <div>
+                    <div class="fw-bold">Aún no se ha hecho la distribución del día</div>
+                    <small class="d-block">El capitán o administrador debe asignar las mesas antes de abrir pedidos. La apertura está bloqueada.</small>
+                </div>
+            </div>
+        <% } %>
+
         <div class="row g-4">
             <!-- Sección Salón de Mesas (Ocupa el 100% del ancho) -->
             <div class="col-12">
@@ -261,6 +287,9 @@
                             </span>
                             <span class="badge text-dark bg-light border px-2.5 py-1.5 rounded-pill small fw-medium">
                                 <i class="fa-solid fa-circle text-danger me-1 small"></i> Ocupadas
+                            </span>
+                            <span class="badge text-dark bg-light border px-2.5 py-1.5 rounded-pill small fw-medium">
+                                <i class="fa-solid fa-circle me-1 small" style="color: #7c3aed;"></i> Reservadas
                             </span>
                         </div>
                     </div>
@@ -299,6 +328,9 @@
                                                         <span class="d-block mt-1 text-truncate"><i class="fa-solid fa-user-check me-1"></i> Asignada a: <strong><%= mesa.dependiente_asignado.nombre %></strong></span>
                                                         <% } %>
                                                         <span class="d-block mt-1"><i class="fa-solid fa-tags me-1"></i> Carta: <strong><%= mesa.carta || 'CUP' %></strong></span>
+                                                        <% if (mesa.reserva_pendiente && !mesa.id_pedido_activo) { %>
+                                                        <span class="d-block mt-1 reserva-info-linea"><i class="fa-solid fa-calendar-check me-1"></i> Reservada: <strong><%= mesa.reserva_pendiente.nombre %></strong> · <%= mesa.reserva_pendiente.fechaCorta %> · <%= mesa.reserva_pendiente.comensales %> pers.</span>
+                                                        <% } %>
                                                         <% if (mesa.hora_apertura) { %>
                                                         <span class="d-block mt-1"><i class="fa-solid fa-clock me-1"></i> Abierta hace <strong data-t0-ms="<%= new Date(mesa.hora_apertura).getTime() %>">…</strong></span>
                                                         <% } %>
@@ -317,7 +349,15 @@
                                                             </button>
                                                         <% } %>
                                                     <% } else if (!mesa.id_pedido_activo) { %>
-                                                        <% if (puedeTomarOrdenesTablero) { %>
+                                                        <% if (mesa.reserva_pendiente || (mesa.estado && mesa.estado.toLowerCase() === 'reservada')) { %>
+                                                        <button type="button" class="btn-monitor btn-monitor-reservada" disabled title="Mesa reservada: la cuenta se abre desde el módulo Reservas con Sentar">
+                                                            <i class="fa-solid fa-calendar-check"></i> Reservada — Sentar desde Reservas
+                                                        </button>
+                                                        <% } else if (!distribucionHecha) { %>
+                                                        <button type="button" class="btn-monitor btn-monitor-libre" disabled style="opacity: .55; cursor: not-allowed;" title="Sin distribución del día: no se puede abrir ninguna mesa">
+                                                            <i class="fa-solid fa-lock"></i> Sin distribución
+                                                        </button>
+                                                        <% } else if (puedeTomarOrdenesTablero) { %>
                                                         <button class="btn-monitor btn-monitor-libre abrir-mesa-btn" data-mesa-id="<%= mesa.id %>">
                                                             <i class="fa-solid fa-plus"></i> Abrir Mesa
                                                         </button>
@@ -564,7 +604,14 @@
                     if (data.success && data.pedidoId) {
                         window.location.href = `/pos/${data.pedidoId}`;
                     } else {
-                        alert(data.message || 'Error al abrir mesa');
+                        const tituloBloqueo = (data.codigo === 'SIN_DISTRIBUCION' || data.codigo === 'MESA_RESERVADA')
+                            ? 'Apertura bloqueada'
+                            : 'No se pudo abrir la mesa';
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire(tituloBloqueo, data.message || 'Error al abrir mesa', 'warning');
+                        } else {
+                            alert(data.message || 'Error al abrir mesa');
+                        }
                         abrirButton.disabled = false;
                         abrirButton.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
                     }

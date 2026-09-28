@@ -9,6 +9,31 @@
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        /* Calendario de reservas: semana (defecto), mes y día. */
+        .cal-scroll-x { overflow-x: auto; }
+        .cal-semana { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: .5rem; min-width: 1060px; }
+        .cal-mes { display: grid; grid-template-columns: repeat(7, 1fr); gap: .35rem; }
+        .cal-dow { font-size: .72rem; font-weight: 700; text-transform: uppercase; color: #6c757d; text-align: center; padding: .15rem 0; }
+        .cal-dia { border: 1px solid #e5e7eb; border-radius: .5rem; background: #fff; cursor: pointer; min-height: 118px; padding: .4rem; transition: border-color .15s ease, box-shadow .15s ease; }
+        .cal-mes .cal-dia { min-height: 86px; }
+        .cal-dia:hover { border-color: #0d6efd; box-shadow: 0 0 0 1px #0d6efd inset; }
+        .cal-dia.hoy { border-color: #0d6efd; box-shadow: 0 0 0 1px #0d6efd; }
+        .cal-dia.fuera-mes { background: #f8f9fa; cursor: pointer; }
+        .cal-dia-num { font-weight: 800; font-size: .85rem; color: #212529; }
+        .cal-dia.hoy .cal-dia-num { background: #0d6efd; color: #fff; border-radius: 9999px; padding: 0 .45rem; }
+        .cal-chip { display: block; width: 100%; text-align: left; font-size: .72rem; line-height: 1.25; border: 1px solid transparent; border-left-width: 3px; border-radius: .3rem; padding: .15rem .3rem; margin-top: .25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+        .cal-chip.pendiente { background: #e7f1ff; border-left-color: #0d6efd; color: #0a3d8f; }
+        .cal-chip.vencida { background: #fff3cd; border-left-color: #ffc107; color: #664d03; }
+        .cal-chip.sentada { background: #e9f7ef; border-left-color: #198754; color: #0f5132; }
+        .cal-chip.cancelada, .cal-chip.no_show { background: #f1f3f5; border-left-color: #adb5bd; color: #6c757d; text-decoration: line-through; }
+        .cal-mas { font-size: .68rem; color: #6c757d; margin-top: .2rem; }
+        .cal-agenda-fila { border: 1px solid #e5e7eb; border-radius: .5rem; padding: .6rem .8rem; }
+        @media (max-width: 575.98px) {
+            .cal-mes .cal-dia { min-height: 64px; padding: .25rem; }
+            .cal-chip { font-size: .62rem; }
+        }
+    </style>
 </head>
 <body>
     <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
@@ -40,6 +65,31 @@
                         <% } %>
                     </div>
 
+                    <div class="card shadow-sm mb-4" id="cardCalendario">
+                        <div class="card-header bg-white d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Vista de reservas">
+                                <button type="button" class="btn btn-dark" data-vista="semana">Semana</button>
+                                <button type="button" class="btn btn-outline-dark" data-vista="mes">Mes</button>
+                                <button type="button" class="btn btn-outline-dark" data-vista="dia">Día</button>
+                                <button type="button" class="btn btn-outline-dark" data-vista="lista">Lista</button>
+                            </div>
+                            <div class="d-flex align-items-center gap-2" id="calToolbar">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="calPrev" title="Anterior"><i class="fa-solid fa-chevron-left"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="calHoy">Hoy</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="calNext" title="Siguiente"><i class="fa-solid fa-chevron-right"></i></button>
+                                <strong id="calTitulo" class="ms-1"></strong>
+                            </div>
+                        </div>
+                        <div class="card-body" id="calCuerpoWrap">
+                            <div class="text-center text-muted py-4" id="calCargando">
+                                <i class="fa-solid fa-spinner fa-spin me-2"></i>Cargando calendario…
+                            </div>
+                            <div id="calCuerpo"></div>
+                            <div class="form-text mt-2">Pulse un día para crear una reserva en esa fecha.</div>
+                        </div>
+                    </div>
+
+                    <div id="vista-lista" class="d-none">
                     <div class="card shadow-sm mb-4">
                         <div class="card-header bg-white">
                             <strong>Próximas</strong>
@@ -140,6 +190,7 @@
                             </table>
                         </div>
                     </div>
+                    </div><!-- /vista-lista -->
                 </div>
             </main>
         </div>
@@ -266,6 +317,298 @@
                 });
             });
         }
+
+        // ============================================================
+        // CALENDARIO DE RESERVAS (semana por defecto, mes y día).
+        // Todo el cálculo es con fechas locales; el servidor devuelve
+        // texto 'AAAA-MM-DD HH:MM' para no correr días por zona horaria.
+        // ============================================================
+        var PUEDE_OPERAR_RESERVAS = <%= puedeOperar ? 'true' : 'false' %>;
+        var DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+        var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                     'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        var calEstado = { vista: 'semana', ref: '' };
+        var calCache = {};
+        try {
+            var guardado = JSON.parse(sessionStorage.getItem('bahia_cal_reservas') || 'null');
+            if (guardado && guardado.vista && guardado.ref) calEstado = guardado;
+        } catch (_) {}
+
+        function isoHoy() {
+            var f = new Date();
+            return f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(calEstado.ref)) calEstado.ref = isoHoy();
+        if (['semana', 'mes', 'dia', 'lista'].indexOf(calEstado.vista) === -1) calEstado.vista = 'semana';
+
+        function calGuardarEstado() {
+            try { sessionStorage.setItem('bahia_cal_reservas', JSON.stringify(calEstado)); } catch (_) {}
+        }
+        function sumarDiasISO(iso, n) {
+            var p = iso.split('-');
+            var f = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+            f.setDate(f.getDate() + n);
+            return f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
+        }
+        function lunesDe(iso) {
+            // La semana empieza el lunes.
+            var p = iso.split('-');
+            var f = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+            var bajada = (f.getDay() + 6) % 7;
+            return sumarDiasISO(iso, -bajada);
+        }
+        function escCal(v) {
+            return String(v === null || v === undefined ? '' : v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function tituloDia(iso) {
+            var p = iso.split('-');
+            return Number(p[2]) + ' de ' + MESES[Number(p[1]) - 1] + ' de ' + p[0];
+        }
+        function rangoCalendario() {
+            if (calEstado.vista === 'dia') return { desde: calEstado.ref, hasta: calEstado.ref };
+            if (calEstado.vista === 'mes') {
+                var p = calEstado.ref.split('-');
+                var primero = new Date(Number(p[0]), Number(p[1]) - 1, 1);
+                var inicio = lunesDe(p[0] + '-' + p[1] + '-01');
+                var ultimo = new Date(Number(p[0]), Number(p[1]), 0);
+                var finIso = p[0] + '-' + p[1] + '-' + String(ultimo.getDate()).padStart(2, '0');
+                var finDow = (ultimo.getDay() + 6) % 7;
+                return { desde: inicio, hasta: sumarDiasISO(finIso, 6 - finDow) };
+            }
+            var lunes = lunesDe(calEstado.ref);
+            return { desde: lunes, hasta: sumarDiasISO(lunes, 6) };
+        }
+
+        function ahoraTexto() {
+            var f = new Date();
+            return f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0') +
+                ' ' + String(f.getHours()).padStart(2, '0') + ':' + String(f.getMinutes()).padStart(2, '0');
+        }
+        function chipHtml(r) {
+            var hora = String(r.fecha || '').slice(11, 16);
+            var clase = r.estado === 'pendiente'
+                ? (String(r.fecha || '') < ahoraTexto() ? 'vencida' : 'pendiente')
+                : r.estado;
+            var etiqueta = escCal(r.nombre) + ' · Mesa ' + escCal(r.mesaNumero);
+            return '<button type="button" class="cal-chip ' + clase + '" data-reserva="' + r.id + '"' +
+                ' title="' + escCal(hora + ' · ' + r.nombre + ' · Mesa ' + r.mesaNumero + ' · ' + r.comensales + ' pers.') + '">' +
+                '<strong>' + escCal(hora) + '</strong> ' + etiqueta + '</button>';
+        }
+
+        function renderSemana(reservas, desde) {
+            var hoy = isoHoy();
+            var dias = [];
+            for (var i = 0; i < 7; i++) dias.push(sumarDiasISO(desde, i));
+            var html = '<div class="cal-scroll-x"><div class="cal-semana">';
+            dias.forEach(function(dia, i) {
+                var num = Number(dia.split('-')[2]);
+                html += '<div class="cal-dia' + (dia === hoy ? ' hoy' : '') + '" data-dia="' + dia + '">' +
+                    '<div class="d-flex align-items-center justify-content-between">' +
+                    '<span class="cal-dow">' + DIAS_SEMANA[i] + '</span>' +
+                    '<span class="cal-dia-num">' + num + '</span></div>';
+                reservas.filter(function(r) { return r.dia === dia; }).forEach(function(r) {
+                    html += chipHtml(r);
+                });
+                html += '</div>';
+            });
+            return html + '</div></div>';
+        }
+
+        function renderMes(reservas, desde, hasta) {
+            var hoy = isoHoy();
+            var mesRef = calEstado.ref.slice(0, 7);
+            var html = '<div class="cal-mes">';
+            DIAS_SEMANA.forEach(function(d) { html += '<div class="cal-dow">' + d + '</div>'; });
+            var dia = desde;
+            while (dia <= hasta) {
+                (function(d) {
+                    var num = Number(d.split('-')[2]);
+                    var delMes = d.slice(0, 7) === mesRef;
+                    html += '<div class="cal-dia' + (d === hoy ? ' hoy' : '') + (delMes ? '' : ' fuera-mes') + '" data-dia="' + d + '">' +
+                        '<span class="cal-dia-num">' + num + '</span>';
+                    var delDia = reservas.filter(function(r) { return r.dia === d; });
+                    delDia.slice(0, 3).forEach(function(r) { html += chipHtml(r); });
+                    if (delDia.length > 3) html += '<div class="cal-mas">+' + (delDia.length - 3) + ' más</div>';
+                    html += '</div>';
+                })(dia);
+                dia = sumarDiasISO(dia, 1);
+            }
+            return html + '</div>';
+        }
+
+        function renderDia(reservas) {
+            if (!reservas.length) {
+                return '<div class="text-center text-muted py-4">Sin reservas este día. Pulse el día en Semana/Mes o «Nueva reserva» para crear una.</div>';
+            }
+            var html = '<div class="d-flex flex-column gap-2">';
+            reservas.forEach(function(r) {
+                var hora = String(r.fecha || '').slice(11, 16);
+                var insignia = r.estado === 'pendiente'
+                    ? '<span class="badge bg-primary-subtle text-primary">Pendiente</span>'
+                    : r.estado === 'sentada'
+                        ? '<span class="badge bg-success-subtle text-success">Sentada</span>'
+                        : r.estado === 'no_show'
+                            ? '<span class="badge bg-danger-subtle text-danger">No-show</span>'
+                            : '<span class="badge bg-secondary-subtle text-secondary">Cancelada</span>';
+                html += '<div class="cal-agenda-fila d-flex flex-wrap align-items-center gap-2">' +
+                    '<strong class="me-1">' + escCal(hora) + '</strong>' +
+                    '<span>Mesa <strong>' + escCal(r.mesaNumero) + '</strong></span>' +
+                    '<span class="fw-semibold">' + escCal(r.nombre) + '</span>' +
+                    '<span class="text-muted small">' + escCal(r.comensales) + ' pers.' +
+                    (r.telefono ? ' · ' + escCal(r.telefono) : '') + '</span>' +
+                    insignia +
+                    (r.notas ? '<span class="text-muted small fst-italic">' + escCal(r.notas) + '</span>' : '');
+                if (PUEDE_OPERAR_RESERVAS && r.estado === 'pendiente') {
+                    html += '<span class="ms-auto d-flex gap-1">' +
+                        '<button type="button" class="btn btn-sm btn-success" data-accion="sentar" data-id="' + r.id + '">Sentar</button>' +
+                        '<button type="button" class="btn btn-sm btn-outline-secondary" data-accion="cancelar" data-id="' + r.id + '">Cancelar</button>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger" data-accion="no-show" data-id="' + r.id + '">No-show</button>' +
+                        '</span>';
+                }
+                html += '</div>';
+            });
+            return html + '</div>';
+        }
+
+        function pintarTitulo(rango) {
+            var t = '';
+            if (calEstado.vista === 'dia') t = tituloDia(calEstado.ref);
+            else if (calEstado.vista === 'mes') {
+                var p = calEstado.ref.split('-');
+                t = MESES[Number(p[1]) - 1] + ' de ' + p[0];
+            } else {
+                t = tituloDia(rango.desde) + ' — ' + tituloDia(rango.hasta);
+            }
+            document.getElementById('calTitulo').textContent = t;
+        }
+
+        function cargarCalendario() {
+            var esLista = calEstado.vista === 'lista';
+            document.getElementById('vista-lista').classList.toggle('d-none', !esLista);
+            document.getElementById('calCuerpoWrap').classList.toggle('d-none', esLista);
+            document.getElementById('calToolbar').style.visibility = esLista ? 'hidden' : 'visible';
+            document.querySelectorAll('[data-vista]').forEach(function(b) {
+                var activo = b.getAttribute('data-vista') === calEstado.vista;
+                b.classList.toggle('btn-dark', activo);
+                b.classList.toggle('btn-outline-dark', !activo);
+            });
+            calGuardarEstado();
+            if (esLista) return;
+            var rango = rangoCalendario();
+            pintarTitulo(rango);
+            var cuerpo = document.getElementById('calCuerpo');
+            document.getElementById('calCargando').style.display = 'block';
+            cuerpo.innerHTML = '';
+            fetch('/admin/reservas/rango?desde=' + rango.desde + '&hasta=' + rango.hasta)
+                .then(function(resp) { return resp.json(); })
+                .then(function(d) {
+                    document.getElementById('calCargando').style.display = 'none';
+                    if (!d || !d.success) {
+                        cuerpo.innerHTML = '<div class="alert alert-danger mb-0">' + escCal((d && d.message) || 'No se pudo cargar.') + '</div>';
+                        return;
+                    }
+                    calCache = {};
+                    (d.reservas || []).forEach(function(r) { calCache[r.id] = r; });
+                    if (calEstado.vista === 'dia') cuerpo.innerHTML = renderDia(d.reservas || []);
+                    else if (calEstado.vista === 'mes') cuerpo.innerHTML = renderMes(d.reservas || [], rango.desde, rango.hasta);
+                    else cuerpo.innerHTML = renderSemana(d.reservas || [], rango.desde);
+                })
+                .catch(function() {
+                    document.getElementById('calCargando').style.display = 'none';
+                    cuerpo.innerHTML = '<div class="alert alert-danger mb-0">Sin conexión con el servidor.</div>';
+                });
+        }
+
+        function detalleReserva(id) {
+            var r = calCache[id];
+            if (!r) return;
+            var puedeSentar = PUEDE_OPERAR_RESERVAS && r.estado === 'pendiente';
+            Swal.fire({
+                title: escCal(r.nombre),
+                html: '<div class="text-start small">' +
+                    '<div><strong>Fecha:</strong> ' + escCal(r.fecha) + '</div>' +
+                    '<div><strong>Mesa:</strong> ' + escCal(r.mesaNumero) + '</div>' +
+                    '<div><strong>Comensales:</strong> ' + escCal(r.comensales) + '</div>' +
+                    (r.telefono ? '<div><strong>Teléfono:</strong> ' + escCal(r.telefono) + '</div>' : '') +
+                    (r.notas ? '<div><strong>Notas:</strong> ' + escCal(r.notas) + '</div>' : '') +
+                    '<div><strong>Estado:</strong> ' + escCal(r.estado) + '</div></div>',
+                showDenyButton: puedeSentar,
+                denyButtonText: 'Sentar ahora',
+                confirmButtonText: 'Cerrar'
+            }).then(function(x) {
+                if (x.isDenied) llegadaReserva(r.id, r.nombre);
+            });
+        }
+
+        function abrirModalNuevaReserva(diaISO) {
+            if (!PUEDE_OPERAR_RESERVAS) {
+                Swal.fire('Solo lectura', 'Solo el personal autorizado puede crear reservas.', 'info');
+                return;
+            }
+            var modal = document.getElementById('modalReserva');
+            if (!modal) return;
+            var hora = '13:00';
+            if (diaISO === isoHoy()) {
+                var h = new Date().getHours() + 1;
+                if (h > 23) h = 23;
+                hora = String(h).padStart(2, '0') + ':00';
+            }
+            document.getElementById('resFecha').value = diaISO + 'T' + hora;
+            bootstrap.Modal.getOrCreateInstance(modal).show();
+        }
+
+        document.querySelectorAll('[data-vista]').forEach(function(b) {
+            b.addEventListener('click', function() {
+                calEstado.vista = b.getAttribute('data-vista');
+                cargarCalendario();
+            });
+        });
+        document.getElementById('calPrev').addEventListener('click', function() {
+            var paso = calEstado.vista === 'mes' ? 30 : calEstado.vista === 'dia' ? 1 : 7;
+            if (calEstado.vista === 'mes') {
+                var p = calEstado.ref.split('-');
+                var f = new Date(Number(p[0]), Number(p[1]) - 1, 1);
+                f.setMonth(f.getMonth() - 1);
+                calEstado.ref = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-01';
+            } else {
+                calEstado.ref = sumarDiasISO(calEstado.ref, -paso);
+            }
+            cargarCalendario();
+        });
+        document.getElementById('calNext').addEventListener('click', function() {
+            if (calEstado.vista === 'mes') {
+                var p = calEstado.ref.split('-');
+                var f = new Date(Number(p[0]), Number(p[1]) - 1, 1);
+                f.setMonth(f.getMonth() + 1);
+                calEstado.ref = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-01';
+            } else {
+                calEstado.ref = sumarDiasISO(calEstado.ref, calEstado.vista === 'dia' ? 1 : 7);
+            }
+            cargarCalendario();
+        });
+        document.getElementById('calHoy').addEventListener('click', function() {
+            calEstado.ref = isoHoy();
+            cargarCalendario();
+        });
+        document.getElementById('calCuerpo').addEventListener('click', function(e) {
+            var chip = e.target.closest('[data-reserva]');
+            if (chip) { detalleReserva(chip.getAttribute('data-reserva')); return; }
+            var acc = e.target.closest('[data-accion]');
+            if (acc) {
+                var r = calCache[acc.getAttribute('data-id')];
+                if (!r) return;
+                var a = acc.getAttribute('data-accion');
+                if (a === 'sentar') llegadaReserva(r.id, r.nombre);
+                else if (a === 'cancelar') cerrarReserva(r.id, 'cancelar', 'Cancelar la reserva de ' + r.nombre + '?');
+                else if (a === 'no-show') cerrarReserva(r.id, 'no-show', 'Marcar NO-SHOW a ' + r.nombre + '?');
+                return;
+            }
+            var dia = e.target.closest('[data-dia]');
+            if (dia) abrirModalNuevaReserva(dia.getAttribute('data-dia'));
+        });
+        cargarCalendario();
 
         function cerrarReserva(id, accion, pregunta) {
             Swal.fire({

@@ -9,6 +9,7 @@ const puedeVer = checkRole(['superadministrador', 'administrador', 'capitan', 'c
 const puedeOperar = checkRole(['superadministrador', 'administrador', 'capitan', 'cajero']);
 
 router.get('/reservas', ensureAuthenticated, puedeVer, reservaController.renderReservas);
+router.get('/reservas/rango', ensureAuthenticated, puedeVer, reservaController.listarRango);
 router.post('/reservas', ensureAuthenticated, puedeOperar, reservaController.crear);
 router.post('/reservas/:id/llegada', ensureAuthenticated, puedeOperar, reservaController.llegada);
 router.post('/reservas/:id/cancelar', ensureAuthenticated, puedeOperar, reservaController.cancelar);

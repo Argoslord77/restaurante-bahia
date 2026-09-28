@@ -1,17 +1,24 @@
 -- ==========================================================================
 -- ACTUALIZACIÓN DE CARTA ZELLE — precios USD desde la carta impresa
--- Restaurante Bahía · 2026-09-28
+-- Restaurante Bahía · 2026-09-28 (rev. 2: no intrusivo)
 -- ==========================================================================
--- Actualiza precio_usd de 56 platillos EXISTENTES según las 7 fotos de
--- la carta (Servicio Internacional). No toca precio (CUP) ni crea platos.
+-- Fusiona los precios de la carta impresa con la tabla EXISTENTE:
+--   * UPDATE por nombre exacto donde el platillo YA existe (56 líneas).
+--   * INSERT protegido (WHERE NOT EXISTS) donde NO existe (3 líneas).
+-- NO borra nada (cero DELETE/TRUNCATE) y es RE-EJECUTABLE: correrlo dos
+-- veces deja el mismo resultado (los UPDATE repiten el valor y los INSERT
+-- no duplican).
+-- Solo toca precio_usd. No toca precio (CUP) salvo en los 3 platos nuevos,
+-- que se crean con precio = 0.00 para que usted le ponga el CUP que lleve.
 --
--- CÓMO APLICAR:
+-- CÓMO APLICAR (en la PC de producción u otra BD):
 --   mysql -u USUARIO -p restaurante_db < scripts/actualizar_precios_zelle_carta.sql
 --
--- SEGURO: cada UPDATE busca por nombre exacto; si un nombre no coincide
--- con su tabla actual, esa línea afecta 0 filas (no rompe nada). Al final,
--- la consulta de VERIFICACIÓN muestra qué quedó pendiente (NULL).
+-- Al final, la consulta de VERIFICACIÓN muestra qué quedó pendiente (NULL
+-- = ese nombre no existe en SU tabla y necesita ajuste manual).
 -- ==========================================================================
+
+SET NAMES utf8mb4;
 
 SET SQL_SAFE_UPDATES = 0; -- permite WHERE por nombre (solo esta sesión)
 
@@ -194,25 +201,32 @@ UPDATE platillos_menu SET precio_usd = 6.00 WHERE nombre = 'Risotto de Mariscos 
 UPDATE platillos_menu SET precio_usd = 7.00 WHERE nombre = 'Filete de Pescado Canciller';
 
 -- ==========================================================================
--- PLATOS DE LA CARTA QUE NO ESTÁN EN LA TABLA (descomente para crearlos).
--- Ajuste el precio CUP antes de aplicar. Categorías: 8=Pescados y Mariscos,
--- 9=Carnes, 13=Especialidades Italianas.
+-- ==========================================================================
+-- PLATOS DE LA CARTA QUE NO ESTÁN EN LA TABLA (se crean automáticamente).
+-- Cada INSERT lleva WHERE NOT EXISTS: si el nombre ya existe (lo creó
+-- usted a mano o corre el script otra vez), no duplica. Categorías:
+-- 8=Pescados y Mariscos, 9=Carnes, 13=Especialidades Italianas.
 -- ==========================================================================
 -- Langosta a Thermidor .... $9.00  (Thermidor Lobster)
--- INSERT INTO platillos_menu (nombre, descripcion, precio, categoria, precio_usd)
--- VALUES ('Langosta a Thermidor', 'Thermidor Lobster', 0.00, 8, 9.00);
+INSERT INTO platillos_menu (nombre, descripcion, precio, categoria, precio_usd)
+SELECT 'Langosta a Thermidor', 'Thermidor Lobster', 0.00, 8, 9.00
+WHERE NOT EXISTS (SELECT 1 FROM platillos_menu WHERE nombre = 'Langosta a Thermidor');
 -- Pollo a la Parmesana .... $5.00  (Fried Breaded chicken, marinara, gratin cheese)
--- INSERT INTO platillos_menu (nombre, descripcion, precio, categoria, precio_usd)
--- VALUES ('Pollo a la Parmesana', 'Fried Breaded chicken covered with marinara sauce and gratin cheese', 0.00, 13, 5.00);
+INSERT INTO platillos_menu (nombre, descripcion, precio, categoria, precio_usd)
+SELECT 'Pollo a la Parmesana', 'Fried Breaded chicken covered with marinara sauce and gratin cheese', 0.00, 13, 5.00
+WHERE NOT EXISTS (SELECT 1 FROM platillos_menu WHERE nombre = 'Pollo a la Parmesana');
 -- Escalopes de Cerdo en Cazuela .... $6.50  (Pork steak in tomatoes sauce)
--- INSERT INTO platillos_menu (nombre, descripcion, precio, categoria, precio_usd)
--- VALUES ('Escalopes de Cerdo en Cazuela', 'Pork steak in tomatoes sauce', 0.00, 9, 6.50);
+INSERT INTO platillos_menu (nombre, descripcion, precio, categoria, precio_usd)
+SELECT 'Escalopes de Cerdo en Cazuela', 'Pork steak in tomatoes sauce', 0.00, 9, 6.50
+WHERE NOT EXISTS (SELECT 1 FROM platillos_menu WHERE nombre = 'Escalopes de Cerdo en Cazuela');
 
--- ==========================================================================
 -- VERIFICACIÓN: debe mostrar 56 filas con su precio; NULL = no se encontró
 -- ese nombre en su tabla (revise y ajuste a mano).
 -- ==========================================================================
 SELECT id, nombre, precio_usd FROM platillos_menu WHERE id IN (100, 101, 102, 103, 66, 67, 68, 69, 71, 72, 73, 74, 85, 86, 87, 88, 89, 90, 145, 147, 143, 75, 76, 77, 78, 79, 80, 81, 82, 83, 58, 59, 60, 61, 62, 63, 64, 65, 57, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 17, 19) ORDER BY categoria, nombre;
 SELECT COUNT(*) AS pendientes_null FROM platillos_menu WHERE id IN (100, 101, 102, 103, 66, 67, 68, 69, 71, 72, 73, 74, 85, 86, 87, 88, 89, 90, 145, 147, 143, 75, 76, 77, 78, 79, 80, 81, 82, 83, 58, 59, 60, 61, 62, 63, 64, 65, 57, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 17, 19) AND precio_usd IS NULL;
+
+SELECT id, nombre, precio_usd, 'nuevo de carta' AS origen FROM platillos_menu
+WHERE nombre IN ('Langosta a Thermidor', 'Pollo a la Parmesana', 'Escalopes de Cerdo en Cazuela');
 
 SET SQL_SAFE_UPDATES = 1;

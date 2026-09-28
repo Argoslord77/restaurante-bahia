@@ -4,10 +4,12 @@
 jest.mock('../config/db', () => ({ query: jest.fn(), getConnection: jest.fn() }));
 jest.mock('../models/pedidoModel', () => ({ create: jest.fn() }));
 jest.mock('./turnoService', () => ({ obtenerTurnoActivo: jest.fn() }));
+jest.mock('./aperturaMesaService', () => ({ hayDistribucion: jest.fn() }));
 
 const db = require('../config/db');
 const PedidoModel = require('../models/pedidoModel');
 const TurnoService = require('./turnoService');
+const AperturaMesaService = require('./aperturaMesaService');
 const ReservaService = require('./reservaService');
 
 const MESA_LIBRE = { id: 5, numero: 'Nro 5', capacidad: 4, estado: 'libre' };
@@ -110,6 +112,7 @@ describe('reservaService.llegada (C2)', () => {
     });
 
     it('abre el pedido, ocupa la mesa y marca sentada', async () => {
+        AperturaMesaService.hayDistribucion.mockResolvedValue(true);
         TurnoService.obtenerTurnoActivo.mockResolvedValue({ id: 3 });
         PedidoModel.create.mockResolvedValue(77);
         const conn = conexionCon([
@@ -203,5 +206,29 @@ describe('reservaService.listar (C2)', () => {
         expect(r[0]).toMatchObject({ mesaNumero: 'Nro 5', vencida: true, creadoPor: 'Juan P' });
         expect(r[1]).toMatchObject({ vencida: false, creadoPor: '—' });
         expect(db.query.mock.calls[0][0]).toContain("estado = 'pendiente'");
+    });
+});
+
+describe('reservaService.listarRango (calendario)', () => {
+    it('valida el rango antes de consultar', async () => {
+        await expect(ReservaService.listarRango('no-fecha', '2026-10-01')).rejects.toThrow('Rango de fechas');
+        await expect(ReservaService.listarRango('2026-10-05', '2026-10-01')).rejects.toThrow('no puede ser mayor');
+        await expect(ReservaService.listarRango('2026-01-01', '2026-12-31')).rejects.toThrow('62 días');
+        expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('mapea filas con día y fecha en texto', async () => {
+        db.query.mockResolvedValue([[
+            { id: 1, id_mesa: 5, mesa_numero: 'Nro 5', cliente_nombre: 'A',
+              cliente_telefono: null, comensales: '2', fecha_texto: '2026-09-30 20:00',
+              dia: '2026-09-30', estado: 'pendiente', notas: null }
+        ], []]);
+        const r = await ReservaService.listarRango('2026-09-28', '2026-10-04');
+        expect(r).toEqual([{
+            id: 1, mesaId: 5, mesaNumero: 'Nro 5', nombre: 'A', telefono: null,
+            comensales: 2, fecha: '2026-09-30 20:00', dia: '2026-09-30',
+            estado: 'pendiente', notas: null
+        }]);
+        expect(db.query.mock.calls[0][1]).toEqual(['2026-09-28', '2026-10-04']);
     });
 });

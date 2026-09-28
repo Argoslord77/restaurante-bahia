@@ -12,6 +12,14 @@ jest.mock('../services/settingService', () => ({
     getAll: jest.fn(async () => ({})),
     set: jest.fn(async () => true)
 }));
+// La puerta de apertura y las reservas pendientes consultan la BD: se
+// mockean para no contaminar el conteo de consultas SQL.
+jest.mock('../services/aperturaMesaService', () => ({
+    hayDistribucion: jest.fn(async () => true)
+}));
+jest.mock('../services/reservaService', () => ({
+    listar: jest.fn(async () => [])
+}));
 
 function crearReqRes({ query = {}, user = null } = {}) {
     const req = {
@@ -263,6 +271,29 @@ describe('DashboardDependienteController — titularidad del salón (capitán)',
 
         const sqlMesas = db.query.mock.calls[0][0];
         expect(sqlMesas).toContain('dam.dependiente_id = ?');
+    });
+
+    it('anexa la reserva pendiente a su mesa y la bandera de distribución', async () => {
+        const AperturaMesaService = require('../services/aperturaMesaService');
+        const ReservaService = require('../services/reservaService');
+        turnoService.obtenerTurnoActivo.mockResolvedValue({ id: 7 });
+        AperturaMesaService.hayDistribucion.mockResolvedValue(true);
+        ReservaService.listar.mockResolvedValue([
+            { mesaId: 1, nombre: 'Ana', comensales: 2, fechaReserva: new Date('2026-09-28T20:00:00') }
+        ]);
+        db.query.mockImplementation(async () => {
+            const n = db.query.mock.calls.length;
+            if (n === 1) return [[{ id: 1, numero: 'Nro 8', nombre: 'Nro 8', estado: 'reservada' }], []];
+            return [[{ total_mesas: 1, mesas_ocupadas: 0, pedidos_pendientes: 0, en_preparacion: 0, ventas_del_turno: 0 }], []];
+        });
+
+        const { req, res } = crearReqRes({ user: { id: 9, rol: 'capitan', nombre: 'Capitán' } });
+        await controller.viewDependienteDashboard(req, res);
+
+        const datos = res.render.mock.calls[0][1];
+        expect(datos.hayDistribucion).toBe(true);
+        expect(datos.mesas[0].reserva_pendiente).toMatchObject({ nombre: 'Ana', comensales: 2 });
+        expect(datos.mesas[0].reserva_pendiente.fechaCorta).toMatch(/28\/09 20:00/);
     });
 
     it('el salón no se rompe si falla la consulta de asignados', async () => {

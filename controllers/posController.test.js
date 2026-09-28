@@ -144,6 +144,8 @@ describe('posController · titularidad del salón (capitán sobre mesa ajena)', 
         simularPool([
             ['FROM turnos_servicio', [[{ id: 7 }], []]],
             ['COUNT(dp.id)', [[], []]],
+            ['COUNT(*) AS n', [[{ n: 6 }], []]],
+            ['FROM mesas WHERE', [[{ id: 3, numero: 'Nro 3', capacidad: 2, estado: 'libre' }], []]],
             ['detalle_asignacion_mesa', [[ASIGNADO_JUAN], []]],
             ['INSERT INTO pedidos', [{ insertId: 99 }]],
             ['UPDATE mesas', [[], []]]
@@ -166,6 +168,8 @@ describe('posController · titularidad del salón (capitán sobre mesa ajena)', 
         simularPool([
             ['FROM turnos_servicio', [[{ id: 7 }], []]],
             ['COUNT(dp.id)', [[], []]],
+            ['COUNT(*) AS n', [[{ n: 6 }], []]],
+            ['FROM mesas WHERE', [[{ id: 3, numero: 'Nro 3', capacidad: 2, estado: 'libre' }], []]],
             ['detalle_asignacion_mesa', [[], []]],
             ['INSERT INTO pedidos', [{ insertId: 99 }]],
             ['UPDATE mesas', [[], []]]
@@ -184,6 +188,8 @@ describe('posController · titularidad del salón (capitán sobre mesa ajena)', 
         simularPool([
             ['FROM turnos_servicio', [[{ id: 7 }], []]],
             ['COUNT(dp.id)', [[], []]],
+            ['COUNT(*) AS n', [[{ n: 6 }], []]],
+            ['FROM mesas WHERE', [[{ id: 3, numero: 'Nro 3', capacidad: 2, estado: 'libre' }], []]],
             ['detalle_asignacion_mesa', [[{ id: 9, usuario: 'cap', nombre: 'El', apellidos: 'Capitán' }], []]],
             ['INSERT INTO pedidos', [{ insertId: 99 }]],
             ['UPDATE mesas', [[], []]]
@@ -202,6 +208,8 @@ describe('posController · titularidad del salón (capitán sobre mesa ajena)', 
         simularPool([
             ['COUNT(dp.id)', [[], []]],
             ['FROM turnos_servicio', [[{ id: 7 }], []]],
+            ['COUNT(*) AS n', [[{ n: 6 }], []]],
+            ['FROM mesas WHERE', [[{ id: 3, numero: 'Nro 3', capacidad: 2, estado: 'libre' }], []]],
             ['detalle_asignacion_mesa', [[ASIGNADO_JUAN], []]],
             ['INSERT INTO pedidos', [{ insertId: 99 }]],
             ['UPDATE mesas', [[], []]]
@@ -221,6 +229,8 @@ describe('posController · titularidad del salón (capitán sobre mesa ajena)', 
             ['FROM auto_creacion_orden', [[{ id_mesa: 6 }], []]],
             ['FROM turnos_servicio', [[{ id: 7 }], []]],
             ['FROM pedidos', [[], []]],
+            ['COUNT(*) AS n', [[{ n: 6 }], []]],
+            ['FROM mesas WHERE', [[{ id: 3, numero: 'Nro 3', capacidad: 2, estado: 'libre' }], []]],
             ['detalle_asignacion_mesa', [[ASIGNADO_JUAN], []]],
             ['INSERT INTO pedidos', [{ insertId: 99 }]],
             ['UPDATE mesas', [[], []]],
@@ -238,9 +248,11 @@ describe('posController · titularidad del salón (capitán sobre mesa ajena)', 
 
     it('apiSaveOrder atribuye la orden nueva al asignado', async () => {
         simularPool([
-            ['FROM mesas WHERE', [[{ id: 3 }], []]],
+            ['FROM mesas WHERE', [[{ id: 3, numero: 'Nro 3', capacidad: 2, estado: 'libre' }], []]],
             ['FROM turnos_servicio', [[{ id: 7 }], []]],
             ['FROM platillos_menu', [[{ id: 1, nombre: 'Mojito', precio: 10, precio_alt: null, precio_usd: null, tipo_categoria: 'COCINA' }], []]],
+            ['COUNT(*) AS n', [[{ n: 6 }], []]],
+            ['FROM mesas WHERE', [[{ id: 3, numero: 'Nro 3', capacidad: 2, estado: 'libre' }], []]],
             ['detalle_asignacion_mesa', [[ASIGNADO_JUAN], []]],
             ['INSERT INTO pedidos', [{ insertId: 50 }]],
             ['UPDATE mesas', [[], []]],
@@ -259,6 +271,43 @@ describe('posController · titularidad del salón (capitán sobre mesa ajena)', 
         expect(params).toEqual([3, 5, 7]);
         expect(req.auditoriaExtra.mesero_titular_id).toBe(5);
         expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, id_pedido: 50 }));
+    });
+
+    it('initOrderManual se niega sin distribución del día (409 SIN_DISTRIBUCION)', async () => {
+        simularPool([
+            ['FROM turnos_servicio', [[{ id: 7 }], []]],
+            ['COUNT(dp.id)', [[], []]],
+            ['COUNT(*) AS n', [[{ n: 0 }], []]]
+        ]);
+
+        const { req, res } = crearReqResAPI({ body: { id_mesa: 3 }, user: CAPITAN });
+        await initOrderManual(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: false, codigo: 'SIN_DISTRIBUCION'
+        }));
+        expect(pool.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO pedidos'))).toBe(false);
+    });
+
+    it('initOrderManual se niega en mesa reservada e indica ir a Sentar', async () => {
+        simularPool([
+            ['FROM turnos_servicio', [[{ id: 7 }], []]],
+            ['COUNT(dp.id)', [[], []]],
+            ['COUNT(*) AS n', [[{ n: 6 }], []]],
+            ['FROM mesas WHERE', [[{ id: 3, numero: 'Nro 3', capacidad: 2, estado: 'reservada' }], []]],
+            ['FROM reservas', [[{ cliente_nombre: 'Ana', fecha_corta: '28/09 20:00', comensales: 2 }], []]]
+        ]);
+
+        const { req, res } = crearReqResAPI({ body: { id_mesa: 3 }, user: CAPITAN });
+        await initOrderManual(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(409);
+        const cuerpo = res.json.mock.calls[0][0];
+        expect(cuerpo.codigo).toBe('MESA_RESERVADA');
+        expect(cuerpo.message).toMatch(/RESERVADA/);
+        expect(cuerpo.message).toMatch(/Sentar/);
+        expect(pool.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO pedidos'))).toBe(false);
     });
 
     it('viewPOS indica cuando el operador no es el titular de la orden', async () => {

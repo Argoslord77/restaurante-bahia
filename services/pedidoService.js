@@ -4,6 +4,7 @@ const logger = require('../config/logger');
 const orderEngine = require('./orderEngineService');
 const PedidoModel = require('../models/pedidoModel');
 const STATUS = require('../config/orderStatus');
+const AperturaMesaService = require('./aperturaMesaService');
 
 const pedidoService = { 
 

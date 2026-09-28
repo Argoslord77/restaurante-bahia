@@ -10,6 +10,80 @@
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
     <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        /* C5+: insignias y cabecera de comanda con estilos propios. No
+           dependen del bundle tailwind compilado (que no trae las clases
+           red-* ni whitespace-nowrap): así la alerta de SLA siempre se lee
+           (fondo rojo, texto blanco) y la mesa no se corta en dos líneas. */
+        .mon-mesa-badge {
+            white-space: nowrap;
+            display: inline-block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .comanda-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .sla-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .sla-badge-alert {
+            background-color: #dc2626;
+            border-color: #b91c1c;
+            color: #ffffff;
+            animation: sla-parpadeo 1.2s ease-in-out infinite;
+        }
+        .sla-badge-cola {
+            background-color: #fef3c7;
+            border-color: #fde68a;
+            color: #b45309;
+        }
+        .sla-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 9999px;
+            background-color: #f59e0b;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+        .comanda-excedida {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, .55), 0 25px 50px -12px rgba(0, 0, 0, .25);
+        }
+        #sla-pill {
+            background-color: rgba(220, 38, 38, .18);
+            border: 2px solid #ef4444;
+            color: #fecaca;
+        }
+        @keyframes sla-parpadeo {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .55; }
+        }
+        @media (max-width: 420px) {
+            .sla-badge {
+                font-size: 10px;
+                padding: 5px 8px;
+                white-space: normal;
+                text-align: center;
+            }
+        }
+    </style>
 </head>
 <body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans antialiased select-none">
 
@@ -314,13 +388,13 @@
                 const minCola = Number(comanda.minutos_en_cola || 0);
                 const excedida = minCola >= slaLimiteCards;
                 const insigniaSla = excedida
-                    ? '<span class="text-[11px] text-white font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-red-600 px-3 py-1.5 rounded-lg border border-red-700 animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> Retrasado +' + minCola + ' min (SLA ' + slaLimiteCards + ')</span>'
-                    : '<span class="text-[11px] text-[#b45309] font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-[#fef3c7] px-3 py-1.5 rounded-lg border border-[#fde68a]"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> En cola</span>';
+                    ? '<span class="sla-badge sla-badge-alert"><i class="fa-solid fa-triangle-exclamation"></i> Retrasado +' + minCola + ' min (SLA ' + slaLimiteCards + ')</span>'
+                    : '<span class="sla-badge sla-badge-cola"><span class="sla-dot"></span> En cola</span>';
                 html += `
-                    <div class="w-full md:w-85 bg-[#f8fafc] rounded-3xl shadow-2xl flex flex-col max-h-[68vh] whitespace-normal flex-shrink-0 transition-all border ${excedida ? 'border-red-500 ring-2 ring-red-500/70' : 'border-slate-200/60'} overflow-hidden transform hover:translate-y-[-4px] duration-200">
-                        <div class="p-4 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center">
-                            <div>
-                                <span class="bg-[#1e293b] text-white text-[11px] px-3.5 py-1.5 rounded-xl font-black tracking-widest uppercase shadow-sm">
+                    <div class="w-full md:w-85 bg-[#f8fafc] rounded-3xl shadow-2xl flex flex-col max-h-[68vh] whitespace-normal flex-shrink-0 transition-all border ${excedida ? 'comanda-excedida' : 'border-slate-200/60'} overflow-hidden transform hover:translate-y-[-4px] duration-200">
+                        <div class="p-4 bg-[#f1f5f9] border-b border-slate-200/80 comanda-head">
+                            <div style="min-width: 0;">
+                                <span class="mon-mesa-badge bg-[#1e293b] text-white text-[11px] px-3.5 py-1.5 rounded-xl font-black tracking-widest uppercase shadow-sm">
                                     MESA ${comanda.numero_mesa}
                                 </span>
                                 <div class="text-[11px] text-slate-500 mt-2.5 font-bold tracking-wider">ORDEN #${comanda.id_pedido}</div>

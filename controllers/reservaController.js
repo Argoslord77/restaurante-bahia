@@ -28,6 +28,15 @@ exports.renderReservas = async (req, res) => {
     }
 };
 
+exports.listarRango = async (req, res) => {
+    try {
+        const reservas = await ReservaService.listarRango(req.query.desde, req.query.hasta);
+        return res.json({ success: true, reservas });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.crear = async (req, res) => {
     try {
         const actor = actorDe(req);

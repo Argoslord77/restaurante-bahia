@@ -380,6 +380,16 @@
             margin-bottom: 8px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
             transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            min-width: 0;
+        }
+        /* Nombre del ítem: hasta 2 líneas y luego corta con puntos. */
+        .cart-item-nombre {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            overflow-wrap: break-word;
+            line-height: 1.25;
         }
         .cart-item-row:hover {
             border-color: #cbd5e1;
@@ -1568,6 +1578,13 @@
 
             // Detección de Scroll para mostrar Botón Top y Buscador Superior
             function handleMenuScroll() {
+                // Con el carrito abierto en móvil el botón Top estorba sobre
+                // los botones de acción: se mantiene oculto hasta volver.
+                const cartAbierto = document.getElementById('section-cart');
+                if (cartAbierto && cartAbierto.classList.contains('active')) {
+                    if (btnScrollTop) btnScrollTop.classList.remove('visible');
+                    return;
+                }
                 const scrollTop = menuSection ? menuSection.scrollTop : (window.pageYOffset || document.documentElement.scrollTop || 0);
                 const threshold = 100;
 
@@ -1735,10 +1752,15 @@
                 cartSection.classList.add('active');
                 cartTrigger.style.display = 'none';
                 backMenuBtn.style.display = 'inline-block';
+                const btnTop = document.getElementById('btn-scroll-top');
+                if (btnTop) btnTop.classList.remove('visible');
             } else {
                 cartSection.classList.remove('active');
                 cartTrigger.style.display = 'flex';
                 backMenuBtn.style.display = 'none';
+                // Re-evaluar el botón Top según el scroll del menú.
+                const menuSec = document.getElementById('section-menu');
+                if (menuSec) menuSec.dispatchEvent(new Event('scroll'));
             }
         }
 
@@ -1918,18 +1940,18 @@
             `).join('');
 
             const { value: resultado } = await Swal.fire({
-                title: `<div class="d-flex align-items-center justify-content-center gap-2" style="font-family: var(--font-display); font-size: 1.1rem; color: #0f172a;">
-                    <i class="fa-solid fa-bell-concierge text-primary"></i> 
-                    <span>Instrucciones: ${escapeHtml(item.nombre)}</span>
+                title: `<div class="d-flex flex-wrap align-items-center justify-content-center gap-2 text-center" style="font-family: var(--font-display); font-size: 1.1rem; color: #0f172a;">
+                    <i class="fa-solid fa-bell-concierge text-primary"></i>
+                    <span style="overflow-wrap: anywhere;">Instrucciones: ${escapeHtml(item.nombre)}</span>
                 </div>`,
                 html: `
-                    <div class="text-start mt-2">
-                        <label class="form-label text-muted small fw-bold mb-1.5 d-flex align-items-center justify-content-between" style="font-size: 0.75rem;">
+                    <div class="text-center mt-2">
+                        <label class="form-label text-muted small fw-bold mb-1.5 d-flex flex-column flex-sm-row align-items-center justify-content-center justify-content-sm-between gap-1" style="font-size: 0.75rem;">
                             <span>INDICACIONES PARA COCINA / BARRA</span>
                             <span class="text-secondary opacity-75">Opcional</span>
                         </label>
-                        
-                        <div class="d-flex flex-wrap gap-1.5 mb-3 p-2 rounded bg-light border" style="max-height: 90px; overflow-y: auto;">
+
+                        <div class="d-flex flex-wrap justify-content-center gap-1.5 mb-3 p-2 rounded bg-light border" style="max-height: 90px; overflow-y: auto;">
                             ${htmlChips}
                         </div>
 
@@ -2042,22 +2064,26 @@
                     const row = document.createElement('div');
                     row.className = 'cart-item-row';
                     row.innerHTML = `
-                        <div class="d-flex align-items-center justify-content-between w-100">
-                            <div style="max-width: 48%;">
-                                <span class="font-heading font-bold text-dark d-block text-truncate small">${escapeHtml(prod.nombre)}</span>
-                                <small class="text-muted font-digits font-bold">$${prod.precio.toFixed(2)}</small>
+                        <div class="w-100" style="min-width: 0;">
+                            <div class="d-flex align-items-start gap-2">
+                                <div class="flex-grow-1" style="min-width: 0;">
+                                    <span class="font-heading font-bold text-dark d-block small cart-item-nombre">${escapeHtml(prod.nombre)}</span>
+                                    <small class="text-muted font-digits font-bold">Precio: $${prod.precio.toFixed(2)}</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                    <button type="button" class="btn-cart-note ${prod.notas ? 'has-note' : ''} add-notes" data-id="${prod.id}" title="${prod.notas ? 'Modificar observaciones' : 'Agregar observaciones a cocina/barra'}">
+                                        <i class="fa-solid ${prod.notas ? 'fa-pen-to-square' : 'fa-comment-medical'}"></i>
+                                    </button>
+                                    <button class="btn btn-sm text-danger border-0 p-1 remove-item" data-id="${prod.id}" title="Quitar de la ronda"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
                             </div>
-                            <div class="d-flex align-items-center gap-1.5">
-                                <button type="button" class="btn-cart-note ${prod.notas ? 'has-note' : ''} add-notes" data-id="${prod.id}" title="${prod.notas ? 'Modificar observaciones' : 'Agregar observaciones a cocina/barra'}">
-                                    <i class="fa-solid ${prod.notas ? 'fa-pen-to-square' : 'fa-comment-medical'}"></i>
-                                </button>
-                                <div class="btn-group btn-group-sm border rounded bg-white shadow-xs">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-1">
+                                <div class="btn-group btn-group-sm border rounded bg-white shadow-xs flex-shrink-0">
                                     <button class="btn btn-white border-0 px-2 text-secondary update-qty" data-id="${prod.id}" data-delta="-1"><i class="fa-solid fa-minus" style="font-size: 9px;"></i></button>
                                     <span class="px-2 font-digits font-bold text-dark d-flex align-items-center bg-white" style="min-width:20px; justify-content:center;">${prod.cantidad}</span>
                                     <button class="btn btn-white border-0 px-2 text-secondary update-qty" data-id="${prod.id}" data-delta="1"><i class="fa-solid fa-plus" style="font-size: 9px;"></i></button>
                                 </div>
-                                <span class="font-digits font-bold text-dark ms-1 small" style="min-width: 50px; text-align: right;">$${itemTotal.toFixed(2)}</span>
-                                <button class="btn btn-sm text-danger border-0 p-1 ms-0.5 remove-item" data-id="${prod.id}"><i class="fa-solid fa-trash-can"></i></button>
+                                <span class="font-digits font-bold text-dark small text-nowrap">Importe: $${itemTotal.toFixed(2)}</span>
                             </div>
                         </div>
                         ${prod.notas ? `

@@ -3,6 +3,15 @@ const db = require('../config/db');
 const turnoService = require('../services/turnoService');
 const PosAutorizacionService = require('../services/posAutorizacionService');
 const MesaAsignacionService = require('../services/mesaAsignacionService');
+const AperturaMesaService = require('../services/aperturaMesaService');
+const ReservaService = require('../services/reservaService');
+
+function fechaCortaReserva(valor) {
+    const f = valor instanceof Date ? valor : new Date(valor);
+    if (Number.isNaN(f.getTime())) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(f.getDate())}/${p(f.getMonth() + 1)} ${p(f.getHours())}:${p(f.getMinutes())}`;
+}
 
 function obtenerBasePublica(req) {
     const protocolo = process.env.PUBLIC_PROTOCOL || (process.env.SERVER_HTTP === '1' ? 'http' : 'https');
@@ -153,6 +162,42 @@ const DashboardDependienteController = {
                 mesa.dependiente_asignado = (mesa && mapaAsignados[mesa.id]) || null;
             }
 
+            // ¿Se hizo la distribución del día? Sin ella no se puede abrir
+            // ninguna mesa (la puerta del servidor lo exige; el tablero lo
+            // refleja deshabilitando la apertura). Nunca rompe el salón.
+            let hayDistribucion = true;
+            try {
+                hayDistribucion = await AperturaMesaService.hayDistribucion(turnoId);
+            } catch (errorDist) {
+                console.error('Error al verificar la distribución del turno:', errorDist);
+                hayDistribucion = false;
+            }
+
+            // Próxima reserva pendiente por mesa: el tablero la muestra en
+            // la tarjeta para que el dependiente no intente abrirla (solo
+            // se opera desde Reservas con Sentar). Nunca rompe el salón.
+            try {
+                const proximas = await ReservaService.listar('proximas');
+                const mapaReservas = {};
+                for (const r of (proximas || [])) {
+                    if (r && r.mesaId !== null && r.mesaId !== undefined && !mapaReservas[r.mesaId]) {
+                        mapaReservas[r.mesaId] = {
+                            nombre: r.nombre,
+                            comensales: r.comensales,
+                            fechaCorta: fechaCortaReserva(r.fechaReserva)
+                        };
+                    }
+                }
+                for (const mesa of (mesas || [])) {
+                    mesa.reserva_pendiente = (mesa && mapaReservas[mesa.id]) || null;
+                }
+            } catch (errorRes) {
+                console.error('Error al obtener reservas pendientes del tablero:', errorRes);
+                for (const mesa of (mesas || [])) {
+                    mesa.reserva_pendiente = null;
+                }
+            }
+
             // Autorización para TOMAR órdenes según Opciones generales. Se
             // evalúa con el rol del VISOR autenticado (en supervisión el
             // visor es administrador y las acciones ya están deshabilitadas).
@@ -175,6 +220,7 @@ const DashboardDependienteController = {
                 cuentasPagadas,
                 modoTomaOrdenes,
                 puedeTomarOrdenes,
+                hayDistribucion,
                 success_msg: req.flash('success_msg'),
                 error_msg: req.flash('error_msg')
             });
