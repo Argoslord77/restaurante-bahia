@@ -272,6 +272,17 @@ module.exports = {
                 valorParsed = (valor === true || valor === 'true' || valor === 1 || valor === '1');
             }
 
+            // C5: ajustes numéricos (SLA de cocina/bar): enteros 1..180.
+            // Solo las claves SLA se normalizan; el resto con tipo number
+            // conserva el paso directo histórico (p. ej. usuario designado).
+            if (tipoSetting === 'number' && ['sla_cocina_min', 'sla_bar_min'].includes(clave)) {
+                valorParsed = Math.floor(Number(valor));
+                if (!Number.isFinite(valorParsed)) {
+                    return res.status(400).json({ success: false, message: 'Valor numérico no válido.' });
+                }
+                valorParsed = Math.min(180, Math.max(1, valorParsed));
+            }
+
             // Opciones generales del POS: solo valores conocidos.
             if (clave === 'pos_quien_toma_ordenes') {
                 tipoSetting = 'string';
@@ -332,7 +343,7 @@ module.exports = {
                 return res.json({
                     success: true,
                     clave,
-                    valor: valorParsed ? '1' : '0',
+                    valor: tipoSetting === 'boolean' ? (valorParsed ? '1' : '0') : String(valorParsed),
                     message: `Opción "${clave}" actualizada correctamente.`
                 });
             } else {

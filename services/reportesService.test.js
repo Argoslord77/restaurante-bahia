@@ -480,3 +480,62 @@ describe('reportesService · ventasTurnoACSV', () => {
         expect(csv).toContain('Cerveza;No;BEBIDAS;Bebidas;6;20;57,1;200,00;20,0;10,00;C');
     });
 });
+
+describe('reportesService · propinasDelTurno (C6)', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    function simularTurnoConCuentas() {
+        db.query
+            .mockResolvedValueOnce([[{ id: 7, estado: 'cerrado', fecha_apertura: '2026-09-28 08:00:00', fecha_cierre: '2026-09-28 16:00:00', abierto_por: 'Jefe Total' }], []])
+            .mockResolvedValueOnce([[
+                { id: 1, mesero: 'Juan P', cuentas: 2, ventas: 200, propinas: 15 },
+                { id: 2, mesero: 'Ana G', cuentas: 1, ventas: 100, propinas: 5 }
+            ], []])
+            .mockResolvedValueOnce([[
+                { id: 11, total: 120, propina: 10, fecha_cierre: '2026-09-28 12:00:00', estado_pago: 'pagado', mesa: '5', mesero: 'Juan P' }
+            ], []]);
+    }
+
+    it('agrega meseros con promedio y % del pool + detalle de cuentas', async () => {
+        simularTurnoConCuentas();
+        const r = await ReportesService.propinasDelTurno(7);
+        expect(r.turno).toMatchObject({ id: 7, abierto_por: 'Jefe Total', en_curso: false });
+        expect(r.totales).toMatchObject({ meseros: 2, cuentas: 3, ventas: 300, propinas: 20, propina_promedio: 6.67 });
+        expect(r.meseros[0]).toMatchObject({ id: 1, mesero: 'Juan P', cuentas: 2, propinas: 15, propina_promedio: 7.5, pct_pool: 75 });
+        expect(r.meseros[1]).toMatchObject({ pct_pool: 25 });
+        expect(r.cuentas).toHaveLength(1);
+        expect(r.cuentas[0]).toMatchObject({ id: 11, mesa: '5', propina: 10 });
+    });
+
+    it('solo suma cuentas cerradas cobradas o de cortesía', async () => {
+        simularTurnoConCuentas();
+        await ReportesService.propinasDelTurno(7);
+        const sqlCuentas = db.query.mock.calls[2][0];
+        expect(sqlCuentas).toContain('fecha_cierre IS NOT NULL');
+        expect(sqlCuentas).toContain("'pagado', 'facturado', 'cortesia'");
+    });
+
+    it('turno inexistente devuelve null', async () => {
+        db.query.mockResolvedValueOnce([[], []]);
+        await expect(ReportesService.propinasDelTurno(999)).resolves.toBeNull();
+    });
+});
+
+describe('reportesService · propinasACSV (C6)', () => {
+    const REPORTE = {
+        turno: { id: 7, abierto_por: 'Jefe Total', fecha_apertura: '2026-09-28 08:00:00' },
+        meseros: [{ id: 1, mesero: 'Juan P', cuentas: 2, ventas: 200, propinas: 15, propina_promedio: 7.5, pct_pool: 75 }],
+        cuentas: [{ id: 11, mesa: '5', mesero: 'Juan P', total: 120, propina: 10, estado_pago: 'pagado', fecha_cierre: '2026-09-28 12:00:00' }],
+        totales: { cuentas: 3, ventas: 300, propinas: 20, propina_promedio: 6.67 }
+    };
+
+    it('exporta resumen + detalle con BOM y punto y coma', () => {
+        const csv = ReportesService.propinasACSV(REPORTE);
+        expect(csv.charCodeAt(0)).toBe(0xFEFF);
+        expect(csv).toContain('Propinas del turno;#7;Jefe Total');
+        expect(csv).toContain('Mesero;Cuentas;Ventas;Propinas;Propina promedio;% del pool');
+        expect(csv).toContain('TOTALES;3;300,00;20,00;6,67;100');
+        expect(csv).toContain('Cuenta;Mesa;Mesero;Total;Propina;Estado;Fecha cierre');
+        expect(csv).toContain('11;5;Juan P;120,00;10,00;pagado');
+    });
+});

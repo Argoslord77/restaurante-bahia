@@ -27,6 +27,10 @@ router.post('/turno/apertura', ensureAuthenticated, checkRole(['superadministrad
 // 2. Arqueo de Caja y Cierre Financiero Definitivo
 // Recibe: { monto_cierre_real, observaciones_cierre } vía JSON (fetch)
 router.post('/turno/cierre', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), turnoController.cerrarTurno);
+// C4: retiros de efectivo a caja fuerte (registra cajero+, anula admin).
+router.get('/turno/retiros', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), turnoController.listarRetiros);
+router.post('/turno/retiros', ensureAuthenticated, checkRole(['superadministrador', 'administrador', 'cajero']), turnoController.registrarRetiro);
+router.post('/turno/retiros/:id/anular', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), turnoController.anularRetiro);
 
 
 /**

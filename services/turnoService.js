@@ -56,10 +56,13 @@ class TurnoService {
             // 2. Desglose real por método y moneda. ZELLE se excluye del
             //    efectivo físico mediante CajaService.
             const desglosePagos = await CajaService.obtenerDesglosePagos(turnoId, connection);
+            // C4: lo retirado a caja fuerte resta del esperado de caja.
+            const totalRetiros = await this.totalRetirosVigentes(turnoId, connection);
             const resumenFinanciero = CajaService.calcularResumenFinanciero(
                 pedidos,
                 desglosePagos,
-                turnoActivo.monto_apertura
+                turnoActivo.monto_apertura,
+                totalRetiros
             );
 
             const total_cobrado_caja = resumenFinanciero.total_cobrado_caja;
@@ -92,6 +95,7 @@ class TurnoService {
                         \`total_cxc_facturas\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`total_pendiente_pago\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`total_cortesias\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`total_retiros\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`monto_esperado_caja\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`monto_real_entregado\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`diferencia\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -112,11 +116,11 @@ class TurnoService {
                     INSERT INTO cierres_servicio (
                         turno_servicio_id, usuario_cierre_id, fecha_cierre,
                         fondo_apertura, total_cobrado_caja, total_propinas,
-                        total_cxc_facturas, total_pendiente_pago, total_cortesias,
+                        total_cxc_facturas, total_pendiente_pago, total_cortesias, total_retiros,
                         monto_esperado_caja, monto_real_entregado, diferencia, balance_estado,
                         total_pedidos, pedidos_pagados, pedidos_facturados, pedidos_pendientes,
                         desglose_monedas, observaciones
-                    ) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
                         usuario_cierre_id = VALUES(usuario_cierre_id),
                         fondo_apertura = VALUES(fondo_apertura),
@@ -125,6 +129,7 @@ class TurnoService {
                         total_cxc_facturas = VALUES(total_cxc_facturas),
                         total_pendiente_pago = VALUES(total_pendiente_pago),
                         total_cortesias = VALUES(total_cortesias),
+                        total_retiros = VALUES(total_retiros),
                         monto_esperado_caja = VALUES(monto_esperado_caja),
                         monto_real_entregado = VALUES(monto_real_entregado),
                         diferencia = VALUES(diferencia),
@@ -140,6 +145,7 @@ class TurnoService {
                     total_cxc_facturas,
                     total_pendiente_pago,
                     total_cortesias,
+                    totalRetiros,
                     montoEsperado,
                     montoCierreReal,
                     diferencia,
@@ -180,6 +186,7 @@ class TurnoService {
                 fondoApertura,
                 totalCobrado: total_cobrado_caja,
                 totalPropinas: total_propinas,
+                totalRetiros,
                 totalZelle: resumenFinanciero.total_zelle,
                 montoEsperado,
                 montoReal: montoCierreReal,
@@ -245,6 +252,87 @@ class TurnoService {
         }
 
         return { turno_id: turnoActivo.id, monedas: rows };
+    }
+
+    // ---------- C4: retiros de efectivo a caja fuerte ----------
+
+    static async totalRetirosVigentes(turnoId, conn = null) {
+        const q = conn || db;
+        const [rows] = await q.query(
+            `SELECT COALESCE(SUM(monto), 0) AS total FROM retiros_efectivo
+             WHERE turno_servicio_id = ? AND anulado = 0`,
+            [turnoId]
+        );
+        return Number(rows[0]?.total || 0);
+    }
+
+    static async listarRetiros(turnoId) {
+        const [rows] = await db.query(
+            `SELECT r.id, r.turno_servicio_id, r.monto, r.motivo, r.creado_en,
+                    r.anulado, r.anulado_en,
+                    TRIM(CONCAT(COALESCE(u.nombre, ''), ' ', COALESCE(u.apellidos, ''))) AS usuario,
+                    TRIM(CONCAT(COALESCE(ua.nombre, ''), ' ', COALESCE(ua.apellidos, ''))) AS anulado_por_nombre
+             FROM retiros_efectivo r
+             LEFT JOIN usuarios u ON r.usuario_id = u.id
+             LEFT JOIN usuarios ua ON r.anulado_por = ua.id
+             WHERE r.turno_servicio_id = ?
+             ORDER BY r.id DESC`,
+            [turnoId]
+        );
+        return rows.map(r => ({ ...r, monto: Number(r.monto), anulado: Number(r.anulado) }));
+    }
+
+    static async _turnoAbiertoOrThrow(turnoId) {
+        const [rows] = await db.query(
+            `SELECT id, estado FROM turnos_servicio WHERE id = ? LIMIT 1`, [turnoId]
+        );
+        if (!rows.length || rows[0].estado !== 'abierto') {
+            throw new Error('Solo se puede operar retiros con el turno abierto.');
+        }
+        return rows[0];
+    }
+
+    static async registrarRetiro({ turnoId, monto, motivo, usuarioId }) {
+        const valor = Number(monto);
+        if (!Number.isFinite(valor) || valor <= 0) {
+            throw new Error('El monto del retiro debe ser mayor que cero.');
+        }
+        const motivoLimpio = String(motivo || '').trim();
+        if (!motivoLimpio) throw new Error('El motivo del retiro es obligatorio.');
+        if (motivoLimpio.length > 255) throw new Error('El motivo no puede exceder 255 caracteres.');
+        await this._turnoAbiertoOrThrow(turnoId);
+        const [r] = await db.query(
+            `INSERT INTO retiros_efectivo (turno_servicio_id, monto, motivo, usuario_id)
+             VALUES (?, ?, ?, ?)`,
+            [turnoId, valor.toFixed(2), motivoLimpio, usuarioId]
+        );
+        return { id: r.insertId, turnoId, monto: Number(valor.toFixed(2)), motivo: motivoLimpio };
+    }
+
+    static async anularRetiro(retiroId, usuarioId) {
+        const [rows] = await db.query(
+            `SELECT id, turno_servicio_id, monto, anulado FROM retiros_efectivo WHERE id = ? LIMIT 1`,
+            [retiroId]
+        );
+        if (!rows.length) throw new Error('El retiro no existe.');
+        if (Number(rows[0].anulado)) throw new Error('El retiro ya está anulado.');
+        await this._turnoAbiertoOrThrow(rows[0].turno_servicio_id);
+        await db.query(
+            `UPDATE retiros_efectivo SET anulado = 1, anulado_por = ?, anulado_en = NOW() WHERE id = ?`,
+            [usuarioId, retiroId]
+        );
+        return { id: retiroId, monto: Number(rows[0].monto) };
+    }
+
+    // ---------- C7: advertencia de cuentas abiertas al cerrar ----------
+
+    static async contarPedidosAbiertos(turnoId) {
+        const [rows] = await db.query(
+            `SELECT COUNT(*) AS cuentas, COALESCE(SUM(total), 0) AS total
+             FROM pedidos WHERE turno_servicio_id = ? AND fecha_cierre IS NULL`,
+            [turnoId]
+        );
+        return { cuentas: Number(rows[0]?.cuentas || 0), total: Number(rows[0]?.total || 0) };
     }
 }
 

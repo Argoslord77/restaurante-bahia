@@ -165,3 +165,41 @@ describe('settingController · control de precios (crítico)', () => {
         });
     });
 });
+
+describe('settingController · SLA monitores (C5, tipo number)', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('guarda el SLA de cocina/bars con valor numérico normalizado', async () => {
+        SettingService.set.mockResolvedValue(true);
+        const { req, res } = crearReqRes({ clave: 'sla_cocina_min', valor: '25', tipo: 'number' });
+        await controller.actualizarOpcionRapida(req, res);
+        expect(SettingService.set).toHaveBeenCalledWith('sla_cocina_min', 25, '', 'general', 'number');
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, valor: '25' }));
+    });
+
+    it('sujeta al rango 1–180', async () => {
+        SettingService.set.mockResolvedValue(true);
+        const alto = crearReqRes({ clave: 'sla_bar_min', valor: '999', tipo: 'number' });
+        await controller.actualizarOpcionRapida(alto.req, alto.res);
+        expect(SettingService.set).toHaveBeenCalledWith('sla_bar_min', 180, '', 'general', 'number');
+        const bajo = crearReqRes({ clave: 'sla_bar_min', valor: '0', tipo: 'number' });
+        await controller.actualizarOpcionRapida(bajo.req, bajo.res);
+        expect(SettingService.set).toHaveBeenCalledWith('sla_bar_min', 1, '', 'general', 'number');
+    });
+
+    it('rechaza SLA no numérico', async () => {
+        const basura = crearReqRes({ clave: 'sla_cocina_min', valor: 'mucho', tipo: 'number' });
+        await controller.actualizarOpcionRapida(basura.req, basura.res);
+        expect(basura.res.status).toHaveBeenCalledWith(400);
+        expect(basura.res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+        expect(SettingService.set).not.toHaveBeenCalled();
+    });
+
+    it('otras claves con tipo number conservan el paso directo', async () => {
+        SettingService.set.mockResolvedValue(true);
+        const { req, res } = crearReqRes({ clave: 'precio_venta_libre', valor: '3', tipo: 'number' });
+        await controller.actualizarOpcionRapida(req, res);
+        expect(SettingService.set).toHaveBeenCalledWith('precio_venta_libre', '3', '', 'general', 'number');
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+});

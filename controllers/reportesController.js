@@ -94,6 +94,15 @@ const ENLACES = [
         badge: 'NUEVO'
     },
     {
+        id: 'propinas',
+        titulo: 'Propinas del turno',
+        descripcion: 'Propinas por mesero y por cuenta en un turno (cerrado o en curso): pool, promedios y detalle para reparto. Exportable a CSV.',
+        icono: 'fa-solid fa-hand-holding-dollar',
+        url: '/admin/reportes/propinas',
+        grupo: 'Control financiero',
+        badge: 'NUEVO'
+    },
+    {
         id: 'ventas-turno',
         titulo: 'Ventas del turno',
         descripcion: 'Análisis de un turno (cerrado o en curso): platos y bebidas más vendidos, categorías, horas pico, meseros, mesas y pagos. Exportable a CSV.',
@@ -449,6 +458,40 @@ exports.viewVentasTurno = async (req, res) => {
     } catch (error) {
         console.error('Error al cargar las ventas del turno:', error);
         return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.viewPropinas = async (req, res) => {
+    try {
+        const { turnos, turnoId } = await resolverTurnoSeleccionado(req.query);
+        const reporte = turnoId ? await ReportesService.propinasDelTurno(turnoId) : null;
+        return res.render('reportes/propinas', {
+            title: 'Propinas del Turno - Restaurante Bahía',
+            view: 'propinas',
+            turnos,
+            turnoSeleccionado: turnoId,
+            reporte,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar las propinas del turno:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.exportarPropinas = async (req, res) => {
+    try {
+        const { turnoId } = await resolverTurnoSeleccionado(req.query);
+        if (!turnoId) return res.redirect('/admin/reportes/propinas');
+        const reporte = await ReportesService.propinasDelTurno(turnoId);
+        if (!reporte) return res.redirect('/admin/reportes/propinas');
+        return responderCSV(req, res, `propinas_turno_${turnoId}`,
+            ReportesService.propinasACSV(reporte), reporte.cuentas.length);
+    } catch (error) {
+        console.error('Error al exportar las propinas del turno:', error);
+        return res.redirect('/admin/reportes/propinas');
     }
 };
 

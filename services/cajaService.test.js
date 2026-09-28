@@ -77,3 +77,22 @@ describe('cajaService · calcularResumenFinanciero (esperado sin doble conteo)',
         });
     });
 });
+
+describe('cajaService · retiros de efectivo (C4)', () => {
+    it('los retiros vigentes restan del esperado', () => {
+        const r = CajaService.calcularResumenFinanciero([], [], 100, 30);
+        expect(r.total_retiros).toBe(30);
+        expect(r.total_en_caja_esperado).toBe(70);
+    });
+
+    it('sin retiros el esperado no cambia (compatibilidad)', () => {
+        const r = CajaService.calcularResumenFinanciero([], [], 100);
+        expect(r.total_retiros).toBe(0);
+        expect(r.total_en_caja_esperado).toBe(100);
+    });
+
+    it('los retiros negativos se ignoran', () => {
+        const r = CajaService.calcularResumenFinanciero([], [], 100, -5);
+        expect(r.total_en_caja_esperado).toBe(100);
+    });
+});

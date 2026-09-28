@@ -1155,6 +1155,122 @@ function ventasTurnoACSV(reporte) {
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
+/**
+ * C6: propinas del turno — por mesero (pool y promedios) + detalle por
+ * cuenta. Base para transparencia y reparto de propinas.
+ */
+async function propinasDelTurno(turnoId) {
+    const [turnoRows] = await db.query(`
+        SELECT ts.id, ts.estado, ts.fecha_apertura, ts.fecha_cierre,
+               TRIM(CONCAT(COALESCE(u.nombre, ''), ' ', COALESCE(u.apellidos, ''))) AS abierto_por
+        FROM turnos_servicio ts
+        LEFT JOIN usuarios u ON ts.usuario_apertura_id = u.id
+        WHERE ts.id = ? LIMIT 1
+    `, [turnoId]);
+    if (!turnoRows.length) return null;
+    const t = turnoRows[0];
+    const turno = {
+        id: Number(t.id),
+        estado: t.estado,
+        fecha_apertura: t.fecha_apertura,
+        fecha_cierre: t.fecha_cierre,
+        abierto_por: String(t.abierto_por || '').trim() || 'N/D',
+        en_curso: t.estado === 'abierto'
+    };
+
+    const [meserosRows] = await db.query(`
+        SELECT u.id,
+               TRIM(CONCAT(COALESCE(u.nombre, ''), ' ', COALESCE(u.apellidos, ''))) AS mesero,
+               COUNT(p.id) AS cuentas,
+               COALESCE(SUM(p.total), 0) AS ventas,
+               COALESCE(SUM(p.propina), 0) AS propinas
+        FROM usuarios u
+        INNER JOIN pedidos p ON p.id_usuario_mesero = u.id
+            AND p.turno_servicio_id = ?
+            AND p.fecha_cierre IS NOT NULL
+            AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+        GROUP BY u.id, u.nombre, u.apellidos
+        ORDER BY propinas DESC, cuentas DESC
+    `, [turnoId]);
+
+    const [cuentasRows] = await db.query(`
+        SELECT p.id, p.total, p.propina, p.fecha_cierre, p.estado_pago,
+               m.numero AS mesa,
+               TRIM(CONCAT(COALESCE(u.nombre, ''), ' ', COALESCE(u.apellidos, ''))) AS mesero
+        FROM pedidos p
+        LEFT JOIN mesas m ON p.id_mesa = m.id
+        LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+        WHERE p.turno_servicio_id = ?
+          AND p.fecha_cierre IS NOT NULL
+          AND p.estado_pago IN ('pagado', 'facturado', 'cortesia')
+        ORDER BY p.fecha_cierre DESC, p.id DESC
+    `, [turnoId]);
+
+    const pool = meserosRows.reduce((acc, f) => acc + Number(f.propinas || 0), 0);
+    const meseros = meserosRows.map(f => {
+        const cuentas = num(f.cuentas);
+        const propinas = num(f.propinas, 2);
+        return {
+            id: f.id,
+            mesero: String(f.mesero || '').trim() || 'Mesero',
+            cuentas,
+            ventas: num(f.ventas, 2),
+            propinas,
+            propina_promedio: cuentas > 0 ? num(propinas / cuentas, 2) : 0,
+            pct_pool: pool > 0 ? num(propinas / pool * 100, 1) : 0
+        };
+    });
+    const cuentas = cuentasRows.map(x => ({
+        id: x.id,
+        mesa: x.mesa ?? '—',
+        mesero: String(x.mesero || '').trim() || '—',
+        total: num(x.total, 2),
+        propina: num(x.propina, 2),
+        estado_pago: x.estado_pago,
+        fecha_cierre: x.fecha_cierre
+    }));
+    const totCuentas = meseros.reduce((acc, m) => acc + m.cuentas, 0);
+    return {
+        turno,
+        meseros,
+        cuentas,
+        totales: {
+            meseros: meseros.length,
+            cuentas: totCuentas,
+            ventas: num(meseros.reduce((acc, m) => acc + m.ventas, 0), 2),
+            propinas: num(pool, 2),
+            propina_promedio: totCuentas > 0 ? num(pool / totCuentas, 2) : 0
+        }
+    };
+}
+
+/** CSV de propinas del turno: resumen por mesero + detalle de cuentas. */
+function propinasACSV(reporte) {
+    const filas = [];
+    const t = reporte.turno;
+    filas.push(`Propinas del turno;#${t.id};${csvTexto(t.abierto_por)};${csvTexto(t.fecha_apertura ? String(t.fecha_apertura) : '')}`);
+    filas.push('');
+    filas.push('Mesero;Cuentas;Ventas;Propinas;Propina promedio;% del pool');
+    for (const m of reporte.meseros) {
+        filas.push([
+            csvTexto(m.mesero), csvNum(m.cuentas, 0), csvNum(m.ventas),
+            csvNum(m.propinas), csvNum(m.propina_promedio), csvNum(m.pct_pool, 1)
+        ].join(';'));
+    }
+    const tot = reporte.totales;
+    filas.push(`TOTALES;${csvNum(tot.cuentas, 0)};${csvNum(tot.ventas)};${csvNum(tot.propinas)};${csvNum(tot.propina_promedio)};100`);
+    filas.push('');
+    filas.push('Cuenta;Mesa;Mesero;Total;Propina;Estado;Fecha cierre');
+    for (const c of reporte.cuentas) {
+        filas.push([
+            csvNum(c.id, 0), csvTexto(String(c.mesa)), csvTexto(c.mesero),
+            csvNum(c.total), csvNum(c.propina), csvTexto(c.estado_pago),
+            csvTexto(c.fecha_cierre ? String(c.fecha_cierre) : '')
+        ].join(';'));
+    }
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
 module.exports = {
     saludInventario,
     margenPorPlatillo,
@@ -1170,5 +1286,7 @@ module.exports = {
     ventasMeseroACSV,
     consumoInsumosACSV,
     ventasHorasACSV,
-    ventasTurnoACSV
+    ventasTurnoACSV,
+    propinasDelTurno,
+    propinasACSV
 };

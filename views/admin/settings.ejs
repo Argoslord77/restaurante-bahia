@@ -434,6 +434,37 @@
                                         </div>
 
                                     </div>
+                                        <!-- Opción 6: SLA de cocina y bar (C5) -->
+                                        <%
+                                            const slaCocinaCfg = settings.sla_cocina_min ? parseInt(settings.sla_cocina_min.valor, 10) || 20 : 20;
+                                            const slaBarCfg = settings.sla_bar_min ? parseInt(settings.sla_bar_min.valor, 10) || 10 : 10;
+                                        %>
+                                        <div class="col-12 col-md-10">
+                                            <div class="p-3 border rounded shadow-sm bg-light">
+                                                <h6 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                                                    <i class="fa-solid fa-stopwatch text-danger"></i>
+                                                    SLA de cocina y bar (minutos en cola)
+                                                </h6>
+                                                <small class="text-muted d-block mb-2">
+                                                    Tiempo máximo en cola antes de marcar una comanda como <strong>RETRASADA</strong> en el monitor (tarjeta roja + aviso). Rango 1–180 minutos.
+                                                </small>
+                                                <div class="d-flex align-items-end gap-3 flex-wrap">
+                                                    <div>
+                                                        <label class="form-label small fw-semibold mb-1" for="cfg_sla_cocina_min">Cocina (min)</label>
+                                                        <input type="number" id="cfg_sla_cocina_min" class="form-control form-control-sm fw-semibold" style="max-width: 110px;" min="1" max="180" value="<%= slaCocinaCfg %>">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label small fw-semibold mb-1" for="cfg_sla_bar_min">Bar (min)</label>
+                                                        <input type="number" id="cfg_sla_bar_min" class="form-control form-control-sm fw-semibold" style="max-width: 110px;" min="1" max="180" value="<%= slaBarCfg %>">
+                                                    </div>
+                                                    <button type="button" id="btn_guardar_sla" class="btn btn-sm btn-dark fw-semibold">
+                                                        <i class="fa-solid fa-floppy-disk me-1"></i>Guardar SLA
+                                                    </button>
+                                                    <span id="lbl_status_sla" class="badge bg-success-subtle text-success border border-success px-2.5 py-1.5">Actual: cocina <%= slaCocinaCfg %> min · bar <%= slaBarCfg %> min</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                 </div>
 
                                 <!-- PESTAÑA 7: RESPALDO, RESTAURACIÓN Y AUDITORÍA -->
@@ -645,6 +676,33 @@
                 this.checked = !isChecked; // Revertir si la solicitud falla
                 Swal.fire('Error', 'No se pudo conectar con el servidor para actualizar la opción.', 'error');
             });
+        });
+
+        // C5: guardar SLA de cocina/bar (numérico 1..180).
+        document.getElementById('btn_guardar_sla').addEventListener('click', async function() {
+            const btn = this;
+            const pares = [
+                ['sla_cocina_min', document.getElementById('cfg_sla_cocina_min').value],
+                ['sla_bar_min', document.getElementById('cfg_sla_bar_min').value]
+            ];
+            btn.disabled = true;
+            try {
+                for (const par of pares) {
+                    const res = await fetch('/admin/configuracion/opcion-rapida', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ clave: par[0], valor: par[1], tipo: 'number' })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.success) throw new Error(data.message || ('No se pudo guardar ' + par[0]));
+                }
+                document.getElementById('lbl_status_sla').textContent = 'Actual: cocina ' + pares[0][1] + ' min · bar ' + pares[1][1] + ' min';
+                Swal.fire({ icon: 'success', title: '¡SLA actualizado!', timer: 1500, showConfirmButton: false });
+            } catch (err) {
+                Swal.fire('Error', err.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
         });
 
         // Manejo asíncrono e inmediato de la opción de monitores de elaboración

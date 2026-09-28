@@ -1,4 +1,4 @@
-RUNBOOK DE OPERACIÓN — Restaurante Bahía (V10)
+RUNBOOK DE OPERACIÓN — Restaurante Bahía (V11)
 ================================================
 Guía rápida para el administrador del servidor. Detalle de cada
 versión en su LEEME-ACTUALIZACION-V*.txt.
@@ -7,7 +7,11 @@ versión en su LEEME-ACTUALIZACION-V*.txt.
 ----------------
 - Abrir turno con fondo de caja; asignar meseros a mesas.
 - Operar normal (POS, monitores, QR cliente, cierres de día).
-- Cerrar turno (esperado vs real) y cierre del día.
+- Si el cajón junta mucho efectivo, hacer RETIROS a caja fuerte
+  (Caja → Turnos → Retiros; cada uno deja su acta firmada).
+- Cerrar turno a CIEGAS: contar y declarar sin ver el esperado;
+  el sistema revela la comparación después de cerrar.
+- Revisar Reportes → Propinas del turno para el reparto.
 - El respaldo de la BD es AUTOMÁTICO cada madrugada (ver §3).
 
 2) APLICAR UNA ACTUALIZACIÓN (zip V*)
@@ -59,6 +63,13 @@ versión en su LEEME-ACTUALIZACION-V*.txt.
   app detenida.
 - "Ruta no encontrada" en página amable: URL mal escrita; el
   botón vuelve al panel. Los errores de API siguen en JSON.
+- La tarjeta de retiros sale vacía o el cierre ignora retiros:
+  falta scripts/migracion_retiros_efectivo.sql (V11 §3 del LEEME).
+- Monitor sin tiempos o sin alerta: revisar Opción 6 (SLA) en
+  Configuración y recargar con Ctrl+F5; el sonido necesita que
+  el navegador permita audio (un clic en la página lo activa).
+- Propinas en cero con ventas: normal si las cuentas siguen
+  abiertas; el informe solo suma cuentas cerradas.
 - Pantalla lenta en tablets: verificar red local; los estáticos
   se cachean 1 día (Ctrl+F5 tras actualizar).
 

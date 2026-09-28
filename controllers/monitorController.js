@@ -1,6 +1,35 @@
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
 
+// C5: SLA por área — minutos máximos en cola antes de marcar RETRASADO.
+// Configurable en Opciones generales (sla_cocina_min / sla_bar_min).
+async function leerSlaMin(areaKey) {
+    const clave = areaKey === 'bar' ? 'sla_bar_min' : 'sla_cocina_min';
+    const defecto = areaKey === 'bar' ? 10 : 20;
+    const v = Number(await SettingService.get(clave, defecto));
+    return Number.isFinite(v) && v > 0 ? Math.min(180, Math.floor(v)) : defecto;
+}
+
+function filtroTipoArea(areaKey) {
+    if (areaKey === 'cocina') {
+        return "AND (COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') = 'COMESTIBLES' OR cp.tipo = 'cocina' OR cp.tipo IS NULL OR cp.tipo = '')";
+    }
+    if (areaKey === 'bar') {
+        return "AND (COALESCE(pd.tipo, cp.tipo, '') = 'BEBIDAS' OR cp.tipo = 'bar')";
+    }
+    return '';
+}
+
+// Marca cada comanda con su peor tiempo en cola y si excede el SLA.
+function aplicarSla(comandas, slaMin) {
+    for (const c of comandas) {
+        const peor = (c.items || []).reduce((m, it) => Math.max(m, Number(it.minutos_en_cola || 0)), 0);
+        c.minutos_en_cola = peor;
+        c.excedido = peor >= slaMin;
+    }
+    return comandas;
+}
+
 module.exports = {
     // Vista del Monitor Digital de Cocina / Bar
     viewMonitor: async (req, res) => {
@@ -14,18 +43,16 @@ module.exports = {
             const exitUrl = isAdministrative ? '/admin/dashboard' : '/logout';
 
             let comandas = [];
+            let slaMin = areaKey === 'bar' ? 10 : 20;
             if (habilitarMonitores && pool) {
                 // Consulta de comandas activas
-                let tipoFilter = '';
-                if (areaKey === 'cocina') {
-                    tipoFilter = "AND (COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') = 'COMESTIBLES' OR cp.tipo = 'cocina' OR cp.tipo IS NULL OR cp.tipo = '')";
-                } else if (areaKey === 'bar') {
-                    tipoFilter = "AND (COALESCE(pd.tipo, cp.tipo, '') = 'BEBIDAS' OR cp.tipo = 'bar')";
-                }
+                const tipoFilter = filtroTipoArea(areaKey);
+                slaMin = await leerSlaMin(areaKey);
 
                 const [items] = await pool.query(`
                     SELECT dp.id AS detalle_id, dp.id_pedido, dp.cantidad, dp.notas_especiales, 
                            dp.estado_item, p.creado_en AS fecha_item,
+                           TIMESTAMPDIFF(MINUTE, p.creado_en, NOW()) AS minutos_en_cola,
                            COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre_platillo,
                            pm.categoria AS categoria_id,
                            COALESCE(cp.nombre, 'Oferta Especial') AS categoria_nombre,
@@ -67,17 +94,19 @@ module.exports = {
                         notas_especiales: row.notas_especiales,
                         estado_item: row.estado_item,
                         categoria_tipo: row.categoria_tipo,
-                        fecha_item: row.fecha_item
+                        fecha_item: row.fecha_item,
+                        minutos_en_cola: Number(row.minutos_en_cola || 0)
                     });
                 }
 
-                comandas = Array.from(comandasMap.values());
+                comandas = aplicarSla(Array.from(comandasMap.values()), slaMin);
             }
 
             res.render('monitor', {
                 pageTitle: `Monitor de ${area} • Restaurante Bahía`,
                 area,
                 areaKey,
+                slaMin,
                 habilitarMonitores,
                 comandas,
                 isAdministrative,
@@ -108,16 +137,13 @@ module.exports = {
 
             if (!pool) return res.json({ success: true, habilitarMonitores: true, comandas: [] });
 
-            let tipoFilter = '';
-            if (areaKey === 'cocina') {
-                tipoFilter = "AND (COALESCE(pd.tipo, cp.tipo, 'COMESTIBLES') = 'COMESTIBLES' OR cp.tipo = 'cocina' OR cp.tipo IS NULL OR cp.tipo = '')";
-            } else if (areaKey === 'bar') {
-                tipoFilter = "AND (COALESCE(pd.tipo, cp.tipo, '') = 'BEBIDAS' OR cp.tipo = 'bar')";
-            }
+            const tipoFilter = filtroTipoArea(areaKey);
+            const slaMin = await leerSlaMin(areaKey);
 
             const [items] = await pool.query(`
                 SELECT dp.id AS detalle_id, dp.id_pedido, dp.cantidad, dp.notas_especiales, 
                        dp.estado_item, p.creado_en AS fecha_item,
+                       TIMESTAMPDIFF(MINUTE, p.creado_en, NOW()) AS minutos_en_cola,
                        COALESCE(pd.nombre, pm.nombre, 'Platillo') AS nombre_platillo,
                        pm.categoria AS categoria_id,
                        COALESCE(cp.nombre, 'Oferta Especial') AS categoria_nombre,
@@ -158,15 +184,17 @@ module.exports = {
                     notas_especiales: row.notas_especiales,
                     estado_item: row.estado_item,
                     categoria_tipo: row.categoria_tipo,
-                    fecha_item: row.fecha_item
+                    fecha_item: row.fecha_item,
+                    minutos_en_cola: Number(row.minutos_en_cola || 0)
                 });
             }
 
             res.json({
                 success: true,
                 habilitarMonitores: true,
+                sla_min: slaMin,
                 total_comandas: comandasMap.size,
-                comandas: Array.from(comandasMap.values())
+                comandas: aplicarSla(Array.from(comandasMap.values()), slaMin)
             });
         } catch (err) {
             console.error('Error en getComandasAPI:', err);

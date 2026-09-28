@@ -4,7 +4,7 @@
 // fuera de la lista (enlaces desde el historial) se acepta si existe.
 jest.mock('../config/db', () => ({ query: jest.fn() }));
 jest.mock('../models/reporteModel', () => ({ getReporteKardexPos: jest.fn() }));
-jest.mock('../services/reportesService', () => ({ listarTurnos: jest.fn(), ventasDelTurno: jest.fn() }));
+jest.mock('../services/reportesService', () => ({ listarTurnos: jest.fn(), ventasDelTurno: jest.fn(), propinasDelTurno: jest.fn(), propinasACSV: jest.fn() }));
 
 const db = require('../config/db');
 const ReportesService = require('../services/reportesService');
@@ -84,5 +84,49 @@ describe('reportesController.viewVentasTurno · selección del turno', () => {
 
         expect(ReportesService.ventasDelTurno).not.toHaveBeenCalled();
         expect(res.render).toHaveBeenCalledWith('reportes/ventas_turno', expect.objectContaining({ turnoSeleccionado: null, reporte: null }));
+    });
+});
+
+describe('reportesController · propinas (C6)', () => {
+    const REPORTE = {
+        turno: { id: 9 }, totales: { cuentas: 1 },
+        meseros: [], cuentas: [{ id: 11 }]
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        ReportesService.listarTurnos.mockResolvedValue([TURNO_ACTIVO, TURNO_9, TURNO_8]);
+        ReportesService.propinasDelTurno.mockResolvedValue(REPORTE);
+    });
+
+    it('viewPropinas renderiza el turno pedido si existe', async () => {
+        const { req, res } = crearReqRes({ turno: '9' });
+        await controller.viewPropinas(req, res);
+        expect(ReportesService.propinasDelTurno).toHaveBeenCalledWith(9);
+        expect(res.render).toHaveBeenCalledWith('reportes/propinas', expect.objectContaining({ turnoSeleccionado: 9, reporte: REPORTE }));
+    });
+
+    it('viewPropinas sin turno usa el activo', async () => {
+        const { req, res } = crearReqRes({});
+        await controller.viewPropinas(req, res);
+        expect(ReportesService.propinasDelTurno).toHaveBeenCalledWith(10);
+    });
+
+    it('exportarPropinas descarga el CSV con nombre por turno', async () => {
+        ReportesService.propinasACSV.mockReturnValue('csv');
+        const { req, res } = crearReqRes({ turno: '9' });
+        await controller.exportarPropinas(req, res);
+        expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+        expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringMatching(/^attachment; filename="propinas_turno_9_.*\.csv"$/));
+        expect(res.setHeader).toHaveBeenCalledWith('X-Reporte-Filas', '1');
+        expect(res.send).toHaveBeenCalledWith('csv');
+        expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('exportarPropinas sin turnos redirige a la vista', async () => {
+        ReportesService.listarTurnos.mockResolvedValue([]);
+        const { req, res } = crearReqRes({ turno: '9' });
+        await controller.exportarPropinas(req, res);
+        expect(res.redirect).toHaveBeenCalledWith('/admin/reportes/propinas');
     });
 });

@@ -1,0 +1,91 @@
+ACTUALIZACIÓN V11 — Caja y cocina: retiros, SLA, propinas, cierre ciego (Fase 2.1)
+Restaurante Bahía · 2026-09-28 · Aplica sobre la V10 (cf143d2)
+====================================================================
+
+QUÉ CAMBIA
+----------
+C4 RETIROS DE EFECTIVO A CAJA FUERTE
+- Nueva tarjeta "Retiros de efectivo" en Caja → Turnos: registra cada
+  salida de billetes del turno con monto y motivo (cajero o superior).
+- Cada retiro genera su ACTA imprimible (folio, fecha, turno, cajero,
+  monto, motivo) para firmar y archivar. Botón "Anular" solo para
+  administradores (la anulación queda marcada, nunca se borra).
+- El esperado del cierre RESTA los retiros vigentes automáticamente:
+  esperado = fondo + cobrado − retiros. El cierre guarda el total de
+  retiros en su snapshot (cierres_servicio.total_retiros).
+C5 SLA EN MONITORES DE COCINA Y BAR
+- Cada comanda muestra sus minutos en cola; si supera el límite del
+  área se marca RETRASADO (insignia + anillo rojo) y suena una alerta.
+- El aviso sonoro/visual salta SOLO cuando una comanda pasa a
+  retrasada (sin spam mientras sigue en rojo).
+- Límites configurables en Configuración → Opciones generales,
+  Opción 6: SLA cocina (defecto 20 min) y SLA bar (defecto 10 min).
+C6 INFORME DE PROPINAS POR MESERO
+- Nuevo reporte en Reportes → Propinas del turno: por cada mesero,
+  cuentas atendidas, ventas, propinas, promedio y % del pool, más el
+  detalle cuenta por cuenta. Selector de turno (abierto + historial).
+- Exportación a CSV (Excel) con resumen y detalle.
+C7 CIERRE DE CAJA CIEGO
+- Al cerrar, el sistema ya NO muestra el esperado antes de declarar:
+  el cajero cuenta y escribe el real sin ver el objetivo.
+- Tras cerrar se revela la comparación completa (fondo, cobrado,
+  retiros, esperado, real, diferencia y estado cuadrado/sobrante/
+  faltante) más las propinas informativas del turno.
+- Si hay cuentas abiertas al cerrar, avisa cuántas y por cuánto
+  (no bloquea, solo informa para que no se olviden).
+CORRECCIONES (encontradas por las pruebas nuevas)
+- El monitor digital daba 500 siempre (variable fuera de alcance).
+- El guardado rápido numérico rechazaba al usuario designado del
+  control de precios; ahora solo normaliza las claves SLA.
+- 34 pruebas nuevas (385/385 OK; 3 suites de entorno igual que antes:
+  faltan winston/supertest en dev, sin efecto en producción).
+
+ARCHIVOS INCLUIDOS (24)
+-----------------------
+controllers/turnoController.js         C4 endpoints + C7 datos para la vista
+controllers/turnoController.test.js    NUEVO: 6 pruebas
+controllers/monitorController.js       C5 SLA + corrección del 500
+controllers/monitorController.test.js  NUEVO: 5 pruebas
+controllers/reportesController.js      C6 vista + exportación CSV
+controllers/reportesController.test.js +4 pruebas
+controllers/settingController.js       C5 guardado numérico SLA
+controllers/settingController.test.js  +4 pruebas
+services/turnoService.js               C4 retiros + C7 abiertas
+services/turnoService.test.js          NUEVO: 8 pruebas
+services/cajaService.js                C4 retiros restan del esperado
+services/cajaService.test.js           +3 pruebas
+services/reportesService.js            C6 propinas + CSV
+services/reportesService.test.js       +4 pruebas
+services/settingService.js             C5 lectura de SLA
+routes/turnoRoutes.js                  C4 rutas de retiros
+routes/reporteRoutes.js                C6 rutas de propinas
+scripts/migracion_retiros_efectivo.sql NUEVO: OBLIGATORIA (una vez)
+views/caja/turnos.ejs                  C4 tarjeta+acta + C7 ciego+aviso
+views/monitor.ejs                      C5 insignia RETRASADO + alerta
+views/reportes/propinas.ejs            NUEVO: informe C6
+views/admin/settings.ejs               Opción 6: SLA cocina/bar
+views/includes/sideBarMenu.ejs         enlace a Propinas
+parche/RUNBOOK-OPERACION.txt           guía operativa actualizada (V11)
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Parar el servidor. Respaldo manual preventivo (Configuración).
+2. Descomprima el zip en la RAÍZ conservando las carpetas.
+3. OBLIGATORIO — crear la tabla de retiros (una sola vez):
+     mysql -u USUARIO -p restaurante_db < scripts/migracion_retiros_efectivo.sql
+   (Idempotente: si ya existe, no hace nada. Sin esto, la tarjeta
+   de retiros aparece vacía y el cierre ignora los retiros.)
+4. Sin variables nuevas: su .env NO se toca. Arranque y verifique
+   https://servidor/salud → "ok": true.
+5. Ctrl+F5 en navegadores/tablets y monitores de cocina/bar.
+6. Verificación rápida:
+   a) Caja → Turnos: registrar un retiro de $1 (motivo "prueba"),
+      imprimir su acta, anularlo (admin). El total vuelve a $0.
+   b) Configuración → Opciones generales: Opción 6 muestra los SLA;
+      cambiar cocina a 15 y guardar; el monitor lo refleja.
+   c) Monitor de cocina: una comanda vieja se marca RETRASADO una
+      sola vez (una alerta, no repetida).
+   d) Reportes → Propinas del turno: cuadra con el turno actual;
+      exportar CSV abre bien en Excel.
+   e) Cerrar turno: NO muestra el esperado antes de declarar; tras
+      cerrar revela la comparación con los retiros restados.

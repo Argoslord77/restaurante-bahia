@@ -50,7 +50,13 @@
                     <span id="sync-text">Sincronizado</span>
                     <span id="sync-counter" class="text-xs text-amber-400 font-mono font-bold ml-1"></span>
                 </button>
-                
+
+                <!-- C5: contador de comandas que exceden el SLA -->
+                <span id="sla-pill" class="hidden h-11 min-w-[170px] bg-red-600/20 border-2 border-red-500 text-red-200 px-5 py-2 text-sm font-bold items-center justify-center gap-2" style="border-radius: 9999px !important; display: none;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span id="sla-pill-texto">0 retrasadas</span>
+                </span>
+
                 <!-- Botón Refrescar -->
                 <button id="btn-reload" 
                         type="button"
@@ -127,6 +133,9 @@
         const CURRENT_AREA_KEY = '<%= currentAreaKey %>';
         const CURRENT_AREA_NAME = '<%= currentArea %>';
         const INTERVALO_SEGUNDOS = 15;
+        // C5: SLA en minutos (servidor; por defecto 20 cocina / 10 bar).
+        const SLA_MIN = <%= (typeof slaMin !== 'undefined' && slaMin) ? slaMin : (currentAreaKey === 'bar' ? 10 : 20) %>;
+        let ultimoSlaMin = SLA_MIN;
         
         let countdownInterval = null;
         let timeLeft = INTERVALO_SEGUNDOS;
@@ -134,6 +143,7 @@
 
         // Registro de IDs conocidos para comparar ingresos nuevos sin recargar la página
         let idsItemsConocidos = new Set();
+        let idsExcedidosConocidos = new Set();
         let esPrimerCarga = true;
 
         // Carga inicial inyectada desde Express (SSR)
@@ -160,6 +170,7 @@
                 const data = await response.json();
 
                 if (data.success && Array.isArray(data.comandas)) {
+                    if (Number(data.sla_min) > 0) ultimoSlaMin = Number(data.sla_min);
                     procesarYRenderizar(data.comandas);
                 }
             } catch (error) {
@@ -201,6 +212,30 @@
                         title: CURRENT_AREA_KEY === 'cocina' ? '¡Nuevos platillos en comanda!' : '¡Nuevas bebidas en comanda!'
                     });
                 }
+            }
+
+            // C5: SLA — avisar solo cuando una comanda RECIÉN excede el
+            // límite (no en cada sondeo) para no fatigar con sonido.
+            const slaLimite = (typeof ultimoSlaMin === 'number' && ultimoSlaMin > 0) ? ultimoSlaMin : SLA_MIN;
+            const excedidasAhora = [];
+            comandas.forEach(comanda => {
+                if (Number(comanda.minutos_en_cola || 0) >= slaLimite) excedidasAhora.push(String(comanda.id_pedido));
+            });
+            const nuevasExcedidas = excedidasAhora.filter(id => !idsExcedidosConocidos.has(id));
+            idsExcedidosConocidos = new Set(excedidasAhora);
+            if (!esPrimerCarga && nuevasExcedidas.length > 0) {
+                playAreaNotificationSound();
+                const ToastSla = Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 5000,
+                    timerProgressBar: true
+                });
+                ToastSla.fire({
+                    icon: 'warning',
+                    title: nuevasExcedidas.length + ' comanda(s) exceden el SLA (' + slaLimite + ' min)'
+                });
             }
 
             // Actualizar Set de control
@@ -266,14 +301,23 @@
                         <p class="text-slate-400 text-sm mt-1.5">No hay ordenes pendientes en ${CURRENT_AREA_NAME}.</p>
                     </div>
                 `;
+                const pillVacia = document.getElementById('sla-pill');
+                if (pillVacia) pillVacia.style.display = 'none';
                 return;
             }
 
             let html = `<div class="flex flex-col space-y-6 md:space-y-0 md:flex-row md:inline-flex md:space-x-6 h-full items-start align-top w-full md:w-auto">`;
 
+            const slaLimiteCards = (typeof ultimoSlaMin === 'number' && ultimoSlaMin > 0) ? ultimoSlaMin : SLA_MIN;
             comandas.forEach(comanda => {
+                // C5: insignia RETRASADO si excede el SLA.
+                const minCola = Number(comanda.minutos_en_cola || 0);
+                const excedida = minCola >= slaLimiteCards;
+                const insigniaSla = excedida
+                    ? '<span class="text-[11px] text-white font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-red-600 px-3 py-1.5 rounded-lg border border-red-700 animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> Retrasado +' + minCola + ' min (SLA ' + slaLimiteCards + ')</span>'
+                    : '<span class="text-[11px] text-[#b45309] font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-[#fef3c7] px-3 py-1.5 rounded-lg border border-[#fde68a]"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> En cola</span>';
                 html += `
-                    <div class="w-full md:w-85 bg-[#f8fafc] rounded-3xl shadow-2xl flex flex-col max-h-[68vh] whitespace-normal flex-shrink-0 transition-all border border-slate-200/60 overflow-hidden transform hover:translate-y-[-4px] duration-200">
+                    <div class="w-full md:w-85 bg-[#f8fafc] rounded-3xl shadow-2xl flex flex-col max-h-[68vh] whitespace-normal flex-shrink-0 transition-all border ${excedida ? 'border-red-500 ring-2 ring-red-500/70' : 'border-slate-200/60'} overflow-hidden transform hover:translate-y-[-4px] duration-200">
                         <div class="p-4 bg-[#f1f5f9] border-b border-slate-200/80 flex justify-between items-center">
                             <div>
                                 <span class="bg-[#1e293b] text-white text-[11px] px-3.5 py-1.5 rounded-xl font-black tracking-widest uppercase shadow-sm">
@@ -282,9 +326,7 @@
                                 <div class="text-[11px] text-slate-500 mt-2.5 font-bold tracking-wider">ORDEN #${comanda.id_pedido}</div>
                                 <div class="text-[11px] text-slate-500 mt-1 font-bold tracking-wider">⏱ EN ELABORACIÓN <span class="text-slate-700" data-t0="${comanda.fecha_pedido}">…</span></div>
                             </div>
-                            <span class="text-[11px] text-[#b45309] font-extrabold tracking-wider uppercase flex items-center gap-1.5 bg-[#fef3c7] px-3 py-1.5 rounded-lg border border-[#fde68a]">
-                                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> En cola
-                            </span>
+                            ${insigniaSla}
                         </div>
 
                         <div class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar bg-white">
@@ -330,6 +372,19 @@
 
             html += `</div>`;
             main.innerHTML = html;
+
+            // C5: píldora del encabezado con el conteo de retrasadas.
+            const pill = document.getElementById('sla-pill');
+            const pillTexto = document.getElementById('sla-pill-texto');
+            if (pill && pillTexto) {
+                const nRetrasadas = comandas.filter(c => Number(c.minutos_en_cola || 0) >= slaLimiteCards).length;
+                if (nRetrasadas > 0) {
+                    pillTexto.textContent = nRetrasadas + (nRetrasadas === 1 ? ' retrasada' : ' retrasadas') + ' (SLA ' + slaLimiteCards + ' min)';
+                    pill.style.display = 'inline-flex';
+                } else {
+                    pill.style.display = 'none';
+                }
+            }
 
             // Vincular los eventos de los botones recién renderizados
             main.querySelectorAll('.btn-complete').forEach(btn => {

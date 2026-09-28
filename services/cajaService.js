@@ -67,7 +67,8 @@ async function obtenerDesglosePagos(turnoId, connection = db) {
     }));
 }
 
-function calcularResumenFinanciero(pedidos, desglosePagos, fondoApertura = 0) {
+// C4: totalRetiros resta del esperado (retiros vigentes a caja fuerte).
+function calcularResumenFinanciero(pedidos, desglosePagos, fondoApertura = 0, totalRetiros = 0) {
     let totalCxcFacturas = 0;
     let totalPendientePago = 0;
     let totalCortesias = 0;
@@ -95,6 +96,7 @@ function calcularResumenFinanciero(pedidos, desglosePagos, fondoApertura = 0) {
         .reduce((sum, pago) => sum + Number(pago.total_local || 0), 0);
 
     const fondo = Number(fondoApertura || 0);
+    const retiros = Math.max(0, Number(totalRetiros || 0));
     // El efectivo de caja son los abonos en efectivo TAL CUAL: ya traen
     // dentro las propinas pagadas en efectivo (el cobro exige abonos >=
     // orden + propina), así que sumar totalPropinas aquí las contaría
@@ -114,9 +116,11 @@ function calcularResumenFinanciero(pedidos, desglosePagos, fondoApertura = 0) {
         total_pendiente_pago: totalPendientePago,
         total_cortesias: totalCortesias,
         total_propinas: totalPropinas,
+        total_retiros: retiros,
         total_pedidos: (pedidos || []).length,
         fondo_apertura: fondo,
-        total_en_caja_esperado: fondo + totalEfectivoCaja
+        // C4: lo retirado a caja fuerte salió de la gaveta: no se espera.
+        total_en_caja_esperado: fondo + totalEfectivoCaja - retiros
     };
 }
 
