@@ -12,6 +12,11 @@ module.exports = {
     '**/__tests__/**/*.js',
     '**/?(*.)+(spec|test).js'
   ],
+  // config/environments/test.js es configuración (no una prueba).
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/config/environments/'
+  ],
   verbose: true,
   testTimeout: 10000
 };

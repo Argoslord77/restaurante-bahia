@@ -1,0 +1,66 @@
+GUÍA DE DESPLIEGUE — FASE 2 (V11 + V12 + V13)
+Restaurante Bahía · 2026-09-28 · Aplica sobre la V10 (cf143d2)
+====================================================================
+La Fase 2 entrega: V11 caja/cocina (retiros, SLA, propinas, cierre
+ciego), V12 sala/cuentas (reservas, trasladar/unir/dividir) y V13
+compras (proveedores, sugerido). Todo con pruebas: 458/458 OK.
+
+DECIDA SU CAMINO (solo uno)
+---------------------------
+A) INCREMENTAL (ya aplicó V11 o V12): descomprima en orden, en la RAÍZ:
+     1. restaurante-bahia-actualizacion-V11-2026-09-28.zip
+     2. restaurante-bahia-actualizacion-V12-2026-09-28.zip
+     3. restaurante-bahia-actualizacion-V13-2026-09-28.zip
+   (El V13 trae el app.js que le faltó al V12: repara las rutas
+   /admin/reservas y /admin/cuentas aunque la V12 quedó a medias.)
+B) ACUMULADO (viene directo de V10): un solo zip en la RAÍZ:
+     restaurante-bahia-FASE2-acumulado-V11-V12-V13-2026-09-28.zip
+   Trae lo mismo que A+B+C juntos + esta guía + el verificador.
+
+PASOS (ambos caminos)
+---------------------
+1. Parar el servidor (pm2 stop bahia — o su proceso).
+2. Respaldo preventivo: Configuración → Respaldo (o copie backups/).
+3. Descomprimir el/los zip en la RAÍZ del proyecto (conserva carpetas).
+4. Verificar archivos ANTES de arrancar:
+       bash scripts/verificar_fase2.sh
+   Debe decir "30 comprobaciones OK". Si falla, re-descomprima.
+5. OBLIGATORIO — las 3 migraciones, EN ORDEN (idempotentes: repetir
+   no hace daño; si alguna ya se aplicó, no hace nada):
+       mysql -u USUARIO -p restaurante_db < scripts/migracion_retiros_efectivo.sql
+       mysql -u USUARIO -p restaurante_db < scripts/migracion_reservas_cuentas.sql
+       mysql -u USUARIO -p restaurante_db < scripts/migracion_proveedores_compras.sql
+6. Sin variables nuevas: su .env NO se toca. Si aún no rotó los
+   secretos de la V10 (RUNBOOK §6), hágalo ahora.
+7. Arrancar (pm2 start / restart) y abrir https://servidor/salud:
+   debe decir "ok": true.
+8. Ctrl+F5 en navegadores, tablets y monitores de cocina/bar.
+
+HUMO RÁPIDO (10 minutos, en orden)
+----------------------------------
+V11 a) Caja → Turnos: retiro de $1 (motivo "prueba") → acta →
+       anular (admin) → total $0.
+   b) Configuración → Opciones generales, Opción 6: SLA cocina/bar.
+   c) Reportes → Propinas del turno cuadra; CSV abre en Excel.
+   d) Cerrar turno: NO muestra el esperado antes; lo revela después.
+V12 e) Reservas: apartar, traslape a 30 min (rechaza), sentar (abre
+       cuenta), cancelar (libera mesa).
+   f) Cuentas abiertas: trasladar, dividir 1 ítem, unir de vuelta.
+V13 g) Proveedores: crear, ficha, entrada con proveedor.
+   h) Reportes → Sugerido de compra: urgencias + CSV.
+
+SI ALGO FALLA
+-------------
+- El verificador (§4) dice QUÉ archivo falta y de qué versión es.
+- 404 en /admin/reservas, /admin/cuentas o /admin/proveedores:
+  app.js viejo → re-descomprima el zip V13 o el acumulado y reinicie.
+- Error en una vista nueva: falta su migración (§5); aplíquela con
+  el servidor detenido y reinicie.
+- Más casos: RUNBOOK-OPERACION.txt §5 (sección por versión).
+- Vuelta atrás: restaure el respaldo del §2 y el código anterior
+  (git). Las migraciones solo AGREGAN (tablas/columnas/valores):
+  no borran datos y convivien con el código viejo.
+
+DETALLE POR VERSIÓN
+-------------------
+parche/LEEME-ACTUALIZACION-V11.txt · -V12.txt · -V13.txt
