@@ -1271,6 +1271,114 @@ function propinasACSV(reporte) {
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
+// V13 (C8): salidas que SÍ reflejan consumo (las transferencias entre
+// almacenes y devoluciones no son gasto: se excluyen del promedio).
+const TIPOS_CONSUMO_SUGERIDO = ['VENTA', 'CONSUMO_RECETA', 'MERMA', 'PRODUCCION_SALIDA'];
+
+/**
+ * Sugerido de compra: qué pedir y cuánto. Para cada producto activo con
+ * necesidad (sugerido > 0): stock actual (lotes), consumo diario promedio
+ * de la ventana y objetivo = máximo(mínimo, consumo × cobertura).
+ * La cobertura respeta dias_cobertura del producto o el valor pedido.
+ */
+async function sugeridoCompra({ dias = 30, cobertura = 7 } = {}) {
+    const ventana = Math.min(90, Math.max(7, Number(dias) || 30));
+    const coberturaDefault = Math.min(60, Math.max(1, Number(cobertura) || 7));
+    const [filas] = await db.query(`
+        SELECT p.id, p.codigo, p.nombre,
+               MAX(um.abreviatura) AS unidad,
+               COALESCE(p.stock_minimo, 0) AS minimo,
+               COALESCE(p.dias_cobertura, ?) AS cobertura_dias,
+               COALESCE(SUM(l.cantidad_actual), 0) AS stock,
+               COALESCE(c.consumo, 0) / ? AS consumo_diario,
+               GREATEST(COALESCE(p.stock_minimo, 0),
+                        (COALESCE(c.consumo, 0) / ?) * COALESCE(p.dias_cobertura, ?)) AS objetivo,
+               GREATEST(GREATEST(COALESCE(p.stock_minimo, 0),
+                        (COALESCE(c.consumo, 0) / ?) * COALESCE(p.dias_cobertura, ?))
+                        - COALESCE(SUM(l.cantidad_actual), 0), 0) AS sugerido,
+               MAX(pp.precio_referencia) AS precio_ref,
+               MAX(pr.nombre_comercial) AS proveedor,
+               COALESCE(p.costo_promedio, 0) AS costo_promedio,
+               COALESCE(p.costo_ultimo, 0) AS costo_ultimo
+        FROM productos p
+        LEFT JOIN unidades_medida um ON um.id = p.unidad_inventario_id
+        LEFT JOIN lotes l ON l.producto_id = p.id AND l.cantidad_actual > 0
+        LEFT JOIN (
+            SELECT producto_id, SUM(cantidad) AS consumo
+            FROM movimientos_inventario
+            WHERE tipo_movimiento IN ('VENTA', 'CONSUMO_RECETA', 'MERMA', 'PRODUCCION_SALIDA')
+              AND fecha_movimiento >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY producto_id
+        ) c ON c.producto_id = p.id
+        LEFT JOIN proveedores_productos pp
+            ON pp.producto_id = p.id AND pp.proveedor_preferido = 1 AND pp.activo = 1
+        LEFT JOIN proveedores pr ON pr.id = pp.proveedor_id AND pr.activo = 1
+        WHERE p.activo = 1
+        GROUP BY p.id, p.codigo, p.nombre, p.stock_minimo, p.dias_cobertura,
+                 p.costo_promedio, p.costo_ultimo, c.consumo
+        HAVING sugerido > 0
+        ORDER BY stock ASC
+        LIMIT 500
+    `, [coberturaDefault, ventana, ventana, coberturaDefault, ventana, coberturaDefault, ventana]);
+
+    const items = filas.map((f) => {
+        const stock = num(f.stock, 3);
+        const minimo = num(f.minimo, 3);
+        const sugerido = num(f.sugerido, 3);
+        const precio = Number(f.precio_ref) > 0 ? Number(f.precio_ref)
+            : Number(f.costo_promedio) > 0 ? Number(f.costo_promedio)
+            : Number(f.costo_ultimo) || 0;
+        return {
+            id: f.id,
+            codigo: f.codigo,
+            producto: f.nombre,
+            unidad: f.unidad || '',
+            stock,
+            minimo,
+            consumoDiario: num(f.consumo_diario, 3),
+            coberturaDias: num(f.cobertura_dias),
+            objetivo: num(f.objetivo, 3),
+            sugerido,
+            proveedor: f.proveedor || null,
+            precioRef: num(precio, 2),
+            costoEst: num(sugerido * precio, 2),
+            urgencia: stock <= 0 ? 'AGOTADO' : (stock < minimo ? 'URGENTE' : 'REPONER')
+        };
+    });
+    const peso = { AGOTADO: 0, URGENTE: 1, REPONER: 2 };
+    items.sort((a, b) => (peso[a.urgencia] - peso[b.urgencia]) || (b.costoEst - a.costoEst));
+    return {
+        parametros: { dias: ventana, cobertura: coberturaDefault },
+        items,
+        totales: {
+            items: items.length,
+            monto: num(items.reduce((acc, i) => acc + i.costoEst, 0), 2),
+            agotados: items.filter((i) => i.urgencia === 'AGOTADO').length,
+            urgentes: items.filter((i) => i.urgencia === 'URGENTE').length
+        }
+    };
+}
+
+/** CSV del sugerido: lista de compra lista para cotizar/pedir. */
+function sugeridoCompraACSV(reporte) {
+    const filas = [];
+    const prm = (reporte && reporte.parametros) || {};
+    filas.push(`Sugerido de compra;Consumo ${csvNum(prm.dias || 30, 0)} dias;Cobertura ${csvNum(prm.cobertura || 7, 0)} dias`);
+    filas.push('');
+    filas.push('Urgencia;Codigo;Producto;Unidad;Stock;Minimo;Consumo diario;Objetivo;Sugerido;Proveedor;Precio ref.;Costo est.');
+    for (const i of ((reporte && reporte.items) || [])) {
+        filas.push([
+            csvTexto(i.urgencia), csvTexto(i.codigo), csvTexto(i.producto), csvTexto(i.unidad),
+            csvNum(i.stock, 3), csvNum(i.minimo, 3), csvNum(i.consumoDiario, 3),
+            csvNum(i.objetivo, 3), csvNum(i.sugerido, 3), csvTexto(i.proveedor || '—'),
+            csvNum(i.precioRef), csvNum(i.costoEst)
+        ].join(';'));
+    }
+    const tot = (reporte && reporte.totales) || {};
+    filas.push(`TOTALES;;;${csvNum(tot.items || 0, 0)} items;;;;;;;;${csvNum(tot.monto || 0)}`);
+    return '\uFEFF' + filas.join('\r\n') + '\r\n';
+}
+
 module.exports = {
     saludInventario,
     margenPorPlatillo,
@@ -1288,5 +1396,7 @@ module.exports = {
     ventasHorasACSV,
     ventasTurnoACSV,
     propinasDelTurno,
-    propinasACSV
+    propinasACSV,
+    sugeridoCompra,
+    sugeridoCompraACSV
 };

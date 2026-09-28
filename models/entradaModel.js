@@ -21,6 +21,8 @@ const Entrada = {
                 p.unidad_inventario_id,
                 ui.abreviatura AS unidad_inventario_abreviatura,
                 l.estado,
+                l.proveedor_id,
+                pr.nombre_comercial AS proveedor_nombre,
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
                 a.nombre AS almacen_nombre
@@ -29,6 +31,7 @@ const Entrada = {
             INNER JOIN almacenes a ON l.almacen_id = a.id
             LEFT JOIN unidades_medida um ON l.unidad_medida_id = um.id
             LEFT JOIN unidades_medida ui ON p.unidad_inventario_id = ui.id
+            LEFT JOIN proveedores pr ON l.proveedor_id = pr.id
             ORDER BY l.created_at DESC
         `;
         const [rows] = await db.query(query);
@@ -49,6 +52,20 @@ const Entrada = {
             }
             if (!Number.isFinite(Number(data.costo_unitario)) || Number(data.costo_unitario) < 0) {
                 throw new Error('El costo unitario de la entrada no es válido.');
+            }
+
+            // V13 (C1): proveedor opcional pero validado si viene.
+            let proveedorId = null;
+            if (data.proveedor_id !== undefined && data.proveedor_id !== null && data.proveedor_id !== '') {
+                proveedorId = Number(data.proveedor_id);
+                if (!Number.isInteger(proveedorId) || proveedorId <= 0) {
+                    throw new Error('El proveedor indicado no es válido.');
+                }
+                const [provRows] = await conn.query(
+                    'SELECT id FROM proveedores WHERE id = ? AND activo = 1 LIMIT 1', [proveedorId]);
+                if (provRows.length === 0) {
+                    throw new Error('El proveedor indicado no existe o está inactivo.');
+                }
             }
 
             // La cantidad que opera inventario queda normalizada a la unidad
@@ -80,8 +97,8 @@ const Entrada = {
                 INSERT INTO lotes
                 (producto_id, almacen_id, numero_lote, fecha_ingreso, fecha_vencimiento,
                  cantidad_inicial, cantidad_actual, costo_unitario, unidad_medida_id,
-                 cantidad_ingresada, estado, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', NOW(), NOW())
+                 cantidad_ingresada, proveedor_id, estado, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', NOW(), NOW())
             `;
             
             const [result] = await conn.query(queryLote, [
@@ -94,7 +111,8 @@ const Entrada = {
                 cantidadInventario,
                 costoInventario,
                 unidadEntrada.unidad.id,
-                data.cantidad
+                data.cantidad,
+                proveedorId
             ]);
 
             // 5. Kardex de la entrada (movimientos_inventario, esquema real)

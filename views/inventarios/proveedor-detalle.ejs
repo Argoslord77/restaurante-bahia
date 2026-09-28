@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proveedor <%= proveedor.nombre %> - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                <div class="flex-grow-1">
+                    <a href="/admin/proveedores" class="btn btn-sm btn-outline-secondary mb-3">
+                        <i class="fa-solid fa-arrow-left me-1"></i> Proveedores
+                    </a>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+                        <div>
+                            <h1 class="h3 mb-1"><%= proveedor.nombre %>
+                                <% if (proveedor.activo) { %>
+                                <span class="badge bg-success-subtle text-success fs-6">Activo</span>
+                                <% } else { %>
+                                <span class="badge bg-secondary-subtle text-secondary fs-6">Inactivo</span>
+                                <% } %>
+                            </h1>
+                            <p class="text-muted mb-0 font-monospace"><%= proveedor.codigo %></p>
+                        </div>
+                        <% if (proveedor.activo) { %>
+                        <a class="btn btn-dark" href="/admin/almacenes/entradas?proveedor=<%= proveedor.id %>">
+                            <i class="fa-solid fa-plus me-1"></i> Registrar compra
+                        </a>
+                        <% } %>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-header bg-white"><strong>Datos</strong></div>
+                                <div class="card-body small">
+                                    <div class="row mb-2"><div class="col-5 text-muted">Razón social</div><div class="col-7"><%= proveedor.razonSocial || '—' %></div></div>
+                                    <div class="row mb-2"><div class="col-5 text-muted">Identificación</div><div class="col-7"><%= proveedor.identificacion || '—' %></div></div>
+                                    <div class="row mb-2"><div class="col-5 text-muted">Teléfono</div><div class="col-7"><%= proveedor.telefono || '—' %></div></div>
+                                    <div class="row mb-2"><div class="col-5 text-muted">Correo</div><div class="col-7"><%= proveedor.email || '—' %></div></div>
+                                    <div class="row mb-2"><div class="col-5 text-muted">Contacto</div><div class="col-7"><%= proveedor.contacto || '—' %></div></div>
+                                    <div class="row mb-2"><div class="col-5 text-muted">Dirección</div><div class="col-7"><%= proveedor.direccion || '—' %></div></div>
+                                    <div class="row mb-2"><div class="col-5 text-muted">Condiciones</div><div class="col-7"><%= proveedor.condicionesPago || '—' %></div></div>
+                                    <div class="row"><div class="col-5 text-muted">Crédito</div><div class="col-7"><%= proveedor.diasCredito %> días · $<%= Number(proveedor.limiteCredito).toFixed(2) %></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-header bg-white"><strong>Resumen de compras</strong></div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between border-bottom py-2"><span> Movimientos</span><strong><%= resumen.movimientos %></strong></div>
+                                    <div class="d-flex justify-content-between border-bottom py-2"><span>Productos distintos</span><strong><%= resumen.productos %></strong></div>
+                                    <div class="d-flex justify-content-between border-bottom py-2"><span>Monto acumulado</span><strong>$<%= Number(resumen.monto).toFixed(2) %></strong></div>
+                                    <div class="d-flex justify-content-between py-2"><span>Última compra</span><strong data-fecha="<%= resumen.ultimaCompra || '' %>"><%= resumen.ultimaCompra || '—' %></strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <% if (resumen.topProductos.length) { %>
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-white"><strong>Productos más comprados</strong></div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr><th>Producto</th><th class="text-center">Compras</th><th class="text-end">Cantidad</th><th class="text-end">Monto</th></tr>
+                                </thead>
+                                <tbody>
+                                    <% resumen.topProductos.forEach(function(t) { %>
+                                    <tr>
+                                        <td><%= t.producto %></td>
+                                        <td class="text-center"><%= t.movimientos %></td>
+                                        <td class="text-end"><%= Number(t.cantidad).toFixed(2) %> <%= t.unidad %></td>
+                                        <td class="text-end">$<%= Number(t.monto).toFixed(2) %></td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <% } %>
+
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <strong>Historial de compras</strong>
+                            <span class="text-muted small">Últimas <%= historial.length %> · $<%= Number(totalHistorial.monto).toFixed(2) %></span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr><th>Fecha</th><th>Lote</th><th>Producto</th><th>Almacén</th><th class="text-end">Cantidad</th><th class="text-end">Costo unit.</th><th class="text-end">Monto</th></tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!historial.length) { %>
+                                    <tr><td colspan="7" class="text-center text-muted py-4">Sin compras registradas a este proveedor.</td></tr>
+                                    <% } %>
+                                    <% historial.forEach(function(c) { %>
+                                    <tr>
+                                        <td data-fecha="<%= c.fecha %>"><%= c.fecha %></td>
+                                        <td class="font-monospace"><%= c.lote %></td>
+                                        <td><%= c.producto %></td>
+                                        <td><%= c.almacen %></td>
+                                        <td class="text-end"><%= Number(c.cantidad).toFixed(2) %> <%= c.unidad %></td>
+                                        <td class="text-end">$<%= Number(c.costoUnitario).toFixed(2) %></td>
+                                        <td class="text-end">$<%= Number(c.monto).toFixed(2) %></td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        document.querySelectorAll('[data-fecha]').forEach(function(td) {
+            const v = td.getAttribute('data-fecha');
+            if (!v) return;
+            const f = new Date(v);
+            if (!isNaN(f.getTime())) {
+                const p = function(n) { return String(n).padStart(2, '0'); };
+                td.textContent = p(f.getDate()) + '/' + p(f.getMonth() + 1) + '/' + f.getFullYear();
+            }
+        });
+    </script>
+</body>
+</html>

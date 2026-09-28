@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sugerido de Compra - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+
+            <%- include('../includes/topBarMobile') %>
+
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-3 px-md-5 py-4 d-flex flex-column min-vh-100">
+
+                <%- include('../includes/header', {encabezado_pagina: 'Sugerido de Compra', desc_pagina: 'Qué pedir y cuánto: stock actual vs consumo promedio, cobertura objetivo y proveedor preferido.', add_btn: false}) %>
+
+                <% const fmt$ = (v) => '$' + Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); %>
+                <% const fmtN = (v, d) => Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); %>
+                <% const urgBadge = (u) => u === 'AGOTADO' ? 'text-bg-danger' : (u === 'URGENTE' ? 'text-bg-warning' : 'text-bg-primary'); %>
+
+                <!-- Filtros -->
+                <div class="card border-0 shadow-sm rounded p-3 mb-4 bg-white">
+                    <form method="get" action="/admin/reportes/sugerido-compra" class="row g-2 align-items-end">
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1">Consumo (días)</label>
+                            <input type="number" name="dias" class="form-control form-control-sm" min="7" max="90" value="<%= reporte.parametros.dias %>">
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small text-muted fw-semibold mb-1">Cobertura (días)</label>
+                            <input type="number" name="cobertura" class="form-control form-control-sm" min="1" max="60" value="<%= reporte.parametros.cobertura %>">
+                        </div>
+                        <div class="col-12 col-md-2 d-grid">
+                            <button type="submit" class="btn btn-dark btn-sm fw-semibold py-2">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Consultar
+                            </button>
+                        </div>
+                        <div class="col-12 col-md-6 d-flex justify-content-md-end gap-2">
+                            <a href="/admin/reportes/sugerido-compra/exportar?dias=<%= reporte.parametros.dias %>&cobertura=<%= reporte.parametros.cobertura %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
+                            </a>
+                            <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Resumen -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white border-start border-danger border-4">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Costo estimado</h6>
+                            <h3 class="fw-bold mb-0 text-danger"><%= fmt$(reporte.totales.monto) %></h3>
+                            <small class="text-muted"><%= fmtN(reporte.totales.items) %> producto(s) a pedir</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Agotados</h6>
+                            <h3 class="fw-bold mb-0 text-dark"><%= fmtN(reporte.totales.agotados) %></h3>
+                            <small class="text-muted">Sin stock: pedir hoy</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Bajo mínimo</h6>
+                            <h3 class="fw-bold mb-0 text-dark"><%= fmtN(reporte.totales.urgentes) %></h3>
+                            <small class="text-muted">Incluir en el pedido</small>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="card border-0 shadow-sm rounded p-3 h-100 bg-white">
+                            <h6 class="text-muted fw-semibold mb-1 fs-7">Parámetros</h6>
+                            <h3 class="fw-bold mb-0 text-dark"><%= fmtN(reporte.parametros.dias) %> / <%= fmtN(reporte.parametros.cobertura) %></h3>
+                            <small class="text-muted">Días de consumo / cobertura</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detalle -->
+                <div class="card border-0 shadow-sm rounded bg-white overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Urgencia</th>
+                                    <th>Producto</th>
+                                    <th class="text-end">Stock</th>
+                                    <th class="text-end">Mínimo</th>
+                                    <th class="text-end">Cons./día</th>
+                                    <th class="text-end">Objetivo</th>
+                                    <th class="text-end">Sugerido</th>
+                                    <th>Proveedor</th>
+                                    <th class="text-end">Costo est.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (!reporte.items.length) { %>
+                                <tr><td colspan="9" class="text-center text-muted py-4">Todo cubierto: ningún producto necesita compra con estos parámetros.</td></tr>
+                                <% } %>
+                                <% reporte.items.forEach(function(i) { %>
+                                <tr>
+                                    <td><span class="badge <%= urgBadge(i.urgencia) %>"><%= i.urgencia %></span></td>
+                                    <td><strong><%= i.producto %></strong> <span class="text-muted font-monospace"><%= i.codigo %></span></td>
+                                    <td class="text-end"><%= fmtN(i.stock, 2) %> <%= i.unidad %></td>
+                                    <td class="text-end"><%= fmtN(i.minimo, 2) %></td>
+                                    <td class="text-end"><%= fmtN(i.consumoDiario, 2) %></td>
+                                    <td class="text-end"><%= fmtN(i.objetivo, 2) %></td>
+                                    <td class="text-end fw-bold"><%= fmtN(i.sugerido, 2) %> <%= i.unidad %></td>
+                                    <td><%= i.proveedor || '—' %></td>
+                                    <td class="text-end"><%= fmt$(i.costoEst) %></td>
+                                </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="alert alert-light border small text-muted mt-3 mb-0">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    El objetivo es el máximo entre el mínimo del producto y su consumo diario × cobertura (la del producto o la pedida).
+                    El proveedor es el preferido del producto, si está configurado. Cantidades en unidad de inventario.
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+</body>
+</html>

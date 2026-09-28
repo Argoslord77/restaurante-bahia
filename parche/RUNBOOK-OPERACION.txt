@@ -1,4 +1,4 @@
-RUNBOOK DE OPERACIÓN — Restaurante Bahía (V12)
+RUNBOOK DE OPERACIÓN — Restaurante Bahía (V13)
 ================================================
 Guía rápida para el administrador del servidor. Detalle de cada
 versión en su LEEME-ACTUALIZACION-V*.txt.
@@ -14,6 +14,8 @@ versión en su LEEME-ACTUALIZACION-V*.txt.
 - Revisar Reportes → Propinas del turno para el reparto.
 - Reservas: apartar con hora real; sentar a la llegada (abre la
   cuenta) y cancelar/no-show si no viene (libera la mesa).
+- Compras: registrar cada entrada con su proveedor; revisar el
+  Sugerido de compra antes de pedir (cubre stock mínimo y consumo).
 - El respaldo de la BD es AUTOMÁTICO cada madrugada (ver §3).
 
 2) APLICAR UNA ACTUALIZACIÓN (zip V*)
@@ -76,6 +78,12 @@ versión en su LEEME-ACTUALIZACION-V*.txt.
   mover la hora o usar otra mesa.
 - No deja unir/dividir ("mismo turno"): las cuentas son de turnos
   distintos; cóbrelas por separado.
+- /admin/reservas o /admin/cuentas dan 404: aplicar la V13 (su zip
+  trae el app.js con los montajes que faltaron en la V12).
+- /admin/proveedores da error o la entrada no acepta proveedor:
+  falta scripts/migracion_proveedores_compras.sql (V13 §3).
+- Sugerido vacío con stock bajo: revisar stock_minimo y dias_cobertura
+  del producto en el Catálogo (ceros = sin objetivo).
 - Propinas en cero con ventas: normal si las cuentas siguen
   abiertas; el informe solo suma cuentas cerradas.
 - Pantalla lenta en tablets: verificar red local; los estáticos

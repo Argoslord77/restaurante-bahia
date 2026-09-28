@@ -27,6 +27,7 @@ router.get('/reportes/consumo-insumos', ensureAuthenticated, puedeVer, reportesC
 router.get('/reportes/ventas-horas', ensureAuthenticated, puedeVer, reportesController.viewVentasHoras);
 router.get('/reportes/ventas-turno', ensureAuthenticated, puedeVer, reportesController.viewVentasTurno);
 router.get('/reportes/propinas', ensureAuthenticated, puedeVer, reportesController.viewPropinas);
+router.get('/reportes/sugerido-compra', ensureAuthenticated, puedeVer, reportesController.viewSugerido);
 
 // ── Exportaciones a CSV (Excel) ─────────────────────────────────────────
 router.get('/reportes/salud-inventario/exportar', ensureAuthenticated, puedeVer, reportesController.exportarSaludInventario);
@@ -37,5 +38,6 @@ router.get('/reportes/consumo-insumos/exportar', ensureAuthenticated, puedeVer, 
 router.get('/reportes/ventas-horas/exportar', ensureAuthenticated, puedeVer, reportesController.exportarVentasHoras);
 router.get('/reportes/ventas-turno/exportar', ensureAuthenticated, puedeVer, reportesController.exportarVentasTurno);
 router.get('/reportes/propinas/exportar', ensureAuthenticated, puedeVer, reportesController.exportarPropinas);
+router.get('/reportes/sugerido-compra/exportar', ensureAuthenticated, puedeVer, reportesController.exportarSugerido);
 
 module.exports = router;

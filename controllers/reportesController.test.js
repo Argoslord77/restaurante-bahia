@@ -4,7 +4,7 @@
 // fuera de la lista (enlaces desde el historial) se acepta si existe.
 jest.mock('../config/db', () => ({ query: jest.fn() }));
 jest.mock('../models/reporteModel', () => ({ getReporteKardexPos: jest.fn() }));
-jest.mock('../services/reportesService', () => ({ listarTurnos: jest.fn(), ventasDelTurno: jest.fn(), propinasDelTurno: jest.fn(), propinasACSV: jest.fn() }));
+jest.mock('../services/reportesService', () => ({ listarTurnos: jest.fn(), ventasDelTurno: jest.fn(), propinasDelTurno: jest.fn(), propinasACSV: jest.fn(), sugeridoCompra: jest.fn(), sugeridoCompraACSV: jest.fn() }));
 
 const db = require('../config/db');
 const ReportesService = require('../services/reportesService');
@@ -128,5 +128,34 @@ describe('reportesController · propinas (C6)', () => {
         const { req, res } = crearReqRes({ turno: '9' });
         await controller.exportarPropinas(req, res);
         expect(res.redirect).toHaveBeenCalledWith('/admin/reportes/propinas');
+    });
+});
+
+describe('reportesController · sugerido de compra (C8)', () => {
+    const REPORTE = { parametros: { dias: 30, cobertura: 7 }, items: [{ id: 1 }], totales: {} };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        ReportesService.sugeridoCompra.mockResolvedValue(REPORTE);
+    });
+
+    it('viewSugerido pasa los filtros y renderiza', async () => {
+        const { req, res } = crearReqRes({ dias: '15', cobertura: '10' });
+        await controller.viewSugerido(req, res);
+        expect(ReportesService.sugeridoCompra).toHaveBeenCalledWith({ dias: '15', cobertura: '10' });
+        expect(res.render).toHaveBeenCalledWith('reportes/sugerido_compra',
+            expect.objectContaining({ view: 'sugerido_compra', reporte: REPORTE }));
+    });
+
+    it('exportarSugerido descarga el CSV', async () => {
+        ReportesService.sugeridoCompraACSV.mockReturnValue('csv');
+        const { req, res } = crearReqRes({ dias: '15' });
+        await controller.exportarSugerido(req, res);
+        expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+        expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition',
+            expect.stringMatching(/^attachment; filename="sugerido_compra_.*\.csv"$/));
+        expect(res.setHeader).toHaveBeenCalledWith('X-Reporte-Filas', '1');
+        expect(res.send).toHaveBeenCalledWith('csv');
+        expect(db.query).not.toHaveBeenCalled();
     });
 });

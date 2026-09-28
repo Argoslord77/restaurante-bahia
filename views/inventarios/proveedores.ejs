@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proveedores - Restaurante Bahía</title>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/all.min.css">
+    <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="bg-white d-md-none p-3 border-bottom d-flex align-items-center justify-content-between sticky-top shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/img/favicon.png" alt="Logo" class="sidebar-logo">
+            <span class="fw-bold text-dark">Restaurante Bahía</span>
+        </div>
+        <button class="btn btn-outline-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <%- include('../includes/sideBarMenu') %>
+
+            <main class="col-md-9 ms-md-auto col-lg-10 px-md-5 py-4 d-flex flex-column min-vh-100">
+                <div class="flex-grow-1">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+                        <div>
+                            <h1 class="h3 mb-1">Proveedores</h1>
+                            <p class="text-muted mb-0">Catálogo de suministrantes e historial de compras por proveedor.</p>
+                        </div>
+                        <button type="button" class="btn btn-dark" onclick="abrirModal(null)">
+                            <i class="fa-solid fa-plus me-1"></i> Nuevo proveedor
+                        </button>
+                    </div>
+
+                    <div class="card shadow-sm">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Nombre comercial</th>
+                                        <th>Contacto</th>
+                                        <th class="text-center">Compras</th>
+                                        <th class="text-end">Monto</th>
+                                        <th>Última compra</th>
+                                        <th>Estado</th>
+                                        <th class="text-end">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (!proveedores.length) { %>
+                                    <tr><td colspan="8" class="text-center text-muted py-4">Sin proveedores registrados.</td></tr>
+                                    <% } %>
+                                    <% proveedores.forEach(function(p) { %>
+                                    <tr class="<%= p.activo ? '' : 'table-secondary' %>">
+                                        <td class="font-monospace"><%= p.codigo %></td>
+                                        <td>
+                                            <a href="/admin/proveedores/<%= p.id %>" class="fw-bold text-decoration-none"><%= p.nombre %></a>
+                                            <% if (p.contacto) { %><div class="small text-muted"><%= p.contacto %></div><% } %>
+                                        </td>
+                                        <td class="small"><%= p.telefono || '—' %><% if (p.email) { %><div class="text-muted"><%= p.email %></div><% } %></td>
+                                        <td class="text-center"><%= p.totalCompras %></td>
+                                        <td class="text-end">$<%= Number(p.montoComprado).toFixed(2) %></td>
+                                        <td data-fecha="<%= p.ultimaCompra || '' %>"><%= p.ultimaCompra ? p.ultimaCompra : '—' %></td>
+                                        <td>
+                                            <% if (p.activo) { %>
+                                            <span class="badge bg-success-subtle text-success">Activo</span>
+                                            <% } else { %>
+                                            <span class="badge bg-secondary-subtle text-secondary">Inactivo</span>
+                                            <% } %>
+                                        </td>
+                                        <td class="text-end text-nowrap">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirModal(<%= p.id %>)" title="Editar">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <% if (p.activo) { %>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="cambiarEstado(<%= p.id %>, false)" title="Desactivar">
+                                                <i class="fa-solid fa-ban"></i>
+                                            </button>
+                                            <% } else { %>
+                                            <button type="button" class="btn btn-sm btn-outline-success" onclick="cambiarEstado(<%= p.id %>, true)" title="Activar">
+                                                <i class="fa-solid fa-check"></i>
+                                            </button>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalProveedor" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modTitulo">Nuevo proveedor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="prCodigo">Código</label>
+                            <input type="text" class="form-control" id="prCodigo" maxlength="50" placeholder="Auto: PROV-0001">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label" for="prNombre">Nombre comercial *</label>
+                            <input type="text" class="form-control" id="prNombre" maxlength="150">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="prRazon">Razón social</label>
+                            <input type="text" class="form-control" id="prRazon" maxlength="200">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="prIdent">Identificación fiscal</label>
+                            <input type="text" class="form-control" id="prIdent" maxlength="50">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="prTelefono">Teléfono</label>
+                            <input type="text" class="form-control" id="prTelefono" maxlength="50">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="prEmail">Correo</label>
+                            <input type="email" class="form-control" id="prEmail" maxlength="150">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="prContacto">Persona de contacto</label>
+                            <input type="text" class="form-control" id="prContacto" maxlength="150">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label" for="prDireccion">Dirección</label>
+                            <input type="text" class="form-control" id="prDireccion" maxlength="500">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="prCondiciones">Condiciones de pago</label>
+                            <input type="text" class="form-control" id="prCondiciones" maxlength="255" placeholder="Contado, 15 días, etc.">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="prDias">Días crédito</label>
+                            <input type="number" class="form-control" id="prDias" min="0" value="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="prLimite">Límite crédito</label>
+                            <input type="number" class="form-control" id="prLimite" min="0" step="0.01" value="0">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label" for="prObs">Observaciones</label>
+                            <input type="text" class="form-control" id="prObs" maxlength="500">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-dark" id="btnGuardar" onclick="guardar()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/jquery-4.0.0.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery-ui.min.js"></script>
+    <script src="/js/sweetalert2.all.min.js"></script>
+    <script>
+        const PROVEEDORES = <%- JSON.stringify(proveedores) %>;
+        let editandoId = null;
+
+        document.querySelectorAll('[data-fecha]').forEach(function(td) {
+            const v = td.getAttribute('data-fecha');
+            if (!v) return;
+            const f = new Date(v);
+            if (!isNaN(f.getTime())) {
+                const p = function(n) { return String(n).padStart(2, '0'); };
+                td.textContent = p(f.getDate()) + '/' + p(f.getMonth() + 1) + '/' + f.getFullYear();
+            }
+        });
+
+        function abrirModal(id) {
+            editandoId = id || null;
+            document.getElementById('modTitulo').textContent = id ? 'Editar proveedor' : 'Nuevo proveedor';
+            const p = id ? PROVEEDORES.find(function(x) { return x.id === id; }) : null;
+            document.getElementById('prCodigo').value = p ? p.codigo : '';
+            document.getElementById('prNombre').value = p ? p.nombre : '';
+            document.getElementById('prRazon').value = (p && p.razonSocial) || '';
+            document.getElementById('prIdent').value = (p && p.identificacion) || '';
+            document.getElementById('prTelefono').value = (p && p.telefono) || '';
+            document.getElementById('prEmail').value = (p && p.email) || '';
+            document.getElementById('prContacto').value = (p && p.contacto) || '';
+            document.getElementById('prDireccion').value = (p && p.direccion) || '';
+            document.getElementById('prCondiciones').value = (p && p.condicionesPago) || '';
+            document.getElementById('prDias').value = p ? p.diasCredito : 0;
+            document.getElementById('prLimite').value = p ? p.limiteCredito : 0;
+            document.getElementById('prObs').value = (p && p.observaciones) || '';
+            new bootstrap.Modal(document.getElementById('modalProveedor')).show();
+        }
+
+        function guardar() {
+            const datos = {
+                codigo: document.getElementById('prCodigo').value.trim(),
+                nombre: document.getElementById('prNombre').value.trim(),
+                razonSocial: document.getElementById('prRazon').value.trim(),
+                identificacion: document.getElementById('prIdent').value.trim(),
+                telefono: document.getElementById('prTelefono').value.trim(),
+                email: document.getElementById('prEmail').value.trim(),
+                contacto: document.getElementById('prContacto').value.trim(),
+                direccion: document.getElementById('prDireccion').value.trim(),
+                condicionesPago: document.getElementById('prCondiciones').value.trim(),
+                diasCredito: document.getElementById('prDias').value,
+                limiteCredito: document.getElementById('prLimite').value,
+                observaciones: document.getElementById('prObs').value.trim()
+            };
+            if (!datos.nombre) { Swal.fire('Falta el nombre', 'El nombre comercial es obligatorio.', 'warning'); return; }
+            const btn = document.getElementById('btnGuardar');
+            btn.disabled = true;
+            fetch(editandoId ? '/admin/proveedores/' + editandoId : '/admin/proveedores', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datos)
+            }).then(function(resp) { return resp.json().then(function(d) { return { ok: resp.ok, d: d }; }); }).then(function(r) {
+                btn.disabled = false;
+                if (!r.ok || !r.d.success) {
+                    Swal.fire('No se pudo guardar', (r.d && r.d.message) || 'Error inesperado.', 'error');
+                    return;
+                }
+                bootstrap.Modal.getInstance(document.getElementById('modalProveedor')).hide();
+                Swal.fire('Guardado', 'Proveedor ' + r.d.proveedor.codigo + ' listo.', 'success')
+                    .then(function() { location.reload(); });
+            }).catch(function() {
+                btn.disabled = false;
+                Swal.fire('Sin conexión', 'No se pudo contactar al servidor.', 'error');
+            });
+        }
+
+        function cambiarEstado(id, activo) {
+            Swal.fire({
+                title: activo ? 'Activar proveedor?' : 'Desactivar proveedor?',
+                text: activo ? 'Volverá a salir en las entradas.' : 'Ya no saldrá en entradas nuevas (el historial se conserva).',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí',
+                cancelButtonText: 'Volver'
+            }).then(function(r) {
+                if (!r.isConfirmed) return;
+                fetch('/admin/proveedores/' + id + '/estado', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activo: activo })
+                }).then(function(resp) { return resp.json(); }).then(function(d) {
+                    if (!d.success) { Swal.fire('No se pudo', d.message || 'Error.', 'error'); return; }
+                    location.reload();
+                });
+            });
+        }
+    </script>
+</body>
+</html>

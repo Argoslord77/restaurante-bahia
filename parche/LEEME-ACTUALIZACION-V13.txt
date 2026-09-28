@@ -1,0 +1,75 @@
+ACTUALIZACIÓN V13 — Compras y proveedores + sugerido de compra (Fase 2.3)
+Restaurante Bahía · 2026-09-28 · Aplica sobre la V12 (8de8851)
+====================================================================
+
+QUÉ CAMBIA
+----------
+C1 COMPRAS Y PROVEEDORES (nuevo: Proveedores)
+- Catálogo de proveedores: alta (código auto PROV-####), edición,
+  activación/desactivación. Nunca se borran: el historial los usa.
+- Cada entrada de almacén puede indicar su proveedor (opcional);
+  la lista de entradas muestra la columna Proveedor.
+- Ficha por proveedor: datos, resumen (movimientos, monto, última
+  compra), top de productos comprados e historial de compras, con
+  botón "Registrar compra" que abre la entrada preseleccionada.
+C8 SUGERIDO DE COMPRA (nuevo: Reportes → Sugerido de compra)
+- Lista de qué pedir y cuánto: stock actual vs consumo diario
+  promedio (ventana configurable 7–90 días) y objetivo =
+  máximo(mínimo, consumo × cobertura). Respeta dias_cobertura
+  del producto o la cobertura pedida (1–60 días).
+- Urgencias AGOTADO / URGENTE / REPONER, proveedor preferido del
+  producto con precio de referencia y costo estimado del pedido.
+  Exportable a CSV para cotizar.
+CORRECCIÓN CRÍTICA (V12)
+- El zip V12 no incluyó app.js con el montaje de rutas: sin este
+  parche, /admin/reservas y /admin/cuentas devuelven 404. Esta V13
+  SÍ incluye app.js con los tres montajes (reservas, cuentas,
+  proveedores). Si aplicó la V12, este zip lo repara todo.
+- 26 pruebas nuevas (440/440 OK; 3 suites de entorno igual que antes:
+  faltan winston/supertest en dev, sin efecto en producción).
+
+ARCHIVOS INCLUIDOS (23)
+-----------------------
+scripts/migracion_proveedores_compras.sql NUEVO: OBLIGATORIA (una vez)
+services/proveedorService.js              NUEVO: C1 catálogo
+services/proveedorService.test.js         NUEVO: 8 pruebas
+services/compraService.js                 NUEVO: C1 historial
+services/compraService.test.js            NUEVO: 4 pruebas
+controllers/proveedorController.js        NUEVO: vistas + API C1
+controllers/proveedorController.test.js   NUEVO: 5 pruebas
+models/entradaModel.test.js               NUEVO: 4 pruebas
+routes/proveedorRoutes.js                 NUEVO: /admin/proveedores*
+views/inventarios/proveedores.ejs         NUEVO: catálogo
+views/inventarios/proveedor-detalle.ejs   NUEVO: ficha + historial
+views/reportes/sugerido_compra.ejs        NUEVO: informe C8
+models/entradaModel.js                    C1 proveedor en lote
+controllers/entradaController.js          C1 catálogo + recepción
+views/inventarios/entradas.ejs            C1 select + columna
+services/reportesService.js               C8 sugerido + CSV
+services/reportesService.test.js          +3 pruebas
+controllers/reportesController.js         C8 vista + hub
+controllers/reportesController.test.js    +2 pruebas
+routes/reporteRoutes.js                   C8 rutas
+views/includes/sideBarMenu.ejs            Proveedores + reporte
+app.js                                    montajes V12 (FIX) + V13
+parche/RUNBOOK-OPERACION.txt              guía operativa (V13)
+
+INSTALACIÓN (proyecto local)
+----------------------------
+1. Parar el servidor. Respaldo manual preventivo (Configuración).
+2. Descomprima el zip en la RAÍZ conservando las carpetas.
+3. OBLIGATORIO — proveedores + vínculo lote (una sola vez):
+     mysql -u USUARIO -p restaurante_db < scripts/migracion_proveedores_compras.sql
+   (Idempotente: si existen, no hace nada. Sin esto, /admin/proveedores
+   da error y las entradas no aceptan proveedor.)
+4. Sin variables nuevas: su .env NO se toca. Arranque y verifique
+   https://servidor/salud → "ok": true.
+5. Ctrl+F5 en navegadores/tablets.
+6. Verificación rápida:
+   a) Proveedores: crear uno (código auto), editarlo, ver su ficha.
+   b) Entradas: registrar una entrada con ese proveedor; aparece
+      en la columna y en el historial de su ficha.
+   c) Reportes → Sugerido de compra: lista con urgencias y costo;
+      cambiar días/cobertura recalcula; exportar CSV abre en Excel.
+   d) V12 reparada: /admin/reservas y /admin/cuentas ya responden
+      (antes daban 404 sin app.js).

@@ -60,6 +60,7 @@
                             <th class="ps-4 py-3">Fecha Ingreso</th>
                             <th class="py-3">Producto</th>
                             <th class="py-3">Almacén Destino</th>
+                            <th class="py-3">Proveedor</th>
                             <th class="py-3">Nº Lote</th>
                             <th class="text-end py-3">Cant. Inicial (U. inventario)</th>
                             <th class="py-3">U. Entrada</th>
@@ -87,6 +88,7 @@
                                         <small class="font-monospace text-primary">#<%= e.producto_codigo %></small>
                                     </td>
                                     <td><span class="badge bg-light text-dark border"><i class="fa-solid fa-warehouse me-1 text-secondary"></i><%= e.almacen_nombre %></span></td>
+                                    <td><%= e.proveedor_nombre || '<span class="text-muted">—</span>' %></td>
                                     <td><span class="font-monospace fw-bold text-secondary"><%= e.numero_lote %></span></td>
                                     <td class="text-end font-monospace"><%= parseFloat(e.cantidad_inicial || 0).toFixed(2) %> <%= e.unidad_inventario_abreviatura || '' %></td>
                                     <td><span class="badge bg-info-subtle text-info-emphasis border"><%= e.unidad_medida_abreviatura || e.unidad_inventario_abreviatura || '—' %></span>
@@ -107,7 +109,7 @@
                             <% }) %>
                         <% } else { %>
                             <tr>
-                                <td colspan="9" class="text-center py-4 text-muted">
+                                <td colspan="10" class="text-center py-4 text-muted">
                                     <i class="fa-solid fa-box-open d-block fs-3 mb-2 text-secondary"></i>
                                     No se registran lotes o entradas en este momento.
                                 </td>
@@ -167,6 +169,17 @@
                                 <% } %>
                             </select>
                             <div class="form-text">Use una unidad del catálogo. Si es distinta de la unidad de inventario, debe existir un factor de conversión activo.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="proveedor_id" class="form-label fw-semibold text-secondary small">Proveedor (Opcional)</label>
+                            <select class="form-select shadow-sm" id="proveedor_id">
+                                <option value="">Sin proveedor / stock inicial...</option>
+                                <% if (typeof proveedores !== 'undefined') { %>
+                                    <% proveedores.forEach(pr => { %>
+                                        <option value="<%= pr.id %>"><%= pr.nombre %> (<%= pr.codigo %>)</option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label for="numero_lote" class="form-label fw-semibold text-secondary small">Número de Lote / Consecutivo</label>
@@ -231,6 +244,13 @@
         actualizarMinimoVencimiento();
 
         // Escuchar cambios en la fecha de ingreso para actualizar los límites del calendario
+
+        // V13 (C1): llegada desde la ficha del proveedor: preselecciona y abre.
+        const proveedorPreset = <%- JSON.stringify(typeof proveedorPreseleccionado !== 'undefined' ? proveedorPreseleccionado : '') %>;
+        if (proveedorPreset) {
+            document.getElementById('proveedor_id').value = proveedorPreset;
+            bsModal.show();
+        }
         fechaIngresoInput.addEventListener('change', actualizarMinimoVencimiento);
 
         // Inicializar Select2 al abrir el modal de Bootstrap
@@ -313,7 +333,8 @@
                 fecha_ingreso: fIngreso,
                 fecha_vencimiento: fVencimiento || '', 
                 cantidad: document.getElementById('cantidad').value,
-                costo_unitario: document.getElementById('costo_unitario').value
+                costo_unitario: document.getElementById('costo_unitario').value,
+                proveedor_id: document.getElementById('proveedor_id').value || null
             };
 
             Swal.fire({

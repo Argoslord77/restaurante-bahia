@@ -2,6 +2,7 @@
 const db = require('../config/db');
 const Entrada = require('../models/entradaModel');
 const UnidadMedidaService = require('../services/unidadMedidaService');
+const ProveedorService = require('../services/proveedorService');
 
 // Renderiza la vista principal de entradas
 exports.viewEntradas = async (req, res) => {
@@ -18,6 +19,13 @@ exports.viewEntradas = async (req, res) => {
         `);
         const unidades = await UnidadMedidaService.listarUnidades(false);
         const entradas = await Entrada.getAll();
+        // V13 (C1): catálogo de proveedores para la entrada (tolerante).
+        let proveedores = [];
+        try {
+            proveedores = await ProveedorService.listar({ soloActivos: true });
+        } catch (provErr) {
+            console.warn('Catálogo de proveedores no disponible:', provErr.message);
+        }
 
         res.render('inventarios/entradas', {
             title: 'Entradas de Almacén - Restaurante Bahía',
@@ -25,6 +33,8 @@ exports.viewEntradas = async (req, res) => {
             productos,
             unidades,
             entradas,
+            proveedores,
+            proveedorPreseleccionado: req.query.proveedor || '',
             user: req.session?.user || req.user || null,
             view: 'entradas' // Activa el link en el Sidebar
         });
@@ -43,7 +53,8 @@ exports.createEntrada = async (req, res) => {
         fecha_ingreso,
         fecha_vencimiento,
         cantidad,
-        costo_unitario
+        costo_unitario,
+        proveedor_id
     } = req.body;
 
     try {
@@ -66,7 +77,8 @@ exports.createEntrada = async (req, res) => {
             fecha_ingreso: fechaValida,
             fecha_vencimiento: fecha_vencimiento === '' ? null : fecha_vencimiento,
             cantidad: parseFloat(cantidad),
-            costo_unitario: parseFloat(costo_unitario)
+            costo_unitario: parseFloat(costo_unitario),
+            proveedor_id: proveedor_id === '' || proveedor_id === undefined ? null : proveedor_id
         });
 
         return res.status(201).json({

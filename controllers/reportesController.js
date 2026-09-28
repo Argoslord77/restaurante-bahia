@@ -49,6 +49,15 @@ const ENLACES = [
         badge: 'NUEVO'
     },
     {
+        id: 'sugerido-compra',
+        titulo: 'Sugerido de compra',
+        descripcion: 'Qué pedir y cuánto: stock vs consumo promedio, cobertura objetivo y proveedor preferido. Exportable a CSV.',
+        icono: 'fa-solid fa-cart-shopping',
+        url: '/admin/reportes/sugerido-compra',
+        grupo: 'Control físico',
+        badge: 'NUEVO'
+    },
+    {
         id: 'valorizacion',
         titulo: 'Valorización de inventario',
         descripcion: 'Valor del stock por almacén y lote a costo unitario (Σ cantidad × costo).',
@@ -492,6 +501,38 @@ exports.exportarPropinas = async (req, res) => {
     } catch (error) {
         console.error('Error al exportar las propinas del turno:', error);
         return res.redirect('/admin/reportes/propinas');
+    }
+};
+
+exports.viewSugerido = async (req, res) => {
+    try {
+        const reporte = await ReportesService.sugeridoCompra({
+            dias: req.query.dias, cobertura: req.query.cobertura
+        });
+        return res.render('reportes/sugerido_compra', {
+            title: 'Sugerido de Compra - Restaurante Bahía',
+            view: 'sugerido_compra',
+            reporte,
+            user: req.user || null,
+            success_msg: req.flash ? req.flash('success_msg') : null,
+            error_msg: req.flash ? req.flash('error_msg') : null
+        });
+    } catch (error) {
+        console.error('Error al cargar el sugerido de compra:', error);
+        return res.status(500).send('Error interno al generar el reporte');
+    }
+};
+
+exports.exportarSugerido = async (req, res) => {
+    try {
+        const reporte = await ReportesService.sugeridoCompra({
+            dias: req.query.dias, cobertura: req.query.cobertura
+        });
+        return responderCSV(req, res, 'sugerido_compra',
+            ReportesService.sugeridoCompraACSV(reporte), reporte.items.length);
+    } catch (error) {
+        console.error('Error al exportar el sugerido de compra:', error);
+        return res.redirect('/admin/reportes/sugerido-compra');
     }
 };
 

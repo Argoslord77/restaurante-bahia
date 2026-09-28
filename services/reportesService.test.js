@@ -539,3 +539,63 @@ describe('reportesService · propinasACSV (C6)', () => {
         expect(csv).toContain('11;5;Juan P;120,00;10,00;pagado');
     });
 });
+
+describe('reportesService · sugeridoCompra (C8)', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    function fila(sobre = {}) {
+        return {
+            id: 1, codigo: 'ARZ', nombre: 'Arroz', unidad: 'kg', minimo: 10,
+            cobertura_dias: 7, stock: 0, consumo_diario: 2, objetivo: 14,
+            sugerido: 14, precio_ref: 100, proveedor: 'Acme',
+            costo_promedio: 90, costo_ultimo: 95, ...sobre
+        };
+    }
+
+    it('clasifica urgencia, prefiere precio de proveedor y ordena', async () => {
+        db.query.mockResolvedValue([[
+            fila({}),
+            fila({ id: 2, codigo: 'AZU', nombre: 'Azúcar', minimo: 10, stock: 5,
+                consumo_diario: 1, objetivo: 10, sugerido: 5,
+                precio_ref: 0, proveedor: null, costo_promedio: 50, costo_ultimo: 0 }),
+            fila({ id: 3, codigo: 'SAL', nombre: 'Sal', minimo: 2, stock: 5,
+                consumo_diario: 1, objetivo: 7, sugerido: 2,
+                precio_ref: 0, proveedor: null, costo_promedio: 0, costo_ultimo: 20 })
+        ], []]);
+        const r = await ReportesService.sugeridoCompra({ dias: 30, cobertura: 7 });
+        expect(r.parametros).toEqual({ dias: 30, cobertura: 7 });
+        expect(r.items.map((i) => i.urgencia)).toEqual(['AGOTADO', 'URGENTE', 'REPONER']);
+        expect(r.items[0]).toMatchObject({ precioRef: 100, costoEst: 1400 });
+        expect(r.items[1]).toMatchObject({ precioRef: 50, costoEst: 250 });
+        expect(r.items[2]).toMatchObject({ precioRef: 20, costoEst: 40 });
+        expect(r.totales).toMatchObject({ items: 3, monto: 1690, agotados: 1, urgentes: 1 });
+        const [sql, params] = db.query.mock.calls[0];
+        expect(sql).toContain('HAVING sugerido > 0');
+        expect(sql).toContain("'VENTA', 'CONSUMO_RECETA', 'MERMA', 'PRODUCCION_SALIDA'");
+        expect(sql).not.toContain('TRANSFERENCIA_SALIDA');
+        expect(params).toEqual([7, 30, 30, 7, 30, 7, 30]);
+    });
+
+    it('sujeta los parámetros a rangos sanos', async () => {
+        db.query.mockResolvedValue([[], []]);
+        const r = await ReportesService.sugeridoCompra({ dias: 999, cobertura: 0 });
+        expect(r.parametros).toEqual({ dias: 90, cobertura: 7 });
+        expect(r.items).toEqual([]);
+    });
+});
+
+describe('reportesService · sugeridoCompraACSV (C8)', () => {
+    it('exporta la lista de compra con BOM y totales', () => {
+        const csv = ReportesService.sugeridoCompraACSV({
+            parametros: { dias: 30, cobertura: 7 },
+            items: [{ urgencia: 'AGOTADO', codigo: 'ARZ', producto: 'Arroz', unidad: 'kg',
+                stock: 0, minimo: 10, consumoDiario: 2, objetivo: 14, sugerido: 14,
+                proveedor: 'Acme', precioRef: 100, costoEst: 1400 }],
+            totales: { items: 1, monto: 1400 }
+        });
+        expect(csv.charCodeAt(0)).toBe(0xFEFF);
+        expect(csv).toContain('Sugerido de compra;Consumo 30 dias;Cobertura 7 dias');
+        expect(csv).toContain('Urgencia;Codigo;Producto;Unidad;Stock;Minimo;Consumo diario;Objetivo;Sugerido;Proveedor;Precio ref.;Costo est.');
+        expect(csv).toContain('AGOTADO;ARZ;Arroz;kg;0,000;10,000;2,000;14,000;14,000;Acme;100,00;1400,00');
+    });
+});
