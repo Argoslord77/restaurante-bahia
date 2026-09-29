@@ -1,6 +1,6 @@
 -- ============================================================================
 -- MIGRACIÓN (T7): borrador del carrito compartido capitán → dependiente
--- Fecha: 2026-09-28
+-- Fecha: 2026-09-28 (rev. 2: sin llaves foráneas, convención del proyecto)
 -- ============================================================================
 -- Cuando el modo "solo capitanes" está activo, el capitán toma la orden en
 -- el POS y su carrito (ronda en captura, aún sin enviar) se guarda aquí
@@ -9,6 +9,11 @@
 --
 -- El borrador se elimina solo: al enviar la ronda, al cobrar la orden o
 -- al vaciar el carrito. Un pedido tiene como máximo UN borrador vigente.
+--
+-- NOTA: igual que la tabla `reservas`, esta tabla NO declara llaves
+-- foráneas (los id de pedidos/mesas son INT UNSIGNED y una FK con tipo
+-- distinto aborta la migración con errno 150). La integridad la cuida la
+-- aplicación, que borra el borrador al enviar, cobrar o vaciar.
 --
 -- Es SEGURO ejecutarlo varias veces (CREATE TABLE IF NOT EXISTS).
 -- ============================================================================
@@ -22,7 +27,5 @@ CREATE TABLE IF NOT EXISTS borradores_carrito (
     actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_borrador_pedido (id_pedido),
     KEY idx_borrador_mesa (id_mesa),
-    KEY idx_borrador_actualizado (actualizado_en),
-    CONSTRAINT fk_borrador_pedido FOREIGN KEY (id_pedido) REFERENCES pedidos (id) ON DELETE CASCADE,
-    CONSTRAINT fk_borrador_mesa FOREIGN KEY (id_mesa) REFERENCES mesas (id) ON DELETE CASCADE
+    KEY idx_borrador_actualizado (actualizado_en)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
