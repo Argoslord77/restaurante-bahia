@@ -1,0 +1,41 @@
+FIX PEDIDOS/VENTAS — Restaurante Bahía (2026-09-28)
+==================================================
+Contenido: restaurante-bahia-fix-pedidos-ventas-2026-09-28.zip (4 archivos)
+
+SÍNTOMA
+-------
+Al abrir el apartado pedidos/ventas la app caía con:
+  TypeError: pedidoService.obtenerPedidosPorRango is not a function
+  (controllers/pedidoController.js:17)
+
+CAUSA
+-----
+El controlador local es el del listado Ventas/Pedidos por rango de fechas
+(sesión arena/01a07166): pide el rango, los KPIs, los turnos y el reporte
+del pedido. Pero el servicio instalado (V14/conciliación) no traía esas
+dos funciones. Faltaba la mitad del par.
+
+REPARACIÓN (solo se suma código, nada se quita ni cambia de conducta)
+--------------------------------------------------------------------
+1. services/pedidoService.js
+   - Se portan intactas obtenerPedidosPorRango(desde, hasta) y
+     obtenerReportePedido(id) desde arena/01a07166.
+   - crearNuevoPedido acepta el 4.º parámetro comensales (el controlador
+     local ya lo enviaba y se estaba perdiendo). Las guardias V14
+     (distribución del día, mesa reservada, candado FOR UPDATE) quedan
+     intactas.
+2. models/pedidoModel.js
+   - create() acepta comensales (5.º parámetro opcional). Sin él guarda 1,
+     que es el DEFAULT de la columna: conducta idéntica para el resto.
+3. services/pedidoService.test.js (nuevo): 6 pruebas del porte.
+
+INSTALACIÓN
+-----------
+Descomprima el zip SOBRE la carpeta del proyecto y reinicie la app.
+No requiere migración SQL ni cambios en sus vistas/rutas locales (esas ya
+las tiene: el controlador y la vista del listado no se tocan).
+
+VERIFICACIÓN
+------------
+Suite jest: 493/493 tests en verde (45 suites; las 2 suites que no corren
+son la falla ambiental previa de 'supertest', ajena a este fix).

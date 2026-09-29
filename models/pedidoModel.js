@@ -122,11 +122,11 @@ class Pedido {
     // ------------------------------------------------------------------------
 
     // Crear un nuevo pedido (Ahora soporta el turno_servicio_id obligatorio)
-    static async create(id_mesa, id_usuario_mesero, turno_servicio_id, connection = db) {
+    static async create(id_mesa, id_usuario_mesero, turno_servicio_id, connection = db, comensales = null) {
         const [result] = await connection.query(
-            `INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, creado_en) 
-             VALUES (?, ?, ?, NOW())`,
-            [id_mesa, id_usuario_mesero, turno_servicio_id]
+            `INSERT INTO pedidos (id_mesa, id_usuario_mesero, turno_servicio_id, comensales, creado_en) 
+             VALUES (?, ?, ?, COALESCE(?, 1), NOW())`,
+            [id_mesa, id_usuario_mesero, turno_servicio_id, comensales]
         );
         return result.insertId;
     }
