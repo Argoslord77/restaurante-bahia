@@ -244,3 +244,96 @@ describe('reservaService.listarRango (calendario)', () => {
         expect(db.query.mock.calls[0][1]).toEqual(['2026-09-28', '2026-10-04']);
     });
 });
+
+describe('reservaService.llegada · titularidad del salón (T8)', () => {
+    const MesaAsignacionService = require('./mesaAsignacionService');
+
+    function prepararLlegada() {
+        AperturaMesaService.hayDistribucion.mockResolvedValue(true);
+        TurnoService.obtenerTurnoActivo.mockResolvedValue({ id: 3 });
+        PedidoModel.create.mockResolvedValue(77);
+        const conn = conexionCon([
+            ['FROM reservas', [[{ id: 1, id_mesa: 5, estado: 'pendiente', comensales: 4 }], []]],
+            ['FROM mesas', [[{ ...MESA_LIBRE, estado: 'reservada' }], []]]
+        ]);
+        db.getConnection.mockResolvedValue(conn);
+        return conn;
+    }
+
+    it('atribuye el pedido al dependiente asignado aunque siente un admin', async () => {
+        const conn = prepararLlegada();
+        const original = MesaAsignacionService.resolverMeseroTitular;
+        MesaAsignacionService.resolverMeseroTitular = jest.fn()
+            .mockResolvedValue({ id: 5, nombre: 'Juan', esAsignado: true });
+        try {
+            const r = await ReservaService.llegada(1, 7); // 7 = admin que presiona Sentar
+            expect(MesaAsignacionService.resolverMeseroTitular).toHaveBeenCalledWith(5, 3, 7);
+            expect(PedidoModel.create).toHaveBeenCalledWith(5, 5, 3, conn);
+            expect(r).toMatchObject({ pedidoId: 77, titularId: 5, titularEsAsignado: true });
+            expect(conn.commit).toHaveBeenCalled();
+        } finally {
+            MesaAsignacionService.resolverMeseroTitular = original;
+        }
+    });
+
+    it('sin asignación vigente, el pedido queda a nombre de quien sienta', async () => {
+        const conn = prepararLlegada();
+        const original = MesaAsignacionService.resolverMeseroTitular;
+        MesaAsignacionService.resolverMeseroTitular = jest.fn()
+            .mockResolvedValue({ id: 7, nombre: null, esAsignado: false });
+        try {
+            const r = await ReservaService.llegada(1, 7);
+            expect(PedidoModel.create).toHaveBeenCalledWith(5, 7, 3, conn);
+            expect(r).toMatchObject({ titularId: 7, titularEsAsignado: false });
+        } finally {
+            MesaAsignacionService.resolverMeseroTitular = original;
+        }
+    });
+});
+
+describe('reservaService.crear · candado anti-doble-reserva (T9)', () => {
+    it('rechaza la mesa con reserva pendiente (pre-chequeo)', async () => {
+        db.query.mockImplementation(async (sql) => {
+            const texto = String(sql);
+            if (texto.includes('FROM mesas')) return [[{ ...MESA_LIBRE }], []];
+            if (texto.includes('COUNT(*) AS n')) return [[{ n: 1 }], []];
+            return [[], []];
+        });
+        await expect(ReservaService.crear({ mesaId: 5, nombre: 'Ana', fechaReserva: FUTURO }))
+            .rejects.toThrow('ya tiene una reserva pendiente');
+        expect(db.getConnection).not.toHaveBeenCalled();
+    });
+
+    it('revalida dentro de la transacción (carrera entre recepcionistas)', async () => {
+        db.query.mockImplementation(async (sql) => {
+            const texto = String(sql);
+            if (texto.includes('FROM mesas')) return [[{ ...MESA_LIBRE }], []];
+            return [[], []]; // pre-chequeo limpio + sin traslape
+        });
+        const conn = conexionCon([
+            ['FROM mesas', [[{ ...MESA_LIBRE }], []]],
+            ['COUNT(*) AS n', [[{ n: 1 }], []]] // otro recepcionista ganó la mesa
+        ]);
+        db.getConnection.mockResolvedValue(conn);
+        await expect(ReservaService.crear({ mesaId: 5, nombre: 'Ana', fechaReserva: FUTURO }))
+            .rejects.toThrow('ya tiene una reserva pendiente');
+        expect(conn.rollback).toHaveBeenCalled();
+        expect(conn.commit).not.toHaveBeenCalled();
+    });
+
+    it('permite reservar una mesa marcada reservada sin pendientes (estado viejo)', async () => {
+        db.query.mockImplementation(async (sql) => {
+            const texto = String(sql);
+            if (texto.includes('FROM mesas')) return [[{ ...MESA_LIBRE, estado: 'reservada' }], []];
+            return [[], []];
+        });
+        const conn = conexionCon([
+            ['FROM mesas', [[{ ...MESA_LIBRE, estado: 'reservada' }], []]],
+            ['INSERT INTO reservas', [{ insertId: 9 }, undefined]]
+        ]);
+        db.getConnection.mockResolvedValue(conn);
+        const r = await ReservaService.crear({ mesaId: 5, nombre: 'Ana', fechaReserva: FUTURO });
+        expect(r).toMatchObject({ id: 9, mesaId: 5 });
+        expect(conn.commit).toHaveBeenCalled();
+    });
+});

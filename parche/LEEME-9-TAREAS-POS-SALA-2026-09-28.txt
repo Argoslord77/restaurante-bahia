@@ -1,0 +1,97 @@
+9 TAREAS POS + SALA — Restaurante Bahía (2026-09-28)
+=====================================================
+Contenido: restaurante-bahia-9-tareas-pos-sala-2026-09-28.zip (26 archivos)
+
+INSTALACIÓN
+-----------
+1. Descomprima el zip SOBRE la carpeta del proyecto (respeta las rutas).
+2. IMPORTANTE — ejecute la migración de la tarea 7 en MySQL/MariaDB:
+     mysql -u USUARIO -p bahia < scripts/migracion_borradores_carrito.sql
+   (Es idempotente: puede ejecutarse varias veces. Sin ella, el borrador
+   del capitán no funciona pero nada más se rompe.)
+3. Reinicie la app (pm2 restart / node app.js).
+
+QUÉ TRAE (por tarea pedida)
+---------------------------
+1. FILTRO FLOTANTE BAJA A LAS TARJETAS (POS)
+   - El buscador flotante ya no vive en el header: ahora flota sobre el
+     inicio de la caja de tarjetas al hacer scroll. No tapa nada.
+   - Archivo: views/pos.ejs.
+
+2. HEADER MUESTRA SOLO EL Nº DE ORDEN (POS)
+   - En vez de "ORDEN #42" con icono, el header muestra solo "42" bien
+     grande. Archivo: views/pos.ejs.
+
+3. "VER ORDEN" + ADIÓS A "COMANDA" EN LO VISUAL
+   - Botón móvil "Ver Comanda" → "VER ORDEN" (mayúsculas).
+   - "Comanda/comandar" → "Orden/ordenar" en todas las pantallas:
+     POS, monitor de cocina/bar, pre-cuenta, cierre del día, ticket de
+     cierre, facturas históricas, licencia, ajustes, recetas y registro
+     de auditoría visible. Los nombres internos de código y la API no
+     cambian (no se rompe nada).
+   - Archivos: 9 vistas + controllers/cierreDiaController.js,
+     services/settingService.js, config/auditoriaCatalogo.js.
+
+4. BOTÓN RESERVADA EN DOS LÍNEAS (tablero)
+   - "Reservada — Sentar desde Reservas" → "Reservada" + salto de línea
+     + "Sentar desde Reservas" (sin guion). Archivo:
+     views/dependiente/dashboard.ejs.
+
+5. NOVEDADES DE SALA EN TIEMPO REAL (tablero, sin recargar)
+   - Cada 4 segundos el tablero pregunta por reservas nuevas y movidas.
+   - Aviso con sonido cuando: se aparta una mesa, sientan al cliente
+     (con botón "Ver orden" que abre el POS), cancelan o marcan no-show.
+   - Si la mesa está en el tablero, su tarjeta se actualiza sola
+     (insignia, datos de la reserva y botón). Funciona para mesas
+     propias y ajenas (el aviso llega igual; la tarjeta solo si se ve).
+   - Archivos: controllers/posController.js (+tests),
+     views/dependiente/dashboard.ejs.
+
+6. COBRO SOLO PARA CAPITANES (modo solo_capitanes)
+   - En ese modo el dependiente ya NO puede cobrar: el botón Cobrar se
+     oculta en el POS y el servidor rechaza el cobro (403) aunque se
+     intente por llamada directa. Administradores y cajero cobran
+     siempre. En modo "todos" nada cambia.
+   - El aviso del tablero queda corto y exacto:
+     "Solo los capitanes pueden tomar ordenes."
+   - Archivos: services/posAutorizacionService.js (+tests),
+     controllers/posController.js (+tests), views/pos.ejs,
+     views/dependiente/dashboard.ejs.
+
+7. RONDA DEL CAPITÁN EN VIVO PARA EL DEPENDIENTE (modo solo_capitanes)
+   - Lo que el capitán agrega a su carrito (sin enviar aún) se guarda
+     como borrador y el dependiente asignado lo ve en su POS en tiempo
+     real (solo lectura, cada 5 s, con aviso de "actualizó la ronda").
+   - También le avisa en el tablero con botón "Ver" que abre la orden.
+   - El borrador se borra solo al enviar la ronda, cobrar o vaciar.
+   - Archivos NUEVOS: scripts/migracion_borradores_carrito.sql,
+     services/borradorService.js (+tests). Tocados:
+     controllers/posController.js (+tests), routes/posRoutes.js,
+     views/pos.ejs, views/dependiente/dashboard.ejs.
+
+8. TITULAR CORRECTO AL SENTAR (reservas)
+   - Confirmado el bug: al presionar Sentar, la orden quedaba a nombre
+     del admin/capitán que sentaba. Ahora queda a nombre del
+     dependiente ASIGNADO a la mesa (titular del salón); si la mesa no
+     tiene asignado, queda a nombre de quien sienta. La auditoría
+     anota al titular.
+   - Archivos: services/reservaService.js (+tests),
+     controllers/reservaController.js.
+
+9. RESERVAS: BUSCADOR + CANDADO ANTI-DOBLE-RESERVA
+   - El campo Mesa del formulario ahora es un buscador (select2, igual
+     que el de turnos en reportes): escriba para filtrar.
+   - Las mesas apartadas salen marcadas "(apartada)" y NO se pueden
+     elegir. El servidor rechaza crear una segunda reserva pendiente
+     sobre la misma mesa (error "ya tiene una reserva pendiente"),
+     incluso si dos recepcionistas la piden a la vez.
+   - Archivos: views/admin/reservas.ejs, services/reservaService.js
+     (+tests).
+
+VERIFICACIÓN
+------------
+- Suite jest: 487/487 tests en verde (44 suites; 2 suites base no corren
+  en este entorno por el módulo 'supertest' ausente — fallo previo, ajeno
+  a estos cambios).
+- Vistas pos/dashboard/reservas: compilación EJS + renderizado con datos
+  de prueba + sintaxis JS verificados.

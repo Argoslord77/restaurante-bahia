@@ -4,7 +4,8 @@
 //   1. Quién puede TOMAR órdenes (agregar productos / abrir mesas con orden):
 //      - 'todos' (por defecto): capitanes y dependientes.
 //      - 'solo_capitanes': únicamente los capitanes (los dependientes solo
-//        entregan, consultan la pre-cuenta y cobran lo ya tomado).
+//        entregan y consultan la pre-cuenta; el cobro también es exclusivo
+//        de los capitanes en este modo).
 //      Los administradores siempre pueden operar el POS.
 //   2. CORTESÍAS (cobro al 100% gratis): requieren autorización de un
 //      supervisor (roles configurables, por defecto administradores y
@@ -68,6 +69,25 @@ const PosAutorizacionService = {
     async puedeTomarOrdenes(rol) {
         const rolNormalizado = normalizarRol(rol);
         if (ROLES_ADMIN.includes(rolNormalizado)) return true;
+        const modo = await this.modoTomaOrdenes();
+        if (modo === MODO_TOMA_SOLO_CAPITANES) {
+            return rolNormalizado === 'capitan';
+        }
+        return rolNormalizado === 'capitan'
+            || rolNormalizado === 'dependiente'
+            || rolNormalizado === 'dependiente-pos';
+    },
+
+    /**
+     * ¿El rol indicado puede COBRAR órdenes? En modo 'solo_capitanes' el
+     * cobro también queda reservado a los capitanes (los dependientes solo
+     * entregan y consultan la pre-cuenta). Los administradores y el cajero
+     * siempre pueden cobrar.
+     */
+    async puedeCobrar(rol) {
+        const rolNormalizado = normalizarRol(rol);
+        if (ROLES_ADMIN.includes(rolNormalizado)) return true;
+        if (rolNormalizado === 'cajero') return true;
         const modo = await this.modoTomaOrdenes();
         if (modo === MODO_TOMA_SOLO_CAPITANES) {
             return rolNormalizado === 'capitan';

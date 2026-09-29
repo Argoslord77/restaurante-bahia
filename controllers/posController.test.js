@@ -15,7 +15,7 @@ jest.mock('../services/precioService', () => ({
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
-const { viewPOS, initOrderManual, abrirOObtenerPedidoMesa, initOrderQR, apiSaveOrder, obtenerAlertasPendientes, procesarCobroAvanzado } = require('./posController');
+const { viewPOS, initOrderManual, abrirOObtenerPedidoMesa, initOrderQR, apiSaveOrder, obtenerAlertasPendientes, procesarCobroAvanzado, guardarBorrador, obtenerBorrador } = require('./posController');
 
 function crearReqRes({ url = '/pos/15', query = {}, params = {} } = {}) {
     const req = { url, query, params, user: { id: 1, rol: 'administrador', nombre: 'Admin' } };
@@ -365,7 +365,9 @@ describe('posController.obtenerAlertasPendientes · ítems listos (V5)', () => {
         simularPool([
             ['FROM notificaciones_mesero', [[{ id: 1, tipo: 'LLAMADA_SERVICIO', mensaje: 'hola', nombre_mesa: '3' }], []]],
             ['FROM pre_pedidos', [[], []]],
-            ["estado_item = 'listo'", [[...listos], []]]
+            ["estado_item = 'listo'", [[...listos], []]],
+            ['FROM reservas r', [[], []]],
+            ['FROM borradores_carrito', [[], []]]
         ]);
     }
 
@@ -406,7 +408,9 @@ describe('posController.obtenerAlertasPendientes · ítems listos (V5)', () => {
     it('el capitán (modo todos) no recibe listos del salón', async () => {
         simularPool([
             ['FROM notificaciones_mesero', [[], []]],
-            ['FROM pre_pedidos', [[], []]]
+            ['FROM pre_pedidos', [[], []]],
+            ['FROM reservas r', [[], []]],
+            ['FROM borradores_carrito', [[], []]]
         ]);
         const { req, res } = crearReqResAPI({ user: { id: 9, rol: 'capitan' } });
         req.turnoServicioId = 7;
@@ -420,7 +424,9 @@ describe('posController.obtenerAlertasPendientes · ítems listos (V5)', () => {
         monitores = false;
         simularPool([
             ['FROM notificaciones_mesero', [[], []]],
-            ['FROM pre_pedidos', [[], []]]
+            ['FROM pre_pedidos', [[], []]],
+            ['FROM reservas r', [[], []]],
+            ['FROM borradores_carrito', [[], []]]
         ]);
         const { req, res } = crearReqResAPI({ user: { id: 5, rol: 'dependiente' } });
         req.turnoServicioId = 7;
@@ -433,7 +439,9 @@ describe('posController.obtenerAlertasPendientes · ítems listos (V5)', () => {
     it('sin usuario autenticado no hay listos', async () => {
         simularPool([
             ['FROM notificaciones_mesero', [[], []]],
-            ['FROM pre_pedidos', [[], []]]
+            ['FROM pre_pedidos', [[], []]],
+            ['FROM reservas r', [[], []]],
+            ['FROM borradores_carrito', [[], []]]
         ]);
         const { req, res } = crearReqResAPI({ user: null });
         req.turnoServicioId = 7;
@@ -443,6 +451,60 @@ describe('posController.obtenerAlertasPendientes · ítems listos (V5)', () => {
         expect(res.json.mock.calls[0][0].alertas.itemsListos).toEqual([]);
     });
 });
+describe('posController.obtenerAlertasPendientes · novedades de sala (T5)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        SettingService.get.mockImplementation(async (clave, valorPorDefecto) => {
+            if (clave === 'habilitar_monitores_elaboracion') return false;
+            if (clave === 'pos_quien_toma_ordenes') return 'todos';
+            return valorPorDefecto;
+        });
+    });
+
+    function simularSala({ pendientes = [], movidas = [] } = {}) {
+        simularPool([
+            ['FROM notificaciones_mesero', [[], []]],
+            ['FROM pre_pedidos', [[], []]],
+            ['FROM reservas r', (sql) => (String(sql).includes('actualizado_en')
+                ? [[...movidas], []]
+                : [[...pendientes], []])],
+            ['FROM borradores_carrito', [[], []]]
+        ]);
+    }
+
+    it('incluye pendientes y movidas recientes de la sala', async () => {
+        simularSala({
+            pendientes: [{ id: 3, id_mesa: 6, mesa_numero: 'Nro 6', cliente_nombre: 'Ana', comensales: 2, fecha_corta: '28/09 20:00' }],
+            movidas: [{ id: 2, id_mesa: 5, mesa_numero: 'Nro 5', cliente_nombre: 'Luis', estado: 'sentada', pedido_id: 77 }]
+        });
+        const { req, res } = crearReqResAPI({ user: { id: 5, rol: 'dependiente' } });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        const cuerpo = res.json.mock.calls[0][0];
+        expect(cuerpo.alertas.sala.pendientes).toHaveLength(1);
+        expect(cuerpo.alertas.sala.movidas).toHaveLength(1);
+        expect(cuerpo.alertas.sala.movidas[0]).toMatchObject({ estado: 'sentada', pedido_id: 77 });
+        expect(cuerpo.alertas.notificaciones).toEqual([]);
+    });
+
+    it('un fallo de sala no rompe el sondeo', async () => {
+        simularPool([
+            ['FROM notificaciones_mesero', [[{ id: 1, tipo: 'LLAMADA_SERVICIO', mensaje: 'hola', nombre_mesa: '3' }], []]],
+            ['FROM pre_pedidos', [[], []]],
+            ['FROM reservas r', () => { throw new Error('ER_NO_SUCH_TABLE'); }]
+        ]);
+        const { req, res } = crearReqResAPI({ user: { id: 5, rol: 'dependiente' } });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        const cuerpo = res.json.mock.calls[0][0];
+        expect(cuerpo.success).toBe(true);
+        expect(cuerpo.alertas.sala).toEqual({ pendientes: [], movidas: [] });
+        expect(cuerpo.alertas.notificaciones).toHaveLength(1);
+    });
+});
+
 describe('posController.procesarCobroAvanzado · excedente del cobro', () => {
     const PEDIDO = { id: 15, id_mesa: 3, turno_servicio_id: 7, carta: 'CUP', numero_mesa: '5' };
     let conexion;
@@ -636,5 +698,194 @@ describe('posController.procesarCobroAvanzado · candado anti doble-cobro (A1)',
         expect(conexion.commit).toHaveBeenCalled();
         const mesaPool = pool.query.mock.calls.find(([sql]) => String(sql).includes('UPDATE mesas'));
         expect(mesaPool).toBeFalsy();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// T6: cobro restringido a capitanes en modo 'solo_capitanes'.
+// ---------------------------------------------------------------------------
+describe('posController.viewPOS · bandera puedeCobrarOrden (T6)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        pool.query.mockImplementation(async () => {
+            const n = pool.query.mock.calls.length;
+            if (n === 1) return [[PEDIDO_ABIERTO], []];
+            if (n === 2) return [[], []];
+            return [[], []];
+        });
+        PrecioService.obtenerContextoCobro.mockResolvedValue({ carta: 'CUP', es_zelle: false, moneda_codigo: 'CUP' });
+    });
+
+    function modo(m) {
+        SettingService.get.mockImplementation(async (clave, def) =>
+            clave === 'pos_quien_toma_ordenes' ? m : def);
+    }
+
+    it('dependiente en modo solo_capitanes: no puede cobrar ni tomar', async () => {
+        modo('solo_capitanes');
+        const { req, res } = crearReqRes({ params: { id_pedido: '15' } });
+        req.user = { id: 5, rol: 'dependiente' };
+        await viewPOS(req, res);
+        expect(res.render).toHaveBeenCalledWith('pos', expect.objectContaining({
+            puedeCobrarOrden: false, puedeTomarOrdenes: false
+        }));
+    });
+
+    it('dependiente en modo todos: sí puede cobrar', async () => {
+        modo('todos');
+        const { req, res } = crearReqRes({ params: { id_pedido: '15' } });
+        req.user = { id: 5, rol: 'dependiente' };
+        await viewPOS(req, res);
+        expect(res.render).toHaveBeenCalledWith('pos', expect.objectContaining({ puedeCobrarOrden: true }));
+    });
+
+    it('cajero en modo solo_capitanes: conserva el cobro', async () => {
+        modo('solo_capitanes');
+        const { req, res } = crearReqRes({ params: { id_pedido: '15' } });
+        req.user = { id: 2, rol: 'cajero' };
+        await viewPOS(req, res);
+        expect(res.render).toHaveBeenCalledWith('pos', expect.objectContaining({ puedeCobrarOrden: true }));
+    });
+});
+
+describe('posController.procesarCobroAvanzado · candado de cobro (T6)', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    function modo(m) {
+        SettingService.get.mockImplementation(async (clave, def) =>
+            clave === 'pos_quien_toma_ordenes' ? m : def);
+    }
+
+    it('403 para el dependiente en modo solo_capitanes (sin tocar la BD)', async () => {
+        modo('solo_capitanes');
+        const { req, res } = crearReqResAPI({
+            params: { id_pedido: '15' }, body: { pagos: [] }, user: { id: 5, rol: 'dependiente' }
+        });
+        await procesarCobroAvanzado(req, res);
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: false, codigo: 'COBRO_SOLO_CAPITANES'
+        }));
+        expect(pool.getConnection).not.toHaveBeenCalled();
+        expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it('el capitán supera el candado en modo solo_capitanes', async () => {
+        modo('solo_capitanes');
+        const { req, res } = crearReqResAPI({
+            params: { id_pedido: '15' }, body: { pagos: [] }, user: { id: 9, rol: 'capitan' }
+        });
+        await procesarCobroAvanzado(req, res);
+        expect(res.status).not.toHaveBeenCalledWith(403);
+        expect(pool.query).toHaveBeenCalled(); // superó el candado: tocó la BD
+    });
+
+    it('el dependiente cobra normal en modo todos', async () => {
+        modo('todos');
+        const { req, res } = crearReqResAPI({
+            params: { id_pedido: '15' }, body: { pagos: [] }, user: { id: 5, rol: 'dependiente' }
+        });
+        await procesarCobroAvanzado(req, res);
+        expect(res.status).not.toHaveBeenCalledWith(403);
+        expect(pool.query).toHaveBeenCalled(); // superó el candado: tocó la BD
+    });
+});
+
+// ---------------------------------------------------------------------------
+// T7: borrador del carrito compartido capitán → dependiente.
+// ---------------------------------------------------------------------------
+describe('posController.borrador · guardar y leer (T7)', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    function modo(m) {
+        SettingService.get.mockImplementation(async (clave, def) =>
+            clave === 'pos_quien_toma_ordenes' ? m : def);
+    }
+
+    it('403 al guardar si no puede tomar órdenes (dependiente en solo_capitanes)', async () => {
+        modo('solo_capitanes');
+        const { req, res } = crearReqResAPI({
+            body: { id_pedido: 50, id_mesa: 3, items: [{ id: 1, cantidad: 1 }] },
+            user: { id: 5, rol: 'dependiente' }
+        });
+        await guardarBorrador(req, res);
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it('el capitán guarda su borrador (upsert)', async () => {
+        modo('solo_capitanes');
+        pool.query.mockResolvedValue([{ affectedRows: 1 }]);
+        const { req, res } = crearReqResAPI({
+            body: { id_pedido: 50, id_mesa: 3, items: [{ id: 1, nombre: 'Mojito', precio: 10, cantidad: 2 }] },
+            user: { id: 9, rol: 'capitan' }
+        });
+        await guardarBorrador(req, res);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, pedidoId: 50, n: 1 }));
+        expect(String(pool.query.mock.calls[0][0])).toContain('ON DUPLICATE KEY UPDATE');
+    });
+
+    it('leer devuelve el borrador vigente o null', async () => {
+        pool.query.mockResolvedValue([[{ id_pedido: 50, id_mesa: 3, actualizado_en: '2026-09-28 12:00:00',
+            items_json: JSON.stringify([{ id: 1, cantidad: 2 }]), autor: 'Carlos' }], []]);
+        const { req, res } = crearReqResAPI({ params: { id_pedido: '50' }, user: { id: 5, rol: 'dependiente' } });
+        await obtenerBorrador(req, res);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: true, borrador: expect.objectContaining({ id_pedido: 50 })
+        }));
+        pool.query.mockResolvedValue([[], []]);
+        const v = crearReqResAPI({ params: { id_pedido: '51' }, user: { id: 5, rol: 'dependiente' } });
+        await obtenerBorrador(v.req, v.res);
+        expect(v.res.json).toHaveBeenCalledWith({ success: true, borrador: null });
+    });
+});
+
+describe('posController.obtenerAlertasPendientes · borradores (T7)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        SettingService.get.mockImplementation(async (clave, valorPorDefecto) => {
+            if (clave === 'habilitar_monitores_elaboracion') return false;
+            if (clave === 'pos_quien_toma_ordenes') return 'solo_capitanes';
+            return valorPorDefecto;
+        });
+    });
+
+    it('el dependiente recibe los borradores de SUS mesas asignadas', async () => {
+        simularPool([
+            ['FROM notificaciones_mesero', [[], []]],
+            ['FROM pre_pedidos', [[], []]],
+            ['FROM reservas r', [[], []]],
+            ['FROM borradores_carrito', [[{ id_pedido: 50, id_mesa: 3, mesa_numero: 'Nro 3',
+                items_json: JSON.stringify([{ id: 1 }]), actualizado_en: '2026-09-28 12:00:00', autor: 'Carlos' }], []]]
+        ]);
+        const { req, res } = crearReqResAPI({ user: { id: 5, rol: 'dependiente' } });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        const llamada = pool.query.mock.calls.find(([sql]) => String(sql).includes('FROM borradores_carrito'));
+        expect(llamada).toBeDefined();
+        expect(llamada[0]).toContain('dam.dependiente_id = ?');
+        expect(llamada[1]).toEqual([5, 7, 7]);
+        const cuerpo = res.json.mock.calls[0][0];
+        expect(cuerpo.alertas.borradores).toEqual([{
+            id_pedido: 50, id_mesa: 3, mesa_numero: 'Nro 3', n_items: 1,
+            version: '2026-09-28 12:00:00', autor: 'Carlos'
+        }]);
+    });
+
+    it('el capitán no recibe borradores (él es quien los escribe)', async () => {
+        simularPool([
+            ['FROM notificaciones_mesero', [[], []]],
+            ['FROM pre_pedidos', [[], []]],
+            ['FROM reservas r', [[], []]],
+            ['FROM borradores_carrito', [[], []]]
+        ]);
+        const { req, res } = crearReqResAPI({ user: { id: 9, rol: 'capitan' } });
+        req.turnoServicioId = 7;
+        await obtenerAlertasPendientes(req, res);
+
+        const llamada = pool.query.mock.calls.find(([sql]) => String(sql).includes('FROM borradores_carrito'));
+        expect(llamada).toBeUndefined();
+        expect(res.json.mock.calls[0][0].alertas.borradores).toEqual([]);
     });
 });

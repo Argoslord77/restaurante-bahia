@@ -252,10 +252,7 @@
         <% if (!esModoVisualizacion && !puedeTomarOrdenesTablero) { %>
             <div class="alert alert-warning border-0 shadow-sm rounded-3 p-3 mb-4 d-flex align-items-center gap-3" role="alert">
                 <i class="fa-solid fa-user-lock fs-4 text-warning"></i>
-                <div>
-                    <div class="fw-bold text-warning-emphasis">Solo los capitanes pueden tomar órdenes</div>
-                    <small class="text-muted d-block">Por configuración general (Opciones generales) no puedes abrir mesas ni agregar productos. Conservas tus mesas para entregar, consultar la pre-cuenta y cobrar.</small>
-                </div>
+                <div class="fw-bold text-warning-emphasis">Solo los capitanes pueden tomar ordenes.</div>
             </div>
         <% } %>
 
@@ -351,7 +348,7 @@
                                                     <% } else if (!mesa.id_pedido_activo) { %>
                                                         <% if (mesa.reserva_pendiente || (mesa.estado && mesa.estado.toLowerCase() === 'reservada')) { %>
                                                         <button type="button" class="btn-monitor btn-monitor-reservada" disabled title="Mesa reservada: la cuenta se abre desde el módulo Reservas con Sentar">
-                                                            <i class="fa-solid fa-calendar-check"></i> Reservada — Sentar desde Reservas
+                                                            <i class="fa-solid fa-calendar-check"></i> Reservada<br>Sentar desde Reservas
                                                         </button>
                                                         <% } else if (!distribucionHecha) { %>
                                                         <button type="button" class="btn-monitor btn-monitor-libre" disabled style="opacity: .55; cursor: not-allowed;" title="Sin distribución del día: no se puede abrir ninguna mesa">
@@ -669,6 +666,98 @@
         let listosVistos = new Set();
         let primerSondeoListosCompletado = false;
 
+        // T5: novedades de la sala (reservas). Si la mesa está en este
+        // tablero, su tarjeta se actualiza sin recargar la página.
+        const HAY_DISTRIBUCION_TABLERO = <%= distribucionHecha ? 'true' : 'false' %>;
+        let salaVistos = new Set();
+        let primerSondeoSalaCompletado = false;
+        let borradoresVistos = new Set();
+        let primerSondeoBorradoresListo = false;
+
+        function escaparSala(texto) {
+            return String(texto ?? '').replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        function morphTarjetaSala(idMesa, evento, r) {
+            const card = document.querySelector(`.monitor-mesa-card[data-mesa-id="${idMesa}"]`);
+            if (!card) return;
+            const badge = card.querySelector('.monitor-status-badge');
+            const zona = card.querySelector('.monitor-footer-info');
+            const pie = card.lastElementChild;
+            const accion = pie ? pie.querySelector('.btn-monitor:not(.mostrar-qr-btn)') : null;
+            const quitarLineaReserva = () => {
+                const linea = zona ? zona.querySelector('.reserva-info-linea') : null;
+                if (linea) linea.remove();
+            };
+            if (evento === 'reservada') {
+                if (badge) {
+                    badge.className = 'monitor-status-badge status-monitor-reservada';
+                    badge.textContent = '• RESERVADA';
+                }
+                if (zona && !zona.querySelector('.reserva-info-linea')) {
+                    const linea = document.createElement('span');
+                    linea.className = 'd-block mt-1 reserva-info-linea';
+                    linea.innerHTML = `<i class="fa-solid fa-calendar-check me-1"></i> Reservada: <strong></strong> · ${escaparSala(r.fecha_corta || '')} · ${escaparSala(r.comensales ?? '')} pers.`;
+                    linea.querySelector('strong').textContent = r.cliente_nombre || '';
+                    zona.appendChild(linea);
+                }
+                if (accion && accion.tagName === 'BUTTON' && !accion.classList.contains('btn-monitor-reservada')) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn-monitor btn-monitor-reservada';
+                    btn.disabled = true;
+                    btn.title = 'Mesa reservada: la cuenta se abre desde el módulo Reservas con Sentar';
+                    btn.innerHTML = '<i class="fa-solid fa-calendar-check"></i> Reservada<br>Sentar desde Reservas';
+                    accion.replaceWith(btn);
+                }
+            } else if (evento === 'sentada') {
+                if (badge) {
+                    badge.className = 'monitor-status-badge status-monitor-pendiente';
+                    badge.textContent = '• EN ESPERA';
+                }
+                quitarLineaReserva();
+                if (accion && accion.tagName === 'BUTTON' && r.pedido_id) {
+                    const enlace = document.createElement('a');
+                    enlace.href = `/pos/${r.pedido_id}`;
+                    enlace.className = 'btn-monitor btn-monitor-pendiente text-decoration-none';
+                    enlace.innerHTML = '<i class="fa-solid fa-bell"></i> Atender Pedido';
+                    accion.replaceWith(enlace);
+                }
+            } else if (evento === 'libre') {
+                if (badge) {
+                    badge.className = 'monitor-status-badge status-monitor-libre';
+                    badge.textContent = '• LIBRE';
+                }
+                quitarLineaReserva();
+                if (accion && accion.classList.contains('btn-monitor-reservada')) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    if (!HAY_DISTRIBUCION_TABLERO) {
+                        btn.className = 'btn-monitor btn-monitor-libre';
+                        btn.disabled = true;
+                        btn.style.cssText = 'opacity: .55; cursor: not-allowed;';
+                        btn.title = 'Sin distribución del día: no se puede abrir ninguna mesa';
+                        btn.innerHTML = '<i class="fa-solid fa-lock"></i> Sin distribución';
+                    } else if (PUEDE_TOMAR_ORDENES_TABLERO) {
+                        btn.className = 'btn-monitor btn-monitor-libre abrir-mesa-btn';
+                        btn.setAttribute('data-mesa-id', String(idMesa));
+                        btn.innerHTML = '<i class="fa-solid fa-plus"></i> Abrir Mesa';
+                    } else {
+                        btn.className = 'btn-monitor btn-monitor-libre abrir-mesa-btn';
+                        btn.setAttribute('data-mesa-id', String(idMesa));
+                        btn.setAttribute('data-sin-autorizacion', '1');
+                        btn.disabled = true;
+                        btn.style.cssText = 'opacity: .55; cursor: not-allowed;';
+                        btn.title = 'Solo los capitanes pueden tomar órdenes';
+                        btn.innerHTML = '<i class="fa-solid fa-lock"></i> Solo capitanes';
+                    }
+                    accion.replaceWith(btn);
+                }
+            }
+        }
+
         // Insignia "listo para entregar" en cada tarjeta con ítems en 'listo'.
         function actualizarInsigniasListos(items) {
             const porMesa = {};
@@ -702,7 +791,8 @@
                 const data = await response.json();
                 if (!data.success) return;
 
-                const { notificaciones = [], prePedidos = [], itemsListos = [] } = data.alertas || {};
+                const { notificaciones = [], prePedidos = [], itemsListos = [], sala = {}, borradores = [] } = data.alertas || {};
+                const { pendientes = [], movidas = [] } = sala || {};
                 let hayNuevasAlertas = false;
 
                 // 1. Procesar llamadas de clientes y solicitudes de cierre
@@ -837,6 +927,92 @@
                     const actuales = new Set(itemsListos.map(it => String(it.id_detalle)));
                     listosVistos.forEach(key => { if (!actuales.has(key)) listosVistos.delete(key); });
                 }
+                // 4. Novedades de la sala (T5): mesas reservadas y movidas
+                // (sentada, cancelada, no-show). La primera carga siembra
+                // sin avisar; los siguientes sondeos avisan solo lo nuevo.
+                // Si la mesa está en este tablero, su tarjeta se actualiza.
+                if (!primerSondeoSalaCompletado) {
+                    pendientes.forEach(r => salaVistos.add(`res_${r.id}`));
+                    movidas.forEach(r => salaVistos.add(`mov_${r.id}_${r.estado}`));
+                    primerSondeoSalaCompletado = true;
+                } else {
+                    pendientes.forEach(r => {
+                        const key = `res_${r.id}`;
+                        if (salaVistos.has(key)) return;
+                        salaVistos.add(key);
+                        hayNuevasAlertas = true;
+                        morphTarjetaSala(r.id_mesa, 'reservada', r);
+                        Swal.fire({
+                            toast: true, position: 'top-end', icon: 'info',
+                            title: `Mesa ${escaparSala(r.mesa_numero || r.id_mesa)} reservada`,
+                            html: `${escaparSala(r.cliente_nombre || '')} · ${escaparSala(r.fecha_corta || '')} · ${escaparSala(r.comensales ?? '')} pers.`,
+                            showConfirmButton: false, timer: 5000, timerProgressBar: true
+                        });
+                    });
+                    movidas.forEach(r => {
+                        const key = `mov_${r.id}_${r.estado}`;
+                        if (salaVistos.has(key)) return;
+                        salaVistos.add(key);
+                        hayNuevasAlertas = true;
+                        const nombreMesa = escaparSala(r.mesa_numero || r.id_mesa);
+                        if (r.estado === 'sentada') {
+                            morphTarjetaSala(r.id_mesa, 'sentada', r);
+                            Swal.fire({
+                                toast: true, position: 'top-end', icon: 'success',
+                                title: `¡Mesa ${nombreMesa} sentada!`,
+                                html: `${escaparSala(r.cliente_nombre || '')} ya está en la mesa.`,
+                                showConfirmButton: Boolean(r.pedido_id),
+                                confirmButtonText: 'Ver orden',
+                                confirmButtonColor: '#0f172a',
+                                timer: r.pedido_id ? undefined : 5000,
+                                timerProgressBar: true
+                            }).then((result) => {
+                                if (result.isConfirmed && r.pedido_id) {
+                                    window.location.href = `/pos/${r.pedido_id}`;
+                                }
+                            });
+                        } else if (r.estado === 'cancelada' || r.estado === 'no_show') {
+                            morphTarjetaSala(r.id_mesa, 'libre', r);
+                            const etiqueta = r.estado === 'cancelada' ? 'cancelada' : 'marcada no-show';
+                            Swal.fire({
+                                toast: true, position: 'top-end', icon: 'warning',
+                                title: `Reserva ${etiqueta}: Mesa ${nombreMesa}`,
+                                html: `${escaparSala(r.cliente_nombre || '')} · la mesa vuelve a libre.`,
+                                showConfirmButton: false, timer: 5000, timerProgressBar: true
+                            });
+                        }
+                    });
+                }
+
+                // 5. Borradores del capitán (T7): avisa cuando el capitán
+                // actualiza la ronda en captura de una mesa asignada. La
+                // primera carga siembra sin avisar.
+                if (!primerSondeoBorradoresListo) {
+                    borradores.forEach(b => borradoresVistos.add(`bor_${b.id_pedido}_${b.version}`));
+                    primerSondeoBorradoresListo = true;
+                } else {
+                    borradores.forEach(b => {
+                        const key = `bor_${b.id_pedido}_${b.version}`;
+                        if (borradoresVistos.has(key)) return;
+                        borradoresVistos.add(key);
+                        hayNuevasAlertas = true;
+                        Swal.fire({
+                            toast: true, position: 'top-end', icon: 'info',
+                            title: `El capitán actualizó Mesa ${escaparSala(b.mesa_numero || b.id_mesa)}`,
+                            html: `${escaparSala(b.n_items ?? 0)} producto(s) en captura${b.autor ? ` · ${escaparSala(b.autor)}` : ''}.`,
+                            showConfirmButton: true,
+                            confirmButtonText: 'Ver',
+                            confirmButtonColor: '#0f172a',
+                            timer: 8000,
+                            timerProgressBar: true
+                        }).then((result) => {
+                            if (result.isConfirmed && b.id_pedido) {
+                                window.location.href = `/pos/${b.id_pedido}`;
+                            }
+                        });
+                    });
+                }
+
                 actualizarInsigniasListos(itemsListos);
 
                 if (hayNuevasAlertas) {

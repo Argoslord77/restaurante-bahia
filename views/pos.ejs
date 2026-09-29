@@ -131,12 +131,14 @@
             transition: opacity 0.2s ease, transform 0.2s ease;
         }
 
-        .header-floating-search.visible ~ .order-badge-header,
-        .pos-header:has(.header-floating-search.visible) .order-badge-header {
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
+        /* T2: solo el número de orden, bien grande. */
+        .order-number-big {
+            font-size: 1.75rem;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: 0.5px;
         }
+
 
         .pos-container {
             height: calc(100vh - 64px);
@@ -352,6 +354,65 @@
         }
 
         /* Carrito de Comanda */
+        /* T7: ronda del capitán en captura (solo lectura para el dependiente). */
+        #borrador-capitan {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 12px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+        }
+        .borrador-capitan-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: #047857;
+            margin-bottom: 8px;
+        }
+        .borrador-capitan-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            background: #047857;
+            color: #fff;
+            border-radius: 9999px;
+            padding: 2px 8px;
+            white-space: nowrap;
+        }
+        .borrador-capitan-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 0.82rem;
+            color: #1f2937;
+            padding: 4px 0;
+            border-top: 1px dashed #d1fae5;
+        }
+        .borrador-capitan-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .borrador-capitan-nota {
+            font-size: 0.72rem;
+            color: #b45309;
+            background: #fffbeb;
+            border-radius: 6px;
+            padding: 2px 6px;
+            margin: 0 0 4px;
+        }
+        .borrador-capitan-total {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: #065f46;
+            border-top: 1px solid #bbf7d0;
+            margin-top: 6px;
+            padding-top: 6px;
+        }
         .cart-header {
             padding: 12px 16px;
             background-color: #f8fafc;
@@ -658,22 +719,25 @@
             transform: scale(0.95);
         }
 
-        /* Buscador Flotante en el Header Superior */
+        /* T1: buscador flotante anclado al inicio de la caja de tarjetas
+           (ya no vive en el header: no tapa el Nº de orden). */
         .header-floating-search {
             position: absolute;
-            left: 50%;
-            transform: translate(-50%, -10px);
-            width: 100%;
-            max-width: 380px;
+            top: 10px;
+            left: 12px;
+            right: 12px;
+            transform: translateY(-10px);
             opacity: 0;
             visibility: hidden;
             transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             z-index: 1035;
+            pointer-events: none;
         }
         .header-floating-search.visible {
             opacity: 1;
             visibility: visible;
-            transform: translate(-50%, 0);
+            transform: translateY(0);
+            pointer-events: auto;
         }
         .header-search-input {
             width: 100%;
@@ -730,7 +794,8 @@
                 font-size: 14px;
             }
             .header-floating-search {
-                max-width: 210px;
+                left: 10px;
+                right: 10px;
             }
             .cart-section {
                 display: none;
@@ -783,12 +848,15 @@
         .pos-toma-banner small { display: block; opacity: .85; }
         body.pos-sin-toma #btn-save-order { opacity: .55; }
         body.pos-sin-toma .dish-card { cursor: not-allowed; }
+        /* T6: sin permiso de cobro (modo solo_capitanes + dependiente). */
+        body.pos-sin-cobro #btn-checkout-order { display: none !important; }
     </style>
 </head>
 <%
     const posSinToma = (typeof puedeTomarOrdenes !== 'undefined' && puedeTomarOrdenes === false);
+    const posSinCobro = (typeof puedeCobrarOrden !== 'undefined' && puedeCobrarOrden === false);
 %>
-<body<% if ((typeof soloVisualizacion !== 'undefined' && soloVisualizacion) || posSinToma) { %> class="<%= (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) ? 'pos-vista' : '' %><%= posSinToma ? ' pos-sin-toma' : '' %>"<% } %>>
+<body<% if ((typeof soloVisualizacion !== 'undefined' && soloVisualizacion) || posSinToma || posSinCobro) { %> class="<%= (typeof soloVisualizacion !== 'undefined' && soloVisualizacion) ? 'pos-vista' : '' %><%= posSinToma ? ' pos-sin-toma' : '' %><%= posSinCobro ? ' pos-sin-cobro' : '' %>"<% } %>>
     <input type="hidden" id="pos_id_pedido" value="<%= id_pedido %>">
     <input type="hidden" id="pos_id_mesa" value="<%= typeof id_mesa !== 'undefined' ? id_mesa : '' %>">
 
@@ -822,28 +890,10 @@
             </div>
         </div>
 
-        <!-- Buscador Flotante que aparece al hacer scroll -->
-        <div class="header-floating-search" id="header-floating-search">
-            <div class="position-relative w-100">
-                <i class="fa-solid fa-magnifying-glass position-absolute text-slate-400" style="left: 12px; top: 9px; font-size: 12px;"></i>
-                <input type="text" 
-                       id="header-search-input" 
-                       class="header-search-input" 
-                       placeholder="Filtrar platillos o bebidas..." 
-                       autocomplete="off">
-                <button type="button" 
-                        id="btn-clear-header-search" 
-                        class="position-absolute border-0 bg-transparent text-slate-400"
-                        style="right: 10px; top: 6px; cursor: pointer; display: none;">
-                    <i class="fa-solid fa-circle-xmark"></i>
-                </button>
-            </div>
-        </div>
 
         <div class="d-flex align-items-center gap-2">
-            <div class="order-badge-header" id="order-badge-header">
-                <i class="fa-solid fa-receipt text-sky-400"></i>
-                <span>ORDEN #<%= id_pedido %></span>
+            <div class="order-badge-header" id="order-badge-header" title="Número de orden">
+                <span class="order-number-big"><%= id_pedido %></span>
             </div>
 
             <% if (!monitoresHabilitados) { %>
@@ -882,7 +932,7 @@
         <i class="fa-solid fa-user-lock"></i>
         <div class="flex-grow-1">
             <strong>Solo los capitanes pueden tomar órdenes</strong> (Configuración → Opciones generales).
-            <small>Puedes entregar productos, consultar la pre-cuenta y cobrar, pero no agregar productos a la orden.</small>
+            <small><%= posSinCobro ? 'Puedes entregar productos y consultar la pre-cuenta, pero no agregar productos ni cobrar.' : 'Puedes entregar productos, consultar la pre-cuenta y cobrar, pero no agregar productos a la orden.' %></small>
         </div>
     </div>
     <% } %>
@@ -891,6 +941,23 @@
         <div class="row h-100">
             <!-- Panel Izquierdo: Catálogo de Platillos -->
             <div class="col-md-7 col-lg-8 p-0 position-relative h-100" style="overflow: hidden;">
+            <!-- T1: flotante al inicio de la caja de tarjetas (aparece al hacer scroll) -->
+            <div class="header-floating-search" id="header-floating-search">
+                <div class="position-relative w-100">
+                    <i class="fa-solid fa-magnifying-glass position-absolute text-slate-400" style="left: 12px; top: 9px; font-size: 12px;"></i>
+                    <input type="text" 
+                           id="header-search-input" 
+                           class="header-search-input" 
+                           placeholder="Filtrar platillos o bebidas..." 
+                           autocomplete="off">
+                    <button type="button" 
+                            id="btn-clear-header-search" 
+                            class="position-absolute border-0 bg-transparent text-slate-400"
+                            style="right: 10px; top: 6px; cursor: pointer; display: none;">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                </div>
+            </div>
                 <div class="menu-section custom-scrollbar w-100 h-100 p-3" id="section-menu">
                     
                     <!-- Filtros de Categorías -->
@@ -1040,6 +1107,8 @@
                 
                 <!-- Lista del Carrito Activo -->
                 <div id="cart-container" class="flex-grow-1 overflow-y-auto p-3 custom-scrollbar bg-white" style="min-height: 120px;">
+                    <!-- T7: ronda del capitán (solo lectura, modo solo_capitanes) -->
+                    <div id="borrador-capitan" class="d-none"></div>
                     <div id="cart-wrapper"></div>
                 </div>
 
@@ -1128,7 +1197,7 @@
     <!-- Botón Flotante Móvil -->
     <button class="mobile-cart-badge" id="mobile-cart-trigger">
         <i class="fa-solid fa-receipt"></i>
-        <span>Ver Comanda</span>
+        <span>VER ORDEN</span>
         <span class="badge bg-danger rounded-pill font-digits" id="mobile-badge-count">0</span>
     </button>
 
@@ -1146,14 +1215,21 @@
         // Autorizaciones del circuito de servicio (Opciones generales). Si la
         // vista no las trae (render antiguo), se permite y el servidor decide.
         const PUEDE_TOMAR_ORDENES = <%= (typeof puedeTomarOrdenes === 'undefined' || puedeTomarOrdenes) ? 'true' : 'false' %>;
+        const PUEDE_COBRAR_ORDEN = <%= (typeof puedeCobrarOrden === 'undefined' || puedeCobrarOrden) ? 'true' : 'false' %>;
+        const MODO_TOMA_ORDENES = "<%= (typeof modoTomaOrdenes !== 'undefined' && modoTomaOrdenes) ? modoTomaOrdenes : 'todos' %>";
+        // T7: borrador compartido (modo solo_capitanes): el capitán escribe
+        // su carrito y el dependiente asignado lo ve en tiempo real.
+        const COMPARTIR_BORRADOR = (MODO_TOMA_ORDENES === 'solo_capitanes') && PUEDE_TOMAR_ORDENES && !SOLO_VISUALIZACION;
+        const LEER_BORRADOR = (MODO_TOMA_ORDENES === 'solo_capitanes') && !PUEDE_TOMAR_ORDENES && !SOLO_VISUALIZACION;
         const MENSAJE_TOMA_BLOQUEO = <%- JSON.stringify(typeof mensajeTomaNoAutorizada !== 'undefined' && mensajeTomaNoAutorizada ? mensajeTomaNoAutorizada : 'No estás autorizado a tomar órdenes según la configuración general.') %>;
         const CORTESIA_REQUIERE_AUTH = <%= (typeof cortesiaRequiereAutorizacion !== 'undefined' && cortesiaRequiereAutorizacion) ? 'true' : 'false' %>;
         const PUEDE_AUTORIZAR_CORTESIA = <%= (typeof puedeAutorizarCortesia !== 'undefined' && puedeAutorizarCortesia) ? 'true' : 'false' %>;
 
         // Toma de órdenes restringida a capitanes: bloqueo en fase de captura
         // de TODO lo que agrega productos (agregar, cantidades, notas y
-        // guardar ronda). Entregar, cancelar, pre-cuenta y cobrar siguen
-        // habilitados: no son "tomar" la orden. El servidor revalida con 403.
+        // guardar ronda). Entregar, cancelar y pre-cuenta siguen
+        // habilitados: no son "tomar" la orden. El cobro tiene su propio
+        // permiso (T6). El servidor revalida con 403.
         if (!PUEDE_TOMAR_ORDENES && !SOLO_VISUALIZACION) {
             const SELECTORES_TOMA_BLOQUEADA = [
                 '#btn-save-order',
@@ -2103,6 +2179,7 @@
             }
 
             recalcularTotales();
+            programarGuardadoBorrador(); // T7: el capitán comparte su ronda
         }
 
         function renderHistory() {
@@ -2397,6 +2474,10 @@
         }
 
         async function checkoutOrder() {
+            // T6: sin permiso de cobro se avisa y no se abre el modal.
+            if (!PUEDE_COBRAR_ORDEN) {
+                return Swal.fire('Cobro restringido', 'Solo los capitanes pueden cobrar cuando está activo el modo "solo capitanes".', 'warning');
+            }
             if (carrito.length > 0) {
                 return Swal.fire('Productos en captura', 'Hay productos sin guardar. Envíelos o vacíe la captura antes de cobrar.', 'warning');
             }
@@ -2845,6 +2926,96 @@
             }
         }
 
+        // T7: borrador compartido capitán → dependiente (modo solo_capitanes).
+        let borradorTimer = null;
+        let ultimoBorradorEnviado = null; // null = aún no se envía ni una vez
+        function programarGuardadoBorrador() {
+            if (!COMPARTIR_BORRADOR) return;
+            const idPedido = parseInt(document.getElementById('pos_id_pedido').value, 10) || 0;
+            if (!idPedido) return; // sin pedido aún: nada que compartir
+            if (borradorTimer) clearTimeout(borradorTimer);
+            borradorTimer = setTimeout(guardarBorradorAhora, 2000);
+        }
+        async function guardarBorradorAhora() {
+            borradorTimer = null;
+            try {
+                const idPedido = parseInt(document.getElementById('pos_id_pedido').value, 10) || 0;
+                const idMesa = parseInt(document.getElementById('pos_id_mesa').value, 10) || 0;
+                if (!idPedido || !idMesa) return;
+                const cuerpo = JSON.stringify(carrito.map((it) => ({
+                    id: it.id, nombre: it.nombre, precio: it.precio,
+                    cantidad: it.cantidad, notas: it.notas || '',
+                    es_platillo_dia: it.es_platillo_dia ? 1 : 0
+                })));
+                // El primer envío siempre viaja (limpia borradores viejos si
+                // el carrito abrió vacío); luego solo viajan los cambios.
+                if (ultimoBorradorEnviado !== null && cuerpo === ultimoBorradorEnviado) return;
+                const resp = await fetch('/api/pos/borrador', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id_pedido: idPedido, id_mesa: idMesa, items: carrito })
+                });
+                if (resp.ok) ultimoBorradorEnviado = cuerpo;
+            } catch (e) { /* silencioso: reintenta en el próximo cambio */ }
+        }
+
+        let borradorVersionVista = null;
+        let primerSondeoBorradorListo = false;
+        function renderizarBorradorCapitan(b) {
+            const cont = document.getElementById('borrador-capitan');
+            if (!cont) return;
+            const items = (b && Array.isArray(b.items) && b.items.length) ? b.items : null;
+            if (!items) { cont.classList.add('d-none'); cont.innerHTML = ''; return; }
+            const total = items.reduce((acc, it) => acc + (Number(it.precio) || 0) * (Number(it.cantidad) || 0), 0);
+            cont.innerHTML = `
+                <div class="borrador-capitan-head">
+                    <span><i class="fa-solid fa-user-pen me-1"></i> Ronda del capitán${b.autor ? ` · ${escapeHtml(b.autor)}` : ''}</span>
+                    <span class="borrador-capitan-tag">solo lectura</span>
+                </div>
+                ${items.map((it) => `
+                    <div class="borrador-capitan-item">
+                        <span class="borrador-capitan-nombre">${escapeHtml(it.nombre || 'Platillo')} <b>× ${Number(it.cantidad) || 0}</b></span>
+                        <span class="font-digits">$${((Number(it.precio) || 0) * (Number(it.cantidad) || 0)).toFixed(2)}</span>
+                    </div>
+                    ${(it.notas ? `<div class="borrador-capitan-nota"><i class="fa-solid fa-bell-concierge"></i> ${escapeHtml(it.notas)}</div>` : '')}
+                `).join('')}
+                <div class="borrador-capitan-total"><span>Total ronda</span><span class="font-digits">$${total.toFixed(2)}</span></div>
+            `;
+            cont.classList.remove('d-none');
+        }
+        async function verificarBorradorCapitan() {
+            if (!LEER_BORRADOR) return;
+            const idPedido = document.getElementById('pos_id_pedido').value;
+            if (!idPedido || idPedido == 0) return;
+            try {
+                const resp = await fetch(`/api/pos/borrador/${idPedido}`);
+                const data = await resp.json();
+                const b = data && data.success ? data.borrador : null;
+                const version = b ? String(b.actualizado_en || '') : '';
+                renderizarBorradorCapitan(b && b.items && b.items.length ? b : null);
+                if (!primerSondeoBorradorListo) {
+                    primerSondeoBorradorListo = true;
+                } else if (version && version !== borradorVersionVista) {
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'El capitán actualizó la ronda', showConfirmButton: false, timer: 3000 });
+                } else if (!version && borradorVersionVista) {
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'El capitán envió la ronda', text: 'Recarga para verla en el historial.', showConfirmButton: false, timer: 4000 });
+                }
+                borradorVersionVista = version;
+            } catch (e) { /* silencioso */ }
+        }
+        let borradorPollTimer = null;
+        function iniciarPollingBorrador() {
+            if (!LEER_BORRADOR) return;
+            verificarBorradorCapitan();
+            if (!borradorPollTimer) borradorPollTimer = setInterval(verificarBorradorCapitan, 5000);
+        }
+        function detenerPollingBorrador() {
+            if (borradorPollTimer) {
+                clearInterval(borradorPollTimer);
+                borradorPollTimer = null;
+            }
+        }
+
         let itemsListosAnteriores = new Set();
         function verificarItemsListos() {
             if (!MONITORES_HABILITADOS) return;
@@ -2898,7 +3069,9 @@
         }
 
         iniciarPollingItemsListos();
+        iniciarPollingBorrador();
         window.addEventListener('beforeunload', detenerPollingItemsListos);
+        window.addEventListener('beforeunload', detenerPollingBorrador);
     </script>
 </body>
 </html>

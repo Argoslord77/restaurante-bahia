@@ -30,6 +30,11 @@ router.get('/qr/:hash', ensureAuthenticated, checkRole(['superadministrador', 'a
 // Guardado y modificación transaccional de los platillos desde la comanda
 router.post('/api/pos/save', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posValidationRules.saveOrder, handleValidationErrors, ensureAuthenticated, posController.apiSaveOrder);
 
+// T7: borrador del carrito compartido capitán → dependiente (modo
+// solo_capitanes). Escribe quien puede tomar órdenes; lee el dependiente.
+router.post('/api/pos/borrador', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.guardarBorrador);
+router.get('/api/pos/borrador/:id_pedido', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), posController.obtenerBorrador);
+
 // Verificar stock para un platillo específico
 router.get('/api/pos/verify-stock', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.apiVerifyStock);
 

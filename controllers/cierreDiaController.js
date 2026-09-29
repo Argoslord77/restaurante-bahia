@@ -202,13 +202,13 @@ const CierreDiaController = {
             const [filas] = await connection.query('SELECT * FROM pedidos WHERE id = ? FOR UPDATE', [id_pedido]);
             if (!filas || filas.length === 0) {
                 await connection.rollback();
-                return res.status(404).json({ success: false, message: 'La comanda no existe.' });
+                return res.status(404).json({ success: false, message: 'La orden no existe.' });
             }
 
             const pedido = filas[0];
             if (pedido.estado_pago === 'pagado') {
                 await connection.rollback();
-                return res.status(400).json({ success: false, message: 'Esta comanda ya figura como pagada.' });
+                return res.status(400).json({ success: false, message: 'Esta orden ya figura como pagada.' });
             }
 
             // Obtener el turno de servicio activo
@@ -263,7 +263,7 @@ const CierreDiaController = {
             return res.json({
                 success: true,
                 excedente: excedenteLiq,
-                message: `Comanda #${id_pedido} cobrada con éxito. El monto ($${montoEquivLocal.toFixed(2)}) ingresó a la caja del Turno #${turnoCobroId}.` + (excedenteLiq > 0 ? ` Excedente de $${excedenteLiq.toFixed(2)} registrado como propina.` : '')
+                message: `Orden #${id_pedido} cobrada con éxito. El monto ($${montoEquivLocal.toFixed(2)}) ingresó a la caja del Turno #${turnoCobroId}.` + (excedenteLiq > 0 ? ` Excedente de $${excedenteLiq.toFixed(2)} registrado como propina.` : '')
             });
 
         } catch (error) {

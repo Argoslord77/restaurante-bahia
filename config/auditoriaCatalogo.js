@@ -185,11 +185,11 @@ const REGLAS = [
     { patron: /^\/admin\/pedido/, entidad: 'Pedido', modulo: 'Pedidos' },
 
     // ══════════════ Punto de venta ══════════════
-    { patron: /^\/api\/pos\/save$/, entidad: 'Comanda', modulo: 'Punto de Venta',
-      accion: 'Enviar comanda a producción', categoria: CATEGORIAS.ESCRITURA,
+    { patron: /^\/api\/pos\/save$/, entidad: 'Orden', modulo: 'Punto de Venta',
+      accion: 'Enviar orden a producción', categoria: CATEGORIAS.ESCRITURA,
       severidad: SEVERIDADES.AVISO },
-    { patron: /^\/pos\/cancelar-item\//, entidad: 'Ítem de comanda', modulo: 'Punto de Venta',
-      accion: 'Cancelar ítem de la comanda', categoria: CATEGORIAS.ESCRITURA,
+    { patron: /^\/pos\/cancelar-item\//, entidad: 'Ítem de orden', modulo: 'Punto de Venta',
+      accion: 'Cancelar ítem de la orden', categoria: CATEGORIAS.ESCRITURA,
       severidad: SEVERIDADES.CRITICO },
     // NOTA: los sondeos de /pos/alertas-pendientes, /api/pos/items-listos/:id y
     // /pos/mesas/:id/pre-pedidos (GET) NO se auditan: ver EXCLUIDAS_SONDEO.
@@ -207,7 +207,7 @@ const REGLAS = [
     // ══════════════ Monitores de producción ══════════════
     // NOTA: el refresco automático del monitor (/api/monitor/comandas) no se
     // audita: ver EXCLUIDAS_SONDEO.
-    { patron: /^\/api\/monitor\/cambiar-estado$/, entidad: 'Ítem de comanda', modulo: 'Producción',
+    { patron: /^\/api\/monitor\/cambiar-estado$/, entidad: 'Ítem de orden', modulo: 'Producción',
       accion: 'Cambiar estado de elaboración', categoria: CATEGORIAS.ESCRITURA,
       severidad: SEVERIDADES.INFO },
     { patron: /^\/monitor\//, entidad: 'Monitor de producción', modulo: 'Producción' },

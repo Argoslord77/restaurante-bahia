@@ -8,6 +8,13 @@
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/all.min.css">
     <link rel="stylesheet" href="/css/sweetalert2.min.css">
+    <link rel="stylesheet" href="/css/select2.min.css">
+    <style>
+        /* T9: select2 a la altura del form-select de Bootstrap. */
+        #modalReserva .select2-container .select2-selection--single { height: 38px; }
+        #modalReserva .select2-container .select2-selection__rendered { line-height: 36px; }
+        #modalReserva .select2-container .select2-selection__arrow { height: 36px; }
+    </style>
     <link rel="stylesheet" href="/css/styles.css">
     <style>
         /* Calendario de reservas: semana (defecto), mes y día. */
@@ -209,10 +216,11 @@
                         <label class="form-label" for="resMesa">Mesa</label>
                         <select class="form-select" id="resMesa">
                             <% mesas.forEach(function(m) { %>
-                            <option value="<%= m.id %>"><%= m.numero %> — <%= m.capacidad %> personas<%= m.estado === 'reservada' ? ' (ya apartada)' : '' %><%= m.pendientes > 0 ? ' · ' + m.pendientes + ' pendiente(s)' : '' %></option>
+                            <% const mesaApartada = m.estado === 'reservada' || Number(m.pendientes) > 0; %>
+                            <option value="<%= m.id %>"<%= mesaApartada ? ' disabled' : '' %>><%= m.numero %> — <%= m.capacidad %> personas<%= mesaApartada ? ' (apartada)' : '' %></option>
                             <% }); %>
                         </select>
-                        <div class="form-text">Solo mesas libres o ya apartadas (sin traslape de horario).</div>
+                        <div class="form-text">Escriba para buscar. Las mesas apartadas no se pueden elegir.</div>
                     </div>
                     <div class="row">
                         <div class="col-md-7 mb-3">
@@ -252,6 +260,8 @@
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="/js/jquery-ui.min.js"></script>
     <script src="/js/sweetalert2.all.min.js"></script>
+    <script src="/js/libs/select2.min.js"></script>
+    <script src="/js/select2-busqueda-instantanea.js"></script>
     <script>
         document.querySelectorAll('[data-fecha]').forEach(function(td) {
             const f = new Date(td.getAttribute('data-fecha'));
@@ -269,16 +279,34 @@
             }).then(function(resp) { return resp.json().then(function(d) { return { ok: resp.ok, d: d }; }); });
         }
 
+        // T9: buscador de mesas con select2 (dropdown anclado al modal).
+        if (window.jQuery && jQuery.fn.select2) {
+            jQuery('#resMesa').select2({
+                placeholder: 'Buscar mesa…',
+                width: '100%',
+                dropdownParent: jQuery('#modalReserva'),
+                language: {
+                    noResults: function () { return 'Sin resultados'; },
+                    searching: function () { return 'Buscando…'; }
+                }
+            });
+        }
+
         function guardarReserva() {
             const btn = document.getElementById('btnGuardarReserva');
+            const selMesa = document.getElementById('resMesa');
             const datos = {
-                mesaId: document.getElementById('resMesa').value,
+                mesaId: selMesa.value,
                 nombre: document.getElementById('resNombre').value.trim(),
                 telefono: document.getElementById('resTelefono').value.trim(),
                 comensales: document.getElementById('resComensales').value,
                 fechaReserva: document.getElementById('resFecha').value,
                 notas: document.getElementById('resNotas').value.trim()
             };
+            if (selMesa.selectedOptions.length && selMesa.selectedOptions[0].disabled) {
+                Swal.fire('Mesa apartada', 'Esa mesa ya tiene una reserva pendiente: elija una mesa libre.', 'warning');
+                return;
+            }
             if (!datos.nombre) { Swal.fire('Falta el cliente', 'Escriba el nombre de quien reserva.', 'warning'); return; }
             if (!datos.fechaReserva) { Swal.fire('Falta la fecha', 'Indique día y hora de la reserva.', 'warning'); return; }
             btn.disabled = true;

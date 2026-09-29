@@ -6,6 +6,7 @@ const db = require('../config/db');
 const PedidoModel = require('../models/pedidoModel');
 const TurnoService = require('./turnoService');
 const AperturaMesaService = require('./aperturaMesaService');
+const MesaAsignacionService = require('./mesaAsignacionService');
 const STATUS = require('../config/orderStatus');
 
 // Ventana anti-traslape: dos reservas de la misma mesa con menos de 2 h
@@ -29,6 +30,15 @@ async function cargarMesa(conexion, mesaId) {
     const [filas] = await conexion.query(
         'SELECT id, numero, capacidad, estado FROM mesas WHERE id = ? LIMIT 1', [mesaId]);
     return filas.length ? filas[0] : null;
+}
+
+// T9: ¿cuántas reservas pendientes tiene la mesa? Sirve de candado
+// anti-doble-reserva (una mesa apartada no admite otra reserva).
+async function contarPendientes(conexion, mesaId) {
+    const [filas] = await conexion.query(
+        'SELECT COUNT(*) AS n FROM reservas WHERE id_mesa = ? AND estado = ?',
+        [mesaId, STATUS.RESERVA.PENDIENTE]);
+    return Number((filas[0] && filas[0].n) || 0);
 }
 
 async function buscarTraslape(conexion, mesaId, fechaMySQL, excluirId = null) {
@@ -82,6 +92,11 @@ const reservaService = {
         if (mesa.estado === STATUS.MESA.OCUPADA) throw new Error(`La mesa ${mesa.numero} está ocupada.`);
         if (mesa.estado === STATUS.MESA.MANTENIMIENTO) throw new Error(`La mesa ${mesa.numero} está en mantenimiento.`);
         if (mesa.estado === STATUS.MESA.DESOCUPANDOSE) throw new Error(`La mesa ${mesa.numero} se está desocupando.`);
+        // T9: la vista deshabilita las apartadas; esto cierra la puerta a
+        // llamadas directas a la API sobre una mesa ya apartada.
+        if (await contarPendientes(db, mesaIdNum) > 0) {
+            throw new Error(`La mesa ${mesa.numero} ya tiene una reserva pendiente.`);
+        }
 
         const fechaMySQL = formatearFechaMySQL(fecha);
         const conflicto = await buscarTraslape(db, mesaIdNum, fechaMySQL);
@@ -98,6 +113,11 @@ const reservaService = {
             if (!mesaTx) throw new Error('La mesa no existe.');
             if ([STATUS.MESA.OCUPADA, STATUS.MESA.MANTENIMIENTO, STATUS.MESA.DESOCUPANDOSE].includes(mesaTx.estado)) {
                 throw new Error(`La mesa ${mesaTx.numero} ya no está disponible.`);
+            }
+            // T9: revalidar el candado dentro de la transacción (carrera
+            // entre dos recepcionistas sobre la misma mesa).
+            if (await contarPendientes(connection, mesaIdNum) > 0) {
+                throw new Error(`La mesa ${mesaTx.numero} ya tiene una reserva pendiente.`);
             }
             const conflictoTx = await buscarTraslape(connection, mesaIdNum, fechaMySQL);
             if (conflictoTx) throw new Error(`La mesa ${mesaTx.numero} ya tiene una reserva cercana.`);
@@ -225,7 +245,10 @@ const reservaService = {
             if (mesa.estado === STATUS.MESA.MANTENIMIENTO) {
                 throw new Error(`La mesa ${mesa.numero} está en mantenimiento.`);
             }
-            const pedidoId = await PedidoModel.create(reserva.id_mesa, usuarioId, turno.id, connection);
+            // T8: el pedido queda a nombre del dependiente ASIGNADO a la
+            // mesa (titular del salón), no de quien presiona Sentar.
+            const titular = await MesaAsignacionService.resolverMeseroTitular(reserva.id_mesa, turno.id, usuarioId);
+            const pedidoId = await PedidoModel.create(reserva.id_mesa, titular.id, turno.id, connection);
             await connection.query('UPDATE pedidos SET comensales = ? WHERE id = ?',
                 [Math.max(1, Number(reserva.comensales) || 1), pedidoId]);
             await connection.query('UPDATE mesas SET estado = ? WHERE id = ?',
@@ -233,7 +256,8 @@ const reservaService = {
             await connection.query('UPDATE reservas SET estado = ? WHERE id = ?',
                 [STATUS.RESERVA.SENTADA, reservaId]);
             await connection.commit();
-            return { reservaId: Number(reservaId), pedidoId, mesaId: reserva.id_mesa, mesaNumero: mesa.numero };
+            return { reservaId: Number(reservaId), pedidoId, mesaId: reserva.id_mesa, mesaNumero: mesa.numero,
+                     titularId: titular.id, titularEsAsignado: titular.esAsignado };
         } catch (error) {
             await connection.rollback();
             throw error;

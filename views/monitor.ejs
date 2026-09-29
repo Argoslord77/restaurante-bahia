@@ -179,7 +179,7 @@
                 </div>
                 <h2 class="text-xl font-extrabold text-white">Monitores en Modo Inactivo</h2>
                 <p class="text-slate-400 text-sm mt-2 max-w-md">
-                    El sistema está operando actualmente en <strong>Modo Servicio Directo</strong>. Las comandas y despachos se gestionan directamente desde el TPV.
+                    El sistema está operando actualmente en <strong>Modo Servicio Directo</strong>. Las órdenes y despachos se gestionan directamente desde el TPV.
                 </p>
                 <% if (typeof isAdministrative !== 'undefined' && isAdministrative) { %>
                     <a href="/admin/settings" class="mt-4 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm transition-all shadow-md inline-flex items-center gap-2 text-decoration-none">
@@ -283,7 +283,7 @@
 
                     Toast.fire({
                         icon: 'info',
-                        title: CURRENT_AREA_KEY === 'cocina' ? '¡Nuevos platillos en comanda!' : '¡Nuevas bebidas en comanda!'
+                        title: CURRENT_AREA_KEY === 'cocina' ? '¡Nuevos platillos en la orden!' : '¡Nuevas bebidas en la orden!'
                     });
                 }
             }
@@ -308,7 +308,7 @@
                 });
                 ToastSla.fire({
                     icon: 'warning',
-                    title: nuevasExcedidas.length + ' comanda(s) exceden el SLA (' + slaLimite + ' min)'
+                    title: nuevasExcedidas.length + ' orden(es) exceden el SLA (' + slaLimite + ' min)'
                 });
             }
 

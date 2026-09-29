@@ -5,6 +5,7 @@ const PrecioService = require('../services/precioService');
 const PosAutorizacionService = require('../services/posAutorizacionService');
 const MesaAsignacionService = require('../services/mesaAsignacionService');
 const AperturaMesaService = require('../services/aperturaMesaService');
+const BorradorService = require('../services/borradorService');
 
 // Responde un bloqueo de apertura (sin distribución / mesa reservada u
 // ocupada) en el formato que espera cada camino (JSON o redirect).
@@ -45,6 +46,7 @@ module.exports = {
             const rolActual = rolEmpleado(req);
             const modoTomaOrdenes = await PosAutorizacionService.modoTomaOrdenes();
             const puedeTomarOrdenes = await PosAutorizacionService.puedeTomarOrdenes(rolActual);
+            const puedeCobrarOrden = await PosAutorizacionService.puedeCobrar(rolActual);
             const cortesiaRequiereAutorizacion = await PosAutorizacionService.cortesiaRequiereAutorizacion();
             const cortesiaRolesAutorizan = await PosAutorizacionService.rolesAutorizanCortesia();
             const puedeAutorizarCortesia = await PosAutorizacionService.puedeAutorizarCortesia(rolActual);
@@ -187,6 +189,7 @@ module.exports = {
                 operadorEsTitular,
                 modoTomaOrdenes,
                 puedeTomarOrdenes,
+                puedeCobrarOrden,
                 cortesiaRequiereAutorizacion,
                 cortesiaRolesAutorizan,
                 puedeAutorizarCortesia,
@@ -456,6 +459,10 @@ module.exports = {
                 await pool.query('UPDATE pedidos SET subtotal = ?, total = ? WHERE id = ?', [subtotal, subtotal, currentPedidoId]);
             }
 
+            // T7: la ronda enviada invalida el borrador compartido con el
+            // dependiente (el servicio tolera que la tabla no exista aún).
+            await BorradorService.eliminar(currentPedidoId);
+
             return res.json({
                 success: true,
                 id_pedido: currentPedidoId,
@@ -591,6 +598,17 @@ module.exports = {
             const cajeroId = req.user ? req.user.id : 1;
 
             if (!pedidoId) return res.status(400).json({ success: false, message: 'ID de pedido requerido.' });
+
+            // T6: en modo 'solo_capitanes' el cobro también es exclusivo
+            // de los capitanes (administradores y cajero siempre cobran).
+            const puedeCobrar = await PosAutorizacionService.puedeCobrar(rolEmpleado(req));
+            if (!puedeCobrar) {
+                return res.status(403).json({
+                    success: false,
+                    codigo: 'COBRO_SOLO_CAPITANES',
+                    message: 'Solo los capitanes pueden cobrar cuando está activo el modo "solo capitanes".'
+                });
+            }
 
             // ============================================================
             // AUTORIZACIÓN DE CORTESÍA (Opciones generales)
@@ -848,6 +866,11 @@ module.exports = {
             // A6: liberar la mesa es parte del cobro: viaja dentro de la
             // transaccion para no dejar mesas ocupadas tras cobrar.
             await connection.query(`UPDATE mesas SET estado = 'libre' WHERE id = ?`, [pedido.id_mesa]);
+            // T7: la orden cobrada invalida el borrador compartido. La tabla
+            // puede no existir aún: su fallo nunca revierte el cobro.
+            try {
+                await connection.query('DELETE FROM borradores_carrito WHERE id_pedido = ?', [pedidoId]);
+            } catch (_) { /* sin tabla: nada que borrar */ }
             await connection.commit();
             connection.release();
             connection = null;
@@ -878,6 +901,40 @@ module.exports = {
             }
             console.error('Error en procesarCobroAvanzado:', err);
             return res.status(500).json({ success: false, error: err.message, message: err.message });
+        }
+    },
+
+    // T7: guardar borrador del carrito (el capitán lo actualiza en cada
+    // cambio cuando el modo solo_capitanes está activo). Solo quien puede
+    // tomar órdenes escribe; el dependiente solo lee.
+    guardarBorrador: async (req, res) => {
+        try {
+            const puede = await PosAutorizacionService.puedeTomarOrdenes(rolEmpleado(req));
+            if (!puede) {
+                return res.status(403).json({ success: false, message: 'No estás autorizado a tomar órdenes.' });
+            }
+            const body = req.body || {};
+            const r = await BorradorService.guardar({
+                idPedido: body.id_pedido,
+                idMesa: body.id_mesa,
+                items: body.items,
+                usuarioId: req.user ? req.user.id : null
+            });
+            return res.json({ success: true, ...r });
+        } catch (err) {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+    },
+
+    // T7: leer el borrador vigente del pedido (vista de solo lectura del
+    // dependiente asignado a la mesa).
+    obtenerBorrador: async (req, res) => {
+        try {
+            const borrador = await BorradorService.obtener(req.params.id_pedido);
+            return res.json({ success: true, borrador });
+        } catch (err) {
+            console.error('Error al obtener borrador:', err);
+            return res.status(500).json({ success: false, message: err.message });
         }
     },
 
@@ -1197,12 +1254,57 @@ module.exports = {
             } catch (errorListos) {
                 console.error('Error al obtener ítems listos para alertas:', errorListos);
             }
+            // T5: novedades de la sala (reservas) para el tablero: las
+            // pendientes vigentes y las movidas recientes (sentada,
+            // cancelada, no_show). Nunca rompe el sondeo.
+            let sala = { pendientes: [], movidas: [] };
+            try {
+                const [pendientes] = await pool.query(`
+                    SELECT r.id, r.id_mesa, m.numero AS mesa_numero,
+                           r.cliente_nombre, r.comensales,
+                           DATE_FORMAT(r.fecha_reserva, '%d/%m %H:%i') AS fecha_corta
+                    FROM reservas r
+                    INNER JOIN mesas m ON r.id_mesa = m.id
+                    WHERE r.estado = 'pendiente'
+                    ORDER BY r.fecha_reserva ASC
+                    LIMIT 100
+                `);
+                const [movidas] = await pool.query(`
+                    SELECT r.id, r.id_mesa, m.numero AS mesa_numero,
+                           r.cliente_nombre, r.estado,
+                           (SELECT p.id FROM pedidos p
+                            WHERE p.id_mesa = r.id_mesa AND p.fecha_cierre IS NULL
+                            ORDER BY p.id DESC LIMIT 1) AS pedido_id
+                    FROM reservas r
+                    INNER JOIN mesas m ON r.id_mesa = m.id
+                    WHERE r.estado != 'pendiente'
+                      AND r.actualizado_en >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+                    ORDER BY r.actualizado_en DESC
+                    LIMIT 50
+                `);
+                sala = { pendientes, movidas };
+            } catch (errorSala) {
+                console.error('Error al obtener novedades de sala para alertas:', errorSala);
+            }
+            // T7: borradores del capitán sobre las mesas del dependiente
+            // (para avisarle en su tablero). Nunca rompe el sondeo.
+            let borradores = [];
+            try {
+                if (rolEmpleado(req) === 'dependiente' && req.user && req.user.id) {
+                    borradores = await BorradorService.listarParaDependiente(
+                        req.turnoServicioId || null, req.user.id);
+                }
+            } catch (errorBorradores) {
+                console.error('Error al obtener borradores para alertas:', errorBorradores);
+            }
             res.json({
                 success: true,
                 alertas: {
                     notificaciones,
                     prePedidos,
-                    itemsListos
+                    itemsListos,
+                    sala,
+                    borradores
                 }
             });
         } catch (err) {

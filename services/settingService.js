@@ -222,8 +222,8 @@ class SettingService {
             cortesia_roles_autorizan: { nombre: 'Roles que pueden autorizar cortesías', valor: 'superadministrador,administrador,capitan' },
             precio_control_activo: { nombre: 'Control de precios de cartas por usuario designado', valor: '0' },
             precio_control_usuario_id: { nombre: 'Usuario designado para modificar precios de cartas', valor: '' },
-            sla_cocina_min: { nombre: 'SLA cocina: minutos máximos en cola por comanda', valor: '20' },
-            sla_bar_min: { nombre: 'SLA bar: minutos máximos en cola por comanda', valor: '10' }
+            sla_cocina_min: { nombre: 'SLA cocina: minutos máximos en cola por orden', valor: '20' },
+            sla_bar_min: { nombre: 'SLA bar: minutos máximos en cola por orden', valor: '10' }
         };
 
         if (!pool) return defaults;

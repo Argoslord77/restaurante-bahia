@@ -61,6 +61,8 @@ exports.llegada = async (req, res) => {
         const actor = actorDe(req);
         if (!actor.id) return res.status(401).json({ success: false, message: 'Sesión no válida.' });
         const r = await ReservaService.llegada(req.params.id, actor.id);
+        // T8: la auditoría distingue al titular del salón de quien sienta.
+        req.auditoriaExtra = { ...(req.auditoriaExtra || {}), mesero_titular_id: r.titularId ?? null };
         return res.json({ success: true, ...r });
     } catch (error) {
         console.error('Error en la llegada de la reserva:', error.message);

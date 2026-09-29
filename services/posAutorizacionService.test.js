@@ -44,6 +44,35 @@ describe('posAutorizacionService · toma de órdenes', () => {
     });
 });
 
+describe('posAutorizacionService · cobro de órdenes (T6)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('modo "todos": capitanes, dependientes y cajero pueden cobrar', async () => {
+        SettingService.get.mockResolvedValue('todos');
+        await expect(PosAutorizacionService.puedeCobrar('capitan')).resolves.toBe(true);
+        await expect(PosAutorizacionService.puedeCobrar('dependiente')).resolves.toBe(true);
+        await expect(PosAutorizacionService.puedeCobrar('cajero')).resolves.toBe(true);
+        await expect(PosAutorizacionService.puedeCobrar('administrador')).resolves.toBe(true);
+    });
+
+    it('modo "solo_capitanes": solo capitanes (más admins y cajero) cobran', async () => {
+        SettingService.get.mockResolvedValue('solo_capitanes');
+        await expect(PosAutorizacionService.puedeCobrar('capitan')).resolves.toBe(true);
+        await expect(PosAutorizacionService.puedeCobrar('dependiente')).resolves.toBe(false);
+        await expect(PosAutorizacionService.puedeCobrar('dependiente-pos')).resolves.toBe(false);
+        await expect(PosAutorizacionService.puedeCobrar('cajero')).resolves.toBe(true);
+        await expect(PosAutorizacionService.puedeCobrar('superadministrador')).resolves.toBe(true);
+    });
+
+    it('roles ajenos al cobro nunca cobran', async () => {
+        SettingService.get.mockResolvedValue('todos');
+        await expect(PosAutorizacionService.puedeCobrar('cocinero')).resolves.toBe(false);
+        await expect(PosAutorizacionService.puedeCobrar(null)).resolves.toBe(false);
+    });
+});
+
 describe('posAutorizacionService · autorización de cortesías', () => {
     beforeEach(() => {
         jest.clearAllMocks();
