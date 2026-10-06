@@ -84,11 +84,15 @@
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                     res.innerHTML = '';
-                    if (!d.success || !d.data.length) {
+                    if (!d.success) {
+                        res.innerHTML = '<p style="color:#b91c1c;">' + (d.message || 'Error al buscar.') + '</p>';
+                        return;
+                    }
+                    if (!d.items.length) {
                         res.innerHTML = '<p style="color:#64748b;">Sin resultados.</p>';
                         return;
                     }
-                    d.data.forEach(function (p) {
+                    d.items.forEach(function (p) {
                         var b = document.createElement('button');
                         b.type = 'button';
                         b.className = 'producto-hit';
@@ -143,7 +147,7 @@
             .then(function (r) {
                 btn.disabled = false;
                 if (!r.body.success) { $('pos-error').textContent = r.body.message || 'No se pudo cobrar.'; return; }
-                window.location.href = '/ventas/' + r.body.data.id + '/ticket';
+                window.location.href = '/ventas/' + r.body.venta_id + '/ticket';
             })
             .catch(function () { btn.disabled = false; $('pos-error').textContent = 'Error de conexión al cobrar.'; });
     });

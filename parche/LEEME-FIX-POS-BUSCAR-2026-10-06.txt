@@ -1,0 +1,22 @@
+FIX: "Error al buscar" en el POS + riesgo de doble cobro (2026-10-06)
+=====================================================================
+ZIP: fix-pos-buscar-2026-10-06.zip (2 archivos, con rutas tienda/...)
+
+CAUSA 1 (su error): el servidor responde { success, items } pero el JS
+leía d.data (undefined) → TypeError → catch → "Error al buscar" en el
+100% de las búsquedas, aunque el servidor respondía bien.
+
+CAUSA 2 (crítica, silenciosa): al cobrar, el servidor devuelve
+{ success, venta_id, ... } pero el JS leía body.data.id → la venta SE
+CREABA pero el usuario veía error → reintentaba → DOBLE COBRO.
+Ahora redirige al ticket con venta_id real.
+
+MEJORA: si el servidor responde success:false, se muestra su mensaje
+en vez de "Sin resultados".
+
+BLINDAJE: controllers/posController.test.js (3 tests de contrato API).
+
+VERIFICADO: jest 46/46 + 0 referencias a d.data/body.data en pos.js.
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil/ (rutas tienda/...),
+reinicie con npm start. No requiere npm install.
