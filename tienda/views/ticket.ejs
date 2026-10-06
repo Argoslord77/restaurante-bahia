@@ -8,7 +8,7 @@
         <table>
             <% detalles.forEach(function(d) { %>
             <tr>
-                <td><%= d.cantidad %> × <%= d.producto_nombre %><br><small>$<%= Number(d.precio_unit).toFixed(2) %> c/u</small></td>
+                <td><%= d.cantidad %> × <%= d.nombre %><br><small>$<%= Number(d.precio_unitario).toFixed(2) %> c/u</small></td>
                 <td style="text-align:right;">$<%= Number(d.subtotal).toFixed(2) %></td>
             </tr>
             <% }); %>
@@ -17,7 +17,7 @@
         <table>
             <tr><td>Subtotal</td><td style="text-align:right;">$<%= Number(venta.subtotal).toFixed(2) %></td></tr>
             <% if (Number(venta.descuento) > 0) { %><tr><td>Descuento</td><td style="text-align:right;">−$<%= Number(venta.descuento).toFixed(2) %></td></tr><% } %>
-            <tr><td>IVA</td><td style="text-align:right;">$<%= Number(venta.impuestos).toFixed(2) %></td></tr>
+            <tr><td>IVA</td><td style="text-align:right;">$<%= Number(venta.iva_monto).toFixed(2) %></td></tr>
             <tr><td class="total">TOTAL</td><td style="text-align:right;" class="total">$<%= Number(venta.total).toFixed(2) %></td></tr>
         </table>
         <div class="linea"></div>

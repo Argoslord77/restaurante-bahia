@@ -8,7 +8,7 @@ module.exports = {
                 desde: req.query.desde, hasta: req.query.hasta,
                 estado: req.query.estado || null
             });
-            res.render('ventas', { ...r, estado: req.query.estado || '' });
+            res.render('ventas', { ventas: r.filas || [], filtros: r.filtros, estado: req.query.estado || '' });
         } catch (err) {
             req.flash('error_msg', err.message);
             res.redirect('/');

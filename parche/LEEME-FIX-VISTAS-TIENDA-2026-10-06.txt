@@ -1,0 +1,23 @@
+FIX: auditoría total controlador→vista en tienda (2026-10-06)
+=============================================================
+ZIP: fix-vistas-tienda-2026-10-06.zip (7 archivos, con rutas tienda/...)
+
+Su error "ventas is not defined" era 1 de 4 bugs de la misma familia.
+Se auditaron las 18 vistas contra sus 18 renders: solo se halló esto:
+
+1. ventas (CRASH, su error): el servicio devuelve { filas } y la vista
+   pedía `ventas`. → ventaController mapea ventas/filtros/estado.
+2. mas-vendidos (SILENCIOSO: columnas vacías): servicio { cantidad,
+   importe } vs vista { piezas, monto }. → reporteController mapea.
+3. ticket (SILENCIOSO: nombre/precio/IVA vacíos): vista usaba
+   d.producto_nombre/d.precio_unit/venta.impuestos; las columnas reales
+   son nombre/precio_unitario/iva_monto. → ticket.ejs corregido.
+4. BLINDAJE: 4 tests de contrato (controllers/*.test.js) + guardián
+   permanente tools/verificar-vistas.js (npm run verificar:vistas)
+   que renderiza las 24 combinaciones y caza $NaN/undefined.
+
+VERIFICADO: jest 43/43 + 24/24 renders OK (incluye caja cerrada,
+dashboard sin turno, licencia sin instalar, formularios vacíos).
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil/ (rutas tienda/...),
+reinicie con npm start. No requiere npm install.

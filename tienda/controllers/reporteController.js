@@ -21,7 +21,10 @@ module.exports = {
     masVendidos: async (req, res) => {
         try {
             const r = await ReporteService.masVendidos({ desde: req.query.desde, hasta: req.query.hasta, limite: 15 });
-            res.render('reporte_mas_vendidos', r);
+            res.render('reporte_mas_vendidos', {
+                filas: (r.filas || []).map((f) => ({ nombre: f.nombre, piezas: Number(f.cantidad) || 0, monto: Number(f.importe) || 0 })),
+                filtros: r.filtros
+            });
         } catch (err) {
             req.flash('error_msg', err.message);
             res.redirect('/');

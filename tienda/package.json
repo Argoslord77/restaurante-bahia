@@ -7,6 +7,7 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "test": "jest",
+    "verificar:vistas": "node tools/verificar-vistas.js",
     "crear-admin": "node scripts/crear_admin.js",
     "demo": "node scripts/seed_demo.js",
     "licencia": "node scripts/licencia-estado.js",
