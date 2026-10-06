@@ -1,0 +1,33 @@
+<%- include('includes/head', { titulo: 'Inventario valorizado' }) %>
+<%- include('includes/nav', { seccion: 'reportes' }) %>
+<div class="encabezado"><h1>Inventario valorizado</h1></div>
+<div class="tarjeta">
+    <div class="grupo-btn" style="margin-bottom:12px;">
+        <a href="/reportes/ventas" class="btn btn-claro btn-chico">Por día</a>
+        <a href="/reportes/mas-vendidos" class="btn btn-claro btn-chico">Más vendidos</a>
+        <a href="/reportes/inventario" class="btn btn-primario btn-chico">Inventario valorizado</a>
+    </div>
+</div>
+<div class="rejilla c2">
+    <div class="kpi"><div class="etiqueta">Valor a costo</div><div class="valor">$<%= Number(totalCosto).toFixed(2) %></div></div>
+    <div class="kpi"><div class="etiqueta">Valor a precio de venta</div><div class="valor verde">$<%= Number(totalVenta).toFixed(2) %></div></div>
+</div>
+<div class="tarjeta" style="margin-top:14px;">
+    <div class="contenedor-tabla"><table class="tabla">
+        <thead><tr><th>Producto</th><th class="num">Stock</th><th class="num">Costo</th><th class="num">Venta</th><th class="num">Valor costo</th><th class="num">Valor venta</th></tr></thead>
+        <tbody>
+        <% if (!filas.length) { %><tr><td colspan="6">Sin productos activos.</td></tr><% } %>
+        <% filas.forEach(function(f) { %>
+            <tr>
+                <td><%= f.nombre %></td>
+                <td class="num"><%= f.stock %></td>
+                <td class="num">$<%= Number(f.precio_costo).toFixed(2) %></td>
+                <td class="num">$<%= Number(f.precio_venta).toFixed(2) %></td>
+                <td class="num">$<%= Number(f.valor_costo).toFixed(2) %></td>
+                <td class="num">$<%= Number(f.valor_venta).toFixed(2) %></td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table></div>
+</div>
+<%- include('includes/foot') %>

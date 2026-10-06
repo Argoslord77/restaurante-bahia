@@ -1,0 +1,81 @@
+<%- include('includes/head', { titulo: 'Usuarios' }) %>
+<%- include('includes/nav', { seccion: 'usuarios' }) %>
+<div class="encabezado"><h1>Usuarios de la tienda</h1></div>
+<div class="rejilla c2">
+    <div class="tarjeta">
+        <h3>Lista</h3>
+        <div class="contenedor-tabla"><table class="tabla">
+            <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+            <% usuarios.forEach(function(u) { %>
+                <tr>
+                    <td><%= u.nombre %></td>
+                    <td><code><%= u.usuario %></code></td>
+                    <td>
+                        <form method="POST" action="/usuarios/<%= u.id %>/rol" style="display:inline;">
+                            <select name="rol" onchange="this.form.submit()">
+                                <% roles.forEach(function(r) { %>
+                                <option value="<%= r %>" <%= u.rol === r ? 'selected' : '' %>><%= r %></option>
+                                <% }); %>
+                            </select>
+                        </form>
+                    </td>
+                    <td><span class="insignia <%= u.activo ? 'ins-verde' : 'ins-gris' %>"><%= u.activo ? 'activo' : 'inactivo' %></span></td>
+                    <td>
+                        <form method="POST" action="/usuarios/<%= u.id %>/toggle" style="display:inline;" onsubmit="return confirm('¿Cambiar el estado de este usuario?');">
+                            <button class="btn btn-claro btn-chico" type="submit"><%= u.activo ? 'Desactivar' : 'Activar' %></button>
+                        </form>
+                    </td>
+                </tr>
+            <% }); %>
+            </tbody>
+        </table></div>
+    </div>
+    <div>
+        <div class="tarjeta">
+            <h3>Nuevo usuario</h3>
+            <form method="POST" action="/usuarios">
+                <div class="campo"><label>Nombre</label><input type="text" name="nombre" required maxlength="120"></div>
+                <div class="campo"><label>Usuario</label><input type="text" name="usuario" required maxlength="60"></div>
+                <div class="campo"><label>Clave</label><input type="password" name="clave" required minlength="6"></div>
+                <div class="campo"><label>Rol</label>
+                    <select name="rol"><% roles.forEach(function(r) { %><option value="<%= r %>"><%= r %></option><% }); %></select>
+                </div>
+                <button class="btn btn-primario" type="submit">Crear usuario</button>
+            </form>
+        </div>
+        <div class="tarjeta">
+            <h3>Cambiar clave</h3>
+            <form method="POST" action="/usuarios/CLAVE" onsubmit="return cambiarClave(event);">
+                <div class="campo"><label>Usuario</label>
+                    <select id="clave-usuario" required>
+                        <% usuarios.forEach(function(u) { %><option value="<%= u.id %>"><%= u.nombre %> (<%= u.usuario %>)</option><% }); %>
+                    </select>
+                </div>
+                <div class="campo"><label>Nueva clave</label><input type="password" id="clave-1" required minlength="6"></div>
+                <div class="campo"><label>Repetir clave</label><input type="password" id="clave-2" required minlength="6"></div>
+                <button class="btn btn-claro" type="submit">Actualizar clave</button>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function cambiarClave(e) {
+    e.preventDefault();
+    var id = document.getElementById('clave-usuario').value;
+    var c1 = document.getElementById('clave-1').value;
+    var c2 = document.getElementById('clave-2').value;
+    if (c1 !== c2) { alert('Las claves no coinciden.'); return false; }
+    var f = document.createElement('form');
+    f.method = 'POST';
+    f.action = '/usuarios/' + id + '/clave';
+    [['clave', c1], ['clave2', c2]].forEach(function (p) {
+        var i = document.createElement('input');
+        i.type = 'hidden'; i.name = p[0]; i.value = p[1]; f.appendChild(i);
+    });
+    document.body.appendChild(f);
+    f.submit();
+    return false;
+}
+</script>
+<%- include('includes/foot') %>

@@ -1,0 +1,72 @@
+<%- include('includes/head', { titulo: 'Panel' }) %>
+<%- include('includes/nav', { seccion: 'panel' }) %>
+<div class="encabezado">
+    <h1><%= negocio %></h1>
+    <div class="grupo-btn">
+        <% if (turno) { %>
+        <a href="/pos" class="btn btn-primario">Vender</a>
+        <% } else { %>
+        <a href="/caja" class="btn btn-primario">Abrir caja</a>
+        <% } %>
+    </div>
+</div>
+
+<div class="rejilla c4">
+    <div class="kpi">
+        <div class="etiqueta">Caja</div>
+        <div class="valor <%= turno ? 'verde' : 'rojo' %>"><%= turno ? 'Abierta' : 'Cerrada' %></div>
+    </div>
+    <div class="kpi">
+        <div class="etiqueta">Ventas hoy</div>
+        <div class="valor"><%= ventasHoy.n %></div>
+    </div>
+    <div class="kpi">
+        <div class="etiqueta">Total hoy</div>
+        <div class="valor verde">$<%= Number(ventasHoy.total).toFixed(2) %></div>
+    </div>
+    <div class="kpi">
+        <div class="etiqueta">Stock bajo</div>
+        <div class="valor <%= stockBajo.length ? 'ambar' : '' %>"><%= stockBajo.length %></div>
+    </div>
+</div>
+
+<div class="rejilla c2" style="margin-top:14px;">
+    <div class="tarjeta">
+        <h3>Últimas ventas de hoy</h3>
+        <% if (!ultimas.length) { %><p>Sin ventas aún.</p><% } else { %>
+        <div class="contenedor-tabla"><table class="tabla">
+            <thead><tr><th>#</th><th>Hora</th><th class="num">Total</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+            <% ultimas.forEach(function(v) { %>
+                <tr>
+                    <td>#<%= v.id %></td>
+                    <td><%= new Date(v.creado_en).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) %></td>
+                    <td class="num">$<%= Number(v.total).toFixed(2) %></td>
+                    <td><span class="insignia <%= v.estado === 'cobrada' ? 'ins-verde' : 'ins-roja' %>"><%= v.estado %></span></td>
+                    <td><a href="/ventas/<%= v.id %>/ticket">Ticket</a></td>
+                </tr>
+            <% }); %>
+            </tbody>
+        </table></div>
+        <% } %>
+    </div>
+    <div class="tarjeta">
+        <h3>Stock bajo o agotado</h3>
+        <% if (!stockBajo.length) { %><p>Todo en niveles normales.</p><% } else { %>
+        <div class="contenedor-tabla"><table class="tabla">
+            <thead><tr><th>Producto</th><th class="num">Stock</th><th class="num">Mínimo</th></tr></thead>
+            <tbody>
+            <% stockBajo.slice(0, 8).forEach(function(p) { %>
+                <tr>
+                    <td><%= p.nombre %></td>
+                    <td class="num"><strong><%= p.stock %></strong></td>
+                    <td class="num"><%= p.stock_minimo %></td>
+                </tr>
+            <% }); %>
+            </tbody>
+        </table></div>
+        <p><a href="/inventario">Ir a inventario →</a></p>
+        <% } %>
+    </div>
+</div>
+<%- include('includes/foot') %>

@@ -1,0 +1,29 @@
+{
+  "name": "tienda-pos",
+  "version": "1.0.0",
+  "description": "Punto de venta para pequeños negocios: ventas, inventario y caja. Independiente del restaurante.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "jest",
+    "crear-admin": "node scripts/crear_admin.js",
+    "demo": "node scripts/seed_demo.js"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "connect-flash": "^0.1.1",
+    "dotenv": "^17.4.2",
+    "ejs": "^6.0.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "express-session": "^1.19.0",
+    "helmet": "^8.2.0",
+    "mysql2": "^3.22.4"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

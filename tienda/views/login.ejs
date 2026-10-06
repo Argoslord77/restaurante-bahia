@@ -1,0 +1,21 @@
+<%- include('includes/head', { titulo: 'Entrar' }) %>
+<div class="login-fondo">
+    <div class="login-caja">
+        <h1><%= negocio %></h1>
+        <div class="sub">Punto de venta · Inicie sesión</div>
+        <%- include('includes/mensajes') %>
+        <form method="POST" action="/login">
+            <div class="campo">
+                <label for="usuario">Usuario</label>
+                <input type="text" id="usuario" name="usuario" autocomplete="username" required autofocus>
+            </div>
+            <div class="campo">
+                <label for="clave">Clave</label>
+                <input type="password" id="clave" name="clave" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primario btn-bloque">Entrar</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

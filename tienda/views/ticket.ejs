@@ -1,0 +1,41 @@
+<%- include('includes/head', { titulo: 'Ticket #' + venta.id }) %>
+<div style="padding:16px;">
+    <div class="ticket">
+        <h2><%= negocio %></h2>
+        <div class="centrado">Ticket de venta #<%= venta.id %><br>
+        <%= new Date(venta.creado_en).toLocaleString('es') %> · <%= venta.usuario_nombre || '' %></div>
+        <div class="linea"></div>
+        <table>
+            <% detalles.forEach(function(d) { %>
+            <tr>
+                <td><%= d.cantidad %> × <%= d.producto_nombre %><br><small>$<%= Number(d.precio_unit).toFixed(2) %> c/u</small></td>
+                <td style="text-align:right;">$<%= Number(d.subtotal).toFixed(2) %></td>
+            </tr>
+            <% }); %>
+        </table>
+        <div class="linea"></div>
+        <table>
+            <tr><td>Subtotal</td><td style="text-align:right;">$<%= Number(venta.subtotal).toFixed(2) %></td></tr>
+            <% if (Number(venta.descuento) > 0) { %><tr><td>Descuento</td><td style="text-align:right;">−$<%= Number(venta.descuento).toFixed(2) %></td></tr><% } %>
+            <tr><td>IVA</td><td style="text-align:right;">$<%= Number(venta.impuestos).toFixed(2) %></td></tr>
+            <tr><td class="total">TOTAL</td><td style="text-align:right;" class="total">$<%= Number(venta.total).toFixed(2) %></td></tr>
+        </table>
+        <div class="linea"></div>
+        <% pagos.forEach(function(p) { %>
+        <div><%= p.metodo %>: $<%= Number(p.monto).toFixed(2) %></div>
+        <% }); %>
+        <% if (Number(venta.cambio) > 0) { %><div><strong>Cambio: $<%= Number(venta.cambio).toFixed(2) %></strong></div><% } %>
+        <% if (venta.estado === 'cancelada') { %><div class="centrado"><strong>*** VENTA CANCELADA ***</strong></div><% } %>
+        <div class="linea"></div>
+        <div class="centrado"><%= pie %></div>
+    </div>
+    <div class="centrado no-imprimir" style="text-align:center;margin-top:14px;">
+        <div class="grupo-btn" style="justify-content:center;">
+            <button class="btn btn-primario" type="button" onclick="window.print();">Imprimir</button>
+            <a href="/pos" class="btn btn-claro">Nueva venta</a>
+            <a href="/ventas" class="btn btn-claro">Ver ventas</a>
+        </div>
+    </div>
+</div>
+</body>
+</html>

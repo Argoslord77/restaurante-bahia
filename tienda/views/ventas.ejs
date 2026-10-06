@@ -1,0 +1,47 @@
+<%- include('includes/head', { titulo: 'Ventas' }) %>
+<%- include('includes/nav', { seccion: 'ventas' }) %>
+<div class="encabezado"><h1>Ventas</h1></div>
+
+<div class="tarjeta">
+    <form method="GET" action="/ventas">
+        <div class="fila-form c4">
+            <div class="campo"><label>Desde</label><input type="date" name="desde" value="<%= filtros.desde %>"></div>
+            <div class="campo"><label>Hasta</label><input type="date" name="hasta" value="<%= filtros.hasta %>"></div>
+            <div class="campo"><label>Estado</label>
+                <select name="estado">
+                    <option value="" <%= !estado ? 'selected' : '' %>>Todos</option>
+                    <option value="cobrada" <%= estado === 'cobrada' ? 'selected' : '' %>>Cobradas</option>
+                    <option value="cancelada" <%= estado === 'cancelada' ? 'selected' : '' %>>Canceladas</option>
+                </select>
+            </div>
+            <div class="campo"><label>&nbsp;</label><button class="btn btn-claro" type="submit">Filtrar</button></div>
+        </div>
+    </form>
+</div>
+
+<div class="tarjeta">
+    <div class="contenedor-tabla"><table class="tabla">
+        <thead><tr><th>#</th><th>Fecha</th><th>Usuario</th><th class="num">Total</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+        <% if (!ventas.length) { %><tr><td colspan="6">Sin ventas en el rango.</td></tr><% } %>
+        <% ventas.forEach(function(v) { %>
+            <tr>
+                <td>#<%= v.id %></td>
+                <td><%= new Date(v.creado_en).toLocaleString('es') %></td>
+                <td><%= v.usuario_nombre || '—' %></td>
+                <td class="num"><strong>$<%= Number(v.total).toFixed(2) %></strong></td>
+                <td><span class="insignia <%= v.estado === 'cobrada' ? 'ins-verde' : 'ins-roja' %>"><%= v.estado %></span></td>
+                <td>
+                    <a href="/ventas/<%= v.id %>/ticket">Ticket</a>
+                    <% if (v.estado === 'cobrada' && (sesion.rol === 'administrador' || sesion.rol === 'cajero')) { %>
+                    <form method="POST" action="/ventas/<%= v.id %>/cancelar" style="display:inline;" onsubmit="return confirm('¿Cancelar la venta #<%= v.id %>? Se devolverá el stock.');">
+                        <button type="submit" class="btn btn-peligro btn-chico">Cancelar</button>
+                    </form>
+                    <% } %>
+                </td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table></div>
+</div>
+<%- include('includes/foot') %>

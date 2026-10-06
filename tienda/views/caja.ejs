@@ -1,0 +1,68 @@
+<%- include('includes/head', { titulo: 'Caja' }) %>
+<%- include('includes/nav', { seccion: 'caja' }) %>
+<div class="encabezado"><h1>Caja</h1></div>
+
+<% if (!turno) { %>
+<div class="tarjeta" style="max-width:440px;">
+    <h3>Abrir turno de caja</h3>
+    <p style="color:#64748b;">Para vender primero debe abrir la caja con un fondo inicial (puede ser $0).</p>
+    <form method="POST" action="/caja/abrir">
+        <div class="campo"><label>Fondo inicial ($)</label><input type="number" name="fondo" min="0" step="0.01" value="0"></div>
+        <button class="btn btn-primario btn-bloque" type="submit">Abrir caja</button>
+    </form>
+</div>
+<% } else { %>
+<div class="rejilla c4">
+    <div class="kpi"><div class="etiqueta">Turno</div><div class="valor">#<%= turno.id %></div></div>
+    <div class="kpi"><div class="etiqueta">Fondo inicial</div><div class="valor">$<%= Number(turno.fondo_inicial).toFixed(2) %></div></div>
+    <div class="kpi"><div class="etiqueta">Ventas del turno</div><div class="valor"><%= resumen.n_ventas %></div></div>
+    <div class="kpi"><div class="etiqueta">Total vendido</div><div class="valor verde">$<%= Number(resumen.total_vendido).toFixed(2) %></div></div>
+</div>
+
+<div class="rejilla c2" style="margin-top:14px;">
+    <div class="tarjeta">
+        <h3>Cobrado por método</h3>
+        <div class="contenedor-tabla"><table class="tabla">
+            <tbody>
+            <tr><td>Efectivo</td><td class="num">$<%= Number(resumen.por_metodo.efectivo).toFixed(2) %></td></tr>
+            <tr><td>Tarjeta</td><td class="num">$<%= Number(resumen.por_metodo.tarjeta).toFixed(2) %></td></tr>
+            <tr><td>Transferencia</td><td class="num">$<%= Number(resumen.por_metodo.transferencia).toFixed(2) %></td></tr>
+            <tr><td>Otro</td><td class="num">$<%= Number(resumen.por_metodo.otro).toFixed(2) %></td></tr>
+            <tr><td>Cambio entregado</td><td class="num">−$<%= Number(resumen.cambio_total).toFixed(2) %></td></tr>
+            </tbody>
+            <tfoot><tr><td>Efectivo esperado en caja</td><td class="num">$<%= Number(resumen.esperado_efectivo).toFixed(2) %></td></tr></tfoot>
+        </table></div>
+    </div>
+    <div class="tarjeta">
+        <h3>Cerrar turno (arqueo)</h3>
+        <form method="POST" action="/caja/cerrar">
+            <input type="hidden" name="turno_id" value="<%= turno.id %>">
+            <div class="campo"><label>Efectivo contado ($)</label><input type="number" name="conteo_efectivo" min="0" step="0.01" required></div>
+            <div class="campo"><label>Nota (opcional)</label><input type="text" name="nota" maxlength="200"></div>
+            <button class="btn btn-peligro" type="submit" onclick="return confirm('¿Cerrar el turno #<%= turno.id %>? Después no podrá vender hasta abrir otro.');">Cerrar turno</button>
+        </form>
+    </div>
+</div>
+<% } %>
+
+<div class="tarjeta">
+    <h3>Historial de turnos</h3>
+    <div class="contenedor-tabla"><table class="tabla">
+        <thead><tr><th>#</th><th>Apertura</th><th>Cierre</th><th class="num">Ventas</th><th class="num">Total</th><th class="num">Diferencia</th><th>Estado</th></tr></thead>
+        <tbody>
+        <% if (!historial.length) { %><tr><td colspan="7">Sin turnos aún.</td></tr><% } %>
+        <% historial.forEach(function(t) { %>
+            <tr>
+                <td>#<%= t.id %></td>
+                <td><%= new Date(t.abierto_en).toLocaleString('es') %> (<%= t.apertura_nombre || '' %>)</td>
+                <td><%= t.cerrado_en ? new Date(t.cerrado_en).toLocaleString('es') : '—' %></td>
+                <td class="num"><%= t.n_ventas %></td>
+                <td class="num">$<%= Number(t.total_vendido).toFixed(2) %></td>
+                <td class="num"><%= t.diferencia === null ? '—' : '$' + Number(t.diferencia).toFixed(2) %></td>
+                <td><span class="insignia <%= t.estado === 'abierto' ? 'ins-verde' : 'ins-gris' %>"><%= t.estado %></span></td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table></div>
+</div>
+<%- include('includes/foot') %>

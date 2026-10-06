@@ -1,0 +1,27 @@
+<div class="app">
+    <aside class="barra">
+        <div class="barra-marca">Tienda POS<small>Punto de venta</small></div>
+        <nav>
+            <% const sec = typeof seccion !== 'undefined' ? seccion : ''; %>
+            <% const rol = sesion ? sesion.rol : ''; %>
+            <a class="item <%= sec === 'panel' ? 'activo' : '' %>" href="/">Panel</a>
+            <a class="item <%= sec === 'pos' ? 'activo' : '' %>" href="/pos">Vender (POS)</a>
+            <a class="item <%= sec === 'ventas' ? 'activo' : '' %>" href="/ventas">Ventas</a>
+            <a class="item <%= sec === 'productos' ? 'activo' : '' %>" href="/productos">Productos</a>
+            <a class="item <%= sec === 'inventario' ? 'activo' : '' %>" href="/inventario">Inventario</a>
+            <% if (rol === 'administrador' || rol === 'cajero') { %>
+            <a class="item <%= sec === 'caja' ? 'activo' : '' %>" href="/caja">Caja</a>
+            <a class="item <%= sec === 'reportes' ? 'activo' : '' %>" href="/reportes/ventas">Reportes</a>
+            <% } %>
+            <% if (rol === 'administrador') { %>
+            <a class="item <%= sec === 'usuarios' ? 'activo' : '' %>" href="/usuarios">Usuarios</a>
+            <a class="item <%= sec === 'ajustes' ? 'activo' : '' %>" href="/ajustes">Ajustes</a>
+            <% } %>
+        </nav>
+        <div class="barra-usuario">
+            <%= sesion ? sesion.nombre : '' %> · <%= rol %><br>
+            <a href="/logout">Cerrar sesión</a>
+        </div>
+    </aside>
+    <main class="contenido">
+        <%- include('mensajes') %>

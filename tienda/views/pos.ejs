@@ -1,0 +1,51 @@
+<%- include('includes/head', { titulo: 'Vender' }) %>
+<%- include('includes/nav', { seccion: 'pos' }) %>
+<div class="encabezado">
+    <h1>Punto de venta</h1>
+    <span class="insignia ins-verde">Turno #<%= turno.id %> abierto</span>
+</div>
+
+<div class="pos-rejilla">
+    <div class="tarjeta">
+        <div class="campo">
+            <label for="buscador">Buscar producto (nombre o SKU)</label>
+            <input type="text" id="buscador" placeholder="Escriba para buscar…" autocomplete="off">
+        </div>
+        <div id="resultados" class="resultados-busqueda"><p style="color:#64748b;">Escriba al menos 1 letra para buscar.</p></div>
+    </div>
+    <div class="tarjeta">
+        <h3>Venta actual</h3>
+        <div id="carrito"><p style="color:#64748b;">Carrito vacío.</p></div>
+        <div class="campo" style="margin-top:10px;">
+            <label for="descuento">Descuento ($)</label>
+            <input type="number" id="descuento" min="0" step="0.01" value="0">
+        </div>
+        <div class="totales">
+            <div><span>Subtotal</span><span id="t-sub">$0.00</span></div>
+            <div><span>Descuento</span><span id="t-desc">$0.00</span></div>
+            <div><span>IVA (<%= iva %>%)</span><span id="t-iva">$0.00</span></div>
+            <div class="gran"><span>Total</span><span id="t-total">$0.00</span></div>
+        </div>
+        <hr>
+        <h3>Cobro</h3>
+        <div class="fila-form c2">
+            <div class="campo"><label>Efectivo</label><input type="number" id="p-efectivo" min="0" step="0.01" value="0"></div>
+            <div class="campo"><label>Tarjeta</label><input type="number" id="p-tarjeta" min="0" step="0.01" value="0"></div>
+        </div>
+        <div class="fila-form c2">
+            <div class="campo"><label>Transferencia</label><input type="number" id="p-transferencia" min="0" step="0.01" value="0"></div>
+            <div class="campo"><label>Otro</label><input type="number" id="p-otro" min="0" step="0.01" value="0"></div>
+        </div>
+        <div class="totales">
+            <div><span>Recibido</span><span id="t-recibido">$0.00</span></div>
+            <div><span>Cambio</span><span id="t-cambio">$0.00</span></div>
+        </div>
+        <div class="grupo-btn" style="margin-top:10px;">
+            <button class="btn btn-primario btn-bloque" id="btn-cobrar" type="button">Cobrar</button>
+            <button class="btn btn-claro btn-bloque" id="btn-limpiar" type="button">Limpiar</button>
+        </div>
+        <p id="pos-error" style="color:#b91c1c;font-weight:700;"></p>
+    </div>
+</div>
+
+<%- include('includes/foot', { scriptsExtra: '<script>window.TIENDA_IVA = ' + iva + ';</script><script src="/js/pos.js"></script>' }) %>

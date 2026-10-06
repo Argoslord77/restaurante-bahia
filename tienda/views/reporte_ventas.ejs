@@ -1,0 +1,35 @@
+<%- include('includes/head', { titulo: 'Reporte de ventas' }) %>
+<%- include('includes/nav', { seccion: 'reportes' }) %>
+<div class="encabezado"><h1>Ventas por día</h1></div>
+<div class="tarjeta">
+    <div class="grupo-btn" style="margin-bottom:12px;">
+        <a href="/reportes/ventas" class="btn btn-primario btn-chico">Por día</a>
+        <a href="/reportes/mas-vendidos" class="btn btn-claro btn-chico">Más vendidos</a>
+        <a href="/reportes/inventario" class="btn btn-claro btn-chico">Inventario valorizado</a>
+    </div>
+    <form method="GET" action="/reportes/ventas">
+        <div class="fila-form c3">
+            <div class="campo"><label>Desde</label><input type="date" name="desde" value="<%= filtros.desde %>"></div>
+            <div class="campo"><label>Hasta</label><input type="date" name="hasta" value="<%= filtros.hasta %>"></div>
+            <div class="campo"><label>&nbsp;</label><button class="btn btn-claro" type="submit">Filtrar</button></div>
+        </div>
+    </form>
+</div>
+<div class="tarjeta">
+    <div class="contenedor-tabla"><table class="tabla">
+        <thead><tr><th>Día</th><th class="num">Ventas</th><th class="num">Total</th><th class="num">Utilidad est.</th></tr></thead>
+        <tbody>
+        <% if (!filas.length) { %><tr><td colspan="4">Sin ventas en el rango.</td></tr><% } %>
+        <% filas.forEach(function(f) { %>
+            <tr>
+                <td><%= f.dia %></td>
+                <td class="num"><%= f.n_ventas %></td>
+                <td class="num">$<%= Number(f.total).toFixed(2) %></td>
+                <td class="num">$<%= Number(f.utilidad).toFixed(2) %></td>
+            </tr>
+        <% }); %>
+        </tbody>
+        <tfoot><tr><td>Total</td><td class="num"><%= totalVentas %></td><td class="num">$<%= Number(totalMonto).toFixed(2) %></td><td class="num">$<%= Number(totalUtilidad).toFixed(2) %></td></tr></tfoot>
+    </table></div>
+</div>
+<%- include('includes/foot') %>

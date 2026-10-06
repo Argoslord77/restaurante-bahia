@@ -1,0 +1,60 @@
+<%- include('includes/head', { titulo: 'Inventario' }) %>
+<%- include('includes/nav', { seccion: 'inventario' }) %>
+<div class="encabezado"><h1>Inventario</h1></div>
+
+<% if (sesion.rol === 'administrador') { %>
+<div class="tarjeta">
+    <h3>Registrar entrada / salida</h3>
+    <form method="POST" action="/inventario/movimiento">
+        <div class="fila-form c4">
+            <div class="campo"><label>Producto</label>
+                <select name="producto_id" required>
+                    <option value="">— Seleccione —</option>
+                    <% productos.forEach(function(p) { %>
+                    <option value="<%= p.id %>"><%= p.nombre %> (stock: <%= p.stock %>)</option>
+                    <% }); %>
+                </select>
+            </div>
+            <div class="campo"><label>Tipo</label>
+                <select name="tipo"><option value="entrada">Entrada</option><option value="salida">Salida</option></select>
+            </div>
+            <div class="campo"><label>Cantidad</label><input type="number" name="cantidad" min="1" value="1" required></div>
+            <div class="campo"><label>Motivo</label><input type="text" name="motivo" maxlength="150" placeholder="Ej. compra a proveedor"></div>
+        </div>
+        <button class="btn btn-primario" type="submit">Guardar movimiento</button>
+    </form>
+</div>
+<% } %>
+
+<div class="rejilla c2">
+    <div class="tarjeta">
+        <h3>Movimientos recientes</h3>
+        <div class="contenedor-tabla"><table class="tabla">
+            <thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th class="num">Cant.</th></tr></thead>
+            <tbody>
+            <% if (!movs.length) { %><tr><td colspan="4">Sin movimientos.</td></tr><% } %>
+            <% movs.forEach(function(m) { %>
+                <tr>
+                    <td><%= new Date(m.creado_en).toLocaleString('es') %></td>
+                    <td><%= m.producto_nombre %></td>
+                    <td><span class="insignia <%= m.cantidad >= 0 ? 'ins-verde' : 'ins-roja' %>"><%= m.tipo %></span></td>
+                    <td class="num"><%= m.cantidad > 0 ? '+' : '' %><%= m.cantidad %></td>
+                </tr>
+            <% }); %>
+            </tbody>
+        </table></div>
+    </div>
+    <div class="tarjeta">
+        <h3>Stock bajo o agotado</h3>
+        <div class="contenedor-tabla"><table class="tabla">
+            <thead><tr><th>Producto</th><th class="num">Stock</th><th class="num">Mínimo</th></tr></thead>
+            <tbody>
+            <% if (!bajo.length) { %><tr><td colspan="3">Todo en niveles normales.</td></tr><% } %>
+            <% bajo.forEach(function(p) { %>
+                <tr><td><%= p.nombre %></td><td class="num"><strong><%= p.stock %></strong></td><td class="num"><%= p.stock_minimo %></td></tr>
+            <% }); %>
+            </tbody>
+        </table></div>
+    </div>
+</div>
+<%- include('includes/foot') %>

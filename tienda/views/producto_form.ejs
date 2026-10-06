@@ -1,0 +1,40 @@
+<%- include('includes/head', { titulo: producto ? 'Editar producto' : 'Nuevo producto' }) %>
+<%- include('includes/nav', { seccion: 'productos' }) %>
+<div class="encabezado"><h1><%= producto ? 'Editar producto' : 'Nuevo producto' %></h1></div>
+<div class="tarjeta">
+    <form method="POST" action="<%= producto ? '/productos/' + producto.id + '/editar' : '/productos/nuevo' %>">
+        <div class="fila-form c2">
+            <div class="campo"><label>Nombre *</label><input type="text" name="nombre" value="<%= producto ? producto.nombre : '' %>" required maxlength="150"></div>
+            <div class="campo"><label>SKU / código</label><input type="text" name="sku" value="<%= producto ? (producto.sku || '') : '' %>" maxlength="60" placeholder="Opcional"></div>
+        </div>
+        <div class="fila-form c3">
+            <div class="campo"><label>Categoría</label>
+                <select name="categoria_id">
+                    <option value="">—</option>
+                    <% categorias.forEach(function(c) { %>
+                    <option value="<%= c.id %>" <%= producto && String(producto.categoria_id) === String(c.id) ? 'selected' : '' %>><%= c.nombre %></option>
+                    <% }); %>
+                </select>
+            </div>
+            <div class="campo"><label>Precio costo</label><input type="number" name="precio_costo" step="0.01" min="0" value="<%= producto ? producto.precio_costo : '0' %>"></div>
+            <div class="campo"><label>Precio venta</label><input type="number" name="precio_venta" step="0.01" min="0" value="<%= producto ? producto.precio_venta : '0' %>"></div>
+        </div>
+        <div class="fila-form c3">
+            <% if (!producto) { %>
+            <div class="campo"><label>Stock inicial</label><input type="number" name="stock_inicial" min="0" value="0"></div>
+            <% } %>
+            <div class="campo"><label>Stock mínimo (alerta)</label><input type="number" name="stock_minimo" min="0" value="<%= producto ? producto.stock_minimo : '0' %>"></div>
+            <div class="campo"><label>Descripción</label><input type="text" name="descripcion" value="<%= producto ? (producto.descripcion || '') : '' %>" maxlength="255"></div>
+        </div>
+        <div class="grupo-btn">
+            <button class="btn btn-primario" type="submit">Guardar</button>
+            <a href="/productos" class="btn btn-claro">Volver</a>
+            <% if (producto) { %>
+            <form method="POST" action="/productos/<%= producto.id %>/toggle" style="display:inline;" onsubmit="return confirm('¿Cambiar el estado del producto?');">
+                <button class="btn <%= producto.activo ? 'btn-peligro' : 'btn-claro' %>" type="submit"><%= producto.activo ? 'Desactivar' : 'Activar' %></button>
+            </form>
+            <% } %>
+        </div>
+    </form>
+</div>
+<%- include('includes/foot') %>

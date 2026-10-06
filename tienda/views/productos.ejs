@@ -1,0 +1,62 @@
+<%- include('includes/head', { titulo: 'Productos' }) %>
+<%- include('includes/nav', { seccion: 'productos' }) %>
+<div class="encabezado">
+    <h1>Productos</h1>
+    <% if (sesion.rol === 'administrador') { %>
+    <a href="/productos/nuevo" class="btn btn-primario">+ Nuevo producto</a>
+    <% } %>
+</div>
+
+<div class="tarjeta">
+    <form method="GET" action="/productos">
+        <div class="fila-form c3">
+            <div class="campo"><label>Buscar</label><input type="text" name="q" value="<%= q %>" placeholder="Nombre o SKU…"></div>
+            <div class="campo"><label>Categoría</label>
+                <select name="categoria">
+                    <option value="">Todas</option>
+                    <% categorias.forEach(function(c) { %>
+                    <option value="<%= c.id %>" <%= String(categoria) === String(c.id) ? 'selected' : '' %>><%= c.nombre %></option>
+                    <% }); %>
+                </select>
+            </div>
+            <div class="campo"><label>&nbsp;</label><button class="btn btn-claro" type="submit">Filtrar</button></div>
+        </div>
+    </form>
+</div>
+
+<div class="tarjeta">
+    <div class="contenedor-tabla"><table class="tabla">
+        <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th class="num">Costo</th><th class="num">Venta</th><th class="num">Stock</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+        <% if (!productos.length) { %><tr><td colspan="8">Sin productos.</td></tr><% } %>
+        <% productos.forEach(function(p) { %>
+            <tr>
+                <td><%= p.sku || '—' %></td>
+                <td><strong><%= p.nombre %></strong></td>
+                <td><%= p.categoria_nombre || '—' %></td>
+                <td class="num">$<%= Number(p.precio_costo).toFixed(2) %></td>
+                <td class="num">$<%= Number(p.precio_venta).toFixed(2) %></td>
+                <td class="num"><strong style="<%= p.stock <= p.stock_minimo ? 'color:#b91c1c' : '' %>"><%= p.stock %></strong></td>
+                <td><span class="insignia <%= p.activo ? 'ins-verde' : 'ins-gris' %>"><%= p.activo ? 'activo' : 'inactivo' %></span></td>
+                <td>
+                    <a href="/productos/<%= p.id %>/kardex">Kardex</a>
+                    <% if (sesion.rol === 'administrador') { %>
+                    · <a href="/productos/<%= p.id %>/editar">Editar</a>
+                    <% } %>
+                </td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table></div>
+</div>
+
+<% if (sesion.rol === 'administrador') { %>
+<div class="tarjeta">
+    <h3>Nueva categoría</h3>
+    <form method="POST" action="/productos/categorias" style="display:flex;gap:8px;max-width:420px;">
+        <input type="text" name="nombre" placeholder="Nombre…" required style="flex:1;padding:9px 11px;border:1px solid #cbd5e1;border-radius:8px;">
+        <button class="btn btn-claro" type="submit">Crear</button>
+    </form>
+</div>
+<% } %>
+<%- include('includes/foot') %>

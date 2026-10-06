@@ -1,0 +1,14 @@
+<%- include('includes/head', { titulo: 'Ajustes' }) %>
+<%- include('includes/nav', { seccion: 'ajustes' }) %>
+<div class="encabezado"><h1>Ajustes del negocio</h1></div>
+<div class="tarjeta" style="max-width:560px;">
+    <form method="POST" action="/ajustes">
+        <div class="campo"><label>Nombre del negocio</label><input type="text" name="negocio_nombre" value="<%= ajustes.negocio_nombre %>" maxlength="150" required></div>
+        <div class="campo"><label>IVA (%)</label><input type="number" name="iva_pct" step="0.01" min="0" max="100" value="<%= ajustes.iva_pct %>" required>
+            <div class="ayuda">Se aplica a cada venta sobre (subtotal − descuento).</div>
+        </div>
+        <div class="campo"><label>Pie del ticket</label><textarea name="ticket_pie" rows="2" maxlength="255"><%= ajustes.ticket_pie %></textarea></div>
+        <button class="btn btn-primario" type="submit">Guardar ajustes</button>
+    </form>
+</div>
+<%- include('includes/foot') %>

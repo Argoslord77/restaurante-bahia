@@ -1,0 +1,31 @@
+<%- include('includes/head', { titulo: 'Kardex' }) %>
+<%- include('includes/nav', { seccion: 'productos' }) %>
+<div class="encabezado">
+    <h1>Kardex — <%= producto.nombre %></h1>
+    <a href="/productos" class="btn btn-claro">Volver</a>
+</div>
+<div class="rejilla c3">
+    <div class="kpi"><div class="etiqueta">Stock actual</div><div class="valor"><%= producto.stock %></div></div>
+    <div class="kpi"><div class="etiqueta">Precio venta</div><div class="valor">$<%= Number(producto.precio_venta).toFixed(2) %></div></div>
+    <div class="kpi"><div class="etiqueta">SKU</div><div class="valor" style="font-size:1.1rem;"><%= producto.sku || '—' %></div></div>
+</div>
+<div class="tarjeta" style="margin-top:14px;">
+    <div class="contenedor-tabla"><table class="tabla">
+        <thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Antes</th><th class="num">Después</th><th>Motivo</th><th>Usuario</th></tr></thead>
+        <tbody>
+        <% if (!movs.length) { %><tr><td colspan="7">Sin movimientos.</td></tr><% } %>
+        <% movs.forEach(function(m) { %>
+            <tr>
+                <td><%= new Date(m.creado_en).toLocaleString('es') %></td>
+                <td><span class="insignia <%= m.cantidad >= 0 ? 'ins-verde' : 'ins-roja' %>"><%= m.tipo %></span></td>
+                <td class="num"><%= m.cantidad > 0 ? '+' : '' %><%= m.cantidad %></td>
+                <td class="num"><%= m.stock_antes %></td>
+                <td class="num"><%= m.stock_despues %></td>
+                <td><%= m.motivo || '—' %><%= m.referencia_id ? ' (#' + m.referencia_id + ')' : '' %></td>
+                <td><%= m.usuario_nombre || '—' %></td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table></div>
+</div>
+<%- include('includes/foot') %>

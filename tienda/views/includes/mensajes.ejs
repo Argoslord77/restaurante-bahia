@@ -1,0 +1,6 @@
+<% (ok_msg || []).forEach(function(m) { %>
+<div class="aviso aviso-ok"><%= m %></div>
+<% }); %>
+<% (error_msg || []).forEach(function(m) { %>
+<div class="aviso aviso-error"><%= m %></div>
+<% }); %>
