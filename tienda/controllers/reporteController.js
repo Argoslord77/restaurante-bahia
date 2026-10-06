@@ -5,7 +5,13 @@ module.exports = {
     ventas: async (req, res) => {
         try {
             const r = await ReporteService.ventasPorDia({ desde: req.query.desde, hasta: req.query.hasta });
-            res.render('reporte_ventas', r);
+            res.render('reporte_ventas', {
+                filas: r.filas || [],
+                filtros: r.filtros,
+                totalVentas: r.totales.n,
+                totalMonto: r.totales.total,
+                totalUtilidad: r.totales.utilidad
+            });
         } catch (err) {
             req.flash('error_msg', err.message);
             res.redirect('/');
@@ -25,7 +31,11 @@ module.exports = {
     inventario: async (req, res) => {
         try {
             const r = await InventarioService.valorizado();
-            res.render('reporte_inventario', r);
+            res.render('reporte_inventario', {
+                filas: r.filas || [],
+                totalCosto: r.totales.costo,
+                totalVenta: r.totales.venta
+            });
         } catch (err) {
             req.flash('error_msg', err.message);
             res.redirect('/');

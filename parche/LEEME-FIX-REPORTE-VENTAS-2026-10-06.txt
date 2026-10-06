@@ -1,0 +1,19 @@
+FIX: "filas is not defined" en /reportes/ventas (2026-10-06)
+===========================================================
+ZIP: fix-reporte-ventas-2026-10-06.zip (3 archivos, con rutas tienda/...)
+
+CAUSA: ventasPorDia() devolvía { dias, totales, filtros } pero la vista
+reporte_ventas.ejs consume { filas, filtros, totalVentas, totalMonto,
+totalUtilidad }. El controlador pasaba el objeto directo sin mapear.
+El reporte de INVENTARIO tenía el mismo bug (vista usa totalCosto/totalVenta,
+servicio devuelve totales) y también se corrigió. mas-vendidos estaba sano.
+
+ARCHIVOS:
+- tienda/services/reporteService.js (ventasPorDia → filas lista-para-vista)
+- tienda/controllers/reporteController.js (mapeo ventas + inventario)
+- tienda/services/reporteService.test.js (contrato actualizado)
+
+VERIFICADO: jest tienda 39/39 + render EJS real de las 3 vistas (OK).
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil/ (respeta las rutas
+tienda/...), reinicie con npm start. No requiere npm install.

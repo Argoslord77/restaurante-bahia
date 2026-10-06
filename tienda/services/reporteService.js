@@ -46,7 +46,14 @@ const ReporteService = {
             total: acc.total + (Number(f.total) || 0),
             utilidad: acc.utilidad + (Number(f.utilidad) || 0)
         }), { n: 0, subtotal: 0, descuento: 0, iva: 0, total: 0, utilidad: 0 });
-        return { dias, totales, filtros: { desde: d, hasta: h } };
+        // Convención de reportes: la vista consume `filas` con { dia, n_ventas, total, utilidad }.
+        const filasVista = dias.map((f) => ({
+            dia: f.dia,
+            n_ventas: Number(f.n) || 0,
+            total: Number(f.total) || 0,
+            utilidad: Number(f.utilidad) || 0
+        }));
+        return { filas: filasVista, totales, filtros: { desde: d, hasta: h } };
     },
 
     async masVendidos({ desde = null, hasta = null, limite = 10 } = {}) {

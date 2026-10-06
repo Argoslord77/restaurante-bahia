@@ -13,7 +13,7 @@ describe('reporteService', () => {
             .mockResolvedValueOnce([[{ dia: '2026-09-28', n: 2, subtotal: 100, descuento: 0, iva: 16, total: 116 }], []])
             .mockResolvedValueOnce([[{ dia: '2026-09-28', utilidad: 40 }], []]);
         const r = await ReporteService.ventasPorDia({ desde: '2026-09-28', hasta: '2026-09-28' });
-        expect(r.dias).toEqual([{ dia: '2026-09-28', n: 2, subtotal: 100, descuento: 0, iva: 16, total: 116, utilidad: 40 }]);
+        expect(r.filas).toEqual([{ dia: '2026-09-28', n_ventas: 2, total: 116, utilidad: 40 }]);
         expect(r.totales).toMatchObject({ n: 2, total: 116, utilidad: 40 });
     });
     it('masVendidos respeta el límite', async () => {
