@@ -4,7 +4,7 @@ const AjusteService = require('../services/ajusteService');
 module.exports = {
     verLogin: async (req, res) => {
         if (req.session.tiendaUser) return res.redirect('/');
-        let negocio = 'Tienda POS';
+        let negocio = 'CajaFácil';
         try { negocio = await AjusteService.get('negocio_nombre', negocio); } catch (_) { /* sin BD: igual pinta */ }
         res.render('login', { negocio });
     },

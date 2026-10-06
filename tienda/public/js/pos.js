@@ -1,7 +1,7 @@
 // POS — carrito en memoria, cobro contra /api/ventas.
 (function () {
     'use strict';
-    var IVA = Number(window.TIENDA_IVA || 0);
+    var IVA = Number(window.CAJAFACIL_IVA || 0);
     var carrito = []; // {id, nombre, precio, stock, cantidad}
     var $ = function (id) { return document.getElementById(id); };
     var dinero = function (n) { return '$' + Number(n || 0).toFixed(2); };

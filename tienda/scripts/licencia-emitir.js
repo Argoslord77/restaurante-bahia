@@ -2,7 +2,7 @@
 /**
  * tienda/scripts/licencia-emitir.js  —  HERRAMIENTA DEL PROVEEDOR
  *
- * Genera el par de claves y emite licencias firmadas para la Tienda POS.
+ * Genera el par de claves y emite licencias firmadas para CajaFácil.
  * ⚠️  La clave PRIVADA no debe copiarse nunca al equipo del cliente.
  * ⚠️  Use un par de claves DISTINTO al del restaurante: cada app lleva su
  *     propia clave pública y sus licencias no son intercambiables.

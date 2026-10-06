@@ -1,4 +1,4 @@
-# Tienda POS — Punto de venta para pequeños negocios
+# CajaFácil — Punto de venta para pequeños negocios
 
 App **independiente** del restaurante (carpeta `tienda/`): ventas con punto de venta (POS),
 inventario que se descuenta solo al vender, corte de caja, reportes básicos y usuarios propios.
@@ -70,5 +70,5 @@ tienda/
 ├── services/            # lógica + transacciones (+ .test.js con jest)
 ├── scripts/             # instalar.sql, crear_admin.js, seed_demo.js
 ├── views/               # EJS (sin dependencias externas)
-└── public/              # css/tienda.css y js/pos.js propios (funciona offline)
+└── public/              # css, js e img (logo CajaFácil + favicon) propios (funciona offline)
 ```

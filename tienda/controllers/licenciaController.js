@@ -57,7 +57,7 @@ exports.descargarSolicitud = async (req, res) => {
             equipo: { plataforma: process.platform, arquitectura: process.arch, node: process.version }
         };
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', 'attachment; filename="solicitud-licencia-tienda.json"');
+        res.setHeader('Content-Disposition', 'attachment; filename="solicitud-licencia-cajafacil.json"');
         return res.send(JSON.stringify(solicitud, null, 2));
     } catch (error) {
         logger.error('Error al generar la solicitud de licencia:', error);

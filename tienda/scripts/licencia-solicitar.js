@@ -53,14 +53,14 @@ const opt = (n, d = null) => { const i = args.indexOf('--' + n); return i >= 0 &
         equipo: { plataforma: process.platform, arquitectura: process.arch, node: process.version }
     };
 
-    const salida = opt('salida', 'solicitud-licencia-tienda.json');
+    const salida = opt('salida', 'solicitud-licencia-cajafacil.json');
     fs.writeFileSync(salida, JSON.stringify(solicitud, null, 2));
 
     const codigo = Licencia.codigoDeInstalacion(instalacion, huella.resumen);
     const detectados = Object.entries(huella.componentes).filter(([, v]) => v).map(([k]) => k);
 
     console.log('\n══════════════════════════════════════════════════════════');
-    console.log('  SOLICITUD DE LICENCIA · Tienda POS');
+    console.log('  SOLICITUD DE LICENCIA · CajaFácil');
     console.log('══════════════════════════════════════════════════════════\n');
     console.log('  CÓDIGO DE INSTALACIÓN (dictable por teléfono):\n');
     console.log('      ' + codigo + '\n');

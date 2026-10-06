@@ -1,5 +1,5 @@
 {
-  "name": "tienda-pos",
+  "name": "cajafacil",
   "version": "1.0.0",
   "description": "Punto de venta para pequeños negocios: ventas, inventario y caja. Independiente del restaurante.",
   "main": "app.js",

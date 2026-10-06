@@ -56,7 +56,7 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-    app.listen(PUERTO, () => console.log(`Tienda POS en http://localhost:${PUERTO}`));
+    app.listen(PUERTO, () => console.log(`CajaFácil en http://localhost:${PUERTO}`));
 }
 
 module.exports = app;
