@@ -2,3 +2,11 @@ node_modules
 .env
 coverage
 *.log
+# Licencias: nunca se suben al repositorio
+config/licencia.pub
+licencia/licencia.lic
+licencia/estado.dat
+licencia/*.tmp
+licencia-privada/
+solicitud-licencia*.json
+licencia.lic

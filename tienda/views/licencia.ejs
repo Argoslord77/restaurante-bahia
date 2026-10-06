@@ -1,0 +1,151 @@
+<%- include('includes/head', { titulo: 'Licencia' }) %>
+<%- include('includes/nav', { seccion: 'licencia' }) %>
+<%
+    const e = evaluacion;
+    const claseEstado = e.estado === 'ACTIVA' ? 'ins-verde'
+        : (e.estado === 'GRACIA' ? 'ins-ambar' : (e.estado === 'NO_CONFIGURADA' ? 'ins-azul' : 'ins-roja'));
+    const fecha = v => v ? new Date(v).toLocaleString('es') : '—';
+    const nombresComponente = {
+        maquina: 'Identificador del sistema operativo', disco: 'Disco / volumen raíz',
+        red: 'Tarjetas de red', cpu: 'Procesador', nucleos: 'Núcleos',
+        so: 'Sistema y arquitectura', equipo: 'Nombre del equipo', memoria: 'Memoria instalada'
+    };
+%>
+<div class="encabezado">
+    <h1>Licencia del sistema</h1>
+    <span class="insignia <%= claseEstado %>"><%= e.estado.replace('_', ' ') %></span>
+</div>
+
+<% if (e.licencia) { %>
+<div class="tarjeta">
+    <strong><%= e.licencia.cliente %></strong> · plan <%= e.licencia.plan %> ·
+    <span class="mono"><%= e.licencia.id %></span>
+    <% if (e.licencia.expira_en) { %> · caduca <%= new Date(e.licencia.expira_en).toLocaleDateString('es') %>
+    <% } else { %> · <span class="insignia ins-verde">perpetua</span><% } %>
+    <% if (e.licencia.funciones && e.licencia.funciones.length) { %>
+    <div class="ayuda">Funciones: <%= e.licencia.funciones.join(', ') %></div>
+    <% } %>
+</div>
+<% } else { %>
+<div class="tarjeta"><p style="margin:0;">No hay ninguna licencia instalada en este equipo.</p></div>
+<% } %>
+
+<% if (e.gracia) { %>
+<div class="aviso aviso-error">
+    <strong>Periodo de gracia · quedan <%= e.gracia.dias_restantes %> de <%= e.gracia.dias_totales %> días.</strong><br>
+    El sistema funciona con normalidad, pero al agotarse este plazo solo se permitirá
+    <strong>cerrar</strong> el turno de caja y reimprimir tickets. No se podrá vender ni abrir caja.
+</div>
+<% } %>
+
+<% e.problemas.forEach(function(p) { %>
+<div class="aviso aviso-error"><span class="mono">[<%= p.codigo %>]</span> <%= p.mensaje %></div>
+<% }); %>
+<% e.avisos.forEach(function(p) { %>
+<div class="aviso aviso-ok" style="background:var(--aviso-fondo);color:#78350f;border-color:#fde68a;"><span class="mono">[<%= p.codigo %>]</span> <%= p.mensaje %></div>
+<% }); %>
+
+<div class="rejilla c2">
+    <div class="tarjeta">
+        <h3>Identidad de esta instalación</h3>
+        <div class="ayuda">Código de instalación (dictable por teléfono)</div>
+        <div class="codigo"><%= e.instalacion.codigo %></div>
+        <div class="contenedor-tabla"><table class="tabla">
+            <tbody>
+            <tr><td>Identificador</td><td class="mono"><%= e.instalacion.uuid %></td></tr>
+            <tr><td>Huella del equipo</td><td class="mono"><%= e.instalacion.huella_resumen %>…</td></tr>
+            </tbody>
+        </table></div>
+        <p><a href="/licencia/solicitud" class="btn btn-claro btn-chico">Descargar solicitud de licencia</a></p>
+        <div class="ayuda">Envíe este archivo (o dicte el código) al proveedor para obtener su licencia.</div>
+    </div>
+    <div class="tarjeta">
+        <h3>Tiempo de confianza</h3>
+        <div class="ayuda">Inmune a los cambios de hora del equipo</div>
+        <div class="contenedor-tabla"><table class="tabla">
+            <tbody>
+            <tr><td>Tiempo verificado</td><td class="mono"><strong><%= fecha(e.tiempo.confiable) %></strong></td></tr>
+            <tr><td>Reloj del equipo</td><td class="mono" style="<%= e.tiempo.reloj_manipulado ? 'color:#b91c1c;font-weight:800;' : '' %>"><%= fecha(e.tiempo.sistema) %></td></tr>
+            <tr><td>Fuente del tiempo</td><td class="mono"><%= e.tiempo.fuente %></td></tr>
+            <tr><td>Días de uso</td><td class="mono"><strong><%= e.uso.dias_consumidos %><%= e.uso.dias_contratados ? ' / ' + e.uso.dias_contratados : '' %></strong></td></tr>
+            <tr><td>Arranques registrados</td><td class="mono"><%= e.uso.secuencia %></td></tr>
+            </tbody>
+        </table></div>
+        <% if (e.uso.dias_contratados) {
+            const pct = Math.min(100, Math.round((e.uso.dias_consumidos / e.uso.dias_contratados) * 100)); %>
+            <div class="barra-progreso"><span style="width:<%= pct %>%;"></span></div>
+        <% } %>
+        <% if (e.tiempo.reloj_manipulado) { %>
+        <div class="aviso aviso-error" style="margin-top:10px;">
+            El reloj del equipo va <strong><%= e.tiempo.retraso_horas %> horas</strong> por detrás del tiempo
+            que el propio sistema ya tiene registrado en sus ventas y cierres. Atrasar la hora no prolonga la licencia.
+        </div>
+        <% } %>
+    </div>
+</div>
+
+<div class="rejilla c2">
+    <div class="tarjeta">
+        <h3>Componentes del equipo</h3>
+        <% if (comparacion) { %>
+        <p>Coincidencia con el equipo autorizado:
+            <strong style="color:<%= comparacion.coincide ? '#15803d' : '#b91c1c' %>;"><%= comparacion.puntuacion %>%</strong>
+            (se exige <%= comparacion.umbral %>%)</p>
+        <% } %>
+        <div class="contenedor-tabla"><table class="tabla">
+            <tbody>
+            <% Object.entries(huella.componentes).forEach(function(par) {
+                const nombre = par[0], valor = par[1];
+                let estadoComp = 'no-detectado';
+                if (comparacion) {
+                    if (comparacion.coincidentes.includes(nombre)) estadoComp = 'coincide';
+                    else if (comparacion.divergentes.includes(nombre)) estadoComp = 'difiere';
+                    else if (comparacion.ausentes.includes(nombre)) estadoComp = 'no-registrado';
+                } else if (valor) estadoComp = 'detectado';
+            %>
+                <tr>
+                    <td><%= nombresComponente[nombre] || nombre %> <span class="ayuda">· peso <%= huella.pesos[nombre] %></span></td>
+                    <td style="text-align:right;">
+                        <% if (estadoComp === 'coincide') { %><span class="insignia ins-verde">coincide</span>
+                        <% } else if (estadoComp === 'difiere') { %><span class="insignia ins-roja">difiere</span>
+                        <% } else if (estadoComp === 'no-registrado') { %><span class="insignia ins-gris">no registrado</span>
+                        <% } else if (valor) { %><span class="mono"><%= valor.slice(0, 10) %>…</span>
+                        <% } else { %><span class="insignia ins-gris">no disponible</span><% } %>
+                    </td>
+                </tr>
+            <% }); %>
+            </tbody>
+        </table></div>
+        <div class="ayuda">La comprobación es ponderada y tolerante: cambiar una tarjeta de red o ampliar la memoria no invalida la licencia. Copiar la instalación a otro equipo, sí.</div>
+    </div>
+    <div class="tarjeta">
+        <h3>Instalar licencia</h3>
+        <form method="POST" action="/licencia/instalar">
+            <div class="campo">
+                <label>Pegue aquí el contenido del archivo <span class="mono">licencia.lic</span></label>
+                <textarea name="licencia" rows="8" class="mono" style="font-size:.72rem;" placeholder='{ "datos": { … }, "firma": "…" }'></textarea>
+            </div>
+            <button type="submit" class="btn btn-primario">Instalar</button>
+            <div class="ayuda">Solo se instala si la firma es válida. Si no lo es, el archivo actual no se toca.</div>
+        </form>
+    </div>
+</div>
+
+<div class="tarjeta">
+    <h3>Bitácora de la licencia</h3>
+    <div class="contenedor-tabla"><table class="tabla">
+        <thead><tr><th>Fecha</th><th>Evento</th><th>Gravedad</th><th>Detalle</th></tr></thead>
+        <tbody>
+        <% if (!eventos.length) { %><tr><td colspan="4">Sin eventos registrados.</td></tr><% } %>
+        <% eventos.forEach(function(ev) { %>
+            <tr>
+                <td><%= new Date(ev.creado_en).toLocaleString('es') %></td>
+                <td class="mono"><%= ev.tipo %></td>
+                <td><span class="insignia <%= ev.gravedad === 'CRITICO' ? 'ins-roja' : (ev.gravedad === 'AVISO' ? 'ins-ambar' : 'ins-gris') %>"><%= ev.gravedad %></span></td>
+                <td class="mono" style="font-size:.72rem;"><%= ev.detalle %></td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table></div>
+</div>
+<%- include('includes/foot') %>

@@ -32,6 +32,11 @@ app.use((req, res, next) => {
     next();
 });
 
+// Licencia de la instalación: se evalúa antes que las rutas. Nunca bloquea el
+// inicio de sesión, la pantalla de licencia ni los recursos estáticos.
+const { exigirLicencia } = require('./middlewares/licencia');
+app.use(exigirLicencia());
+
 app.use('/', require('./routes'));
 
 // 404

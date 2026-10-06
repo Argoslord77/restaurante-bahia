@@ -4,3 +4,15 @@
 <% (error_msg || []).forEach(function(m) { %>
 <div class="aviso aviso-error"><%= m %></div>
 <% }); %>
+<% if (typeof licencia !== 'undefined' && licencia && licencia.estado === 'GRACIA' && sesion && (sesion.rol === 'administrador' || sesion.rol === 'cajero')) { %>
+<div class="aviso aviso-error">
+    <strong>Licencia en periodo de gracia</strong>
+    <% if (licencia.gracia) { %> — quedan <%= licencia.gracia.dias_restantes %> de <%= licencia.gracia.dias_totales %> días.<% } %>
+    <a href="/licencia">Regularizar →</a>
+</div>
+<% } %>
+<% if (typeof licencia !== 'undefined' && licencia && licencia.estado === 'NO_CONFIGURADA' && sesion && sesion.rol === 'administrador') { %>
+<div class="aviso aviso-ok" style="background:var(--aviso-fondo);color:#78350f;border-color:#fde68a;">
+    El sistema de licencias no está activado en esta instalación (falta <span class="mono">config/licencia.pub</span>). No se aplica ninguna restricción.
+</div>
+<% } %>

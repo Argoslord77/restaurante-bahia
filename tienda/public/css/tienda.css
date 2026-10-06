@@ -143,6 +143,15 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .totales div { display: flex; justify-content: space-between; padding: 3px 0; font-size: .92rem; }
 .totales .gran { font-size: 1.25rem; font-weight: 800; border-top: 2px solid var(--linea); margin-top: 6px; padding-top: 8px; }
 
+/* Licencia */
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.codigo {
+    font-family: ui-monospace, monospace; font-size: 1.35rem; font-weight: 700;
+    letter-spacing: .08em; color: var(--tinta); margin: 4px 0 10px;
+}
+.barra-progreso { height: 8px; border-radius: 4px; background: var(--linea); overflow: hidden; margin-top: 8px; }
+.barra-progreso span { display: block; height: 100%; background: var(--marca); }
+
 /* Ticket */
 .ticket { max-width: 340px; margin: 0 auto; background: #fff; padding: 18px; font-size: .86rem; }
 .ticket h2 { text-align: center; font-size: 1.1rem; }

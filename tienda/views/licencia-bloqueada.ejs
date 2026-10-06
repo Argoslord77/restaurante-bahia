@@ -1,0 +1,28 @@
+<%- include('includes/head', { titulo: 'Licencia no válida' }) %>
+<div class="login-fondo">
+    <div class="login-caja" style="max-width:560px;">
+        <h1>🔒 Licencia no válida</h1>
+        <div class="sub">Esta instalación no tiene una licencia válida. Puede seguir
+            <strong>cerrando</strong> el turno de caja y reimprimiendo tickets, pero no vender ni abrir caja.</div>
+        <div class="aviso aviso-error">
+            <strong>Motivo</strong>
+            <ul style="margin:6px 0 0;padding-left:18px;">
+                <% (evaluacion.problemas || []).forEach(function(p) { %>
+                <li><span class="mono">[<%= p.codigo %>]</span> <%= p.mensaje %></li>
+                <% }); %>
+            </ul>
+        </div>
+        <div class="tarjeta" style="margin-bottom:14px;">
+            <div class="ayuda">Código de instalación</div>
+            <div class="codigo"><%= evaluacion.instalacion.codigo %></div>
+            <div class="ayuda">Facilite este código al proveedor para obtener o renovar su licencia.</div>
+        </div>
+        <div class="grupo-btn">
+            <a href="/licencia" class="btn btn-primario">Instalar o revisar licencia</a>
+            <a href="/caja" class="btn btn-claro">Cerrar turno</a>
+            <a href="/logout" class="btn btn-claro">Salir</a>
+        </div>
+    </div>
+</div>
+</body>
+</html>

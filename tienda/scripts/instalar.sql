@@ -122,3 +122,46 @@ INSERT IGNORE INTO ajustes (clave, valor) VALUES
     ('ticket_pie', 'Gracias por su compra');
 
 INSERT IGNORE INTO categorias (nombre) VALUES ('General');
+
+-- ============================================================================
+-- Sistema de licencias (mismo modelo que la app del restaurante)
+--   licencia_estado    Identidad de la instalación, trinquete de tiempo, días
+--                      consumidos y cadena de arranques. Sellada con HMAC y
+--                      replicada en licencia/estado.dat (fuera de la base): se
+--                      toma siempre el valor MÁS AVANZADO de las dos copias.
+--   licencia_eventos   Bitácora: activaciones, relojes atrasados, bloqueos.
+--   licencia_dias      Días naturales con actividad, base del contador de uso.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS licencia_estado (
+    id TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    instalacion_uuid CHAR(36) NOT NULL COMMENT 'Identidad de esta instalación; la licencia se emite contra ella',
+    licencia_id VARCHAR(40) NULL,
+    trinquete_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Máximo instante jamás observado: solo avanza, nunca retrocede',
+    dias_consumidos INT UNSIGNED NOT NULL DEFAULT 0,
+    ultimo_dia CHAR(10) NULL COMMENT 'Último día natural con actividad (YYYY-MM-DD)',
+    secuencia INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Número de arranques',
+    cadena CHAR(64) NULL COMMENT 'Cadena de hash de los arranques',
+    estado VARCHAR(20) NULL,
+    gracia_desde_ms BIGINT UNSIGNED NULL,
+    sello CHAR(64) NULL COMMENT 'HMAC del contenido: detecta ediciones manuales',
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS licencia_eventos (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    tipo VARCHAR(60) NOT NULL,
+    gravedad VARCHAR(10) NOT NULL DEFAULT 'INFO',
+    detalle TEXT NULL,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_lic_ev_fecha (creado_en),
+    KEY idx_lic_ev_tipo (tipo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS licencia_dias (
+    dia CHAR(10) NOT NULL COMMENT 'YYYY-MM-DD',
+    primera_actividad TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (dia)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

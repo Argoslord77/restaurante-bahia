@@ -8,7 +8,9 @@
     "dev": "nodemon app.js",
     "test": "jest",
     "crear-admin": "node scripts/crear_admin.js",
-    "demo": "node scripts/seed_demo.js"
+    "demo": "node scripts/seed_demo.js",
+    "licencia": "node scripts/licencia-estado.js",
+    "licencia:solicitar": "node scripts/licencia-solicitar.js"
   },
   "license": "ISC",
   "type": "commonjs",

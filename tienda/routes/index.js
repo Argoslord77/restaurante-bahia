@@ -12,6 +12,7 @@ const caja = require('../controllers/cajaController');
 const reporte = require('../controllers/reporteController');
 const ajuste = require('../controllers/ajusteController');
 const usuario = require('../controllers/usuarioController');
+const licencia = require('../controllers/licenciaController');
 
 const router = express.Router();
 const ADMIN = ['administrador'];
@@ -69,5 +70,11 @@ router.post('/usuarios', ensureAuthenticated, checkRole(ADMIN), usuario.crear);
 router.post('/usuarios/:id/clave', ensureAuthenticated, checkRole(ADMIN), usuario.clave);
 router.post('/usuarios/:id/rol', ensureAuthenticated, checkRole(ADMIN), usuario.rol);
 router.post('/usuarios/:id/toggle', ensureAuthenticated, checkRole(ADMIN), usuario.toggle);
+
+// Licencia (solo admin)
+router.get('/licencia', ensureAuthenticated, checkRole(ADMIN), licencia.verLicencia);
+router.get('/licencia/solicitud', ensureAuthenticated, checkRole(ADMIN), licencia.descargarSolicitud);
+router.post('/licencia/instalar', ensureAuthenticated, checkRole(ADMIN), licencia.instalarLicencia);
+router.get('/api/licencia/estado', ensureAuthenticated, checkRole(ADMIN), licencia.apiEstado);
 
 module.exports = router;

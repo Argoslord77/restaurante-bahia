@@ -52,7 +52,9 @@ npm start                   # abre http://localhost:3001
 |---|---|
 | `npm start` | Servidor en producción |
 | `npm run dev` | Servidor con recarga (requiere `nodemon` global) |
-| `npm test` | Pruebas (26, sin base de datos) |
+| `npm test` | Pruebas (39, sin base de datos) |
+| `npm run licencia` | Diagnóstico de la licencia |
+| `npm run licencia:solicitar` | Genera la solicitud de licencia del equipo |
 | `npm run crear-admin -- usuario clave` | Crea/actualiza un administrador |
 | `npm run demo` | Datos de ejemplo |
 
