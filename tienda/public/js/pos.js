@@ -39,13 +39,25 @@
                 '<div><strong></strong><br><small></small></div>' +
                 '<div class="num"><strong></strong></div>' +
                 '<div class="controles"><button type="button" class="cant-btn" data-a="-">−</button>' +
-                '<span></span>' +
+                '<input type="number" class="cant-input" min="1" title="Cantidad">' +
                 '<button type="button" class="cant-btn" data-a="+">+</button>' +
                 '<button type="button" class="cant-btn" data-a="x" title="Quitar">×</button></div>';
             div.querySelector('strong').textContent = l.nombre;
             div.querySelector('small').textContent = dinero(l.precio) + ' c/u · stock: ' + l.stock;
             div.querySelector('.num strong').textContent = dinero(l.precio * l.cantidad);
-            div.querySelector('.controles span').textContent = l.cantidad + ' pza';
+            var inp = div.querySelector('.cant-input');
+            inp.value = l.cantidad;
+            inp.max = l.stock;
+            inp.title = 'Cantidad (stock: ' + l.stock + ')';
+            inp.addEventListener('change', function () {
+                var v = parseInt(inp.value, 10);
+                if (isNaN(v)) v = l.cantidad;
+                l.cantidad = Math.min(Math.max(v, 1), l.stock);
+                pintado();
+            });
+            inp.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); }
+            });
             div.querySelectorAll('button').forEach(function (b) {
                 b.addEventListener('click', function () {
                     var a = b.getAttribute('data-a');
