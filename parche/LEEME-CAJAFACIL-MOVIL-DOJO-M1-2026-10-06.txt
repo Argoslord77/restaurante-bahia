@@ -1,0 +1,23 @@
+CAJAFÁCIL MÓVIL — Dojo M1: plugin nativo de impresión (2026-10-06)
+=====================================================================
+ZIP: cajafacil-movil-dojo-m1-2026-10-06.zip (carpeta movil/ completa)
+
+M1 (hito 1 de 5, Parte B del dojo): plugin Capacitor PROPIO en Kotlin
+(CajaFacilPrinter) que reemplaza al plugin débil de 0 estrellas.
+8 archivos Kotlin (BT SPP seguro->inseguro, USB host con permiso MUTABLE,
+WiFi con reintento, cola FIFO, taxonomía de errores congelada) + Gradle
+(Kotlin 2.0.20, corrutinas), permisos en Manifest, registro en MainActivity,
+reglas ProGuard, puente JS (printer-nativo.js) y selección de vía en
+impresora.js (nativo primero, viejo solo por ausencia, anti doble ticket).
+Puente JS verificado: jest 69/69 (58 viejos + 11 nuevos).
+
+COMPILAR (solo en PC con Android Studio + SDK 36, no en este zip):
+  cd movil/android && ./gradlew :app:assembleDebug
+Instalar en teléfono físico y correr la matriz B.5 del documento dojo.
+android/ es código fuente desde M1: no borrar, no regenerar con cap add.
+
+MATERIALES DOJO (en el repo, carpeta dojo-android/): ELITE-ANDROID-90-DIAS.md,
+labs/NIVEL-0.md, CHECKLIST-90-DIAS.md, plantillas/, adr/ADR-001.
+
+ACTUALIZAR: descomprima sustituyendo movil/ (y dojo-android/ si la quiere
+en local), npm install, npx cap sync android.

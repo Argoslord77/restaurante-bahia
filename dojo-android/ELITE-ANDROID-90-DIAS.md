@@ -267,7 +267,7 @@ object BluetoothSpp {
 
 | Hito | Contenido | Done verificable |
 |---|---|---|
-| **M1** Día 78–79 | Esqueleto + `list()` BT/USB + contrato JS + taxonomía errores | `list()` real en teléfono de guerra; 9 tests unitarios (mapeo errores, base64, límites) |
+| **M1** Día 78–79 | Esqueleto + `list()` BT/USB + contrato JS + taxonomía errores | `list()` real en teléfono de guerra; 9+ tests (11 jest puente JS + JVM: Target.parse, cola) |
 | **M2** Día 80–81 | BT SPP `print()` + cola + timeouts | 20 impresiones seguidas a BT real, 0 fugas (LeakCanary), 0 ANR (StrictMode limpio) |
 | **M3** Día 82–83 | USB host + permiso + bulk chunked | Imprime por OTG; denegar permiso 3 veces → `permission_denied` elegante, sin crash |
 | **M4** Día 84–85 | WiFi + reintento + métricas (bytes/ms) | Imprime por WiFi; `status()` reporta los 3 transportes; jank=0 durante impresión |

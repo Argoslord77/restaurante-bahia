@@ -95,6 +95,6 @@ el ViewModel solo NO basta (pista: sobrevive rotación, no muerte de proceso).
 (el bug que MÁS te dolió esta semana, con causa raíz).
 
 ---
-Siguiente: Nivel 1 (días 8–21) en `ELITE-ANDROID-90-DIAS.md`. Los labs de los
-niveles 1–5 se desbloquean igual: pide "siguiente nivel" y se generan con tus
-números reales como base.
+Siguiente: `NIVEL-1.md` (días 8–21). Los 5 labs ya están escritos:
+trabájalos en orden y mide cada Done contra tus números del Nivel 0.
+El checklist manda.

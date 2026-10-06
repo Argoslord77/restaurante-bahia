@@ -91,6 +91,7 @@ impresora.js prefiere la via nativa y usa el plugin viejo solo por ausencia
 Compilar (requiere Android Studio + SDK 36, no se compila aqui):
 cd movil/android && ./gradlew :app:assembleDebug, instalar en telefono
 fisico y correr la matriz B.5 (dojo-android/ELITE-ANDROID-90-DIAS.md).
+Tests JVM del plugin: ./gradlew :app:testDebugUnitTest (Target.parse + cola).
 android/ es codigo fuente desde M1: no borrar, no regenerar.
 
 ## Licencias (proveedor)

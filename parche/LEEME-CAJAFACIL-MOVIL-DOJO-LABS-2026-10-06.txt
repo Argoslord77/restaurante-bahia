@@ -1,0 +1,17 @@
+CAJAFÁCIL MÓVIL — Dojo: M1 endurecido + labs Nivel 1–5 (2026-10-06)
+======================================================================
+ZIP: cajafacil-movil-dojo-labs-2026-10-06.zip (carpeta movil/ completa)
+
+SOBRE M1: Target.kt refactorizado (from() delega en parse() puro, testeable
+en JVM sin Android) + 2 suites de tests JVM (TargetParseTest: 6, PrintQueueTest:
+3) + dependencia coroutines-test. Correr en Android Studio:
+  cd movil/android && ./gradlew :app:testDebugUnitTest
+Puente JS intacto: jest 69/69.
+
+LABS NIVEL 1–5 (en repo, dojo-android/labs/, con snippets y comandos):
+N1 estado/Room/navegación/offline · N2 jank/arranque/R8/baseline ·
+N3 permisos/Doze/BT/USB (prepara M2-M3) · N4 flavors/catalog/firma/CI ·
+N5 pirámide/screenshots/fuzzing/telemetría. Empieza en labs/NIVEL-0.md.
+
+ACTUALIZAR: descomprima sustituyendo movil/ (y dojo-android/ en local),
+npm install, npx cap sync android.
