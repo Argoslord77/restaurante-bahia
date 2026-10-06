@@ -1,0 +1,18 @@
+CAJAFÁCIL MÓVIL — Fase 1: cimiento (2026-10-06)
+===============================================================================
+ZIP: cajafacil-movil-fase1-2026-10-06.zip  (carpeta movil/ completa adentro)
+
+Qué trae: proyecto Capacitor 8 + plataforma android/ lista para Android
+Studio, almacén JSON sellado, usuarios con PIN, respaldos portátiles,
+matemática de venta idéntica a la web y 17 pruebas en verde. Pantallas:
+crear administrador, login con PIN e inicio con respaldo.
+
+USO
+---
+1. Descomprima movil/ en su PC (junto a tienda/).
+2. Pruebas:  cd movil && npm install && npm test
+3. APK:      npx cap sync android && npx cap open android
+   En Android Studio: Build → Build APK(s). Guía completa en movil/README.md.
+
+NOTA: la venta (POS/inventario/caja) llega en la Fase 2. Este compactado es
+el cimiento verificado sobre el que se construye.

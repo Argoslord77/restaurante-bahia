@@ -1,0 +1,23 @@
+/* CajaFácil móvil — ajustes táctiles sobre el diseño web */
+.movil {
+    max-width: 640px; margin: 0 auto; min-height: 100vh;
+    padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+}
+.cargando { text-align: center; color: var(--suave); margin-top: 40px; }
+.movil-logo { display: block; margin: 8px auto 12px; width: 100%; max-width: 200px; height: auto; }
+.movil .btn { min-height: 48px; font-size: 1rem; }
+.movil .campo input, .movil .campo select { min-height: 48px; font-size: 1.05rem; }
+.pin-pantalla {
+    font-size: 2rem; letter-spacing: .5em; text-align: center;
+    background: #fff; border: 1px solid var(--linea); border-radius: 12px;
+    padding: 10px 0 10px .5em; margin-bottom: 12px;
+}
+.pin-teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pin-teclado button {
+    min-height: 62px; font-size: 1.5rem; font-weight: 800;
+    border: 1px solid var(--linea); border-radius: 12px; background: #fff;
+    cursor: pointer;
+}
+.pin-teclado button:active { background: #f0fdfa; border-color: var(--marca); }
+.pin-teclado button.funcion { font-size: 1rem; color: var(--suave); }
+.centro { text-align: center; }

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CajaFácil</string>
+    <string name="title_activity_main">CajaFácil</string>
+    <string name="package_name">com.cajafacil.app</string>
+    <string name="custom_url_scheme">com.cajafacil.app</string>
+</resources>

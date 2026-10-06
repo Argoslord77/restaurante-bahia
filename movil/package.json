@@ -1,0 +1,23 @@
+{
+  "name": "cajafacil-movil",
+  "version": "0.1.0",
+  "description": "CajaFácil móvil: punto de venta Android 100% offline con datos en JSON local (Capacitor).",
+  "scripts": {
+    "test": "jest",
+    "sync": "npx cap sync",
+    "android": "npx cap sync android && npx cap open android"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/device": "^8.0.3",
+    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2"
+  }
+}

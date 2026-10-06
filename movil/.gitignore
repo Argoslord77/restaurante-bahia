@@ -1,0 +1,7 @@
+node_modules
+coverage
+*.log
+# Llaves y licencias de prueba: nunca al repo
+licencia-privada/
+*.lic
+solicitud-*.json
