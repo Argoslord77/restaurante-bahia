@@ -219,10 +219,20 @@
             ${Number(v.cambio) > 0 ? `<div><strong>Cambio: ${fmt(v.cambio)}</strong></div>` : ''}
             ${v.estado === 'cancelada' ? '<div class="centrado"><strong>*** VENTA CANCELADA ***</strong></div>' : ''}
             <div class="linea"></div><div class="centrado">${esc(t.pie)}</div></div>
+        <div id="t-msg"></div>
         <div class="grupo-btn no-imprimir" style="margin-top:12px;">
-            <button class="btn btn-claro" onclick="window.print()">Imprimir</button>
+            <button class="btn btn-claro" id="t-print">🖨️ Imprimir</button>
             <button class="btn btn-primario" data-ir="pos">Nueva venta</button></div>`);
         vistaBindIr(ctx);
+        $('t-print').addEventListener('click', async () => {
+            try {
+                await G('CFImpresora').imprimirTicket(ctx.store, v.id);
+                $('t-msg').innerHTML = aviso('ok', 'Ticket enviado a la impresora.');
+            } catch (e) {
+                if (e.code === 'SIN_IMPRESORA') { ctx.ir('impresora'); return; }
+                $('t-msg').innerHTML = aviso('error', e.message);
+            }
+        });
     }
 
     // ── Caja ──
@@ -300,7 +310,8 @@
                 <option value="" ${!f.estado ? 'selected' : ''}>Todos</option>
                 <option value="cobrada" ${f.estado === 'cobrada' ? 'selected' : ''}>Cobradas</option>
                 <option value="cancelada" ${f.estado === 'cancelada' ? 'selected' : ''}>Canceladas</option></select></div>
-            <button class="btn btn-claro btn-bloque" id="v-filtrar">Filtrar (${r.totales.n} · ${fmt(r.totales.total)})</button></div>
+            <button class="btn btn-claro btn-bloque" id="v-filtrar">Filtrar (${r.totales.n} · ${fmt(r.totales.total)})</button>
+            <button class="btn btn-claro btn-bloque" id="v-csv" style="margin-top:8px;">⬇ Exportar CSV</button></div>
         <div class="tarjeta"><div class="contenedor-tabla"><table class="tabla">
             <thead><tr><th>#</th><th>Fecha</th><th class="num">Total</th><th></th></tr></thead><tbody>
             ${r.filas.length ? r.filas.map(v => `<tr><td>#${v.id}</td><td>${esc(fechaCorta(v.creado_en))}</td>
@@ -312,6 +323,11 @@
         $('v-filtrar').addEventListener('click', () => ir('ventas', { f: {
             desde: $('v-desde').value || hoyDIA(), hasta: $('v-hasta').value || $('v-desde').value || hoyDIA(),
             estado: $('v-estado').value || null } }));
+        $('v-csv').addEventListener('click', async () => {
+            try {
+                await G('CFBackup').compartir(G('CFCsv').ventas(r), G('CFCsv').nombre('ventas'));
+            } catch (e) { alert(e.message); }
+        });
         document.querySelectorAll('#vista [data-ticket]').forEach(b =>
             b.addEventListener('click', () => ir('ticket', { id: Number(b.getAttribute('data-ticket')) })));
         document.querySelectorAll('#vista [data-cancelar]').forEach(b =>
@@ -467,7 +483,8 @@
         const tabs = `<div class="grupo-btn" style="margin-bottom:12px;">
             <button class="btn ${tab === 'dia' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="dia">Por día</button>
             <button class="btn ${tab === 'mas' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="mas">Más vendidos</button>
-            <button class="btn ${tab === 'inv' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="inv">Valorizado</button></div>`;
+            <button class="btn ${tab === 'inv' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="inv">Valorizado</button>
+            <button class="btn btn-claro btn-chico" id="r-csv">⬇ CSV</button></div>`;
         if (tab === 'inv') {
             const r = await G('CFInventario').valorizado(store);
             vista(`<div class="encabezado"><h1>Reportes</h1></div><div class="tarjeta">${tabs}</div>
@@ -503,6 +520,22 @@
         const bf = $('r-filtrar');
         if (bf) bf.addEventListener('click', () => ir('reportes', { tab, f: {
             desde: $('r-desde').value || hoyDIA(), hasta: $('r-hasta').value || $('r-desde').value || hoyDIA() } }));
+        $('r-csv').addEventListener('click', async () => {
+            try {
+                let texto, nombre;
+                if (tab === 'inv') {
+                    texto = G('CFCsv').valorizado(await G('CFInventario').valorizado(store));
+                    nombre = G('CFCsv').nombre('inventario');
+                } else if (tab === 'mas') {
+                    texto = G('CFCsv').masVendidos(await G('CFReportes').masVendidos(store, { ...f, limite: 50 }));
+                    nombre = G('CFCsv').nombre('mas-vendidos');
+                } else {
+                    texto = G('CFCsv').ventasPorDia(await G('CFReportes').ventasPorDia(store, f));
+                    nombre = G('CFCsv').nombre('ventas-dia');
+                }
+                await G('CFBackup').compartir(texto, nombre);
+            } catch (e) { alert(e.message); }
+        });
     }
 
     function filtrosFechas(f) {
@@ -588,6 +621,66 @@
             }));
     }
 
+    // ── Impresora ──
+    async function impresora(ctx) {
+        const { store, sesion, ir } = ctx;
+        if (!pudeVer(sesion, ['administrador', 'cajero'])) { ir('inicio'); return; }
+        const disp = G('CFImpresora').disponible();
+        const defecto = await G('CFImpresora').leerDefecto(store);
+        vista(`<div class="encabezado"><h1>Impresora</h1></div>
+        <div class="tarjeta"><div id="im-msg"></div>
+            <p>Estado: ${disp ? '<span class="insignia ins-verde">disponible</span>' : '<span class="insignia ins-gris">no disponible en este equipo</span>'}</p>
+            ${defecto ? `<p>Por defecto: <strong>${esc(defecto.nombre)}</strong> <small>(${esc(defecto.transporte)} · ${esc(defecto.direccion)})</small></p>
+            <div class="grupo-btn"><button class="btn btn-claro" id="im-probar">Imprimir prueba</button>
+            <button class="btn btn-peligro" id="im-quitar">Quitar</button></div>`
+            : '<p style="color:#64748b;">Sin impresora configurada. Elija una abajo.</p>'}</div>
+        ${disp ? `<div class="tarjeta"><h3>Bluetooth (emparejadas)</h3><div id="im-bt"><p>Cargando…</p></div>
+            <div class="ayuda">La impresora se empareja primero en Ajustes → Bluetooth de Android.</div></div>
+        <div class="tarjeta"><h3>USB (OTG)</h3><div id="im-usb"><p>Cargando…</p></div></div>
+        <div class="tarjeta"><h3>WiFi / red</h3>
+            <div class="fila-form c2"><div class="campo"><label>IP</label><input id="im-host" placeholder="192.168.1.50"></div>
+            <div class="campo"><label>Puerto</label><input id="im-port" type="number" value="9100"></div></div>
+            <button class="btn btn-claro btn-bloque" id="im-tcp">Usar esta impresora</button></div>` : ''}`);
+
+        async function usar(dest) {
+            try {
+                await G('CFImpresora').pedirPermiso(dest);
+                await G('CFImpresora').guardarDefecto(store, dest);
+                ir('impresora');
+            } catch (e) { $('im-msg').innerHTML = aviso('error', e.message); }
+        }
+        if (defecto) {
+            $('im-probar').addEventListener('click', async () => {
+                try { await G('CFImpresora').prueba(store); $('im-msg').innerHTML = aviso('ok', 'Prueba enviada.'); }
+                catch (e) { $('im-msg').innerHTML = aviso('error', e.message); }
+            });
+            $('im-quitar').addEventListener('click', async () => {
+                await G('CFImpresora').quitarDefecto(store);
+                ir('impresora');
+            });
+        }
+        if (!disp) return;
+        for (const [id, transporte] of [['im-bt', 'bluetooth'], ['im-usb', 'usb']]) {
+            try {
+                const ds = await G('CFImpresora').listar(transporte);
+                $(id).innerHTML = ds.length ? '' : '<p style="color:#64748b;">Ninguna encontrada.</p>';
+                ds.forEach(d => {
+                    const b = document.createElement('button');
+                    b.className = 'btn btn-claro btn-bloque';
+                    b.style.marginBottom = '8px';
+                    b.textContent = `${d.nombre} (${d.direccion})`;
+                    b.addEventListener('click', () => usar(d));
+                    $(id).appendChild(b);
+                });
+            } catch (e) { $(id).innerHTML = aviso('error', e.message); }
+        }
+        $('im-tcp').addEventListener('click', () => {
+            const host = $('im-host').value.trim();
+            if (!host) { $('im-msg').innerHTML = aviso('error', 'Capture la IP.'); return; }
+            usar({ transporte: 'tcp', direccion: `${host}:${$('im-port').value || 9100}`, nombre: host });
+        });
+    }
+
     // ── Más (menú) ──
     async function mas(ctx) {
         const { sesion } = ctx;
@@ -601,6 +694,7 @@
             ${cajaR ? item('reportes', '📊 Reportes') : ''}
             ${admin ? item('ajustes', '⚙️ Ajustes') : ''}
             ${admin ? item('usuarios', '👥 Usuarios') : ''}
+            ${cajaR ? item('impresora', '🖨️ Impresora') : ''}
             ${item('respaldo', '💾 Respaldo')}
         </div></div>`);
         vistaBindIr(ctx);
@@ -640,5 +734,5 @@
     }
 
     return { inicio, pos, ticket, caja, ventas, productos, productoForm, kardex,
-             inventario, reportes, ajustes, usuarios, mas, respaldo };
+             inventario, reportes, ajustes, usuarios, mas, respaldo, impresora };
 });

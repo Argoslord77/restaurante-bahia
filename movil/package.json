@@ -15,7 +15,8 @@
     "@capacitor/core": "^8.5.2",
     "@capacitor/device": "^8.0.3",
     "@capacitor/filesystem": "^8.1.4",
-    "@capacitor/share": "^8.0.3"
+    "@capacitor/share": "^8.0.3",
+    "@devlas/capacitor-thermal-printer": "^0.8.0"
   },
   "devDependencies": {
     "jest": "^30.5.2"

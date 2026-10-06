@@ -1,0 +1,22 @@
+CAJAFÁCIL MÓVIL — Fase 3: impresión térmica + CSV (2026-10-06)
+===============================================================================
+ZIP: cajafacil-movil-fase3-2026-10-06.zip  (carpeta movil/ completa adentro)
+
+NUEVO sobre Fase 2:
+- Constructor ESC/POS propio (español con acentos, tablas, TOTAL en grande,
+  corte automático) + driver de impresión Bluetooth SPP / USB OTG / WiFi
+  (plugin @devlas/capacitor-thermal-printer).
+- Pantalla Más → Impresora: lista emparejadas/USB, IP manual, prueba.
+- Botón 🖨️ Imprimir en cada ticket (usa la impresora por defecto).
+- Exportar CSV formato Excel latam en ventas y los 3 reportes.
+- 49 pruebas jest en verde (14 nuevas).
+
+USO
+---
+1. Descomprima sustituyendo movil/, luego: npm install && npx cap sync android
+2. Recompile el APK en Android Studio (el plugin agrega el código nativo).
+3. En el teléfono: empareje la impresora en Ajustes → Bluetooth, ábrala en
+   Más → Impresora, tóquela para usarla e imprima la prueba.
+
+NOTA: en el navegador la impresión aparece "no disponible" (normal: necesita
+el teléfono). SIGUIENTE: Fase 4 (licencia adaptada al dispositivo).

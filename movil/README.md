@@ -5,7 +5,15 @@ Versión para clientes **sin PC**: APK nativa (Capacitor 8) con los datos en
 servidor, sin base de datos. Misma marca, mismas reglas de negocio que la
 versión web.
 
-## Estado: Fase 2 terminada ✅
+## Estado: Fase 3 terminada ✅
+
+- Todo lo de la Fase 2 (app completa funcional)
+- **Impresión térmica**: constructor ESC/POS propio (español latin-1, tablas,
+  corte) + driver Bluetooth SPP / USB OTG / WiFi (plugin
+  @devlas/capacitor-thermal-printer 0.8.0) + pantalla de configuración
+- **Exportar CSV** (formato Excel latam: `;` y decimales con coma) en ventas
+  y los 3 reportes
+- 49 pruebas jest en verde
 
 - Todo lo de la Fase 1 (proyecto Capacitor, almacén JSON, PIN, respaldos)
 - **POS completo**: búsqueda, carrito, descuento, IVA, cobro 3 métodos, cambio, ticket
@@ -65,17 +73,19 @@ Cópielo al teléfono, ábralo y confirme la instalación (orígenes desconocido
 
 ## Permisos Android
 
-- **Fase 1**: ninguno (archivos privados de la app + compartir estándar).
-- **Fase 3**: Bluetooth (impresora térmica) + vibración opcional.
+- **Fases 1-2**: ninguno (archivos privados de la app + compartir estándar).
+- **Fase 3**: Bluetooth (`BLUETOOTH_CONNECT`, lo pide el plugin al imprimir)
+  y USB OTG si usa impresora por cable. Empareje la impresora primero en
+  Ajustes → Bluetooth de Android; luego elíjala en Más → Impresora.
 
 ## Mapa de ruta
 
 | Fase | Contenido | Estado |
 |---|---|---|
 | 1 | Cimiento: almacén, PIN, respaldos, APK compilable | ✅ lista |
-| 2 | POS + productos + inventario + caja + reportes | siguiente |
-| 3 | Impresora térmica Bluetooth + exportar CSV/compartir ticket | — |
-| 4 | Licencia adaptada (misma firma Ed25519, atada al dispositivo) | — |
+| 2 | POS + productos + inventario + caja + reportes | ✅ lista |
+| 3 | Impresora térmica (BT/USB/WiFi) + exportar CSV | ✅ lista |
+| 4 | Licencia adaptada (misma firma Ed25519, atada al dispositivo) | siguiente |
 
 ## Estructura
 
