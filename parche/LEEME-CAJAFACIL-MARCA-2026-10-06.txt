@@ -1,0 +1,29 @@
+CAJAFÁCIL — Marca aplicada + compactado completo (2026-10-06)
+===============================================================================
+La app de punto de venta ahora se llama CAJAFÁCIL, con logotipo 3D del mismo
+linaje visual que REST (duotono turquesa-marino, relieve glossy, halo blanco,
+tagline "PUNTO DE VENTA").
+
+ZIP: cajafacil-2026-10-06.zip  (la carpeta tienda/ completa adentro, lista
+para descomprimir y usar; incluye marca, licencias y todo lo anterior)
+
+NOVEDADES DE MARCA
+------------------
+- Login con logotipo 3D; barra lateral con emblema + nombre CajaFácil.
+- Favicon propio (emblema) en todas las páginas.
+- Títulos, scripts y mensajes renombrados a CajaFácil.
+- Masters del logo incluidos: public/img/logo-cajafacil.png (3D) y
+  public/img/logo-cajafacil-plano.png (plana, para impresos y tamaños chicos).
+
+ACTUALIZAR SU COPIA LOCAL
+-------------------------
+1. Descomprima y SUSTITUYA su carpeta tienda/ (conserve su .env y, si ya
+   activó licencias, conserve también config/licencia.pub y licencia/).
+2. Dentro de tienda/:  npm install
+3. Reinicie:  npm start   →  http://localhost:3001
+
+NOTA: la carpeta sigue llamándose tienda/ y la base tienda_db (nombres
+internos; renombrarlos rompería instalaciones existentes). La marca visible
+es CajaFácil.
+
+INSTALACIÓN DESDE CERO: ver tienda/README.md (5 minutos).
