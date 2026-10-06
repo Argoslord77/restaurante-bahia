@@ -5,6 +5,10 @@
 >
 > Convenciones: `Done =` significa "cómo probar que lo dominas". `Trampa de novato =` el error que delata a quien no ha sufrido en producción.
 
+**Materiales de trabajo:** labs/NIVEL-0.md (empieza aqui) - CHECKLIST-90-DIAS.md
+(tu marcador) - plantillas/ (presupuesto, cicatrices, graduacion, ADR) -
+adr/ADR-001-formato-transporte.md (decision real tomada).
+
 **Índice**
 
 - [Parte A — Plan de 90 días por niveles](#parte-a--plan-de-90-días-por-niveles)

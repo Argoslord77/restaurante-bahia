@@ -80,6 +80,19 @@ Cópielo al teléfono, ábralo y confirme la instalación (orígenes desconocido
 > El identificador de la app es `com.cajafacil.app` (se cambia en
 > `capacitor.config.ts` y en `android/app/build.gradle` si lo desea).
 
+## Plugin nativo CajaFacilPrinter (dojo M1)
+
+Plugin Capacitor PROPIO en Kotlin (android/app/.../printer/): BT SPP
+(seguro->inseguro), USB host (permiso MUTABLE, bulk por trozos) y WiFi
+(reintento unico). El JS (www/js/printer-nativo.js) traduce destinos y codigos;
+impresora.js prefiere la via nativa y usa el plugin viejo solo por ausencia
+(jamas reintenta un error en el otro driver: anti doble ticket).
+
+Compilar (requiere Android Studio + SDK 36, no se compila aqui):
+cd movil/android && ./gradlew :app:assembleDebug, instalar en telefono
+fisico y correr la matriz B.5 (dojo-android/ELITE-ANDROID-90-DIAS.md).
+android/ es codigo fuente desde M1: no borrar, no regenerar.
+
 ## Licencias (proveedor)
 
 ```bash

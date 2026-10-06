@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Dojo M1: el bridge Capacitor instancia el plugin por reflection.
+-keep class com.cajafacil.app.printer.** { *; }
+-keepclassmembers class com.cajafacil.app.printer.** { @com.getcapacitor.PluginMethod <methods>; }

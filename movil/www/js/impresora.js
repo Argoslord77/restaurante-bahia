@@ -23,11 +23,33 @@
         } catch (_) { return null; }
     }
 
+    let nativoForzado; // solo pruebas: mock del MODULO nativo (no del plugin crudo)
+    function nativoMod() {
+        if (nativoForzado !== undefined) return nativoForzado;
+        const { PrinterNativo } = mods();
+        return (PrinterNativo && PrinterNativo.disponible()) ? PrinterNativo : null;
+    }
+    // Seleccion de via - REGLA DE ELITE: fallback por AUSENCIA, jamas por error.
+    // Si el nativo existe, sus errores se reportan, no se reintentan en el otro
+    // driver: reintentar a ciegas puede imprimir el ticket DOS veces.
+    // El gancho _usarPlugin (forzado, incluso null) siempre gana: simula ausencia.
+    function resolver() {
+        if (pluginForzado !== undefined) {
+            const P = plugin();
+            if (!P) throw new Error('Impresión no disponible en este equipo.');
+            return { via: 'viejo', api: P };
+        }
+        const N = nativoMod();
+        if (N) return { via: 'nativo', api: N };
+        const P = plugin();
+        if (!P) throw new Error('Impresión no disponible en este equipo.');
+        return { via: 'viejo', api: P };
+    }
     function mods() {
         if (typeof module !== 'undefined' && module.exports) {
-            return { Reportes: require('./reportes'), Escpos: require('./escpos'), Ajustes: require('./ajustes') };
+            return { Reportes: require('./reportes'), Escpos: require('./escpos'), Ajustes: require('./ajustes'), PrinterNativo: require('./printer-nativo') };
         }
-        return { Reportes: globalThis.CFReportes, Escpos: globalThis.CFEscpos, Ajustes: globalThis.CFAjustes };
+        return { Reportes: globalThis.CFReportes, Escpos: globalThis.CFEscpos, Ajustes: globalThis.CFAjustes, PrinterNativo: globalThis.CFPrinterNativo };
     }
 
     function bytesABase64(bytes) {
@@ -47,7 +69,8 @@
         connect_failed: 'No se pudo conectar con la impresora.',
         write_failed: 'La impresión se interrumpió a la mitad.',
         invalid_transport: 'Destino de impresión no válido.',
-        invalid_data: 'Datos de impresión no válidos.'
+        invalid_data: 'Datos de impresión no válidos.',
+        timeout: 'La impresora no respondió a tiempo.'
     };
 
     function traducirError(e) {
@@ -75,9 +98,9 @@
     }
 
     async function listar(transporte) {
-        const P = plugin();
-        if (!P) throw new Error('Impresión no disponible en este equipo.');
-        const r = await P.list({ transport: transporte });
+        const { via, api } = resolver();
+        if (via === 'nativo') return api.listar(transporte);
+        const r = await api.list({ transport: transporte });
         return (r.devices || []).map(d => {
             if (transporte === 'bluetooth') {
                 return { transporte, direccion: d.address, nombre: d.name || d.address };
@@ -88,18 +111,18 @@
     }
 
     async function pedirPermiso(dest) {
-        const P = plugin();
-        if (!P) throw new Error('Impresión no disponible en este equipo.');
-        const r = await P.requestPermission(destinoAObjetivo(dest));
+        const { via, api } = resolver();
+        if (via === 'nativo') return api.pedirPermiso(dest);
+        const r = await api.requestPermission(destinoAObjetivo(dest));
         if (r && r.granted === false) throw new Error('Permiso denegado.');
         return true;
     }
 
     async function imprimir(dest, bytes) {
-        const P = plugin();
-        if (!P) throw new Error('Impresión no disponible en este equipo.');
+        const { via, api } = resolver();
         try {
-            await P.print({ ...destinoAObjetivo(dest), data: bytesABase64(bytes) });
+            if (via === 'nativo') await api.imprimir(dest, bytes);
+            else await api.print({ ...destinoAObjetivo(dest), data: bytesABase64(bytes) });
         } catch (e) {
             throw new Error(traducirError(e));
         }
@@ -158,9 +181,16 @@
         return true;
     }
 
-    return { disponible: () => !!plugin(), listar, pedirPermiso, imprimir,
+    function disponible() {
+        if (pluginForzado !== undefined) return !!plugin();
+        return !!nativoMod() || !!plugin();
+    }
+
+    return { disponible, listar, pedirPermiso, imprimir,
              leerDefecto, guardarDefecto, quitarDefecto, imprimirTicket, prueba,
              bytesABase64, traducirError, destinoAObjetivo,
              _usarPlugin: p => { pluginForzado = p; },
-             _limpiarPlugin: () => { pluginForzado = undefined; } };
+             _limpiarPlugin: () => { pluginForzado = undefined; },
+             _usarNativo: m => { nativoForzado = m; },
+             _limpiarNativo: () => { nativoForzado = undefined; } };
 });
