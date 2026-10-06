@@ -5,14 +5,17 @@ Versión para clientes **sin PC**: APK nativa (Capacitor 8) con los datos en
 servidor, sin base de datos. Misma marca, mismas reglas de negocio que la
 versión web.
 
-## Estado: Fase 1 terminada ✅
+## Estado: Fase 2 terminada ✅
 
-- Proyecto Capacitor + plataforma `android/` lista para Android Studio
-- Almacén JSON: un archivo por colección, escritura atómica, sello HMAC
-- Usuarios con PIN (administrador/cajero/vendedor)
-- Respaldos portátiles (JSON con suma de verificación, se comparten por WhatsApp)
-- Matemática de venta idéntica a la web (descuento antes de IVA)
-- 17 pruebas jest en verde
+- Todo lo de la Fase 1 (proyecto Capacitor, almacén JSON, PIN, respaldos)
+- **POS completo**: búsqueda, carrito, descuento, IVA, cobro 3 métodos, cambio, ticket
+- **Productos**: categorías, SKU, precios, stock mínimo, activar/desactivar, kardex
+- **Inventario**: entradas/salidas, recientes, stock bajo, valorizado
+- **Caja**: apertura con fondo, cierre con arqueo, historial
+- **Ventas**: lista con filtros, tickets, cancelación con devolución de stock
+- **Reportes**: ventas por día con utilidad, más vendidos, valorizado
+- **Ajustes + usuarios + datos de ejemplo**, navegación inferior por roles
+- 35 pruebas jest en verde
 
 ## Cómo se guardan los datos
 

@@ -1,0 +1,22 @@
+CAJAFÁCIL MÓVIL — Fase 2: app completa funcional (2026-10-06)
+===============================================================================
+ZIP: cajafacil-movil-fase2-2026-10-06.zip  (carpeta movil/ completa adentro)
+
+Qué trae NUEVO sobre Fase 1: toda la lógica de negocio portada 1:1 de la web
++ interfaz táctil completa con navegación inferior por roles:
+POS (carrito, descuento, IVA, cobro 3 métodos, ticket), productos/categorías/
+kardex, inventario (entradas/salidas, stock bajo, valorizado), caja (apertura,
+arqueo, historial), ventas (filtros, tickets, cancelación), reportes (por día
+con utilidad, más vendidos), ajustes, usuarios y datos de ejemplo.
+35 pruebas jest en verde.
+
+PROBAR EN EL NAVEGADOR (sin teléfono)
+--------------------------------------
+Descomprima, abra una terminal en movil/www y sirva estático, ej.:
+  python -m http.server 8080
+Abra http://localhost:8080
+Cree el admin, cargue datos de ejemplo (Ajustes) y venda. Los datos se guardan
+en el navegador (solo en este modo de prueba).
+
+GENERAR EL APK: movil/README.md (Android Studio, 3 pasos).
+SIGUIENTE: Fase 3 (impresora térmica Bluetooth + exportar).

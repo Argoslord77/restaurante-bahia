@@ -1,5 +1,4 @@
-// movil/www/js/app.js — Arranque, login con PIN y pantalla base (Fase 1).
-// Las pantallas de venta/inventario/caja llegan en la Fase 2 sobre este cimiento.
+// movil/www/js/app.js — Arranque, login con PIN y navegación (Fase 2).
 (function () {
     'use strict';
 
@@ -9,6 +8,7 @@
 
     let store = null;
     let sesion = null;
+    let ruta = { vista: 'inicio', params: {} };
 
     function pantalla(html) { $('pantalla').innerHTML = html; }
     function aviso(tipo, texto) {
@@ -19,6 +19,7 @@
         try {
             store = CFStore.crear(CFStorage.elegir());
             const r = await store.init();
+            await CFAjustes.asegurar(store);
             console.log('[CajaFácil] almacén:', store.backendNombre, '| instalación:', r.instalacion);
             const usuarios = await CFUsers.listar(store);
             if (!usuarios.length) return verCrearAdmin();
@@ -33,7 +34,6 @@
         }
     }
 
-    // ── Primer arranque: crear administrador ──
     function verCrearAdmin(msg) {
         pantalla(`<div class="tarjeta"><div class="centro">
             <img class="movil-logo" src="img/logo-login.png" alt="CajaFácil">
@@ -52,7 +52,6 @@
         });
     }
 
-    // ── Login con PIN ──
     function verLogin(usuarios, msg) {
         if (!usuarios.length) return verCrearAdmin();
         let pin = '';
@@ -75,41 +74,59 @@
                     const u = await CFUsers.verificar(store, $('l-usuario').value, pin);
                     if (!u) { pin = ''; return verLogin(usuarios, aviso('error', 'PIN incorrecto.')); }
                     sesion = u;
-                    return verInicio();
+                    return entrar();
                 }
                 else if (pin.length < 6) pin += t;
-                $('l-pin').textContent = '•'.repeat(Math.max(pin.length, 1)) + '•••'.slice(0, Math.max(0, 3 - pin.length));
-                if (!pin.length) $('l-pin').textContent = '••••';
+                $('l-pin').textContent = pin.length ? '•'.repeat(pin.length) : '••••';
             });
             teclas.appendChild(b);
         });
     }
 
-    // ── Inicio (base; la venta llega en Fase 2) ──
-    async function verInicio() {
-        const n = {};
-        for (const c of CFBackup.COLECCIONES) n[c] = (await store.todos(c)).length;
-        pantalla(`<div class="encabezado"><h1>Hola, ${esc(sesion.nombre)}</h1>
-            <button class="btn btn-claro btn-chico" id="i-salir">Salir</button></div>
-            <div class="tarjeta"><h3>Este equipo</h3>
-            <div class="ayuda">Instalación</div><div class="mono">${esc(store.instalacion())}</div>
-            <div class="ayuda">Almacén: ${esc(store.backendNombre)} · Productos: ${n.productos} · Ventas: ${n.ventas}</div></div>
-            <div class="tarjeta"><h3>Respaldo</h3>
-            <button class="btn btn-primario btn-bloque" id="i-respaldo">Generar y compartir respaldo</button>
-            <div class="ayuda">Se guarda un JSON que puede enviarse por WhatsApp o correo.</div>
-            <div id="i-msg"></div></div>`);
-        $('i-salir').addEventListener('click', async () => {
-            sesion = null;
-            verLogin((await CFUsers.listar(store)).filter(u => u.activo));
+    // ── Cáscara con navegación inferior ──
+    function entrar() {
+        pantalla('<div id="vista"></div><nav id="barnav" class="barnav"></nav>');
+        ir('inicio', {});
+    }
+
+    function itemsNav() {
+        const items = [
+            { v: 'inicio', t: '🏠<small>Inicio</small>', roles: ['administrador', 'cajero', 'vendedor'] },
+            { v: 'pos', t: '🧾<small>Vender</small>', roles: ['administrador', 'cajero', 'vendedor'] },
+            { v: 'ventas', t: '🧮<small>Ventas</small>', roles: ['administrador', 'cajero', 'vendedor'] },
+            { v: 'caja', t: '💰<small>Caja</small>', roles: ['administrador', 'cajero'] },
+            { v: 'mas', t: '⋯<small>Más</small>', roles: ['administrador', 'cajero', 'vendedor'] }
+        ];
+        return items.filter(i => i.roles.includes(sesion.rol));
+    }
+
+    function pintarNav() {
+        $('barnav').innerHTML = itemsNav().map(i =>
+            `<button data-nav="${i.v}" class="${ruta.vista === i.v ? 'activo' : ''}">${i.t}</button>`).join('');
+        document.querySelectorAll('#barnav [data-nav]').forEach(b =>
+            b.addEventListener('click', () => ir(b.getAttribute('data-nav'), {})));
+    }
+
+    function ir(vista, params) {
+        ruta = { vista, params: params || {} };
+        pintarNav();
+        window.scrollTo(0, 0);
+        const fn = CFVistas[vista] || CFVistas.inicio;
+        fn(ctx(), ruta.params).catch(e => {
+            console.error(e);
+            $('vista').innerHTML = `<div class="tarjeta">${aviso('error', e.message)}
+                <button class="btn btn-claro" onclick="document.querySelector('[data-nav=inicio]').click()">Ir al inicio</button></div>`;
         });
-        $('i-respaldo').addEventListener('click', async () => {
-            try {
-                const paquete = await CFBackup.generar(store);
-                const texto = JSON.stringify(paquete, null, 2);
-                const como = await CFBackup.compartir(texto, CFBackup.nombreArchivo());
-                $('i-msg').innerHTML = aviso('ok', como === 'share' ? 'Respaldo listo para enviar.' : 'Respaldo descargado.');
-            } catch (e) { $('i-msg').innerHTML = aviso('error', e.message); }
-        });
+    }
+
+    function ctx() {
+        return {
+            store, sesion, ir,
+            salir: () => {
+                sesion = null;
+                CFUsers.listar(store).then(us => verLogin(us.filter(u => u.activo)));
+            }
+        };
     }
 
     document.addEventListener('DOMContentLoaded', boot);
