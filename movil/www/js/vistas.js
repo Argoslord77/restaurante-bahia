@@ -32,6 +32,7 @@
         const hoy = hoyDIA();
         const lista = await G('CFVentas').listar(store, { desde: hoy, hasta: hoy });
         const bajo = await G('CFInventario').stockBajo(store);
+        const bloqueada = !!(ctx.lic && ctx.lic.bloqueada);
         vista(`
         <div class="encabezado"><h1>Hola, ${esc(sesion.nombre)}</h1>
             <button class="btn btn-claro btn-chico" id="i-salir">Salir</button></div>
@@ -42,12 +43,15 @@
             <div class="kpi"><div class="etiqueta">Ventas hoy</div>
                 <div class="valor">${lista.totales.n} · ${fmt(lista.totales.total)}</div></div>
         </div>
-        <div class="tarjeta"><h3>Acciones</h3><div class="grupo-btn">
+        ${bloqueada
+        ? `<div class="tarjeta"><h3>🔒 Licencia bloqueada</h3><p>No se puede vender ni abrir trabajo nuevo.</p>
+            <div class="grupo-btn"><button class="btn btn-primario" data-ir="licencia">Ver licencia</button></div></div>`
+        : `<div class="tarjeta"><h3>Acciones</h3><div class="grupo-btn">
             <button class="btn btn-primario" data-ir="pos">Vender</button>
             ${pudeVer(sesion, ['administrador', 'cajero']) ? '<button class="btn btn-claro" data-ir="caja">Caja</button>' : ''}
             <button class="btn btn-claro" data-ir="ventas">Ventas</button>
             <button class="btn btn-claro" data-ir="mas">Más</button>
-        </div></div>
+        </div></div>`}
         ${bajo.length ? `<div class="tarjeta"><h3>Stock bajo (${bajo.length})</h3>
             ${bajo.slice(0, 5).map(p => `<div>• ${esc(p.nombre)}: <strong>${p.stock}</strong></div>`).join('')}</div>` : ''}`);
         $('i-salir').addEventListener('click', () => ctx.salir());
@@ -240,7 +244,15 @@
         const { store, sesion, ir } = ctx;
         if (!pudeVer(sesion, ['administrador', 'cajero'])) { ir('inicio'); return; }
         const turno = await G('CFCaja').abierto(store);
+        const bloqueada = !!(ctx.lic && ctx.lic.bloqueada);
         const historial = await G('CFCaja').historial(store, 10);
+        if (!turno && bloqueada) {
+            vista(`<div class="encabezado"><h1>Caja</h1></div><div class="tarjeta">
+                <p>Licencia bloqueada: no se puede abrir caja.</p>
+                <button class="btn btn-primario" data-ir="licencia">Ver licencia</button></div>`);
+            vistaBindIr(ctx);
+            return;
+        }
         if (!turno) {
             vista(`<div class="encabezado"><h1>Caja</h1></div><div class="tarjeta">
                 <h3>Abrir turno</h3><div id="c-msg"></div>
@@ -301,7 +313,7 @@
         const { store, sesion, ir } = ctx;
         const f = (params && params.f) || { desde: hoyDIA(), hasta: hoyDIA(), estado: '' };
         const r = await G('CFVentas').listar(store, f);
-        const puedeCancelar = pudeVer(sesion, ['administrador', 'cajero']);
+        const puedeCancelar = pudeVer(sesion, ['administrador', 'cajero']) && !(ctx.lic && ctx.lic.bloqueada);
         vista(`<div class="encabezado"><h1>Ventas</h1></div>
         <div class="tarjeta"><div class="fila-form c2">
             <div class="campo"><label>Desde</label><input type="date" id="v-desde" value="${esc(f.desde)}"></div>
@@ -681,6 +693,81 @@
         });
     }
 
+    // ── Licencia ──
+    async function licencia(ctx) {
+        const { store, sesion, ir } = ctx;
+        if (!pudeVer(sesion, ['administrador', 'cajero'])) { ir('inicio'); return; }
+        const L = G('CFLicencia');
+        const e = await L.evaluar(store, { forzar: true });
+        const evs = (await store.todos('licencia_eventos')).sort((a, b) => b.id - a.id).slice(0, 40);
+        const clase = e.estado === 'ACTIVA' ? 'ins-verde' : e.estado === 'GRACIA' ? 'ins-ambar'
+            : e.estado === 'NO_CONFIGURADA' ? 'ins-azul' : 'ins-roja';
+        vista(`<div class="encabezado"><h1>Licencia</h1><span class="insignia ${clase}">${esc(e.estado.replace('_', ' '))}</span></div>
+        ${e.licencia ? `<div class="tarjeta"><strong>${esc(e.licencia.cliente)}</strong> · ${esc(e.licencia.plan)} · <span class="mono">${esc(e.licencia.id)}</span>
+        ${e.licencia.expira_en ? ` · caduca ${esc(new Date(e.licencia.expira_en).toLocaleDateString('es'))}` : ' · <span class="insignia ins-verde">perpetua</span>'}</div>`
+        : '<div class="tarjeta"><p style="margin:0;">Sin licencia instalada.</p></div>'}
+        ${e.gracia ? `<div class="aviso aviso-error"><strong>Gracia: quedan ${e.gracia.dias_restantes} de ${e.gracia.dias_totales} días.</strong><br>Al agotarse solo se podrá cerrar el turno.</div>` : ''}
+        ${e.problemas.map(x => `<div class="aviso aviso-error"><span class="mono">[${esc(x.codigo)}]</span> ${esc(x.mensaje)}</div>`).join('')}
+        ${e.avisos.map(x => `<div class="aviso aviso-ok" style="background:var(--aviso-fondo);color:#78350f;border-color:#fde68a;"><span class="mono">[${esc(x.codigo)}]</span> ${esc(x.mensaje)}</div>`).join('')}
+        <div class="tarjeta"><h3>Este equipo</h3><div class="ayuda">Código (dictable por teléfono)</div>
+            <div class="codigo">${esc(e.instalacion.codigo)}</div>
+            <div class="ayuda">Instalación</div><div class="mono">${esc(e.instalacion.uuid)}</div>
+            <div class="grupo-btn" style="margin-top:8px;"><button class="btn btn-claro" id="li-sol">Descargar solicitud</button></div></div>
+        <div class="tarjeta"><h3>Tiempo y uso</h3>
+            <div class="totales"><div><span>Verificado</span><span>${esc(fechaCorta(e.tiempo.confiable))}</span></div>
+            <div><span>Reloj equipo</span><span>${esc(fechaCorta(e.tiempo.sistema))}</span></div>
+            <div><span>Días de uso</span><span>${e.uso.dias_consumidos}${e.uso.dias_contratados ? ' / ' + e.uso.dias_contratados : ''}</span></div>
+            <div><span>Arranques</span><span>${e.uso.secuencia}</span></div></div></div>
+        <div class="tarjeta"><h3>Clave pública</h3><div class="ayuda">Una sola vez (la entrega el proveedor).</div>
+            <div class="campo"><textarea id="li-pub" rows="3" class="mono" style="font-size:.7rem;" placeholder="-----BEGIN PUBLIC KEY-----…"></textarea></div>
+            <button class="btn btn-claro btn-bloque" id="li-pubok">Guardar clave pública</button></div>
+        <div class="tarjeta"><h3>Instalar licencia</h3><div id="li-msg"></div>
+            <div class="campo"><label>Pegar contenido del .lic</label>
+            <textarea id="li-lic" rows="4" class="mono" style="font-size:.7rem;" placeholder='{ "datos": { … }, "firma": "…" }'></textarea></div>
+            <button class="btn btn-primario btn-bloque" id="li-ok">Instalar</button>
+            <div class="campo" style="margin-top:10px;"><label>O elegir archivo</label><input type="file" id="li-file" accept=".lic,.json"></div></div>
+        <div class="tarjeta"><h3>Bitácora</h3><div class="contenedor-tabla"><table class="tabla">
+            <thead><tr><th>Fecha</th><th>Evento</th><th></th></tr></thead><tbody>
+            ${evs.length ? evs.map(x => `<tr><td>${esc(fechaCorta(x.creado_en))}</td><td class="mono">${esc(x.tipo)}</td>
+            <td><span class="insignia ${x.gravedad === 'CRITICO' ? 'ins-roja' : x.gravedad === 'AVISO' ? 'ins-ambar' : 'ins-gris'}">${esc(x.gravedad)}</span></td></tr>`).join('')
+            : '<tr><td colspan="3">Sin eventos.</td></tr>'}</tbody></table></div></div>`);
+        $('li-sol').addEventListener('click', async () => {
+            const s = await L.solicitud(store, '');
+            await G('CFBackup').compartir(JSON.stringify(s, null, 2), 'solicitud-licencia-cajafacil.json');
+        });
+        $('li-pubok').addEventListener('click', async () => {
+            try { await L.guardarPub(store, $('li-pub').value); ir('licencia'); }
+            catch (e2) { $('li-msg').innerHTML = aviso('error', e2.message); }
+        });
+        $('li-ok').addEventListener('click', async () => {
+            try { await L.instalar(store, $('li-lic').value); ir('licencia'); }
+            catch (e2) { $('li-msg').innerHTML = aviso('error', e2.message); }
+        });
+        $('li-file').addEventListener('change', () => {
+            const f = $('li-file').files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = async () => {
+                try { await L.instalar(store, r.result); ir('licencia'); }
+                catch (e2) { $('li-msg').innerHTML = aviso('error', e2.message); }
+            };
+            r.readAsText(f);
+        });
+    }
+
+    // ── Bloqueo ──
+    async function bloqueo(ctx) {
+        const e = await G('CFLicencia').evaluar(ctx.store, {});
+        const turno = await G('CFCaja').abierto(ctx.store);
+        vista(`<div class="tarjeta"><div class="centrado"><h1>🔒 Licencia no válida</h1>
+            <p>Puede cerrar el turno abierto, pero no vender ni abrir trabajo nuevo.</p></div>
+            ${(e.problemas || []).map(x => `<div class="aviso aviso-error"><span class="mono">[${esc(x.codigo)}]</span> ${esc(x.mensaje)}</div>`).join('')}
+            <div class="ayuda">Código de instalación</div><div class="codigo">${esc(e.instalacion.codigo)}</div>
+            <div class="grupo-btn"><button class="btn btn-primario" data-ir="licencia">Ver licencia</button>
+            ${turno ? '<button class="btn btn-claro" data-ir="caja">Cerrar turno</button>' : ''}</div></div>`);
+        vistaBindIr(ctx);
+    }
+
     // ── Más (menú) ──
     async function mas(ctx) {
         const { sesion } = ctx;
@@ -695,6 +782,7 @@
             ${admin ? item('ajustes', '⚙️ Ajustes') : ''}
             ${admin ? item('usuarios', '👥 Usuarios') : ''}
             ${cajaR ? item('impresora', '🖨️ Impresora') : ''}
+            ${cajaR ? item('licencia', '🔐 Licencia') : ''}
             ${item('respaldo', '💾 Respaldo')}
         </div></div>`);
         vistaBindIr(ctx);
@@ -734,5 +822,5 @@
     }
 
     return { inicio, pos, ticket, caja, ventas, productos, productoForm, kardex,
-             inventario, reportes, ajustes, usuarios, mas, respaldo, impresora };
+             inventario, reportes, ajustes, usuarios, mas, respaldo, impresora, licencia, bloqueo };
 });

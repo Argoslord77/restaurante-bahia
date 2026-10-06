@@ -1,0 +1,24 @@
+CAJAFÁCIL MÓVIL — Fase 4: licencia adaptada (APP COMPLETA) (2026-10-06)
+===============================================================================
+ZIP: cajafacil-movil-fase4-2026-10-06.zip  (carpeta movil/ completa adentro)
+
+NUEVO sobre Fase 3: sistema de licencias adaptado al teléfono con EL MISMO
+modelo y formato .lic de la web (firma Ed25519 verificada offline, huella
+del dispositivo Android, tiempo de confianza sobre ventas/turnos/movimientos,
+días de uso, gracia 7 días, bloqueo gradual). Pantallas Licencia (código,
+solicitud, instalar por pegado o archivo, bitácora) y Bloqueo. Emisor del
+proveedor en movil/tools/ (par de claves propio, distinto al de la web).
+58 pruebas jest en verde.
+
+FLUJO PROVEEDOR (en su PC, dentro de movil/)
+---------------------------------------------
+  npm install
+  node tools/emitir.js claves          (una vez; .key en lugar seguro)
+  npm run licencia:emitir -- emitir --solicitud solicitud.json --dias 365 \
+    --cliente "Nombre" --salida licencia.lic
+
+El cliente instala .pub + .lic en Más → Licencia. Sin clave pública la app
+trabaja dormida (sin restricciones).
+
+ACTUALIZAR: descomprima sustituyendo movil/, npm install, npx cap sync
+android y recompile el APK. Detalles: movil/README.md.

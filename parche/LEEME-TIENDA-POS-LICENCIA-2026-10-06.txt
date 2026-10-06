@@ -1,0 +1,31 @@
+TIENDA POS + LICENCIA — Actualización 2026-10-06
+===============================================================================
+La tienda ahora está protegida con EL MISMO sistema de licencias del
+restaurante: firma Ed25519, huella ponderada del equipo, tiempo de confianza
+(trinquete + datos del negocio), estado replicado BD+archivo y periodo de
+gracia de 7 días. Panel en Licencia (solo administrador).
+
+ZIP: tienda-pos-licencia-2026-10-06.zip  (la carpeta tienda/ completa adentro)
+
+ACTUALIZAR SU COPIA LOCAL
+-------------------------
+1. Descomprima y SUSTITUYA su carpeta tienda/ (conserve su .env).
+2. Dentro de tienda/:  npm install   (sin dependencias nuevas, pero asegura)
+3. Aplique las tablas nuevas (idempotente, no borra nada):
+     mysql -u root -p tienda_db < scripts/instalar.sql
+   (Crea licencia_estado, licencia_eventos y licencia_dias.)
+4. Reinicie:  npm start
+
+COMPORTAMIENTO
+--------------
+- SIN config/licencia.pub el sistema está DORMIDO: no restringe nada.
+  Puede seguir trabajando igual que antes mientras no active licencias.
+- Con licencia ACTIVA o en GRACIA: todo normal (en gracia verá un aviso).
+- BLOQUEADA: impide vender y abrir caja; permite cerrar el turno,
+  reimprimir tickets, entrar a Licencia y login.
+- IMPORTANTE: genere un par de claves DISTINTO al del restaurante:
+     node scripts/licencia-emitir.js claves --destino ./licencia-privada-tienda
+  La .key NUNCA va al equipo del cliente; la .pub va en config/licencia.pub.
+- Flujo completo (solicitar → emitir → instalar) en tienda/README.md.
+- Verificado: jest 39/39, 22 vistas EJS, ciclo dormido→activa→gracia→bloqueo
+  y HTTP 423/200 en cada ruta.

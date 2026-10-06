@@ -1,0 +1,30 @@
+TIENDA POS — Punto de venta para pequeños negocios (app nueva, 2026-10-05)
+===============================================================================
+Contenido: carpeta completa tienda/ (nueva aplicación Express+EJS+MySQL,
+independiente del restaurante). Incluye: POS, productos, inventario/kardex,
+corte de caja, reportes, usuarios propios y ajustes.
+
+ZIP: tienda-pos-2026-10-05.zip  (la carpeta tienda/ ya viene adentro)
+
+INSTALACIÓN EN SU PC (5 minutos)
+--------------------------------
+1. Copie la carpeta tienda/ del ZIP junto a la del restaurante
+   (o donde prefiera; es una app separada).
+
+2. En una terminal dentro de tienda/:
+     npm install
+     copy .env.example .env        (en Windows; en Linux/Mac: cp .env.example .env)
+     REM edite .env si su MySQL usa otro usuario/clave
+     mysql -u root -p < scripts\instalar.sql
+     npm run crear-admin -- admin "MiClave123"
+     npm run demo                  (opcional: datos de ejemplo)
+     npm start
+   Abra http://localhost:3001
+
+NOTAS
+-----
+- Puerto 3001 por defecto (no choca con el restaurante en 3000).
+- Base de datos propia: tienda_db (no toca la del restaurante).
+- Sin turno de caja abierto no se puede vender: Caja → Abrir caja.
+- Pruebas incluidas: npm test  (26 pruebas, no necesitan base de datos).
+- Detalles de uso y roles en tienda/README.md.

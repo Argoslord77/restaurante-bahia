@@ -5,7 +5,16 @@ Versión para clientes **sin PC**: APK nativa (Capacitor 8) con los datos en
 servidor, sin base de datos. Misma marca, mismas reglas de negocio que la
 versión web.
 
-## Estado: Fase 3 terminada ✅
+## Estado: Fase 4 terminada ✅ (app completa)
+
+- Todo lo de la Fase 3 (impresión térmica + CSV)
+- **Licencia adaptada**: misma firma Ed25519 y formato .lic que la web
+  (tweetnacl embebido, sin red), huella del dispositivo Android, tiempo de
+  confianza sobre ventas/turnos/movimientos, días de uso, gracia 7 días y
+  bloqueo gradual (cerrar turno sí, vender no)
+- Pantallas Licencia (código, solicitud, instalar, bitácora) y Bloqueo
+- Emisor del proveedor en `tools/` (`npm run licencia:emitir`)
+- 58 pruebas jest en verde
 
 - Todo lo de la Fase 2 (app completa funcional)
 - **Impresión térmica**: constructor ESC/POS propio (español latin-1, tablas,
@@ -71,6 +80,21 @@ Cópielo al teléfono, ábralo y confirme la instalación (orígenes desconocido
 > El identificador de la app es `com.cajafacil.app` (se cambia en
 > `capacitor.config.ts` y en `android/app/build.gradle` si lo desea).
 
+## Licencias (proveedor)
+
+```bash
+# Una sola vez: par de claves SOLO para móvil (distinto al de la web)
+node tools/emitir.js claves
+# licencia-privada-movil/licencia.key → LUGAR SEGURO, nunca al cliente
+
+# Por cliente: con su solicitud-licencia-cajafacil.json
+npm run licencia:emitir -- emitir --solicitud solicitud.json --dias 365 \
+  --cliente "Abarrotes Lupita" --salida licencia.lic
+```
+El cliente pega la `licencia.pub` y el `.lic` en Más → Licencia (o se los
+envía por WhatsApp e importa el archivo). Sin clave pública, la app no
+restringe nada (dormida).
+
 ## Permisos Android
 
 - **Fases 1-2**: ninguno (archivos privados de la app + compartir estándar).
@@ -85,7 +109,7 @@ Cópielo al teléfono, ábralo y confirme la instalación (orígenes desconocido
 | 1 | Cimiento: almacén, PIN, respaldos, APK compilable | ✅ lista |
 | 2 | POS + productos + inventario + caja + reportes | ✅ lista |
 | 3 | Impresora térmica (BT/USB/WiFi) + exportar CSV | ✅ lista |
-| 4 | Licencia adaptada (misma firma Ed25519, atada al dispositivo) | siguiente |
+| 4 | Licencia adaptada (misma firma Ed25519, atada al dispositivo) | ✅ lista |
 
 ## Estructura
 

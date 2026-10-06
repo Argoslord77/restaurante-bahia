@@ -85,7 +85,7 @@
 
     // ── Cáscara con navegación inferior ──
     function entrar() {
-        pantalla('<div id="vista"></div><nav id="barnav" class="barnav"></nav>');
+        pantalla('<div id="aviso-lic"></div><div id="vista"></div><nav id="barnav" class="barnav"></nav>');
         ir('inicio', {});
     }
 
@@ -107,21 +107,42 @@
             b.addEventListener('click', () => ir(b.getAttribute('data-nav'), {})));
     }
 
-    function ir(vista, params) {
+    const PERMITIDAS_BLOQ = ['inicio', 'licencia', 'ticket', 'caja'];
+
+    async function ir(vista, params) {
+        let lic = null;
+        try { lic = await CFLicencia.evaluar(store); }
+        catch (e) {
+            console.error(e);
+            lic = { operativa: true, estado: 'ERROR', problemas: [], avisos: [], gracia: null };
+        }
+        if (!lic.operativa && !PERMITIDAS_BLOQ.includes(vista)) vista = 'bloqueo';
         ruta = { vista, params: params || {} };
         pintarNav();
+        pintarAvisoLic(lic);
         window.scrollTo(0, 0);
         const fn = CFVistas[vista] || CFVistas.inicio;
-        fn(ctx(), ruta.params).catch(e => {
+        fn(ctx(lic), ruta.params).catch(e => {
             console.error(e);
             $('vista').innerHTML = `<div class="tarjeta">${aviso('error', e.message)}
                 <button class="btn btn-claro" onclick="document.querySelector('[data-nav=inicio]').click()">Ir al inicio</button></div>`;
         });
     }
 
-    function ctx() {
+    function pintarAvisoLic(lic) {
+        const caja = $('aviso-lic');
+        if (!caja) return;
+        if (lic.estado === 'GRACIA' && (sesion.rol === 'administrador' || sesion.rol === 'cajero')) {
+            caja.innerHTML = `<div class="aviso aviso-error"><strong>Licencia en gracia</strong>${lic.gracia ? ` — quedan ${lic.gracia.dias_restantes} días` : ''}. <a href="#" id="al-ir">Regularizar →</a></div>`;
+            $('al-ir').addEventListener('click', ev => { ev.preventDefault(); ir('licencia', {}); });
+        } else if (lic.estado === 'NO_CONFIGURADA' && sesion.rol === 'administrador') {
+            caja.innerHTML = '<div class="aviso aviso-ok" style="background:var(--aviso-fondo);color:#78350f;border-color:#fde68a;">Licencias sin activar: no se aplica restricción.</div>';
+        } else caja.innerHTML = '';
+    }
+
+    function ctx(lic) {
         return {
-            store, sesion, ir,
+            store, sesion, ir, lic: lic || null,
             salir: () => {
                 sesion = null;
                 CFUsers.listar(store).then(us => verLogin(us.filter(u => u.activo)));
