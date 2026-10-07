@@ -1,0 +1,20 @@
+TEMA ONIX: interfaz oscura premium + iconos SVG (2026-10-07)
+=============================================================
+ZIP: tema-onix-2026-10-07.zip (5 archivos: movil/www/index.html,
+movil/www/css/onix.css, movil/www/js/iconos.js, movil/www/js/app.js,
+movil/www/js/vistas.js)
+
+Direccion A elegida: fondo #0b0f19, ambar oro #f5b544, cero emojis.
+- NUEVO css/onix.css: re-tonaliza todo (tarjetas, tablas, formularios,
+  botones, PIN, POS, badges, avisos) + componentes: cabecera con avatar,
+  banner de licencia, tarjetas "Mas" con tintes, tab bar flotante.
+  El ticket sigue blanco (papel) a proposito.
+- NUEVO js/iconos.js: set SVG inline (CFIconos.icono, 20 iconos).
+- app.js: nav con SVG, cabecera negocio/turno, banners con icono,
+  tecla Borrar con icono.
+- vistas.js: "Mas" en tarjetas, iconos en botones/titulos, sin emojis
+  ni colores claros hardcodeados.
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil_movil/ (rutas
+movil/www/...), luego `npx cap sync android` en movil/ y Run en
+Android Studio. Sin sync, el telefono sigue mostrando el www viejo.

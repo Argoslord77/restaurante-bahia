@@ -66,7 +66,8 @@
         ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Borrar', '0', 'Entrar'].forEach(t => {
             const b = document.createElement('button');
             b.type = 'button';
-            b.textContent = t === 'Borrar' ? '⌫' : t;
+            if (t === 'Borrar') b.innerHTML = CFIconos.icono('borrar');
+            else b.textContent = t;
             if (t === 'Borrar' || t === 'Entrar') b.className = 'funcion';
             b.addEventListener('click', async () => {
                 if (t === 'Borrar') pin = pin.slice(0, -1);
@@ -85,24 +86,41 @@
 
     // ── Cáscara con navegación inferior ──
     function entrar() {
-        pantalla('<div id="aviso-lic"></div><div id="vista"></div><nav id="barnav" class="barnav"></nav>');
+        pantalla('<header id="cabecera"></header><div id="aviso-lic"></div><div id="vista"></div><nav id="barnav" class="barnav"></nav>');
         ir('inicio', {});
+    }
+
+    // Cabecera Ónix: avatar del negocio + turno. Best-effort: si algo falla, se oculta.
+    async function pintarCabecera() {
+        const caja = $('cabecera');
+        if (!caja || !sesion) return;
+        try {
+            const a = await CFAjustes.todos(store);
+            const turno = await CFCaja.abierto(store);
+            const nombre = (a.negocio_nombre || 'Mi Negocio').trim();
+            const ini = nombre.split(/\s+/).slice(0, 2).map(w => (w[0] || '').toUpperCase()).join('') || 'CF';
+            const sub = turno
+                ? `<span class="livedot"></span>Turno #${turno.id} abierto · ${esc(sesion.nombre)}`
+                : `${esc(sesion.nombre)} · ${esc(sesion.rol)}`;
+            caja.innerHTML = `<div class="cabecera"><div class="cab-avatar">${esc(ini)}</div>
+                <div><div class="cab-nombre">${esc(nombre)}</div><div class="cab-sub">${sub}</div></div></div>`;
+        } catch (_) { caja.innerHTML = ''; }
     }
 
     function itemsNav() {
         const items = [
-            { v: 'inicio', t: '🏠<small>Inicio</small>', roles: ['administrador', 'cajero', 'vendedor'] },
-            { v: 'pos', t: '🧾<small>Vender</small>', roles: ['administrador', 'cajero', 'vendedor'] },
-            { v: 'ventas', t: '🧮<small>Ventas</small>', roles: ['administrador', 'cajero', 'vendedor'] },
-            { v: 'caja', t: '💰<small>Caja</small>', roles: ['administrador', 'cajero'] },
-            { v: 'mas', t: '⋯<small>Más</small>', roles: ['administrador', 'cajero', 'vendedor'] }
+            { v: 'inicio', icono: 'inicio', etiqueta: 'Inicio', roles: ['administrador', 'cajero', 'vendedor'] },
+            { v: 'pos', icono: 'vender', etiqueta: 'Vender', roles: ['administrador', 'cajero', 'vendedor'] },
+            { v: 'ventas', icono: 'ventas', etiqueta: 'Ventas', roles: ['administrador', 'cajero', 'vendedor'] },
+            { v: 'caja', icono: 'caja', etiqueta: 'Caja', roles: ['administrador', 'cajero'] },
+            { v: 'mas', icono: 'mas', etiqueta: 'Más', roles: ['administrador', 'cajero', 'vendedor'] }
         ];
         return items.filter(i => i.roles.includes(sesion.rol));
     }
 
     function pintarNav() {
         $('barnav').innerHTML = itemsNav().map(i =>
-            `<button data-nav="${i.v}" class="${ruta.vista === i.v ? 'activo' : ''}">${i.t}</button>`).join('');
+            `<button data-nav="${i.v}" class="${ruta.vista === i.v ? 'activo' : ''}">${CFIconos.icono(i.icono)}<small>${i.etiqueta}</small></button>`).join('');
         document.querySelectorAll('#barnav [data-nav]').forEach(b =>
             b.addEventListener('click', () => ir(b.getAttribute('data-nav'), {})));
     }
@@ -120,6 +138,7 @@
         ruta = { vista, params: params || {} };
         pintarNav();
         pintarAvisoLic(lic);
+        pintarCabecera();
         window.scrollTo(0, 0);
         const fn = CFVistas[vista] || CFVistas.inicio;
         fn(ctx(lic), ruta.params).catch(e => {
@@ -133,10 +152,11 @@
         const caja = $('aviso-lic');
         if (!caja) return;
         if (lic.estado === 'GRACIA' && (sesion.rol === 'administrador' || sesion.rol === 'cajero')) {
-            caja.innerHTML = `<div class="aviso aviso-error"><strong>Licencia en gracia</strong>${lic.gracia ? ` — quedan ${lic.gracia.dias_restantes} días` : ''}. <a href="#" id="al-ir">Regularizar →</a></div>`;
+            caja.innerHTML = `<div class="lic-banner gracia">${CFIconos.icono('alerta')}<span><strong>Licencia en gracia</strong>${lic.gracia ? ` — quedan ${lic.gracia.dias_restantes} días` : ''}.</span><a href="#" id="al-ir">Regularizar →</a></div>`;
             $('al-ir').addEventListener('click', ev => { ev.preventDefault(); ir('licencia', {}); });
         } else if (lic.estado === 'NO_CONFIGURADA' && sesion.rol === 'administrador') {
-            caja.innerHTML = '<div class="aviso aviso-ok" style="background:var(--aviso-fondo);color:#78350f;border-color:#fde68a;">Licencias sin activar: no se aplica restricción.</div>';
+            caja.innerHTML = `<div class="lic-banner alerta">${CFIconos.icono('licencia')}<span>Licencias sin activar: no se aplica restricción.</span><a href="#" id="al-ir">Activar →</a></div>`;
+            $('al-ir').addEventListener('click', ev => { ev.preventDefault(); ir('licencia', {}); });
         } else caja.innerHTML = '';
     }
 

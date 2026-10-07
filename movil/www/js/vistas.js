@@ -18,6 +18,7 @@
         return `${f.getFullYear()}-${p(f.getMonth() + 1)}-${p(f.getDate())}`;
     };
     const G = n => globalThis[n];
+    const I = n => G('CFIconos').icono(n);
 
     function vista(html) { $('vista').innerHTML = html; }
     function aviso(tipo, texto) {
@@ -35,7 +36,7 @@
         const bloqueada = !!(ctx.lic && ctx.lic.bloqueada);
         vista(`
         <div class="encabezado"><h1>Hola, ${esc(sesion.nombre)}</h1>
-            <button class="btn btn-claro btn-chico" id="i-salir">Salir</button></div>
+            <button class="btn btn-claro btn-chico" id="i-salir">${I('salir')}Salir</button></div>
         ${params && params.msg ? aviso(params.msg.tipo, esc(params.msg.texto)) : ''}
         <div class="rejilla c2">
             <div class="kpi"><div class="etiqueta">Caja</div>
@@ -44,7 +45,7 @@
                 <div class="valor">${lista.totales.n} · ${fmt(lista.totales.total)}</div></div>
         </div>
         ${bloqueada
-        ? `<div class="tarjeta"><h3>🔒 Licencia bloqueada</h3><p>No se puede vender ni abrir trabajo nuevo.</p>
+        ? `<div class="tarjeta"><h3 class="con-icono">${I('candado')}Licencia bloqueada</h3><p>No se puede vender ni abrir trabajo nuevo.</p>
             <div class="grupo-btn"><button class="btn btn-primario" data-ir="licencia">Ver licencia</button></div></div>`
         : `<div class="tarjeta"><h3>Acciones</h3><div class="grupo-btn">
             <button class="btn btn-primario" data-ir="pos">Vender</button>
@@ -117,7 +118,7 @@
             $('p-cam').textContent = fmt(Money.cambio(pagado, t.total));
             const caja = $('p-car');
             caja.innerHTML = '';
-            if (!carrito.length) { caja.innerHTML = '<p style="color:#64748b;">Carrito vacío.</p>'; return; }
+            if (!carrito.length) { caja.innerHTML = '<p class="suave">Carrito vacío.</p>'; return; }
             carrito.forEach((l, i) => {
                 const div = document.createElement('div');
                 div.className = 'carrito-linea';
@@ -145,7 +146,7 @@
             clearTimeout(timer);
             timer = setTimeout(async () => {
                 const res = await G('CFProductos').buscarParaVenta(store, e.target.value);
-                $('p-res').innerHTML = res.length ? '' : '<p style="color:#64748b;">Sin resultados.</p>';
+                $('p-res').innerHTML = res.length ? '' : '<p class="suave">Sin resultados.</p>';
                 res.forEach(p => {
                     const b = document.createElement('button');
                     b.type = 'button'; b.className = 'producto-hit';
@@ -225,7 +226,7 @@
             <div class="linea"></div><div class="centrado">${esc(t.pie)}</div></div>
         <div id="t-msg"></div>
         <div class="grupo-btn no-imprimir" style="margin-top:12px;">
-            <button class="btn btn-claro" id="t-print">🖨️ Imprimir</button>
+            <button class="btn btn-claro" id="t-print">${I('impresora')}Imprimir</button>
             <button class="btn btn-primario" data-ir="pos">Nueva venta</button></div>`);
         vistaBindIr(ctx);
         $('t-print').addEventListener('click', async () => {
@@ -323,7 +324,7 @@
                 <option value="cobrada" ${f.estado === 'cobrada' ? 'selected' : ''}>Cobradas</option>
                 <option value="cancelada" ${f.estado === 'cancelada' ? 'selected' : ''}>Canceladas</option></select></div>
             <button class="btn btn-claro btn-bloque" id="v-filtrar">Filtrar (${r.totales.n} · ${fmt(r.totales.total)})</button>
-            <button class="btn btn-claro btn-bloque" id="v-csv" style="margin-top:8px;">⬇ Exportar CSV</button></div>
+            <button class="btn btn-claro btn-bloque" id="v-csv" style="margin-top:8px;">${I('descargar')}Exportar CSV</button></div>
         <div class="tarjeta"><div class="contenedor-tabla"><table class="tabla">
             <thead><tr><th>#</th><th>Fecha</th><th class="num">Total</th><th></th></tr></thead><tbody>
             ${r.filas.length ? r.filas.map(v => `<tr><td>#${v.id}</td><td>${esc(fechaCorta(v.creado_en))}</td>
@@ -371,7 +372,7 @@
                 <small>${esc(p.sku || '—')} · ${esc(p.categoria_nombre || '—')}</small>
                 ${p.activo ? '' : ' <span class="insignia ins-gris">inactivo</span>'}</td>
                 <td class="num">${fmt(p.precio_venta)}</td>
-                <td class="num"><strong style="${p.stock <= p.stock_minimo ? 'color:#b91c1c' : ''}">${p.stock}</strong></td>
+                <td class="num"><strong class="${p.stock <= p.stock_minimo ? 'texto-mal' : ''}">${p.stock}</strong></td>
                 <td><button class="btn btn-claro btn-chico" data-kardex="${p.id}">Kardex</button>
                 ${esAdmin ? `<button class="btn btn-claro btn-chico" data-editar="${p.id}">Editar</button>` : ''}</td></tr>`).join('')
             : '<tr><td colspan="4">Sin productos.</td></tr>'}</tbody></table></div></div>`);
@@ -496,7 +497,7 @@
             <button class="btn ${tab === 'dia' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="dia">Por día</button>
             <button class="btn ${tab === 'mas' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="mas">Más vendidos</button>
             <button class="btn ${tab === 'inv' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="inv">Valorizado</button>
-            <button class="btn btn-claro btn-chico" id="r-csv">⬇ CSV</button></div>`;
+            <button class="btn btn-claro btn-chico" id="r-csv">${I('descargar')}CSV</button></div>`;
         if (tab === 'inv') {
             const r = await G('CFInventario').valorizado(store);
             vista(`<div class="encabezado"><h1>Reportes</h1></div><div class="tarjeta">${tabs}</div>
@@ -569,7 +570,7 @@
             <div class="campo"><label>Pie del ticket</label><input id="a-pie" value="${esc(a.ticket_pie || '')}" maxlength="255"></div>
             <button class="btn btn-primario btn-bloque" id="a-ok">Guardar</button></div>
         <div class="tarjeta"><h3>Datos de ejemplo</h3>
-            <p style="color:#64748b;">Crea 3 categorías y 8 productos con stock. Solo si el catálogo está vacío.</p>
+            <p class="suave">Crea 3 categorías y 8 productos con stock. Solo si el catálogo está vacío.</p>
             <button class="btn btn-claro btn-bloque" id="a-demo">Cargar datos de ejemplo</button></div>`);
         $('a-ok').addEventListener('click', async () => {
             const iva = Number($('a-iva').value);
@@ -645,7 +646,7 @@
             ${defecto ? `<p>Por defecto: <strong>${esc(defecto.nombre)}</strong> <small>(${esc(defecto.transporte)} · ${esc(defecto.direccion)})</small></p>
             <div class="grupo-btn"><button class="btn btn-claro" id="im-probar">Imprimir prueba</button>
             <button class="btn btn-peligro" id="im-quitar">Quitar</button></div>`
-            : '<p style="color:#64748b;">Sin impresora configurada. Elija una abajo.</p>'}</div>
+            : '<p class="suave">Sin impresora configurada. Elija una abajo.</p>'}</div>
         ${disp ? `<div class="tarjeta"><h3>Bluetooth (emparejadas)</h3><div id="im-bt"><p>Cargando…</p></div>
             <div class="ayuda">La impresora se empareja primero en Ajustes → Bluetooth de Android.</div></div>
         <div class="tarjeta"><h3>USB (OTG)</h3><div id="im-usb"><p>Cargando…</p></div></div>
@@ -675,7 +676,7 @@
         for (const [id, transporte] of [['im-bt', 'bluetooth'], ['im-usb', 'usb']]) {
             try {
                 const ds = await G('CFImpresora').listar(transporte);
-                $(id).innerHTML = ds.length ? '' : '<p style="color:#64748b;">Ninguna encontrada.</p>';
+                $(id).innerHTML = ds.length ? '' : '<p class="suave">Ninguna encontrada.</p>';
                 ds.forEach(d => {
                     const b = document.createElement('button');
                     b.className = 'btn btn-claro btn-bloque';
@@ -708,7 +709,7 @@
         : '<div class="tarjeta"><p style="margin:0;">Sin licencia instalada.</p></div>'}
         ${e.gracia ? `<div class="aviso aviso-error"><strong>Gracia: quedan ${e.gracia.dias_restantes} de ${e.gracia.dias_totales} días.</strong><br>Al agotarse solo se podrá cerrar el turno.</div>` : ''}
         ${e.problemas.map(x => `<div class="aviso aviso-error"><span class="mono">[${esc(x.codigo)}]</span> ${esc(x.mensaje)}</div>`).join('')}
-        ${e.avisos.map(x => `<div class="aviso aviso-ok" style="background:var(--aviso-fondo);color:#78350f;border-color:#fde68a;"><span class="mono">[${esc(x.codigo)}]</span> ${esc(x.mensaje)}</div>`).join('')}
+        ${e.avisos.map(x => `<div class="aviso-alerta"><span class="mono">[${esc(x.codigo)}]</span> ${esc(x.mensaje)}</div>`).join('')}
         <div class="tarjeta"><h3>Este equipo</h3><div class="ayuda">Código (dictable por teléfono)</div>
             <div class="codigo">${esc(e.instalacion.codigo)}</div>
             <div class="ayuda">Instalación</div><div class="mono">${esc(e.instalacion.uuid)}</div>
@@ -759,7 +760,7 @@
     async function bloqueo(ctx) {
         const e = await G('CFLicencia').evaluar(ctx.store, {});
         const turno = await G('CFCaja').abierto(ctx.store);
-        vista(`<div class="tarjeta"><div class="centrado"><h1>🔒 Licencia no válida</h1>
+        vista(`<div class="tarjeta"><div class="centrado"><h1 class="con-icono">${I('candado')}Licencia no válida</h1>
             <p>Puede cerrar el turno abierto, pero no vender ni abrir trabajo nuevo.</p></div>
             ${(e.problemas || []).map(x => `<div class="aviso aviso-error"><span class="mono">[${esc(x.codigo)}]</span> ${esc(x.mensaje)}</div>`).join('')}
             <div class="ayuda">Código de instalación</div><div class="codigo">${esc(e.instalacion.codigo)}</div>
@@ -773,18 +774,18 @@
         const { sesion } = ctx;
         const admin = pudeVer(sesion, ['administrador']);
         const cajaR = pudeVer(sesion, ['administrador', 'cajero']);
-        const item = (v, t) => `<button class="btn btn-claro menu-item" data-ir="${v}">${t}</button>`;
+        const item = (v, t) => `<button class="menu-tile tile-${v}" data-ir="${v}"><span class="tile-ic">${I(v)}</span><span class="tile-nombre">${t}</span></button>`;
         vista(`<div class="encabezado"><h1>Más</h1></div>
-        <div class="tarjeta"><div class="menu-rejilla">
-            ${item('productos', '📦 Productos')}
-            ${item('inventario', '📋 Inventario')}
-            ${cajaR ? item('reportes', '📊 Reportes') : ''}
-            ${admin ? item('ajustes', '⚙️ Ajustes') : ''}
-            ${admin ? item('usuarios', '👥 Usuarios') : ''}
-            ${cajaR ? item('impresora', '🖨️ Impresora') : ''}
-            ${cajaR ? item('licencia', '🔐 Licencia') : ''}
-            ${item('respaldo', '💾 Respaldo')}
-        </div></div>`);
+        <div class="menu-rejilla">
+            ${item('productos', 'Productos')}
+            ${item('inventario', 'Inventario')}
+            ${cajaR ? item('reportes', 'Reportes') : ''}
+            ${admin ? item('ajustes', 'Ajustes') : ''}
+            ${admin ? item('usuarios', 'Usuarios') : ''}
+            ${cajaR ? item('impresora', 'Impresora') : ''}
+            ${cajaR ? item('licencia', 'Licencia') : ''}
+            ${item('respaldo', 'Respaldo')}
+        </div>`);
         vistaBindIr(ctx);
     }
 
