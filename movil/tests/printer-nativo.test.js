@@ -103,6 +103,33 @@ describe('printer-nativo (puente JS)', () => {
             .rejects.toThrow('USB no válido');
         expect(ll.length).toBe(0);
     });
+
+    it('B.5 #6: trabajo gigante (1 MB) se rechaza client-side sin tocar el bridge', async () => {
+        const ll = [];
+        CFNativo._usarPlugin(nativoFalso(ll));
+        const e = await CFNativo.imprimir(
+            { transporte: 'bluetooth', direccion: 'AA:BB:CC:DD:EE:FF' }, new Uint8Array(1024 * 1024))
+            .catch(x => x);
+        expect(e.code).toBe('invalid_data');
+        expect(ll.length).toBe(0);
+    });
+
+    it('B.5 #6: trabajo vacío se rechaza igual', async () => {
+        const ll = [];
+        CFNativo._usarPlugin(nativoFalso(ll));
+        const e = await CFNativo.imprimir(
+            { transporte: 'bluetooth', direccion: 'AA:BB:CC:DD:EE:FF' }, new Uint8Array(0))
+            .catch(x => x);
+        expect(e.code).toBe('invalid_data');
+        expect(ll.length).toBe(0);
+    });
+
+    it('B.5 #3: permiso denegado guía a Ajustes', async () => {
+        CFNativo._usarPlugin({ ...nativoFalso([]), solicitarPermiso: async () => ({ granted: false }) });
+        const e = await CFNativo.pedirPermiso({ transporte: 'bluetooth', direccion: 'X' }).catch(x => x);
+        expect(e.code).toBe('permission_denied');
+        expect(e.message).toMatch('Ajustes');
+    });
 });
 
 describe('impresora: selección de vía', () => {
@@ -142,5 +169,22 @@ describe('impresora: selección de vía', () => {
         CFImpresora._usarPlugin(null);
         expect(CFImpresora.disponible()).toBe(false);
         await expect(CFImpresora.listar('bluetooth')).rejects.toThrow('no disponible');
+    });
+
+    it('B.5 #9: vía nativa expone métricas bytes/ms', async () => {
+        globalThis.Capacitor = { Plugins: { CajaFacilPrinter: nativoFalso([]) } };
+        const r = await CFImpresora.imprimir(
+            { transporte: 'bluetooth', direccion: 'AA:BB:CC:DD:EE:FF' }, new Uint8Array([1]));
+        expect(r).toEqual({ bytes: 128, ms: 120 });
+    });
+
+    it('B.5 #6 vía impresora: gigante no llega a ningún driver', async () => {
+        const ln = [], lv = [];
+        globalThis.Capacitor = { Plugins: { CajaFacilPrinter: nativoFalso(ln), ThermalPrinter: viejoFalso(lv) } };
+        await expect(CFImpresora.imprimir(
+            { transporte: 'bluetooth', direccion: 'AA:BB:CC:DD:EE:FF' }, new Uint8Array(300000)))
+            .rejects.toThrow('Datos de impresión no válidos');
+        expect(ln.length).toBe(0);
+        expect(lv.length).toBe(0);
     });
 });

@@ -983,7 +983,11 @@ document.querySelectorAll('#vista [data-tog]').forEach(b =>
         }
         if (defecto) {
             $('im-probar').addEventListener('click', async () => {
-                try { await G('CFImpresora').prueba(store); $('im-msg').innerHTML = aviso('ok', 'Prueba enviada.'); }
+                try {
+                    const r = await G('CFImpresora').prueba(store);
+                    const det = (r && r.ms !== undefined) ? ` (${r.bytes} bytes, ${r.ms} ms).` : '.';
+                    $('im-msg').innerHTML = aviso('ok', 'Prueba enviada' + det);
+                }
                 catch (e) { $('im-msg').innerHTML = aviso('error', e.message); }
             });
             $('im-quitar').addEventListener('click', async () => {

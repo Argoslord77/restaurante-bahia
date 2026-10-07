@@ -17,11 +17,12 @@
     let pluginForzado; // solo pruebas
     const TRANSPORTES = { bluetooth: 'bluetooth', usb: 'usb', tcp: 'wifi' };
     const TIMEOUT_MS = 15000;
+    const MAX_TRABAJO_BYTES = 262144; // espejo de CajaFacilPrinter.MAX_JOB_BYTES (B.5 #6)
 
     const ERRORES = {
         unavailable: 'El equipo no tiene ese medio (sin Bluetooth ni USB).',
         not_found: 'Impresora no encontrada: revise que esté encendida y emparejada.',
-        permission_denied: 'Permiso denegado: autorice el Bluetooth/USB para CajaFácil.',
+        permission_denied: 'Permiso denegado: autorice el Bluetooth/USB para CajaFácil (si no vuelve a preguntar, abra Ajustes → Aplicaciones → CajaFácil → Permisos).',
         connect_failed: 'No se pudo conectar con la impresora.',
         write_failed: 'La impresión se interrumpió a la mitad.',
         timeout: 'La impresora no respondió a tiempo.',
@@ -119,8 +120,15 @@
         const P = plugin();
         if (!P) throw new Error('Impresión no disponible en este equipo.');
         const obj = destinoAObjetivo(dest);
+        const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+        // B.5 #6: rechazo client-side, sin cruzar el bridge (1 MB en base64 ≈ 1.4 MB de ida).
+        if (buf.length === 0 || buf.length > MAX_TRABAJO_BYTES) {
+            const e = new Error(ERRORES.invalid_data);
+            e.code = 'invalid_data';
+            throw e;
+        }
         try {
-            const r = await P.print({ ...obj, data: bytesABase64(bytes), timeoutMs: timeoutMs || TIMEOUT_MS });
+            const r = await P.print({ ...obj, data: bytesABase64(buf), timeoutMs: timeoutMs || TIMEOUT_MS });
             return { bytes: r.bytes, ms: r.ms };
         } catch (e) { throw normalizarError(e); }
     }

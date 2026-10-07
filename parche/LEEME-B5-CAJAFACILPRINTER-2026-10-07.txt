@@ -1,0 +1,144 @@
+MATRIZ B.5 — CajaFacilPrinter (plugin nativo de impresión térmica)
+===============================================================
+Fecha: 2026-10-07 · Fuente: dojo-android/ELITE-ANDROID-90-DIAS.md §B.5
+Estado del código: M1–M5 + huecos JS cerrados (B.5 #3 mensaje, #6 client-side,
+#4 NOT_FOUND rápido, métricas bytes/ms en "Imprimir prueba").
+Pendiente AQUÍ (teléfono físico): correr las 9 pruebas y anotar PASA/FALLA.
+
+REQUISITOS
+----------
+1. PC con Android Studio reciente + SDK 36 + JDK 17.
+2. Teléfono Android físico con Bluetooth (y OTG si prueba USB).
+3. Impresora térmica 58/80 mm (BT emparejada, o USB OTG, o WiFi 9100).
+4. Cable USB + depuración USB activada (adb). Papel en la impresora.
+5. Proyecto actualizado con el zip de este lote + `npx cap sync android`.
+
+PASO 0 — Compilar, tests JVM e instalar (una sola vez)
+-------------------------------------------------------
+cd movil/android
+./gradlew :app:testDebugUnitTest        # JVM: Target.parse (6) + cola (3) → 9 en verde
+./gradlew :app:assembleDebug            # APK debug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+Abra CajaFácil en el teléfono, entre con PIN, vaya a Más → Impresora,
+elija su impresora, toque "Imprimir prueba". Debe salir el ticket y el
+mensaje "Prueba enviada (N bytes, M ms).". Anote esos ms: es su BASE.
+
+Ayuda adb (teléfono conectado, depuración USB):
+  adb devices                            # debe listar el teléfono
+  adb logcat -c && adb logcat | findstr /i "cajafacil capacitor"   # ver errores (Win: findstr)
+
+PRUEBA 1 — Muerte durante impresión
+------------------------------------
+Cómo:   1. En Más → Impresora toque "Imprimir prueba".
+        2. ANTES de que salga el ticket, pulse inicio (app a fondo).
+        3. En el PC:  adb shell am kill com.cajafacil.app
+        4. Vuelva a abrir CajaFácil desde el cajón de apps.
+Pasa si: [ ] la app reabre (pide PIN), sin crash ni cuelgue.
+        [ ] la SIGUIENTE "Imprimir prueba" funciona (sin socket colgado).
+Nota: el trabajo muerto SE PIERDE (muere con el proceso; no hay reintento
+automático a propósito: reintentar a ciegas = doble ticket). Si quiere
+persistencia de trabajos, es trabajo futuro (M6), no parte de B.5.
+
+PRUEBA 2 — Bluetooth apagado a la mitad
+----------------------------------------
+Cómo:   1. Configure la impresora BT como defecto.
+        2. Toque "Imprimir prueba" y APAGUE el Bluetooth del teléfono
+           (baje la cortina y toque el icono) antes de que termine.
+        3. Vuelva a encender el Bluetooth.
+Pasa si: [ ] sale error claro ("se interrumpió", "no conecta" o similar),
+             jamás app colgada ni cierre forzoso.
+        [ ] con BT ya encendido, la siguiente prueba imprime normal
+             (la cola se vació con error, no quedó trabada).
+
+PRUEBA 3 — Permiso negado 2 veces ("no preguntar")
+---------------------------------------------------
+Cómo:   1. Desinstale y reinstale la app (limpia permisos):
+           adb uninstall com.cajafacil.app
+           adb install -r app/build/outputs/apk/debug/app-debug.apk
+        2. Entre con PIN → Más → Impresora → toque su BT emparejada.
+        3. En el diálogo de permiso toque "No permitir" (2 veces si repregunta).
+Pasa si: [ ] jamás crash ni cierre.
+        [ ] el mensaje le dice que abra Ajustes → Aplicaciones → CajaFácil
+             → Permisos (guía a ajustes).
+        4. Abra esos Ajustes, active "Dispositivos cercanos", vuelva y toque
+           la impresora otra vez → debe configurarse sin error.
+
+PRUEBA 4 — Impresora equivocada (MAC inexistente)
+-------------------------------------------------
+Cómo:   1. Con la impresora BT configurada como defecto, vaya a Ajustes →
+           Bluetooth de ANDROID y DESENPAREJE (olvidar) la impresora.
+        2. Vuelva a CajaFácil → Más → Impresora → "Imprimir prueba".
+Pasa si: [ ] error "Impresora no encontrada" EN EL ACTO (< 2 s, sin espera
+             de 15/30 s), app respondiendo (sin ANR).
+        3. Vuelva a emparejar la impresora en Android y repita la prueba
+           → imprime normal.
+
+PRUEBA 5 — Doble ticket simultáneo (cola)
+------------------------------------------
+Cómo:   1. En Más → Impresora, toque "Imprimir prueba" DOS VECES SEGUIDAS
+           (lo más rápido que pueda, doble toque).
+Pasa si: [ ] salen DOS tickets COMPLETOS e ÍNTEGROS, en orden, sin basura
+             ni líneas mezcladas (la cola serializó; sin cola saldrían
+             entrelazados).
+
+PRUEBA 6 — Ticket gigante (1 MB, rechazo client-side)
+-----------------------------------------------------
+Cómo:   1. Con la app ABIERTA en el teléfono y el cable conectado, en el PC
+           abra Chrome y vaya a:  chrome://inspect
+        2. Bajo "Remote Target" busque CajaFácil y pulse "inspect".
+        3. En la consola pegue:
+             await CFPrinterNativo.imprimir(
+               { transporte: 'bluetooth', direccion: 'AA:BB:CC:DD:EE:FF' },
+               new Uint8Array(1024*1024))
+Pasa si: [ ] la promesa RECHAZA al instante con "Datos de impresión no
+             válidos." (invalid_data), sin intentar imprimir nada y sin
+             trabarse (el MB jamás cruzó al lado nativo).
+
+PRUEBA 7 — Rotación imprimiendo
+-------------------------------
+Cómo:   1. En Más → Impresora configure una WiFi FALSA que no responde:
+           IP = 10.255.255.1 , puerto 9100 ("Usar esta impresora").
+        2. Toque "Imprimir prueba" (tardará: está esperando el timeout).
+        3. Durante esa espera, ROTE el teléfono 3 veces (vertical→horizontal→…).
+Pasa si: [ ] al vencer el timeout sale el error ("no respondió a tiempo"),
+             sin crash en ninguna rotación (el trabajo vive en el plugin,
+             no en la pantalla).
+        4. Quite esa impresora falsa y deje la real como defecto.
+
+PRUEBA 8 — Release instalable imprime igual
+--------------------------------------------
+Nota: el release va SIN ofuscar a propósito (minifyEnabled=false: el bridge
+Capacitor instancia el plugin por reflexión y R8 agresivo lo rompería; las
+reglas de proguard-rules.pro quedan como red de seguridad).
+Cómo:   1. En Android Studio: Build → Generate Signed App Bundle / APK…
+           → APK → Create new… (keystore, una sola vez, guarde la clave)
+           → variante release → Finish. Instale ese APK release en el teléfono
+           (cópielo y ábralo, o: adb install -r app-release.apk).
+        2. Entre con PIN → Más → Impresora → configure y "Imprimir prueba".
+Pasa si: [ ] el ticket sale IDÉNTICO al de debug (mismo formato, español,
+             corte) y la app no pide nada raro.
+
+PRUEBA 9 — Teléfono de guerra (gama baja)
+------------------------------------------
+Cómo:   1. Instale el mismo APK debug en el teléfono más flojo que tenga.
+        2. Repita las pruebas 1–8 (o mínimo: configurar, prueba, doble toque,
+           BT off/on, rotación).
+        3. Compare los ms de "Prueba enviada (N bytes, M ms)" con su BASE.
+Pasa si: [ ] cero ANR (la app jamás muestra "no responde") y cero crashes.
+        [ ] los ms NO suben más de 20% sobre la BASE.
+             BASE: _____ ms → guerra: _____ ms → diferencia: _____%
+
+TABLA DE RESULTADOS (rellene y guarde)
+---------------------------------------
+#  Prueba                    PASA/FALLA   Notas (ms, mensaje visto)
+1  Muerte durante impresión  [ ]          ___________________________
+2  BT apagado a mitad        [ ]          ___________________________
+3  Permiso negado ×2         [ ]          ___________________________
+4  MAC inexistente           [ ]          ___________________________
+5  Doble ticket (cola)       [ ]          ___________________________
+6  Ticket gigante            [ ]          ___________________________
+7  Rotación                  [ ]          ___________________________
+8  Release                   [ ]          ___________________________
+9  Teléfono de guerra        [ ]          ___________________________
+
+M5 se declara en verde cuando las 9 casillas dicen PASA.

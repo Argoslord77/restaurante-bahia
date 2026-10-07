@@ -31,7 +31,7 @@ function pluginFalso(llamadas, errorPrint) {
     };
 }
 
-afterEach(() => CFImpresora._limpiarPlugin());
+afterEach(() => { CFImpresora._limpiarPlugin(); CFImpresora._limpiarNativo(); });
 
 describe('Impresora', () => {
     it('base64 exacto de bytes', () => {
@@ -73,6 +73,15 @@ describe('Impresora', () => {
         await CFImpresora.guardarDefecto(store,
             { transporte: 'bluetooth', direccion: 'AA:BB:CC:DD:EE:FF', nombre: 'X' });
         await expect(CFImpresora.prueba(store)).rejects.toThrow('no encontrada');
+    });
+
+    it('prueba expone métricas de la vía nativa (B.5 #9)', async () => {
+        CFImpresora._usarNativo({ disponible: () => true,
+            imprimir: async () => ({ bytes: 200, ms: 33 }) });
+        const store = await nuevoStore();
+        await CFImpresora.guardarDefecto(store,
+            { transporte: 'tcp', direccion: '10.0.0.9:9100', nombre: 'W' });
+        await expect(CFImpresora.prueba(store)).resolves.toEqual({ bytes: 200, ms: 33 });
     });
 
     it('sin plugin ni impresora avisa con claridad', async () => {

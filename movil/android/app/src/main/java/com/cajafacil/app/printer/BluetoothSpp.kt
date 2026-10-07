@@ -1,5 +1,7 @@
 package com.cajafacil.app.printer
 
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
@@ -19,6 +21,8 @@ import java.util.UUID
  * 3. Intento SEGURO primero, fallback INSEGURO (muchas térmicas viejas solo
  *    emparejan bien en inseguro), y recién entonces error.
  * 4. Cerrar el socket desbloquea un connect() huérfano (no responde a interrupts).
+ * 5. Solo emparejadas: MAC válida pero no emparejada = NOT_FOUND inmediato,
+ *    sin quemar 2x timeout en connects condenados (B.5 #4).
  */
 object BluetoothSpp {
     private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
@@ -47,13 +51,8 @@ object BluetoothSpp {
         } catch (_: SecurityException) {
             // En 12+ pide BLUETOOTH_SCAN; si falta, se sigue igual (casi nunca hay discovery activo).
         }
-        val device = try {
-            adapter.getRemoteDevice(address)
-        } catch (e: IllegalArgumentException) {
-            throw PrintError(PrintError.NOT_FOUND, e)
-        } catch (se: SecurityException) {
-            throw PrintError(PrintError.PERMISSION_DENIED, se)
-        }
+        // B.5 #4: MAC inexistente = NOT_FOUND en milisegundos, sin ANR ni timeouts quemados.
+        val device = bondedOrNull(adapter, address) ?: throw PrintError(PrintError.NOT_FOUND)
         var last: Throwable? = null
         for (insecure in listOf(false, true)) {
             val sock = try {
@@ -74,6 +73,16 @@ object BluetoothSpp {
             }
         }
         throw PrintError(PrintError.CONNECT_FAILED, last)
+    }
+
+    /** Busca la MAC entre las emparejadas; null = no existe para nosotros. */
+    private fun bondedOrNull(adapter: BluetoothAdapter, address: String): BluetoothDevice? {
+        try {
+            return adapter.bondedDevices.orEmpty()
+                .firstOrNull { it.address.equals(address, ignoreCase = true) }
+        } catch (se: SecurityException) {
+            throw PrintError(PrintError.PERMISSION_DENIED, se) // sin BLUETOOTH_CONNECT en 12+
+        }
     }
 
     private suspend fun connectWithTimeout(sock: BluetoothSocket, timeoutMs: Int) {

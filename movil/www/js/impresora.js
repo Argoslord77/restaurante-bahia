@@ -65,7 +65,7 @@
     const ERRORES = {
         unavailable: 'El equipo no tiene ese medio (sin Bluetooth ni USB).',
         not_found: 'Impresora no encontrada: revise que esté encendida y emparejada.',
-        permission_denied: 'Permiso denegado: autorice el Bluetooth/USB para CajaFácil.',
+        permission_denied: 'Permiso denegado: autorice el Bluetooth/USB para CajaFácil (si no vuelve a preguntar, abra Ajustes → Aplicaciones → CajaFácil → Permisos).',
         connect_failed: 'No se pudo conectar con la impresora.',
         write_failed: 'La impresión se interrumpió a la mitad.',
         invalid_transport: 'Destino de impresión no válido.',
@@ -118,11 +118,13 @@
         return true;
     }
 
+    // Vía nativa: expone {bytes, ms} del plugin (B.5 #9 se mide con esto).
+    // Vía vieja: el plugin no reporta métricas → true como antes.
     async function imprimir(dest, bytes) {
         const { via, api } = resolver();
         try {
-            if (via === 'nativo') await api.imprimir(dest, bytes);
-            else await api.print({ ...destinoAObjetivo(dest), data: bytesABase64(bytes) });
+            if (via === 'nativo') return await api.imprimir(dest, bytes);
+            await api.print({ ...destinoAObjetivo(dest), data: bytesABase64(bytes) });
         } catch (e) {
             throw new Error(traducirError(e));
         }
@@ -177,8 +179,7 @@
             E.texto('Prueba de impresion'), E.texto('Español: áéíóú ñ ¡! ¿?'),
             E.separador('-'), E.texto(E.fila2col('TOTAL', '$123.45')),
             E.linea(3), E.cortar());
-        await imprimir(dest, bytes);
-        return true;
+        return await imprimir(dest, bytes);
     }
 
     function disponible() {
