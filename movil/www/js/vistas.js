@@ -1,5 +1,5 @@
 // movil/www/js/vistas.js — Pantallas de la app (Fase 2).
-// Vistas.inicio/pos/caja/ventas/ticket/productos/productoForm/kardex/
+// Vistas.inicio/pos/caja/ventas/ticket/productos/productoForm/productoRapido/kardex/
 // inventario/reportes/ajustes/usuarios/mas/respaldo
 (function (root, factory) {
     const mod = factory();
@@ -19,6 +19,12 @@
     };
     const G = n => globalThis[n];
     const I = n => G('CFIconos').icono(n);
+    const U = () => G('CFUnidades');
+    const cantTxt = (c, u) => U().formatear(c, u || 'pza');
+    const insigniaTipo = t => t === 'receta' ? ' <span class="insignia ins-ambar">receta</span>'
+        : t === 'insumo' ? ' <span class="insignia ins-azul">insumo</span>' : '';
+    // Paso de los botones +/− del POS según unidad (100 g, 250 ml…).
+    const pasoUnidad = u => ({ pza: 1, g: 10, kg: 0.25, ml: 10, L: 0.25 }[u] || 1);
 
     function vista(html) { $('vista').innerHTML = html; }
     function aviso(tipo, texto) {
@@ -54,7 +60,7 @@
             <button class="btn btn-claro" data-ir="mas">Más</button>
         </div></div>`}
         ${bajo.length ? `<div class="tarjeta"><h3>Stock bajo (${bajo.length})</h3>
-            ${bajo.slice(0, 5).map(p => `<div>• ${esc(p.nombre)}: <strong>${p.stock}</strong></div>`).join('')}</div>` : ''}`);
+${bajo.slice(0, 5).map(p => `<div>• ${esc(p.nombre)}: <strong>${cantTxt(p.stock, p.unidad)}</strong></div>`).join('')}</div>` : ''}`);
         $('i-salir').addEventListener('click', () => ctx.salir());
         vistaBindIr(ctx);
     }
@@ -125,26 +131,36 @@
                 div.innerHTML = `<div><strong></strong><br><small></small></div>
                     <div class="num"><strong></strong></div>
                     <div class="controles"><button type="button" class="cant-btn" data-a="-">−</button>
-                    <input type="number" class="cant-input" min="1" inputmode="numeric" aria-label="Cantidad"><span class="cant-uni">pza</span><button type="button" class="cant-btn" data-a="+">+</button>
+<input type="number" class="cant-input" min="1" inputmode="numeric" aria-label="Cantidad"><span class="cant-uni"></span><button type="button" class="cant-btn" data-a="+">+</button>
                     <button type="button" class="cant-btn" data-a="x">×</button></div>`;
                 div.querySelector('strong').textContent = l.nombre;
-                div.querySelector('small').textContent = `${fmt(l.precio)} c/u · stock: ${l.stock}`;
+div.querySelector('small').textContent = `${fmt(l.precio)} c/u · hay ${cantTxt(l.stock, l.unidad)}${l.tipo === 'receta' ? ' · receta' : ''}`;
+                div.querySelector('.cant-uni').textContent = l.unidad || 'pza';
                 div.querySelector('.num strong').textContent = fmt(l.precio * l.cantidad);
-                const inp = div.querySelector('.cant-input');
+const inp = div.querySelector('.cant-input');
+                const entera = U().entera(l.unidad || 'pza');
                 inp.value = l.cantidad;
-                inp.max = Math.max(l.stock, 1);
+                inp.min = entera ? 1 : 0.001;
+                inp.step = entera ? 1 : 'any';
+                inp.inputMode = entera ? 'numeric' : 'decimal';
+                inp.max = l.stock;
                 inp.addEventListener('focus', () => inp.select());
                 inp.addEventListener('change', () => {
-                    let v = Math.floor(Number(inp.value));
-                    if (!Number.isFinite(v) || v < 1) v = 1;
-                    if (v > l.stock) v = Math.max(l.stock, 1);
+                    let v = Number(inp.value);
+                    v = entera ? Math.floor(v) : Math.round(v * 1000) / 1000;
+                    if (!Number.isFinite(v) || v <= 0) v = entera ? 1 : Math.min(pasoUnidad(l.unidad), l.stock);
+                    if (v > l.stock) v = l.stock;
                     l.cantidad = v;
                     pintar();
                 });
                 div.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
-                    const a = b.getAttribute('data-a');
-                    if (a === '+') { if (l.cantidad < l.stock) l.cantidad++; }
-                    else if (a === '-') { l.cantidad--; if (l.cantidad <= 0) carrito.splice(i, 1); }
+const a = b.getAttribute('data-a');
+                    const paso = entera ? 1 : pasoUnidad(l.unidad);
+                    if (a === '+') l.cantidad = Math.round(Math.min(l.stock, l.cantidad + paso) * 1000) / 1000;
+                    else if (a === '-') {
+                        l.cantidad = Math.round((l.cantidad - paso) * 1000) / 1000;
+                        if (l.cantidad <= 0) carrito.splice(i, 1);
+                    }
                     else carrito.splice(i, 1);
                     pintar();
                 }));
@@ -162,16 +178,18 @@
                     b.type = 'button'; b.className = 'producto-hit';
                     b.innerHTML = `<div><div class="nombre"></div><div class="detalle"></div></div><div class="precio"></div>`;
                     b.querySelector('.nombre').textContent = p.nombre;
-                    b.querySelector('.detalle').textContent = (p.sku ? p.sku + ' · ' : '') + 'stock: ' + p.stock;
+b.querySelector('.detalle').textContent = (p.sku ? p.sku + ' · ' : '') + 'hay ' + cantTxt(p.stock, p.unidad) + (p.tipo === 'receta' ? ' · receta' : '');
                     b.querySelector('.precio').textContent = fmt(p.precio_venta);
                     b.addEventListener('click', () => {
-                        const l = carrito.find(x => x.id === p.id);
+const l = carrito.find(x => x.id === p.id);
+                        const ent = U().entera(p.unidad || 'pza');
+                        const ini = ent ? 1 : Math.min(pasoUnidad(p.unidad), p.stock);
                         if (l) {
                             if (l.cantidad >= p.stock) { $('p-msg').innerHTML = aviso('error', 'Sin stock suficiente.'); return; }
-                            l.cantidad++;
+                            l.cantidad = Math.round(Math.min(p.stock, l.cantidad + ini) * 1000) / 1000;
                         } else {
-                            if (p.stock < 1) { $('p-msg').innerHTML = aviso('error', 'Sin stock.'); return; }
-                            carrito.push({ id: p.id, nombre: p.nombre, precio: Number(p.precio_venta), stock: p.stock, cantidad: 1 });
+                            if (!(p.stock > 0)) { $('p-msg').innerHTML = aviso('error', 'Sin stock.'); return; }
+                            carrito.push({ id: p.id, nombre: p.nombre, precio: Number(p.precio_venta), stock: p.stock, unidad: p.unidad || 'pza', tipo: p.tipo || 'simple', cantidad: ini });
                         }
                         $('p-msg').innerHTML = '';
                         pintar();
@@ -222,7 +240,7 @@
             <h2>${esc(t.negocio)}</h2>
             <div class="centrado">Ticket de venta #${v.id}<br>${esc(fechaCorta(v.creado_en))} · ${esc(v.usuario_nombre || '')}</div>
             <div class="linea"></div>
-            <table>${t.detalles.map(d => `<tr><td>${d.cantidad} × ${esc(d.nombre)}<br><small>${fmt(d.precio_unitario)} c/u</small></td>
+<table>${t.detalles.map(d => `<tr><td>${cantTxt(d.cantidad, d.unidad)} × ${esc(d.nombre)}<br><small>${fmt(d.precio_unitario)} c/u</small></td>
                 <td style="text-align:right;">${fmt(d.subtotal)}</td></tr>`).join('')}</table>
             <div class="linea"></div>
             <table><tr><td>Subtotal</td><td style="text-align:right;">${fmt(v.subtotal)}</td></tr>
@@ -236,17 +254,24 @@
             <div class="linea"></div><div class="centrado">${esc(t.pie)}</div></div>
         <div id="t-msg"></div>
         <div class="grupo-btn no-imprimir" style="margin-top:12px;">
-            <button class="btn btn-claro" id="t-print">${I('impresora')}Imprimir</button>
+<button class="btn btn-claro" id="t-print">${I('impresora')}Imprimir</button>
+            <button class="btn btn-claro" id="t-share">${I('compartir')}Compartir</button>
             <button class="btn btn-primario" data-ir="pos">Nueva venta</button></div>`);
         vistaBindIr(ctx);
         $('t-print').addEventListener('click', async () => {
             try {
                 await G('CFImpresora').imprimirTicket(ctx.store, v.id);
                 $('t-msg').innerHTML = aviso('ok', 'Ticket enviado a la impresora.');
-            } catch (e) {
+} catch (e) {
                 if (e.code === 'SIN_IMPRESORA') { ctx.ir('impresora'); return; }
                 $('t-msg').innerHTML = aviso('error', e.message);
             }
+        });
+        $('t-share').addEventListener('click', async () => {
+            try {
+                const txt = await G('CFReportes').textoTicket(ctx.store, v.id);
+                await G('CFBackup').compartirTexto(txt, `ticket-${v.id}.txt`, 'Ticket de venta');
+            } catch (e) { $('t-msg').innerHTML = aviso('error', e.message); }
         });
     }
 
@@ -275,8 +300,9 @@
                 try {
                     await G('CFCaja').abrir(store, { usuario_id: sesion.id, fondo: $('c-fondo').value });
                     ir('pos');
-                } catch (e) { $('c-msg').innerHTML = aviso('error', e.message); }
+} catch (e) { $('c-msg').innerHTML = aviso('error', e.message); }
             });
+            bindCortes(ctx);
             return;
         }
         const r = await G('CFCaja').resumen(store, turno.id);
@@ -288,13 +314,23 @@
         <div class="tarjeta"><h3>Cobrado por método</h3>
             <div class="totales"><div><span>Efectivo</span><span>${fmt(r.porMetodo.efectivo)}</span></div>
             <div><span>Tarjeta</span><span>${fmt(r.porMetodo.tarjeta)}</span></div>
-            <div><span>Transferencia</span><span>${fmt(r.porMetodo.transferencia)}</span></div>
+<div><span>Transferencia</span><span>${fmt(r.porMetodo.transferencia)}</span></div>
+            <div><span>Entradas</span><span>+${fmt(r.entradas)}</span></div>
+            <div><span>Retiros</span><span>−${fmt(r.retiros)}</span></div>
             <div class="gran"><span>Esperado en caja</span><span>${fmt(r.esperado_efectivo)}</span></div></div></div>
+<div class="tarjeta"><h3>Retiros / entradas</h3><div id="cm-msg"></div>
+            <div class="fila-form c2">
+                <div class="campo"><label>Tipo</label><select id="cm-tipo"><option value="retiro">Retiro</option><option value="entrada">Entrada</option></select></div>
+                <div class="campo"><label>Monto ($)</label><input id="cm-monto" type="number" min="0" step="0.01" inputmode="decimal"></div></div>
+            <div class="campo"><label>Motivo</label><input id="cm-mot" maxlength="150" placeholder="Ej. taxi, cambio…"></div>
+            <button class="btn btn-claro btn-bloque" id="cm-ok">Registrar movimiento</button>
+            ${r.movimientos.length ? `<div class="contenedor-tabla" style="margin-top:10px;"><table class="tabla"><tbody>${r.movimientos.map(m => `<tr><td>${esc(fechaCorta(m.creado_en))}<br><small>${esc(m.usuario_nombre || '')}</small></td><td><span class="insignia ${m.tipo === 'retiro' ? 'ins-roja' : 'ins-verde'}">${m.tipo}</span><br><small>${esc(m.motivo || '')}</small></td><td class="num"><strong>${m.tipo === 'retiro' ? '−' : '+'}${fmt(m.monto)}</strong></td></tr>`).join('')}</tbody></table></div>` : ''}</div>
         <div class="tarjeta"><h3>Cerrar turno</h3><div id="c-msg"></div>
             <div class="campo"><label>Efectivo contado ($)</label>
                 <input id="c-conteo" type="number" min="0" step="0.01" inputmode="decimal"></div>
             <div class="campo"><label>Nota (opcional)</label><input id="c-nota" maxlength="200"></div>
-            <button class="btn btn-peligro btn-bloque" id="c-cerrar">Cerrar turno</button></div>
+<button class="btn btn-peligro btn-bloque" id="c-cerrar">Cerrar turno</button>
+            <button class="btn btn-claro btn-bloque" id="c-share" style="margin-top:8px;">${I('compartir')}Compartir corte</button></div>
         ${historialHtml(historial)}`);
         $('c-cerrar').addEventListener('click', async () => {
             if (!$('c-conteo').value) { $('c-msg').innerHTML = aviso('error', 'Capture el efectivo contado.'); return; }
@@ -303,10 +339,36 @@
                 const c = await G('CFCaja').cerrar(store, {
                     turno_id: turno.id, usuario_id: sesion.id,
                     conteo_efectivo: $('c-conteo').value, nota: $('c-nota').value });
-                ir('inicio', { msg: { tipo: c.diferencia === 0 ? 'ok' : 'error',
+ir('inicio', { msg: { tipo: c.diferencia === 0 ? 'ok' : 'error',
                     texto: `Turno cerrado. Diferencia: ${fmt(c.diferencia)}` } });
             } catch (e) { $('c-msg').innerHTML = aviso('error', e.message); }
         });
+        $('cm-ok').addEventListener('click', async () => {
+            try {
+                await G('CFCaja').registrarMovimiento(store, {
+                    turno_id: turno.id, usuario_id: sesion.id, tipo: $('cm-tipo').value,
+                    monto: $('cm-monto').value, motivo: $('cm-mot').value || null });
+                ir('caja');
+            } catch (e) { $('cm-msg').innerHTML = aviso('error', e.message); }
+        });
+        $('c-share').addEventListener('click', async () => {
+            try {
+                const txt = await G('CFReportes').textoCierre(store, turno.id);
+                await G('CFBackup').compartirTexto(txt, `corte-turno-${turno.id}.txt`, 'Corte de caja');
+            } catch (e) { $('c-msg').innerHTML = aviso('error', e.message); }
+        });
+        bindCortes(ctx);
+    }
+
+function bindCortes(ctx) {
+        document.querySelectorAll('#vista [data-corte]').forEach(b =>
+            b.addEventListener('click', async () => {
+                try {
+                    const id = Number(b.getAttribute('data-corte'));
+                    const txt = await G('CFReportes').textoCierre(ctx.store, id);
+                    await G('CFBackup').compartirTexto(txt, `corte-turno-${id}.txt`, 'Corte de caja');
+                } catch (e) { alert(e.message); }
+            }));
     }
 
     function historialHtml(historial) {
@@ -315,7 +377,7 @@
             ${historial.length ? historial.map(t => `<tr><td>#${t.id}</td>
                 <td>${esc(fechaCorta(t.abierto_en))}</td><td class="num">${t.ventas_n}</td>
                 <td class="num">${fmt(t.ventas_total)}</td>
-                <td><span class="insignia ${t.estado === 'abierto' ? 'ins-verde' : 'ins-gris'}">${t.estado}</span></td></tr>`).join('')
+<td><span class="insignia ${t.estado === 'abierto' ? 'ins-verde' : 'ins-gris'}">${t.estado}</span><br><button class="btn btn-claro btn-chico" data-corte="${t.id}">Enviar</button></td></tr>`).join('')
             : '<tr><td colspan="5">Sin turnos aún.</td></tr>'}</tbody></table></div></div>`;
     }
 
@@ -370,19 +432,25 @@
     async function productos(ctx, params) {
         const { store, sesion, ir } = ctx;
         const esAdmin = pudeVer(sesion, ['administrador']);
-        const q = (params && params.q) || '';
-        const filas = await G('CFProductos').listar(store, { q, activos: false });
+const q = (params && params.q) || '';
+        const t = (params && params.t) || '';
+        const filas = await G('CFProductos').listar(store, { q, activos: false, tipo: t || null });
         vista(`<div class="encabezado"><h1>Productos</h1>
-            ${esAdmin ? '<button class="btn btn-primario btn-chico" id="pr-nuevo">+ Nuevo</button>' : ''}</div>
-        <div class="tarjeta"><div class="campo"><label>Buscar</label>
-            <input id="pr-q" value="${esc(q)}" placeholder="Nombre o SKU…"></div></div>
+            ${esAdmin ? '<span><button class="btn btn-claro btn-chico" id="pr-rapido">+ Rápida</button> <button class="btn btn-primario btn-chico" id="pr-nuevo">+ Nuevo</button></span>' : ''}</div>
+        <div class="tarjeta"><div class="fila-form c2"><div class="campo"><label>Buscar</label>
+            <input id="pr-q" value="${esc(q)}" placeholder="Nombre o SKU…"></div>
+            <div class="campo"><label>Tipo</label><select id="pr-t">
+                <option value="" ${!t ? 'selected' : ''}>Todos</option>
+                <option value="simple" ${t === 'simple' ? 'selected' : ''}>Vendibles</option>
+                <option value="insumo" ${t === 'insumo' ? 'selected' : ''}>Insumos</option>
+                <option value="receta" ${t === 'receta' ? 'selected' : ''}>Recetas</option></select></div></div></div>
         <div class="tarjeta"><div class="contenedor-tabla"><table class="tabla">
             <thead><tr><th>Producto</th><th class="num">Precio</th><th class="num">Stock</th><th></th></tr></thead><tbody>
-            ${filas.length ? filas.map(p => `<tr><td><strong>${esc(p.nombre)}</strong><br>
+${filas.length ? filas.map(p => `<tr><td><strong>${esc(p.nombre)}</strong>${insigniaTipo(p.tipo)}<br>
                 <small>${esc(p.sku || '—')} · ${esc(p.categoria_nombre || '—')}</small>
                 ${p.activo ? '' : ' <span class="insignia ins-gris">inactivo</span>'}</td>
                 <td class="num">${fmt(p.precio_venta)}</td>
-                <td class="num"><strong class="${p.stock <= p.stock_minimo ? 'texto-mal' : ''}">${p.stock}</strong></td>
+                <td class="num"><strong class="${p.stock <= p.stock_minimo ? 'texto-mal' : ''}">${cantTxt(p.stock, p.unidad)}</strong></td>
                 <td><button class="btn btn-claro btn-chico" data-kardex="${p.id}">Kardex</button>
                 ${esAdmin ? `<button class="btn btn-claro btn-chico" data-editar="${p.id}">Editar</button>` : ''}</td></tr>`).join('')
             : '<tr><td colspan="4">Sin productos.</td></tr>'}</tbody></table></div></div>`);
@@ -393,11 +461,41 @@
                 if (e.target.value !== q) ir('productos', { q: e.target.value });
             }, 400);
         });
+        $('pr-t').addEventListener('change', e => ir('productos', { q, t: e.target.value }));
         if (esAdmin) $('pr-nuevo').addEventListener('click', () => ir('productoForm', {}));
+        if (esAdmin) $('pr-rapido').addEventListener('click', () => ir('productoRapido', {}));
         document.querySelectorAll('#vista [data-kardex]').forEach(b =>
             b.addEventListener('click', () => ir('kardex', { id: Number(b.getAttribute('data-kardex')) })));
         document.querySelectorAll('#vista [data-editar]').forEach(b =>
             b.addEventListener('click', () => ir('productoForm', { id: Number(b.getAttribute('data-editar')) })));
+    }
+
+    // ── Alta rápida ──
+    async function productoRapido(ctx) {
+        const { store, sesion, ir } = ctx;
+        if (!pudeVer(sesion, ['administrador'])) { ir('productos'); return; }
+        const cats = await G('CFProductos').listarCategorias(store);
+        vista(`<div class="encabezado"><h1>Alta rápida</h1></div>
+        <div class="tarjeta"><div id="ar-msg"></div>
+            <div class="campo"><label>Nombre *</label><input id="ar-nombre" maxlength="150" placeholder="Ej. Refresco 600ml"></div>
+            <div class="fila-form c2">
+                <div class="campo"><label>Precio venta *</label><input id="ar-venta" type="number" min="0" step="0.01" inputmode="decimal"></div>
+                <div class="campo"><label>Stock inicial</label><input id="ar-ini" type="number" min="0" step="any" value="0" inputmode="decimal"></div></div>
+            <div class="campo"><label>Categoría</label><select id="ar-cat">
+                <option value="">—</option>${cats.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></div>
+            <div class="grupo-btn"><button class="btn btn-primario" id="ar-ok">Guardar</button>
+                <button class="btn btn-claro" data-ir="productos">Volver</button></div>
+            <p class="suave">Crea un producto vendible en piezas. Para insumos, recetas o empaques use «Nuevo».</p></div>`);
+        vistaBindIr(ctx);
+        $('ar-ok').addEventListener('click', async () => {
+            try {
+                await G('CFProductos').crear(store, {
+                    nombre: $('ar-nombre').value, precio_venta: $('ar-venta').value,
+                    stock_inicial: $('ar-ini').value, categoria_id: $('ar-cat').value || null
+                }, sesion.id);
+                ir('productos', {});
+            } catch (e) { $('ar-msg').innerHTML = aviso('error', e.message); }
+        });
     }
 
     async function productoForm(ctx, params) {
@@ -408,7 +506,15 @@
         const cats = await G('CFProductos').listarCategorias(store);
         vista(`<div class="encabezado"><h1>${p ? 'Editar producto' : 'Nuevo producto'}</h1></div>
         <div class="tarjeta"><div id="pf-msg"></div>
-            <div class="campo"><label>Nombre *</label><input id="pf-nombre" value="${esc(p ? p.nombre : '')}" maxlength="150"></div>
+<div class="campo"><label>Nombre *</label><input id="pf-nombre" value="${esc(p ? p.nombre : '')}" maxlength="150"></div>
+            <div class="fila-form c2">
+                <div class="campo"><label>Tipo</label><select id="pf-tipo">
+                    ${[['simple', 'Vendible'], ['insumo', 'Insumo (ingrediente)'], ['receta', 'Receta (platillo)']].map(([v, et]) => `<option value="${v}" ${(p ? (p.tipo || 'simple') : 'simple') === v ? 'selected' : ''}>${et}</option>`).join('')}</select></div>
+                <div class="campo"><label>Unidad base</label><select id="pf-uni">
+                    ${U().listar().map(u => `<option value="${u.codigo}" ${(p ? (p.unidad || 'pza') : 'pza') === u.codigo ? 'selected' : ''}>${u.nombre} (${u.codigo})</option>`).join('')}</select></div></div>
+            <div class="fila-form c2">
+                <div class="campo"><label>Empaque compra (opcional)</label><input id="pf-eq" value="${esc(p && p.compra_unidad ? p.compra_unidad : '')}" maxlength="24" placeholder="reja, caja…"></div>
+                <div class="campo"><label>Factor (base × empaque)</label><input id="pf-factor" type="number" min="0" step="any" value="${p && p.compra_factor ? p.compra_factor : ''}" inputmode="decimal" placeholder="Ej. 24"></div></div>
             <div class="fila-form c2">
                 <div class="campo"><label>SKU</label><input id="pf-sku" value="${esc(p && p.sku ? p.sku : '')}" maxlength="60"></div>
                 <div class="campo"><label>Categoría</label><select id="pf-cat">
@@ -417,22 +523,90 @@
                 <div class="campo"><label>Costo</label><input id="pf-costo" type="number" min="0" step="0.01" value="${p ? p.precio_costo : 0}" inputmode="decimal"></div>
                 <div class="campo"><label>Venta</label><input id="pf-venta" type="number" min="0" step="0.01" value="${p ? p.precio_venta : 0}" inputmode="decimal"></div></div>
             <div class="fila-form c2">
-                ${!p ? '<div class="campo"><label>Stock inicial</label><input id="pf-ini" type="number" min="0" value="0" inputmode="numeric"></div>' : ''}
-                <div class="campo"><label>Stock mínimo</label><input id="pf-min" type="number" min="0" value="${p ? p.stock_minimo : 0}" inputmode="numeric"></div></div>
+${!p ? '<div class="campo"><label>Stock inicial</label><input id="pf-ini" type="number" min="0" step="any" value="0" inputmode="decimal"></div>' : ''}
+                <div class="campo"><label>Stock mínimo</label><input id="pf-min" type="number" min="0" step="any" value="${p ? p.stock_minimo : 0}" inputmode="decimal"></div></div>
             <div class="grupo-btn"><button class="btn btn-primario" id="pf-ok">Guardar</button>
                 <button class="btn btn-claro" data-ir="productos">Volver</button>
                 ${p ? `<button class="btn ${p.activo ? 'btn-peligro' : 'btn-claro'}" id="pf-toggle">${p.activo ? 'Desactivar' : 'Activar'}</button>` : ''}</div></div>
+<div class="tarjeta" id="pf-recwrap" style="display:none;"><h3>Receta (ingredientes)</h3>
+            <div id="pf-rec"></div>
+            <button class="btn btn-claro" id="pf-add">+ Ingrediente</button>
+            <p class="suave" id="pf-costo" style="margin-top:8px;"></p></div>
         <div class="tarjeta"><h3>Nueva categoría</h3>
             <div class="campo"><input id="pf-catnom" placeholder="Nombre…" maxlength="100"></div>
             <button class="btn btn-claro" id="pf-catok">Crear categoría</button></div>`);
-        vistaBindIr(ctx);
+vistaBindIr(ctx);
+        const todos = await G('CFProductos').listar(store, { activos: false });
+        const candidatos = todos.filter(x => x.activo && (!id || x.id !== id) && x.tipo !== 'receta');
+        function opcionesUnidad(sel, insumoId) {
+            const ins = todos.find(x => Number(x.id) === Number(insumoId)) || { unidad: 'pza' };
+            return U().aceptadas(ins).map(u => `<option value="${u}" ${u === sel ? 'selected' : ''}>${u}</option>`).join('');
+        }
+        function agregarLinea(l) {
+            let opts = candidatos.slice();
+            if (l && !opts.some(x => Number(x.id) === Number(l.insumo_id))) {
+                const viejo = todos.find(x => Number(x.id) === Number(l.insumo_id));
+                if (viejo) opts.unshift(viejo);
+            }
+            if (!opts.length) { $('pf-msg').innerHTML = aviso('error', 'Primero cree insumos o productos.'); return; }
+            const div = document.createElement('div');
+            div.className = 'linea-receta';
+            div.innerHTML = `<select class="lr-ins">${opts.map(x => `<option value="${x.id}"></option>`).join('')}</select>
+                <input class="lr-cant" type="number" min="0" step="any" inputmode="decimal" placeholder="Cant.">
+                <select class="lr-uni"></select>
+                <button type="button" class="btn btn-claro btn-chico lr-x">×</button>`;
+            opts.forEach((x, i) => { div.querySelectorAll('.lr-ins option')[i].textContent = `${x.nombre} (${x.unidad})`; });
+            const sIns = div.querySelector('.lr-ins');
+            const sUni = div.querySelector('.lr-uni');
+            if (l) sIns.value = l.insumo_id;
+            if (l) div.querySelector('.lr-cant').value = l.cantidad;
+            sUni.innerHTML = opcionesUnidad((l && l.unidad) || null, sIns.value);
+            sIns.addEventListener('change', () => { sUni.innerHTML = opcionesUnidad(null, sIns.value); costeo(); });
+            sUni.addEventListener('change', costeo);
+            div.querySelector('.lr-cant').addEventListener('input', costeo);
+            div.querySelector('.lr-x').addEventListener('click', () => { div.remove(); costeo(); });
+            $('pf-rec').appendChild(div);
+            costeo();
+        }
+        function leerReceta() {
+            return Array.from(document.querySelectorAll('#pf-rec .linea-receta')).map(div => ({
+                insumo_id: Number(div.querySelector('.lr-ins').value),
+                cantidad: Number(div.querySelector('.lr-cant').value),
+                unidad: div.querySelector('.lr-uni').value
+            }));
+        }
+        function costeo() {
+            if ($('pf-tipo').value !== 'receta') return;
+            const lineas = leerReceta();
+            let total = 0, ok = true;
+            for (const l of lineas) {
+                const ins = todos.find(x => Number(x.id) === Number(l.insumo_id));
+                if (!ins || !(l.cantidad > 0)) { ok = false; continue; }
+                try { total += U().resolver(ins, l.cantidad, l.unidad) * (Number(ins.precio_costo) || 0); }
+                catch (_) { ok = false; }
+            }
+            $('pf-costo').textContent = lineas.length
+                ? `Costo teórico: $${total.toFixed(2)}${ok ? '' : ' (revise líneas)'}` : 'Sin ingredientes.';
+        }
+        function mostrarReceta() {
+            const es = $('pf-tipo').value === 'receta';
+            $('pf-recwrap').style.display = es ? '' : 'none';
+            if (es) costeo();
+        }
+        $('pf-tipo').addEventListener('change', mostrarReceta);
+        $('pf-add').addEventListener('click', () => agregarLinea(null));
+        (p && p.receta ? p.receta : []).forEach(l => agregarLinea(l));
+        mostrarReceta();
         $('pf-ok').addEventListener('click', async () => {
             const datos = { nombre: $('pf-nombre').value, sku: $('pf-sku').value,
                 categoria_id: $('pf-cat').value || null, precio_costo: $('pf-costo').value,
-                precio_venta: $('pf-venta').value, stock_minimo: $('pf-min').value };
+                precio_venta: $('pf-venta').value, stock_minimo: $('pf-min').value,
+                tipo: $('pf-tipo').value, unidad: $('pf-uni').value,
+                compra_unidad: $('pf-eq').value || null, compra_factor: $('pf-factor').value || null };
+            if (datos.tipo === 'receta') datos.receta = leerReceta();
             try {
                 if (p) { await G('CFProductos').actualizar(store, p.id, datos); }
-                else { datos.stock_inicial = $('pf-ini').value; await G('CFProductos').crear(store, datos, sesion.id); }
+                else { datos.stock_inicial = $('pf-ini') ? $('pf-ini').value : 0; await G('CFProductos').crear(store, datos, sesion.id); }
                 ir('productos', {});
             } catch (e) { $('pf-msg').innerHTML = aviso('error', e.message); }
         });
@@ -453,12 +627,12 @@
         if (!p) { ctx.ir('productos'); return; }
         const movs = await G('CFInventario').kardex(ctx.store, params.id);
         vista(`<div class="encabezado"><h1>Kardex</h1><button class="btn btn-claro btn-chico" data-ir="productos">Volver</button></div>
-        <div class="kpi"><div class="etiqueta">${esc(p.nombre)} · stock actual</div><div class="valor">${p.stock}</div></div>
+<div class="kpi"><div class="etiqueta">${esc(p.nombre)} · stock actual</div><div class="valor">${cantTxt(p.stock, p.unidad)}</div></div>
         <div class="tarjeta"><div class="contenedor-tabla"><table class="tabla">
             <thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Cant.</th><th class="num">Quedó</th></tr></thead><tbody>
             ${movs.length ? movs.map(m => `<tr><td>${esc(fechaCorta(m.creado_en))}</td>
                 <td><span class="insignia ${m.cantidad >= 0 ? 'ins-verde' : 'ins-roja'}">${esc(m.tipo)}</span><br><small>${esc(m.motivo || '')}</small></td>
-                <td class="num">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td><td class="num">${m.stock_despues}</td></tr>`).join('')
+<td class="num">${m.cantidad < 0 ? '−' : '+'}${m.unidad_origen ? cantTxt(Math.abs(m.cantidad_origen), m.unidad_origen) + `<br><small>= ${cantTxt(Math.abs(m.cantidad), m.unidad || p.unidad)}</small>` : cantTxt(Math.abs(m.cantidad), m.unidad || p.unidad)}</td><td class="num">${cantTxt(m.stock_despues, m.unidad || p.unidad)}</td></tr>`).join('')
             : '<tr><td colspan="4">Sin movimientos.</td></tr>'}</tbody></table></div></div>`);
         vistaBindIr(ctx);
     }
@@ -471,58 +645,91 @@
         const bajo = await G('CFInventario').stockBajo(store);
         const prods = await G('CFProductos').listar(store, { activos: false });
         vista(`<div class="encabezado"><h1>Inventario</h1></div>
-        ${esAdmin ? `<div class="tarjeta"><h3>Entrada / salida</h3><div id="in-msg"></div>
+${esAdmin ? `<div class="tarjeta"><h3>Entrada / salida / merma</h3><div id="in-msg"></div>
             <div class="campo"><label>Producto</label><select id="in-prod">
-                ${prods.map(p => `<option value="${p.id}">${esc(p.nombre)} (${p.stock})</option>`).join('')}</select></div>
+                ${prods.map(p => `<option value="${p.id}">${esc(p.nombre)} (${cantTxt(p.stock, p.unidad)})</option>`).join('')}</select></div>
             <div class="fila-form c2">
-                <div class="campo"><label>Tipo</label><select id="in-tipo"><option value="entrada">Entrada</option><option value="salida">Salida</option></select></div>
-                <div class="campo"><label>Cantidad</label><input id="in-cant" type="number" min="1" value="1" inputmode="numeric"></div></div>
+                <div class="campo"><label>Tipo</label><select id="in-tipo"><option value="entrada">Entrada</option><option value="salida">Salida</option><option value="merma">Merma</option></select></div>
+                <div class="campo"><label>Unidad</label><select id="in-uni"></select></div></div>
+            <div class="campo"><label>Cantidad</label><input id="in-cant" type="number" min="0" step="any" value="1" inputmode="decimal"></div>
             <div class="campo"><label>Motivo</label><input id="in-mot" maxlength="150" placeholder="Ej. compra a proveedor"></div>
             <button class="btn btn-primario btn-bloque" id="in-ok">Guardar movimiento</button></div>` : ''}
         <div class="tarjeta"><h3>Stock bajo (${bajo.length})</h3>
-            ${bajo.length ? bajo.map(p => `<div>• ${esc(p.nombre)}: <strong>${p.stock}</strong> (mín. ${p.stock_minimo})</div>`).join('') : '<p>Todo en niveles normales.</p>'}</div>
+${bajo.length ? bajo.map(p => `<div>• ${esc(p.nombre)}: <strong>${cantTxt(p.stock, p.unidad)}</strong> (mín. ${cantTxt(p.stock_minimo, p.unidad)})</div>`).join('') : '<p>Todo en niveles normales.</p>'}</div>
         <div class="tarjeta"><h3>Recientes</h3><div class="contenedor-tabla"><table class="tabla">
             <thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th class="num">Cant.</th></tr></thead><tbody>
             ${movs.length ? movs.map(m => `<tr><td>${esc(fechaCorta(m.creado_en))}</td><td>${esc(m.producto_nombre)}</td>
                 <td><span class="insignia ${m.cantidad >= 0 ? 'ins-verde' : 'ins-roja'}">${esc(m.tipo)}</span></td>
-                <td class="num">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td></tr>`).join('')
+<td class="num">${m.cantidad < 0 ? '−' : '+'}${m.unidad_origen ? cantTxt(Math.abs(m.cantidad_origen), m.unidad_origen) : cantTxt(Math.abs(m.cantidad), m.unidad)}</td></tr>`).join('')
             : '<tr><td colspan="4">Sin movimientos.</td></tr>'}</tbody></table></div></div>`);
-        if (esAdmin) $('in-ok').addEventListener('click', async () => {
-            try {
-                await G('CFInventario').registrar(store, {
-                    producto_id: $('in-prod').value, tipo: $('in-tipo').value,
-                    cantidad: $('in-cant').value, motivo: $('in-mot').value || null, usuario_id: sesion.id });
-                ctx.ir('inventario');
-            } catch (e) { $('in-msg').innerHTML = aviso('error', e.message); }
-        });
+if (esAdmin) {
+            const mapaProds = {};
+            prods.forEach(px => { mapaProds[px.id] = px; });
+            const refrescarUni = () => {
+                const px = mapaProds[$('in-prod').value] || { unidad: 'pza' };
+                $('in-uni').innerHTML = U().aceptadas(px).map(u => `<option value="${u}">${u}</option>`).join('');
+            };
+            $('in-prod').addEventListener('change', refrescarUni);
+            refrescarUni();
+            $('in-ok').addEventListener('click', async () => {
+                try {
+                    await G('CFInventario').registrar(store, {
+                        producto_id: $('in-prod').value, tipo: $('in-tipo').value,
+                        cantidad: $('in-cant').value, unidad: $('in-uni').value || null,
+                        motivo: $('in-mot').value || null, usuario_id: sesion.id });
+                    ctx.ir('inventario');
+                } catch (e) { $('in-msg').innerHTML = aviso('error', e.message); }
+            });
+        }
     }
 
     // ── Reportes ──
     async function reportes(ctx, params) {
         const { store, sesion, ir } = ctx;
         if (!pudeVer(sesion, ['administrador', 'cajero'])) { ir('inicio'); return; }
-        const tab = (params && params.tab) || 'dia';
+        const tab = (params && params.tab) || 'panel';
         const f = (params && params.f) || { desde: hoyDIA(), hasta: hoyDIA() };
         const tabs = `<div class="grupo-btn" style="margin-bottom:12px;">
+            <button class="btn ${tab === 'panel' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="panel">Panel</button>
             <button class="btn ${tab === 'dia' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="dia">Por día</button>
             <button class="btn ${tab === 'mas' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="mas">Más vendidos</button>
             <button class="btn ${tab === 'inv' ? 'btn-primario' : 'btn-claro'} btn-chico" data-tab="inv">Valorizado</button>
             <button class="btn btn-claro btn-chico" id="r-csv">${I('descargar')}CSV</button></div>`;
-        if (tab === 'inv') {
+        if (tab === 'panel') {
+            const f7 = unaSemana(f.hasta);
+            const res = await G('CFReportes').resumenPeriodo(store, f);
+            const dias = await G('CFReportes').ventasPorDia(store, f7);
+            const top = await G('CFReportes').masVendidos(store, { ...f, limite: 5 });
+            const horas = await G('CFReportes').ventasPorHora(store, f);
+            vista(`<div class="encabezado"><h1>Reportes</h1></div><div class="tarjeta">${tabs}${filtrosFechas(f)}</div>
+            <div class="rejilla c2">
+                <div class="kpi"><div class="etiqueta">Ventas</div><div class="valor">${res.n}</div></div>
+                <div class="kpi"><div class="etiqueta">Total</div><div class="valor verde">${fmt(res.total)}</div></div>
+                <div class="kpi"><div class="etiqueta">Ticket prom.</div><div class="valor">${fmt(res.ticket_promedio)}</div></div>
+                <div class="kpi"><div class="etiqueta">Utilidad</div><div class="valor">${fmt(res.utilidad)}</div></div></div>
+            <div class="tarjeta"><h3>Últimos 7 días</h3><div class="grafico">${svgBarras(dias.dias.map(x => ({ et: x.dia.slice(5), v: x.total })))}</div></div>
+            <div class="tarjeta"><h3>Top productos</h3><div class="grafico">${svgBarrasH(top.filas.map(x => ({ et: x.nombre, v: x.cantidad })))}</div></div>
+            <div class="tarjeta"><h3>Ventas por hora</h3><div class="grafico">${svgBarras(horas.horas.map(x => ({ et: String(x.hora).padStart(2, '0'), v: x.total })))}</div></div>
+            <div class="tarjeta"><h3>Por método</h3>
+                <div class="totales"><div><span>Efectivo</span><span>${fmt(res.porMetodo.efectivo)}</span></div>
+                <div><span>Tarjeta</span><span>${fmt(res.porMetodo.tarjeta)}</span></div>
+                <div><span>Transferencia</span><span>${fmt(res.porMetodo.transferencia)}</span></div></div>
+                <div class="grupo-btn" style="margin-top:10px;"><button class="btn btn-claro btn-bloque" id="r-share">${I('compartir')}Compartir resumen</button></div></div>`);
+        } else if (tab === 'inv') {
             const r = await G('CFInventario').valorizado(store);
             vista(`<div class="encabezado"><h1>Reportes</h1></div><div class="tarjeta">${tabs}</div>
             <div class="rejilla c2"><div class="kpi"><div class="etiqueta">A costo</div><div class="valor">${fmt(r.totales.costo)}</div></div>
             <div class="kpi"><div class="etiqueta">A venta</div><div class="valor verde">${fmt(r.totales.venta)}</div></div></div>
             <div class="tarjeta"><div class="contenedor-tabla"><table class="tabla">
                 <thead><tr><th>Producto</th><th class="num">Stock</th><th class="num">V. costo</th><th class="num">V. venta</th></tr></thead><tbody>
-                ${r.filas.map(p => `<tr><td>${esc(p.nombre)}</td><td class="num">${p.stock}</td>
+                ${r.filas.map(p => `<tr><td>${esc(p.nombre)}</td><td class="num">${cantTxt(p.stock, p.unidad)}</td>
                     <td class="num">${fmt(p.valor_costo)}</td><td class="num">${fmt(p.valor_venta)}</td></tr>`).join('')}
                 </tbody></table></div></div>`);
         } else if (tab === 'mas') {
             const r = await G('CFReportes').masVendidos(store, { ...f, limite: 15 });
             vista(`<div class="encabezado"><h1>Reportes</h1></div><div class="tarjeta">${tabs}${filtrosFechas(f)}</div>
             <div class="tarjeta"><div class="contenedor-tabla"><table class="tabla">
-                <thead><tr><th>#</th><th>Producto</th><th class="num">Pzas</th><th class="num">Monto</th></tr></thead><tbody>
+                <thead><tr><th>#</th><th>Producto</th><th class="num">Cant.</th><th class="num">Monto</th></tr></thead><tbody>
                 ${r.filas.length ? r.filas.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.nombre)}</td>
                     <td class="num">${x.cantidad}</td><td class="num">${fmt(x.importe)}</td></tr>`).join('')
                 : '<tr><td colspan="4">Sin ventas en el rango.</td></tr>'}</tbody></table></div></div>`);
@@ -556,9 +763,59 @@
                     texto = G('CFCsv').ventasPorDia(await G('CFReportes').ventasPorDia(store, f));
                     nombre = G('CFCsv').nombre('ventas-dia');
                 }
-                await G('CFBackup').compartir(texto, nombre);
+await G('CFBackup').compartir(texto, nombre);
             } catch (e) { alert(e.message); }
         });
+        const bs = $('r-share');
+        if (bs) bs.addEventListener('click', async () => {
+            try {
+                const txt = await G('CFReportes').textoDia(store, f);
+                await G('CFBackup').compartirTexto(txt, 'resumen-cajafacil.txt', 'Resumen de ventas');
+            } catch (e) { alert(e.message); }
+        });
+    }
+
+function unaSemana(hasta) {
+        const h = /^\d{4}-\d{2}-\d{2}$/.test(hasta || '') ? hasta : hoyDIA();
+        const d = new Date(h + 'T12:00:00');
+        d.setDate(d.getDate() - 6);
+        const p = n => String(n).padStart(2, '0');
+        return { desde: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, hasta: h };
+    }
+
+    // Barras verticales SVG (ancho 100%, sin librerías).
+    function svgBarras(datos) {
+        const vals = (datos || []).map(x => ({ et: String(x.et), v: Number(x.v) || 0 }));
+        const max = Math.max(0, ...vals.map(x => x.v));
+        const W = 340, H = 168, base = H - 22, BH = H - 52;
+        if (!vals.length) return '<p class="suave">Sin datos.</p>';
+        const n = vals.length, paso = (W - 20) / n, bw = Math.min(34, paso * 0.62);
+        let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+        vals.forEach((x, i) => {
+            const h = max > 0 ? Math.max(x.v > 0 ? 2 : 0, Math.round(x.v / max * BH)) : 0;
+            const cx = 10 + paso * i + (paso - bw) / 2;
+            s += `<rect class="${x.v === max && max > 0 ? 'barra-max' : 'barra'}" x="${cx.toFixed(1)}" y="${base - h}" width="${bw.toFixed(1)}" height="${h}"><title>${esc(x.et)}: ${x.v}</title></rect>`;
+            if (n <= 12 || i % 3 === 0) s += `<text x="${(10 + paso * i + paso / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(x.et)}</text>`;
+        });
+        s += `<line class="eje" x1="10" y1="${base}" x2="${W - 10}" y2="${base}"/></svg>`;
+        return s;
+    }
+
+    // Barras horizontales SVG para rankings.
+    function svgBarrasH(datos) {
+        const vals = (datos || []).map(x => ({ et: String(x.et), v: Number(x.v) || 0 })).slice(0, 8);
+        const max = Math.max(0, ...vals.map(x => x.v));
+        if (!vals.length) return '<p class="suave">Sin datos.</p>';
+        const W = 340, RH = 30, H = vals.length * RH + 8, x0 = 128, BW = W - x0 - 52;
+        let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+        vals.forEach((x, i) => {
+            const y = 4 + i * RH, w = max > 0 ? Math.max(x.v > 0 ? 2 : 0, Math.round(x.v / max * BW)) : 0;
+            const nom = x.et.length > 20 ? x.et.slice(0, 19) + '…' : x.et;
+            s += `<text x="0" y="${y + 15}">${esc(nom)}</text>`;
+            s += `<rect class="${x.v === max && max > 0 ? 'barra-max' : 'barra'}" x="${x0}" y="${y + 4}" width="${w}" height="14"><title>${esc(x.et)}: ${x.v}</title></rect>`;
+            s += `<text x="${x0 + w + 5}" y="${y + 15}">${x.v}</text>`;
+        });
+        return s + '</svg>';
     }
 
     function filtrosFechas(f) {
@@ -832,6 +1089,6 @@
         });
     }
 
-    return { inicio, pos, ticket, caja, ventas, productos, productoForm, kardex,
+    return { inicio, pos, ticket, caja, ventas, productos, productoForm, productoRapido, kardex,
              inventario, reportes, ajustes, usuarios, mas, respaldo, impresora, licencia, bloqueo };
 });

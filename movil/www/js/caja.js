@@ -1,4 +1,6 @@
-// movil/www/js/caja.js — Turnos de caja (mismas reglas que la web).
+// movil/www/js/caja.js — Turnos de caja (Fase 2).
+// Suma movimientos de efectivo del turno (retiros/entradas con motivo), que el
+// arqueo toma en cuenta: esperado = fondo + efectivo − cambio + entradas − retiros.
 (function (root, factory) {
     const mod = factory();
     if (typeof module !== 'undefined' && module.exports) module.exports = mod;
@@ -7,6 +9,8 @@
     'use strict';
 
     const COL = 'turnos';
+    const COL_MOV = 'caja_movimientos';
+    const TIPOS_MOV = ['retiro', 'entrada'];
     const redondear = n => Math.round((Number(n) || 0) * 100) / 100;
 
     function diaLocal(d) {
@@ -42,7 +46,37 @@
         return f.id;
     }
 
-    // Esperado en efectivo = fondo + efectivo recibido − cambio entregado.
+    async function movimientos(store, turno_id) {
+        const usuarios = await mapaUsuarios(store);
+        return (await store.todos(COL_MOV))
+            .filter(m => Number(m.turno_id) === Number(turno_id))
+            .sort((a, b) => a.id - b.id)
+            .map(m => ({ ...m, usuario_nombre: usuarios[m.usuario_id] || null }));
+    }
+
+    async function registrarMovimiento(store, { turno_id, usuario_id, tipo, monto, motivo = null }) {
+        const tid = parseInt(turno_id, 10);
+        if (!Number.isInteger(tid) || tid <= 0) throw new Error('Turno no válido.');
+        if (!TIPOS_MOV.includes(tipo)) throw new Error('Tipo de movimiento no válido.');
+        const cantidad = redondear(monto);
+        if (!(cantidad > 0)) throw new Error('El monto debe ser mayor a 0.');
+        const turno = await store.obtener(COL, tid);
+        if (!turno) throw new Error('El turno no existe.');
+        if (turno.estado !== 'abierto') throw new Error('El turno ya está cerrado.');
+        if (tipo === 'retiro') {
+            const r = await resumen(store, tid);
+            if (cantidad - r.esperado_efectivo > 1e-9) {
+                throw new Error(`El retiro supera el efectivo en caja ($${r.esperado_efectivo.toFixed(2)}).`);
+            }
+        }
+        const f = await store.insertar(COL_MOV, {
+            turno_id: tid, tipo, monto: cantidad, motivo: motivo || null,
+            usuario_id: usuario_id || null, creado_en: new Date().toISOString(), dia: diaLocal()
+        });
+        return f.id;
+    }
+
+    // Esperado en efectivo = fondo + efectivo recibido − cambio − retiros + entradas.
     async function resumen(store, turno_id) {
         const turno = await store.obtener(COL, Number(turno_id));
         if (!turno) throw new Error('El turno no existe.');
@@ -57,6 +91,9 @@
                 porMetodo[p.metodo] = (porMetodo[p.metodo] || 0) + (Number(p.monto) || 0);
             }
         }
+        const movs = await movimientos(store, turno_id);
+        const entradas = redondear(movs.filter(m => m.tipo === 'entrada').reduce((a, m) => a + (Number(m.monto) || 0), 0));
+        const retiros = redondear(movs.filter(m => m.tipo === 'retiro').reduce((a, m) => a + (Number(m.monto) || 0), 0));
         const fondo = Number(turno.fondo_inicial) || 0;
         return {
             turno: { ...turno,
@@ -70,7 +107,8 @@
                 transferencia: redondear(porMetodo.transferencia)
             },
             fondo: redondear(fondo),
-            esperado_efectivo: redondear(fondo + porMetodo.efectivo - cambioTotal)
+            entradas, retiros, movimientos: movs,
+            esperado_efectivo: redondear(fondo + porMetodo.efectivo - cambioTotal + entradas - retiros)
         };
     }
 
@@ -94,16 +132,21 @@
         const n = Math.min(100, Math.max(1, parseInt(limite, 10) || 30));
         const usuarios = await mapaUsuarios(store);
         const ventas = await store.todos('ventas');
+        const movs = await store.todos(COL_MOV);
         const turnos = await store.todos(COL);
         return turnos.sort((a, b) => b.id - a.id).slice(0, n).map(t => {
             const vs = ventas.filter(v => Number(v.turno_id) === t.id && v.estado === 'cobrada');
+            const ms = movs.filter(m => Number(m.turno_id) === t.id);
             return { ...t,
                 abierto_por_nombre: usuarios[t.abierto_por] || null,
                 cerrado_por_nombre: usuarios[t.cerrado_por] || null,
                 ventas_n: vs.length,
-                ventas_total: redondear(vs.reduce((a, v) => a + (Number(v.total) || 0), 0)) };
+                ventas_total: redondear(vs.reduce((a, v) => a + (Number(v.total) || 0), 0)),
+                entradas: redondear(ms.filter(m => m.tipo === 'entrada').reduce((a, m) => a + (Number(m.monto) || 0), 0)),
+                retiros: redondear(ms.filter(m => m.tipo === 'retiro').reduce((a, m) => a + (Number(m.monto) || 0), 0)) };
         });
     }
 
-    return { abierto, abrir, resumen, cerrar, historial, diaLocal, COL };
+    return { abierto, abrir, resumen, cerrar, historial, movimientos, registrarMovimiento,
+             diaLocal, TIPOS_MOV, COL, COL_MOV };
 });

@@ -11,7 +11,7 @@
     const APP = 'cajafacil-movil';
     const V = 1;
     const COLECCIONES = ['usuarios', 'categorias', 'productos', 'turnos', 'ventas',
-                         'movimientos', 'ajustes', 'licencia_eventos'];
+                         'movimientos', 'caja_movimientos', 'ajustes', 'licencia_eventos'];
     const AUTOS = 7; // respaldos automáticos rotativos
 
     const selloPaquete = (store, datos) =>
@@ -78,5 +78,28 @@
         return 'descarga';
     }
 
-    return { generar, validar, restaurar, compartir, nombreArchivo, COLECCIONES, AUTOS, APP };
+    // Comparte texto plano (WhatsApp, correo…): Share en el teléfono,
+    // descarga .txt en el navegador.
+    async function compartirTexto(texto, nombre, titulo) {
+        try {
+            const C = (typeof window !== 'undefined' && window.Capacitor) ||
+                      (typeof globalThis !== 'undefined' && globalThis.Capacitor);
+            const Share = C && C.Plugins && C.Plugins.Share;
+            if (Share) {
+                await Share.share({ title: titulo || 'CajaFácil', text: texto,
+                                    dialogTitle: titulo || 'Compartir' });
+                return 'share';
+            }
+        } catch (_) { /* cae al plan B */ }
+        const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = nombre || 'cajafacil.txt';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        return 'descarga';
+    }
+
+    return { generar, validar, restaurar, compartir, compartirTexto, nombreArchivo, COLECCIONES, AUTOS, APP };
 });

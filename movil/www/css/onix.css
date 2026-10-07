@@ -123,3 +123,16 @@ h1.con-icono svg, h3.con-icono svg { width: 20px; height: 20px; vertical-align: 
 .pie img { height: 26px; width: auto; }
 .pie strong { color: var(--tinta); font-weight: 700; }
 @media print { .pie { display: none !important; } }
+
+/* ── Fase 2: panel, recetas, UoM ── */
+.grafico svg { width: 100%; height: auto; display: block; }
+.grafico text { fill: var(--tinta); font-size: 11px; font-family: inherit; }
+.grafico .barra { fill: var(--marca); }
+.grafico .barra-max { fill: var(--ok); }
+.grafico .eje { stroke: rgba(255, 255, 255, .18); stroke-width: 1; }
+.linea-receta { display: grid; grid-template-columns: 1fr 76px 80px 40px; gap: 6px; margin-bottom: 8px; }
+.linea-receta input, .linea-receta select {
+    background: #0f1524; border: 1px solid rgba(255, 255, 255, .12);
+    color: var(--tinta); border-radius: 8px; padding: 9px 6px; font: inherit; min-width: 0;
+}
+.linea-receta .lr-x { padding-left: 0; padding-right: 0; }
