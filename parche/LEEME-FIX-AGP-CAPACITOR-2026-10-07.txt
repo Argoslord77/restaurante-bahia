@@ -1,0 +1,17 @@
+FIX: override AGP de Capacitor (8.13.0 retirado) (2026-10-07)
+=============================================================
+ZIP: fix-agp-capacitor-2026-10-07.zip (1 archivo: movil/android/build.gradle)
+REEMPLAZA a fix-agp-version (este build.gradle trae todo: espejos + pin + override).
+
+CAUSA: @capacitor/android@8.5.2 trae SU PROPIO buildscript pineando
+AGP 8.13.0 (retirado de Google Maven = 404). El módulo :capacitor-android
+lo pide con sus propios repositorios (sin espejos) y el sync muere ahí
+("Required by: project :capacitor-android").
+
+FIX: bloque allprojects en el build.gradle raíz que (1) inyecta los
+espejos Aliyun en TODOS los buildscripts y (2) fuerza por constraint
+AGP 8.13.2 (última estable 8.x verificada) en todos los classpaths.
+No se toca node_modules (se regenera con npm ci).
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil_movil/ (ruta
+movil/android/build.gradle), en Android Studio: Sync Now.

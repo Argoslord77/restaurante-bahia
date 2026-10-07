@@ -37,3 +37,23 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+// OVERRIDE Capacitor 8.5.2: su capacitor/build.gradle pinea AGP 8.13.0,
+// versión RETIRADA de Google Maven (404). Como vive en node_modules (se
+// regenera con npm ci), no se parcha ahí: se fuerza 8.13.2 verificado y
+// se inyectan espejos en TODOS los buildscripts (root + subproyectos).
+allprojects {
+    buildscript {
+        repositories {
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/central' }
+        }
+        dependencies {
+            constraints {
+                classpath('com.android.tools.build:gradle:8.13.2') {
+                    because '8.13.0 retirado de Google Maven; alinear todo a 8.13.2 verificado'
+                }
+            }
+        }
+    }
+}
