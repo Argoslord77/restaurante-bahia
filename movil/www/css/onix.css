@@ -120,6 +120,6 @@ h1.con-icono svg, h3.con-icono svg { width: 20px; height: 20px; vertical-align: 
 .cant-uni { color: var(--suave); font-size: .8rem; }
 #vista { padding-bottom: 12px; }
 .pie { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 20px 0 110px; color: var(--suave); font-size: .75rem; }
-.pie img { height: 22px; width: auto; border-radius: 6px; }
+.pie img { height: 26px; width: auto; }
 .pie strong { color: var(--tinta); font-weight: 700; }
 @media print { .pie { display: none !important; } }

@@ -12,7 +12,7 @@
 
     function pantalla(html) { $('pantalla').innerHTML = html; }
     function pieHtml() {
-        return '<footer class="pie"><img src="img/logo-argos-core.png" alt="Argos-core"><span><strong>Argos-core</strong> © 2026</span></footer>';
+        return '<footer class="pie"><img src="img/argos-triangulo.png" alt="Argos-Core"><span><strong>Argos-Core</strong> © 2026</span></footer>';
     }
     function aviso(tipo, texto) {
         return `<div class="aviso ${tipo === 'ok' ? 'aviso-ok' : 'aviso-error'}">${esc(texto)}</div>`;
