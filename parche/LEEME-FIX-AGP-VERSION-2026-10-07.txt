@@ -1,0 +1,15 @@
+FIX: pin AGP a 8.13.2 (versión estable verificada) (2026-10-07)
+===============================================================
+ZIP: fix-agp-version-2026-10-07.zip (1 archivo: movil/android/build.gradle)
+
+CAUSA: el proyecto pedía AGP 8.13.0, que da 404 en Google Maven
+(verificado con curl). Se pineó 8.13.2 = última estable 8.x
+confirmada en metadata. Se mantiene google-services 4.4.4 (existe)
+y los espejos Aliyun del fix anterior (este build.gradle ya los trae:
+cubre ambos fixes en un solo archivo).
+
+COMPATIBILIDAD: Gradle 8.14 + JDK 21 + compileSdk 36 + Kotlin 2.0.20.
+Si el sync pidiera KGP mayor, avise con el mensaje exacto.
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil_movil/ (ruta
+movil/android/build.gradle), en Android Studio: Sync Now.
