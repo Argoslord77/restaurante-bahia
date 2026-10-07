@@ -1,7 +1,7 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    ext.kotlinVersion = '2.0.20' // copia local: el buildscript se evalua antes que variables.gradle
+    ext.kotlinVersion = '2.2.10' // alineado con @devlas/capacitor-thermal-printer 0.8.0 (su stdlib es 2.2.10; KGP 2.0.x revienta leyendo esa metadata)
     
     repositories {
         // Espejos primero: dl.google.com / Maven Central pueden estar bloqueados por region.
@@ -31,6 +31,14 @@ allprojects {
         maven { url 'https://maven.aliyun.com/repository/central' }
         google()
         mavenCentral()
+        // JitPack al final, SOLO com.github.*: usb-serial-for-android:3.11.0
+        // (plugin @devlas 0.8.0, balanza serial) no existe en Central, solo en
+        // JitPack. Va en el root porque Gradle resuelve los transitivos con los
+        // repos del consumidor (:app), no con los del módulo que los declara.
+        maven {
+            url 'https://jitpack.io'
+            content { includeGroupByRegex 'com\\.github\\..*' }
+        }
     }
 }
 

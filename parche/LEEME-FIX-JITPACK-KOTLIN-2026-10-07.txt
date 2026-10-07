@@ -1,0 +1,20 @@
+FIX: JitPack + Kotlin 2.2.10 (2026-10-07)
+=========================================
+ZIP: fix-jitpack-kotlin-2026-10-07.zip (2 archivos: movil/android/build.gradle, movil/android/variables.gradle)
+
+CAUSA 1: com.github.mik3y:usb-serial-for-android:3.11.0 (plugin @devlas
+0.8.0, balanza serial) solo existe en JitPack, no en Maven Central.
+El plugin lo declara en SUS repos, pero Gradle resuelve los transitivos
+con los repos del consumidor (:app) -> 404 en checkDebugAarMetadata.
+
+CAUSA 2: el root compilaba Kotlin con 2.0.20 pero el classpath trae
+kotlin-stdlib 2.2.10 (via el plugin) -> el compilador K2 revienta
+("binary version 2.2.0, expected 2.0.0" + crash en BalanzaSerialPlugin).
+
+FIX: (1) repo JitPack en allprojects del root, con filtro de contenido
+solo para com.github.* (no ralentiza lo demas); (2) kotlinVersion
+2.0.20 -> 2.2.10 en build.gradle (buildscript) y variables.gradle
+(alinea :app/CajaFacilPrinter con el plugin @devlas 0.8.0).
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil_movil/ (rutas
+movil/android/...), en Android Studio: Sync Now -> Run.
