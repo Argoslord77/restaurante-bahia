@@ -4,6 +4,10 @@ buildscript {
     ext.kotlinVersion = '2.0.20' // copia local: el buildscript se evalua antes que variables.gradle
     
     repositories {
+        // Espejos primero: dl.google.com / Maven Central pueden estar bloqueados por region.
+        // Son espejos completos; si tienes acceso directo, sube google()/mavenCentral() arriba.
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
         google()
         mavenCentral()
     }
@@ -21,6 +25,10 @@ apply from: "variables.gradle"
 
 allprojects {
     repositories {
+        // Espejos primero: dl.google.com / Maven Central pueden estar bloqueados por region.
+        // Son espejos completos; si tienes acceso directo, sube google()/mavenCentral() arriba.
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
         google()
         mavenCentral()
     }

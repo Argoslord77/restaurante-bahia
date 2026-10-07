@@ -1,0 +1,17 @@
+FIX: Gradle "Could not find AGP / google-services" (2026-10-07)
+===============================================================
+ZIP: fix-gradle-mirrors-2026-10-07.zip (1 archivo: movil/android/build.gradle)
+
+CAUSA: tu red no alcanza dl.google.com ni Maven Central (bloqueo
+regional). Ambos artefactos fallan a la vez = red, no versiones.
+
+FIX: espejos Aliyun (google + central) PRIMERO en buildscript y
+allprojects; google()/mavenCentral() quedan como respaldo. Si tienes
+acceso directo funcionan igual (son espejos completos).
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil_movil/ (ruta
+movil/android/build.gradle), en Android Studio: Sync Now.
+
+DIAGNOSTICO (si aun falla, pegame la salida):
+  curl -sI -m 10 https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.13.0/gradle-8.13.0.pom | head -3
+  curl -sI -m 10 https://maven.aliyun.com/repository/google/com/android/tools/build/gradle/8.13.0/gradle-8.13.0.pom | head -3
