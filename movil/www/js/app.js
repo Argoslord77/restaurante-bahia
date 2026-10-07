@@ -11,6 +11,9 @@
     let ruta = { vista: 'inicio', params: {} };
 
     function pantalla(html) { $('pantalla').innerHTML = html; }
+    function pieHtml() {
+        return '<footer class="pie"><img src="img/logo-argos-core.png" alt="Argos-core"><span><strong>Argos-core</strong> © 2026</span></footer>';
+    }
     function aviso(tipo, texto) {
         return `<div class="aviso ${tipo === 'ok' ? 'aviso-ok' : 'aviso-error'}">${esc(texto)}</div>`;
     }
@@ -30,7 +33,7 @@
                 ${aviso('error', e.code === 'SELLO_INVALIDO'
                     ? 'Los datos fueron modificados fuera de la app y no se puede continuar. Restaure un respaldo.'
                     : 'No se pudo abrir el almacén de datos: ' + e.message)}
-                <button class="btn btn-claro btn-bloque" onclick="location.reload()">Reintentar</button></div>`);
+                <button class="btn btn-claro btn-bloque" onclick="location.reload()">Reintentar</button></div>` + pieHtml());
         }
     }
 
@@ -43,7 +46,7 @@
             <div class="campo"><label>Nombre</label><input id="a-nombre" maxlength="120" placeholder="Ej. María"></div>
             <div class="campo"><label>PIN (4 a 6 dígitos)</label>
                 <input id="a-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>
-            <button class="btn btn-primario btn-bloque" id="a-ok">Crear administrador</button></div>`);
+            <button class="btn btn-primario btn-bloque" id="a-ok">Crear administrador</button></div>` + pieHtml());
         $('a-ok').addEventListener('click', async () => {
             try {
                 await CFUsers.crear(store, { nombre: $('a-nombre').value, pin: $('a-pin').value, rol: 'administrador' });
@@ -61,7 +64,7 @@
             ${msg || ''}
             <div class="campo"><label>Usuario</label><select id="l-usuario">${opciones}</select></div>
             <div class="pin-pantalla" id="l-pin">••••</div>
-            <div class="pin-teclado" id="l-teclas"></div></div>`);
+            <div class="pin-teclado" id="l-teclas"></div></div>` + pieHtml());
         const teclas = $('l-teclas');
         ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Borrar', '0', 'Entrar'].forEach(t => {
             const b = document.createElement('button');
@@ -86,7 +89,7 @@
 
     // ── Cáscara con navegación inferior ──
     function entrar() {
-        pantalla('<header id="cabecera"></header><div id="aviso-lic"></div><div id="vista"></div><nav id="barnav" class="barnav"></nav>');
+        pantalla('<header id="cabecera"></header><div id="aviso-lic"></div><div id="vista"></div>' + pieHtml() + '<nav id="barnav" class="barnav"></nav>');
         ir('inicio', {});
     }
 

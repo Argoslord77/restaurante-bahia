@@ -107,3 +107,19 @@ h1.con-icono svg, h3.con-icono svg { width: 20px; height: 20px; vertical-align: 
 .barnav button svg { width: 23px; height: 23px; }
 .barnav button small { font-size: .62rem; font-weight: 600; }
 .barnav button.activo { color: var(--marca); background: transparent; }
+
+/* ── Ajustes post-estreno Ónix ── */
+.fila-form > *, .rejilla > * { min-width: 0; }
+.campo input[type="date"] { min-width: 0; padding-left: 8px; padding-right: 6px; }
+.cant-input {
+    width: 64px; min-height: 40px; text-align: center; font-size: 1rem; font-weight: 800;
+    background: #0f1524; border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 8px; color: var(--tinta);
+}
+.cant-input:focus { outline: 2px solid var(--marca); border-color: var(--marca); }
+.cant-uni { color: var(--suave); font-size: .8rem; }
+#vista { padding-bottom: 12px; }
+.pie { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 20px 0 110px; color: var(--suave); font-size: .75rem; }
+.pie img { height: 22px; width: auto; border-radius: 6px; }
+.pie strong { color: var(--tinta); font-weight: 700; }
+@media print { .pie { display: none !important; } }

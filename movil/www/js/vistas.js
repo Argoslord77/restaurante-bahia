@@ -125,12 +125,22 @@
                 div.innerHTML = `<div><strong></strong><br><small></small></div>
                     <div class="num"><strong></strong></div>
                     <div class="controles"><button type="button" class="cant-btn" data-a="-">−</button>
-                    <span></span><button type="button" class="cant-btn" data-a="+">+</button>
+                    <input type="number" class="cant-input" min="1" inputmode="numeric" aria-label="Cantidad"><span class="cant-uni">pza</span><button type="button" class="cant-btn" data-a="+">+</button>
                     <button type="button" class="cant-btn" data-a="x">×</button></div>`;
                 div.querySelector('strong').textContent = l.nombre;
                 div.querySelector('small').textContent = `${fmt(l.precio)} c/u · stock: ${l.stock}`;
                 div.querySelector('.num strong').textContent = fmt(l.precio * l.cantidad);
-                div.querySelector('.controles span').textContent = l.cantidad + ' pza';
+                const inp = div.querySelector('.cant-input');
+                inp.value = l.cantidad;
+                inp.max = Math.max(l.stock, 1);
+                inp.addEventListener('focus', () => inp.select());
+                inp.addEventListener('change', () => {
+                    let v = Math.floor(Number(inp.value));
+                    if (!Number.isFinite(v) || v < 1) v = 1;
+                    if (v > l.stock) v = Math.max(l.stock, 1);
+                    l.cantidad = v;
+                    pintar();
+                });
                 div.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
                     const a = b.getAttribute('data-a');
                     if (a === '+') { if (l.cantidad < l.stock) l.cantidad++; }

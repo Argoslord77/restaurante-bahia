@@ -1,0 +1,16 @@
+FIX ONIX: fecha sin desborde + cantidad editable + pie Argos (2026-10-07)
+==========================================================================
+ZIP: fix-onix-detalles-2026-10-07.zip (4 archivos: movil/www/css/onix.css,
+movil/www/js/vistas.js, movil/www/js/app.js, movil/www/img/logo-argos-core.png)
+
+1) Ventas: el input de fecha "Hasta" se desbordaba del formulario.
+   Causa: los hijos del grid no podian encogerse (min-width auto).
+   Fix: min-width:0 en hijos de .fila-form/.rejilla + ajuste date.
+2) POS: la cantidad ahora se escribe directo. La linea del carrito
+   lleva caja numerica (1..stock, autoselecciona al tocar) + "pza",
+   ademas de los botones +/-/x.
+3) Pie Argos-core: logo + "Argos-core (c) 2026" al pie de TODAS las
+   vistas (shell + login + error), oculto al imprimir ticket.
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil_movil/, luego
+`npx cap sync android` en movil/ y Run. Sin sync no se ve el cambio.
