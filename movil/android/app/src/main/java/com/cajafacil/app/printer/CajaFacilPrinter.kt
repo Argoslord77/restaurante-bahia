@@ -53,7 +53,7 @@ class CajaFacilPrinter : Plugin() {
         scope.launch {
             try {
                 val t = call.getString("transport")
-                    ?: return@launch call.retorno(PrintError.INVALID_TRANSPORT)
+                    ?: return@launch call.reject(PrintError.INVALID_TRANSPORT)
                 val ctx = requireCtx()
                 val arr = JSArray()
                 when (t) {
@@ -71,7 +71,7 @@ class CajaFacilPrinter : Plugin() {
                         arr.put(o)
                     }
                     "wifi" -> { /* M1: sin descubrimiento; ver contrato */ }
-                    else -> return@launch call.retorno(PrintError.INVALID_TRANSPORT)
+                    else -> return@launch call.reject(PrintError.INVALID_TRANSPORT)
                 }
                 val ret = JSObject()
                 ret.put("devices", arr)
@@ -171,7 +171,7 @@ class CajaFacilPrinter : Plugin() {
 
     private fun fail(call: PluginCall, e: PrintError) {
         lastError.set(e.code)
-        call.retorno(e.code) // al JS viaja SOLO el código (message); printer-nativo.js lo mapea
+        call.reject(e.code) // al JS viaja SOLO el código (message); printer-nativo.js lo mapea
     }
 
     override fun handleOnDestroy() {

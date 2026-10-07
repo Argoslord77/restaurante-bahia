@@ -1,0 +1,15 @@
+FIX: call.retorno -> call.reject en CajaFacilPrinter (2026-10-07)
+=================================================================
+ZIP: fix-retorno-2026-10-07.zip (1 archivo: movil/android/app/src/main/java/com/cajafacil/app/printer/CajaFacilPrinter.kt)
+
+CAUSA: hispanismo en el plugin nativo del dojo M1: `call.retorno(...)`
+no existe en Capacitor (Unresolved reference, lineas 56/74/174).
+El archivo nunca se habia compilado hasta este primer build real.
+
+FIX: `call.reject(...)` en los 3 puntos (rechaza la llamada con SOLO
+el codigo de error, segun el contrato con printer-nativo.js).
+Resto del modulo (Target, PrintError, transportes) verificado limpio.
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil_movil/ (ruta larga
+movil/android/app/src/...), en Android Studio: Run directo (sin Sync
+no hay cambios Gradle).
