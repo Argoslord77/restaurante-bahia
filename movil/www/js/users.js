@@ -63,5 +63,55 @@
         return true;
     }
 
-    return { crear, verificar, listar, cambiarPin, pinValido, ROLES, COL };
+    async function otrosAdminsActivos(store, excluirId) {
+        return (await store.todos(COL)).filter(u => u.activo && u.rol === 'administrador' && u.id !== excluirId);
+    }
+
+    async function actualizar(store, id, { nombre, rol }, opts) {
+        const actorId = opts && opts.actorId;
+        const u = await store.obtener(COL, Number(id));
+        if (!u) throw new Error('El usuario no existe.');
+        const cambios = {};
+        if (nombre !== undefined) {
+            const nom = String(nombre || '').trim();
+            if (!nom) throw new Error('El nombre es obligatorio.');
+            cambios.nombre = nom;
+        }
+        if (rol !== undefined && rol !== u.rol) {
+            if (!ROLES.includes(rol)) throw new Error('Rol no válido.');
+            if (Number(id) === Number(actorId)) throw new Error('No puede cambiar su propio rol.');
+            if (u.rol === 'administrador' && u.activo && !(await otrosAdminsActivos(store, u.id)).length) {
+                throw new Error('Debe quedar al menos un administrador activo.');
+            }
+            cambios.rol = rol;
+        }
+        if (Object.keys(cambios).length) await store.actualizar(COL, Number(id), cambios);
+        return true;
+    }
+
+    async function cambiarActivo(store, id, activo, opts) {
+        const actorId = opts && opts.actorId;
+        const u = await store.obtener(COL, Number(id));
+        if (!u) throw new Error('El usuario no existe.');
+        if (Number(id) === Number(actorId) && !activo) throw new Error('No puede desactivarse a sí mismo.');
+        if (!activo && u.rol === 'administrador' && u.activo && !(await otrosAdminsActivos(store, u.id)).length) {
+            throw new Error('Debe quedar al menos un administrador activo.');
+        }
+        await store.actualizar(COL, Number(id), { activo: !!activo });
+        return true;
+    }
+
+    async function eliminar(store, id, opts) {
+        const actorId = opts && opts.actorId;
+        const u = await store.obtener(COL, Number(id));
+        if (!u) throw new Error('El usuario no existe.');
+        if (Number(id) === Number(actorId)) throw new Error('No puede eliminar su propio usuario.');
+        if (u.rol === 'administrador' && u.activo && !(await otrosAdminsActivos(store, u.id)).length) {
+            throw new Error('Debe quedar al menos un administrador activo.');
+        }
+        await store.eliminar(COL, Number(id));
+        return true;
+    }
+
+    return { crear, verificar, listar, cambiarPin, actualizar, cambiarActivo, eliminar, pinValido, ROLES, COL };
 });

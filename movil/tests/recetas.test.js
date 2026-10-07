@@ -12,13 +12,13 @@ async function escenario() {
         precio_costo: 180, stock_inicial: 5, stock_minimo: 1
     });
     const tortilla = await CFProductos.crear(store, {
-        nombre: 'Tortilla', tipo: 'insumo', unidad: 'pza',
+        nombre: 'Tortilla', tipo: 'insumo', unidad: 'U',
         precio_costo: 1.2, stock_inicial: 100, stock_minimo: 20
     });
     const taco = await CFProductos.crear(store, {
-        nombre: 'Taco al pastor', tipo: 'receta', unidad: 'pza', precio_venta: 25,
+        nombre: 'Taco al pastor', tipo: 'receta', unidad: 'U', precio_venta: 25,
         receta: [
-            { insumo_id: tortilla, cantidad: 2, unidad: 'pza' },
+            { insumo_id: tortilla, cantidad: 2, unidad: 'U' },
             { insumo_id: queso, cantidad: 80, unidad: 'g' }
         ]
     });
@@ -42,7 +42,7 @@ describe('Recetas', () => {
         const { store } = await escenario();
         const res = await CFProductos.buscarParaVenta(store, 'taco');
         expect(res.length).toBe(1);
-        expect(res[0]).toMatchObject({ tipo: 'receta', stock: 50, unidad: 'pza' });
+        expect(res[0]).toMatchObject({ tipo: 'receta', stock: 50, unidad: 'U' });
         expect(await CFProductos.buscarParaVenta(store, 'queso')).toHaveLength(0);
         expect(await CFProductos.buscarParaVenta(store, 'tortilla')).toHaveLength(0);
     });
@@ -53,7 +53,7 @@ describe('Recetas', () => {
             .rejects.toThrow('ingrediente');
         await expect(CFProductos.crear(store, {
             nombre: 'Y', tipo: 'receta',
-            receta: [{ insumo_id: taco, cantidad: 1, unidad: 'pza' }]
+            receta: [{ insumo_id: taco, cantidad: 1, unidad: 'U' }]
         })).rejects.toThrow('otra receta');
         await expect(CFProductos.crear(store, {
             nombre: 'Z', tipo: 'receta',

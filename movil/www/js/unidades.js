@@ -1,7 +1,7 @@
 // movil/www/js/unidades.js — Catálogo de unidades y conversiones (Fase 2 restaurante).
-// Dimensiones con unidad base: conteo→pza, masa→g, volumen→ml.
-// Además cada producto puede definir su empaque de compra (reja, caja, bulto…)
-// con un factor a su unidad base: resolver() lo traduce todo a la unidad del producto.
+// Dimensiones con unidad base: conteo→U, masa→g, volumen→ml.
+// 'pza' se acepta como alias histórico de 'U' (datos y respaldos viejos siguen
+// operando; la migración 1 normaliza lo almacenado).
 (function (root, factory) {
     const mod = factory();
     if (typeof module !== 'undefined' && module.exports) module.exports = mod;
@@ -10,17 +10,19 @@
     'use strict';
 
     const TABLA = [
-        { codigo: 'pza', nombre: 'Pieza',     dim: 'conteo',  factor: 1 },
-        { codigo: 'g',   nombre: 'Gramo',     dim: 'masa',    factor: 1 },
-        { codigo: 'kg',  nombre: 'Kilogramo', dim: 'masa',    factor: 1000 },
-        { codigo: 'ml',  nombre: 'Mililitro', dim: 'volumen', factor: 1 },
-        { codigo: 'L',   nombre: 'Litro',     dim: 'volumen', factor: 1000 }
+        { codigo: 'U',  nombre: 'Unidad',    dim: 'conteo',  factor: 1 },
+        { codigo: 'g',  nombre: 'Gramo',     dim: 'masa',    factor: 1 },
+        { codigo: 'kg', nombre: 'Kilogramo', dim: 'masa',    factor: 1000 },
+        { codigo: 'ml', nombre: 'Mililitro', dim: 'volumen', factor: 1 },
+        { codigo: 'L',  nombre: 'Litro',     dim: 'volumen', factor: 1000 }
     ];
+    const ALIAS = { pza: 'U' };
+    const norm = c => ALIAS[c] || c;
 
     const r4 = n => Math.round((Number(n) || 0) * 10000) / 10000;
 
     function buscar(codigo) {
-        return TABLA.find(u => u.codigo === codigo) || null;
+        return TABLA.find(u => u.codigo === norm(codigo)) || null;
     }
 
     function listar() { return TABLA.map(u => ({ ...u })); }
@@ -28,8 +30,8 @@
     function dimension(codigo) { const u = buscar(codigo); return u ? u.dim : null; }
     function factor(codigo) { const u = buscar(codigo); return u ? u.factor : null; }
 
-    // Cantidades de venta/stock se capturan enteras en piezas, decimales en lo demás.
-    function entera(codigo) { return codigo === 'pza'; }
+    // Cantidades de venta/stock se capturan enteras en unidades, decimales en lo demás.
+    function entera(codigo) { return norm(codigo) === 'U'; }
 
     function convertir(cantidad, de, a) {
         const u1 = buscar(de), u2 = buscar(a);
@@ -53,7 +55,7 @@
     // Unidades aceptadas al capturar un movimiento de un producto:
     // su unidad base + su empaque de compra (si tiene) + las de su dimensión.
     function aceptadas(producto) {
-        const base = (producto && producto.unidad) || 'pza';
+        const base = norm((producto && producto.unidad) || 'U');
         const lista = [base];
         if (producto && producto.compra_unidad && Number(producto.compra_factor) > 0) {
             lista.push(producto.compra_unidad);
@@ -67,17 +69,18 @@
 
     // Traduce cantidad+unidad a la unidad base del producto (número, redondeado).
     function resolver(producto, cantidad, unidad) {
-        const base = (producto && producto.unidad) || 'pza';
+        const base = norm((producto && producto.unidad) || 'U');
+        const uni = norm(unidad);
         const cant = Number(cantidad);
         if (!Number.isFinite(cant)) throw new Error('Cantidad no válida.');
-        if (!unidad || unidad === base) return r4(cant);
-        if (producto && unidad === producto.compra_unidad && Number(producto.compra_factor) > 0) {
+        if (!uni || uni === base) return r4(cant);
+        if (producto && uni === norm(producto.compra_unidad) && Number(producto.compra_factor) > 0) {
             return r4(cant * Number(producto.compra_factor));
         }
-        return convertir(cant, unidad, base);
+        return convertir(cant, uni, base);
     }
 
-    // "2.5 kg" · "3 pza" · "0.08 kg" (recorta ceros sobrantes).
+    // "2.5 kg" · "3 U" · "0.08 kg" (recorta ceros sobrantes).
     function fmtCant(cantidad) {
         const n = Math.round((Number(cantidad) || 0) * 1000) / 1000;
         return String(n);
@@ -85,7 +88,7 @@
 
     function formatear(cantidad, unidad) {
         const c = fmtCant(cantidad);
-        return unidad ? `${c} ${unidad}` : c;
+        return unidad ? `${c} ${norm(unidad)}` : c;
     }
 
     return { listar, existe, dimension, factor, entera, convertir, aBase, deBase,

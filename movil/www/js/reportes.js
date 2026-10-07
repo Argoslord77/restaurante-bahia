@@ -16,7 +16,7 @@
         return `${f.getFullYear()}-${p(f.getMonth() + 1)}-${p(f.getDate())}`;
     };
     const fechaValida = (v, defecto) =>
-        /^\\d{4}-\\d{2}-\\d{2}$/.test(String(v || '')) ? String(v) : defecto;
+        /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : defecto;
     const fechaCorta = iso => { try { return new Date(iso).toLocaleString('es'); } catch (_) { return iso || ''; } };
 
     function ajustesMod() {

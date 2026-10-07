@@ -20,7 +20,7 @@
         return `${f.getFullYear()}-${p(f.getMonth() + 1)}-${p(f.getDate())}`;
     };
     const fechaValida = (v, defecto) =>
-        /^\\d{4}-\\d{2}-\\d{2}$/.test(String(v || '')) ? String(v) : defecto;
+        /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : defecto;
 
     function modulos() {
         // Navegador: globales · jest: require.
@@ -75,13 +75,13 @@
                 }
                 lineas.push({ producto_id: pid, nombre: p.nombre, precio_unitario: precio,
                     costo_unitario: await Productos.costoUnitario(store, p), cantidad: cant,
-                    subtotal: redondear(precio * cant), unidad: p.unidad || 'pza', tipo, consumo });
+                    subtotal: redondear(precio * cant), unidad: p.unidad || 'U', tipo, consumo });
             } else {
                 const stock = Number(p.stock) || 0;
                 if (stock < cant) throw new Error(`Stock insuficiente de "${p.nombre}" (hay ${p.stock}).`);
                 lineas.push({ producto_id: pid, nombre: p.nombre, precio_unitario: precio,
                     costo_unitario: Number(p.precio_costo) || 0, cantidad: cant,
-                    subtotal: redondear(precio * cant), unidad: p.unidad || 'pza', tipo });
+                    subtotal: redondear(precio * cant), unidad: p.unidad || 'U', tipo });
             }
         }
 
@@ -112,7 +112,7 @@
                     if (ins) await store.actualizar('productos', c.insumo_id, { stock: despues });
                     await store.insertar('movimientos', {
                         producto_id: c.insumo_id, tipo: 'venta',
-                        cantidad: r3(-c.cantidad_base * l.cantidad), unidad: (ins && ins.unidad) || 'pza',
+                        cantidad: r3(-c.cantidad_base * l.cantidad), unidad: (ins && ins.unidad) || 'U',
                         stock_antes: r3(antes), stock_despues: despues,
                         motivo: `Venta #${venta.id} (${l.nombre})`, referencia_id: venta.id,
                         usuario_id: Number(usuario_id), creado_en: new Date().toISOString(), dia: hoyISO()
@@ -125,7 +125,7 @@
                 if (p) await store.actualizar('productos', l.producto_id, { stock: despues });
                 await store.insertar('movimientos', {
                     producto_id: l.producto_id, tipo: 'venta', cantidad: r3(-l.cantidad),
-                    unidad: (p && p.unidad) || 'pza',
+                    unidad: (p && p.unidad) || 'U',
                     stock_antes: r3(antes), stock_despues: despues,
                     motivo: `Venta #${venta.id}`, referencia_id: venta.id,
                     usuario_id: Number(usuario_id), creado_en: new Date().toISOString(), dia: hoyISO()
@@ -156,7 +156,7 @@
                     if (ins) await store.actualizar('productos', c.insumo_id, { stock: despues });
                     await store.insertar('movimientos', {
                         producto_id: c.insumo_id, tipo: 'devolucion',
-                        cantidad: r3(c.cantidad_base * d.cantidad), unidad: (ins && ins.unidad) || 'pza',
+                        cantidad: r3(c.cantidad_base * d.cantidad), unidad: (ins && ins.unidad) || 'U',
                         stock_antes: r3(antes), stock_despues: despues,
                         motivo: `Cancela venta #${vid}`, referencia_id: vid,
                         usuario_id: usuario_id || null, creado_en: new Date().toISOString(), dia: hoyISO()
@@ -170,7 +170,7 @@
                 if (p) await store.actualizar('productos', d.producto_id, { stock: despues });
                 await store.insertar('movimientos', {
                     producto_id: d.producto_id, tipo: 'devolucion', cantidad: r3(d.cantidad),
-                    unidad: (p && p.unidad) || 'pza',
+                    unidad: (p && p.unidad) || 'U',
                     stock_antes: r3(antes), stock_despues: despues,
                     motivo: `Cancela venta #${vid}`, referencia_id: vid,
                     usuario_id: usuario_id || null, creado_en: new Date().toISOString(), dia: hoyISO()

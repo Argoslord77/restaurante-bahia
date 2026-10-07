@@ -41,7 +41,7 @@
         await store.actualizar('productos', pid, { stock: despues });
         const mov = {
             producto_id: pid, tipo, cantidad: r3(direccion * base),
-            unidad: p.unidad || 'pza',
+            unidad: p.unidad || 'U',
             stock_antes: antes, stock_despues: despues,
             motivo: motivo || null, referencia_id: referencia_id || null,
             usuario_id: usuario_id || null, creado_en: new Date().toISOString(), dia: hoyISO()
@@ -82,7 +82,7 @@
             .sort((a, b) => b.id - a.id).slice(0, n)
             .map(m => ({ ...m, producto_nombre: prods[m.producto_id].nombre,
                          sku: prods[m.producto_id].sku || null,
-                         unidad: m.unidad || prods[m.producto_id].unidad || 'pza',
+                         unidad: m.unidad || prods[m.producto_id].unidad || 'U',
                          usuario_nombre: usuarios[m.usuario_id] || null }));
     }
 
@@ -93,7 +93,7 @@
             .filter(p => p.activo && Number(p.stock) <= Number(p.stock_minimo))
             .map(p => ({ id: p.id, sku: p.sku || null, nombre: p.nombre,
                          stock: Number(p.stock) || 0, stock_minimo: Number(p.stock_minimo) || 0,
-                         unidad: p.unidad || 'pza', tipo: p.tipo || 'simple',
+                         unidad: p.unidad || 'U', tipo: p.tipo || 'simple',
                          categoria_nombre: (p.categoria_id && cats[p.categoria_id]) || null }))
             .sort((a, b) => a.stock - b.stock || String(a.nombre).localeCompare(String(b.nombre)));
     }
@@ -107,7 +107,7 @@
                 const stock = r3(Number(p.stock) || 0);
                 return { id: p.id, sku: p.sku || null, nombre: p.nombre,
                     categoria_nombre: (p.categoria_id && cats[p.categoria_id]) || null,
-                    stock, unidad: p.unidad || 'pza', tipo: p.tipo || 'simple',
+                    stock, unidad: p.unidad || 'U', tipo: p.tipo || 'simple',
                     precio_costo: Number(p.precio_costo) || 0,
                     precio_venta: Number(p.precio_venta) || 0,
                     valor_costo: redondear(stock * (Number(p.precio_costo) || 0)),

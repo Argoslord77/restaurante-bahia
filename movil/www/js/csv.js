@@ -32,7 +32,7 @@
     }
 
     function masVendidos(rep) {
-        return tabla(['#', 'Producto', 'Piezas', 'Monto'],
+        return tabla(['#', 'Producto', 'Cantidad', 'Monto'],
             rep.filas.map((f, i) => [i + 1, f.nombre, f.cantidad, num(f.importe)]));
     }
 

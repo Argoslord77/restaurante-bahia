@@ -13,7 +13,7 @@ async function escenario() {
         precio_costo: 180, stock_inicial: 5, stock_minimo: 2
     });
     const refresco = await CFProductos.crear(store, {
-        nombre: 'Refresco', unidad: 'pza',
+        nombre: 'Refresco', unidad: 'U',
         compra_unidad: 'reja', compra_factor: 24,
         precio_costo: 12, precio_venta: 18, stock_inicial: 24
     });

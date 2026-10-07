@@ -20,11 +20,11 @@
     const G = n => globalThis[n];
     const I = n => G('CFIconos').icono(n);
     const U = () => G('CFUnidades');
-    const cantTxt = (c, u) => U().formatear(c, u || 'pza');
+    const cantTxt = (c, u) => U().formatear(c, u || 'U');
     const insigniaTipo = t => t === 'receta' ? ' <span class="insignia ins-ambar">receta</span>'
         : t === 'insumo' ? ' <span class="insignia ins-azul">insumo</span>' : '';
     // Paso de los botones +/− del POS según unidad (100 g, 250 ml…).
-    const pasoUnidad = u => ({ pza: 1, g: 10, kg: 0.25, ml: 10, L: 0.25 }[u] || 1);
+    const pasoUnidad = u => ({ U: 1, g: 10, kg: 0.25, ml: 10, L: 0.25 }[u] || 1);
 
     function vista(html) { $('vista').innerHTML = html; }
     function aviso(tipo, texto) {
@@ -51,8 +51,8 @@
                 <div class="valor">${lista.totales.n} · ${fmt(lista.totales.total)}</div></div>
         </div>
         ${bloqueada
-        ? `<div class="tarjeta"><h3 class="con-icono">${I('candado')}Licencia bloqueada</h3><p>No se puede vender ni abrir trabajo nuevo.</p>
-            <div class="grupo-btn"><button class="btn btn-primario" data-ir="licencia">Ver licencia</button></div></div>`
+? `<div class="tarjeta"><h3 class="con-icono">${I('candado')}Licencia bloqueada</h3><p>No se puede vender ni abrir trabajo nuevo.</p>
+            ${pudeVer(sesion, ['administrador']) ? '<div class="grupo-btn"><button class="btn btn-primario" data-ir="licencia">Ver licencia</button></div>' : '<p class="suave">Contacte al administrador.</p>'}</div>`
         : `<div class="tarjeta"><h3>Acciones</h3><div class="grupo-btn">
             <button class="btn btn-primario" data-ir="pos">Vender</button>
             ${pudeVer(sesion, ['administrador', 'cajero']) ? '<button class="btn btn-claro" data-ir="caja">Caja</button>' : ''}
@@ -135,10 +135,10 @@ ${bajo.slice(0, 5).map(p => `<div>• ${esc(p.nombre)}: <strong>${cantTxt(p.stoc
                     <button type="button" class="cant-btn" data-a="x">×</button></div>`;
                 div.querySelector('strong').textContent = l.nombre;
 div.querySelector('small').textContent = `${fmt(l.precio)} c/u · hay ${cantTxt(l.stock, l.unidad)}${l.tipo === 'receta' ? ' · receta' : ''}`;
-                div.querySelector('.cant-uni').textContent = l.unidad || 'pza';
+                div.querySelector('.cant-uni').textContent = l.unidad || 'U';
                 div.querySelector('.num strong').textContent = fmt(l.precio * l.cantidad);
 const inp = div.querySelector('.cant-input');
-                const entera = U().entera(l.unidad || 'pza');
+                const entera = U().entera(l.unidad || 'U');
                 inp.value = l.cantidad;
                 inp.min = entera ? 1 : 0.001;
                 inp.step = entera ? 1 : 'any';
@@ -182,14 +182,14 @@ b.querySelector('.detalle').textContent = (p.sku ? p.sku + ' · ' : '') + 'hay '
                     b.querySelector('.precio').textContent = fmt(p.precio_venta);
                     b.addEventListener('click', () => {
 const l = carrito.find(x => x.id === p.id);
-                        const ent = U().entera(p.unidad || 'pza');
+                        const ent = U().entera(p.unidad || 'U');
                         const ini = ent ? 1 : Math.min(pasoUnidad(p.unidad), p.stock);
                         if (l) {
                             if (l.cantidad >= p.stock) { $('p-msg').innerHTML = aviso('error', 'Sin stock suficiente.'); return; }
                             l.cantidad = Math.round(Math.min(p.stock, l.cantidad + ini) * 1000) / 1000;
                         } else {
                             if (!(p.stock > 0)) { $('p-msg').innerHTML = aviso('error', 'Sin stock.'); return; }
-                            carrito.push({ id: p.id, nombre: p.nombre, precio: Number(p.precio_venta), stock: p.stock, unidad: p.unidad || 'pza', tipo: p.tipo || 'simple', cantidad: ini });
+                            carrito.push({ id: p.id, nombre: p.nombre, precio: Number(p.precio_venta), stock: p.stock, unidad: p.unidad || 'U', tipo: p.tipo || 'simple', cantidad: ini });
                         }
                         $('p-msg').innerHTML = '';
                         pintar();
@@ -284,8 +284,8 @@ const l = carrito.find(x => x.id === p.id);
         const historial = await G('CFCaja').historial(store, 10);
         if (!turno && bloqueada) {
             vista(`<div class="encabezado"><h1>Caja</h1></div><div class="tarjeta">
-                <p>Licencia bloqueada: no se puede abrir caja.</p>
-                <button class="btn btn-primario" data-ir="licencia">Ver licencia</button></div>`);
+<p>Licencia bloqueada: no se puede abrir caja.</p>
+                ${pudeVer(sesion, ['administrador']) ? '<button class="btn btn-primario" data-ir="licencia">Ver licencia</button>' : '<p class="suave">Contacte al administrador.</p>'}</div>`);
             vistaBindIr(ctx);
             return;
         }
@@ -405,9 +405,17 @@ function bindCortes(ctx) {
                 <td><button class="btn btn-claro btn-chico" data-ticket="${v.id}">Ticket</button>
                 ${v.estado === 'cobrada' && puedeCancelar ? `<button class="btn btn-peligro btn-chico" data-cancelar="${v.id}">Anular</button>` : ''}</td></tr>`).join('')
             : '<tr><td colspan="4">Sin ventas en el rango.</td></tr>'}</tbody></table></div></div>`);
-        $('v-filtrar').addEventListener('click', () => ir('ventas', { f: {
-            desde: $('v-desde').value || hoyDIA(), hasta: $('v-hasta').value || $('v-desde').value || hoyDIA(),
-            estado: $('v-estado').value || null } }));
+$('v-desde').addEventListener('change', () => {
+            if (!$('v-hasta').value || $('v-hasta').value < $('v-desde').value) {
+                $('v-hasta').value = $('v-desde').value;
+            }
+        });
+        $('v-filtrar').addEventListener('click', () => {
+            const desde = $('v-desde').value || hoyDIA();
+            let hasta = $('v-hasta').value || desde;
+            if (hasta < desde) hasta = desde;
+            ir('ventas', { f: { desde, hasta, estado: $('v-estado').value || null } });
+        });
         $('v-csv').addEventListener('click', async () => {
             try {
                 await G('CFBackup').compartir(G('CFCsv').ventas(r), G('CFCsv').nombre('ventas'));
@@ -485,7 +493,7 @@ ${filas.length ? filas.map(p => `<tr><td><strong>${esc(p.nombre)}</strong>${insi
                 <option value="">—</option>${cats.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></div>
             <div class="grupo-btn"><button class="btn btn-primario" id="ar-ok">Guardar</button>
                 <button class="btn btn-claro" data-ir="productos">Volver</button></div>
-            <p class="suave">Crea un producto vendible en piezas. Para insumos, recetas o empaques use «Nuevo».</p></div>`);
+            <p class="suave">Crea un producto vendible en unidades. Para insumos, recetas o empaques use «Nuevo».</p></div>`);
         vistaBindIr(ctx);
         $('ar-ok').addEventListener('click', async () => {
             try {
@@ -511,7 +519,7 @@ ${filas.length ? filas.map(p => `<tr><td><strong>${esc(p.nombre)}</strong>${insi
                 <div class="campo"><label>Tipo</label><select id="pf-tipo">
                     ${[['simple', 'Vendible'], ['insumo', 'Insumo (ingrediente)'], ['receta', 'Receta (platillo)']].map(([v, et]) => `<option value="${v}" ${(p ? (p.tipo || 'simple') : 'simple') === v ? 'selected' : ''}>${et}</option>`).join('')}</select></div>
                 <div class="campo"><label>Unidad base</label><select id="pf-uni">
-                    ${U().listar().map(u => `<option value="${u.codigo}" ${(p ? (p.unidad || 'pza') : 'pza') === u.codigo ? 'selected' : ''}>${u.nombre} (${u.codigo})</option>`).join('')}</select></div></div>
+                    ${U().listar().map(u => `<option value="${u.codigo}" ${(p ? (p.unidad || 'U') : 'U') === u.codigo ? 'selected' : ''}>${u.nombre} (${u.codigo})</option>`).join('')}</select></div></div>
             <div class="fila-form c2">
                 <div class="campo"><label>Empaque compra (opcional)</label><input id="pf-eq" value="${esc(p && p.compra_unidad ? p.compra_unidad : '')}" maxlength="24" placeholder="reja, caja…"></div>
                 <div class="campo"><label>Factor (base × empaque)</label><input id="pf-factor" type="number" min="0" step="any" value="${p && p.compra_factor ? p.compra_factor : ''}" inputmode="decimal" placeholder="Ej. 24"></div></div>
@@ -539,7 +547,7 @@ vistaBindIr(ctx);
         const todos = await G('CFProductos').listar(store, { activos: false });
         const candidatos = todos.filter(x => x.activo && (!id || x.id !== id) && x.tipo !== 'receta');
         function opcionesUnidad(sel, insumoId) {
-            const ins = todos.find(x => Number(x.id) === Number(insumoId)) || { unidad: 'pza' };
+            const ins = todos.find(x => Number(x.id) === Number(insumoId)) || { unidad: 'U' };
             return U().aceptadas(ins).map(u => `<option value="${u}" ${u === sel ? 'selected' : ''}>${u}</option>`).join('');
         }
         function agregarLinea(l) {
@@ -666,7 +674,7 @@ if (esAdmin) {
             const mapaProds = {};
             prods.forEach(px => { mapaProds[px.id] = px; });
             const refrescarUni = () => {
-                const px = mapaProds[$('in-prod').value] || { unidad: 'pza' };
+                const px = mapaProds[$('in-prod').value] || { unidad: 'U' };
                 $('in-uni').innerHTML = U().aceptadas(px).map(u => `<option value="${u}">${u}</option>`).join('');
             };
             $('in-prod').addEventListener('change', refrescarUni);
@@ -748,8 +756,16 @@ if (esAdmin) {
         document.querySelectorAll('#vista [data-tab]').forEach(b =>
             b.addEventListener('click', () => ir('reportes', { tab: b.getAttribute('data-tab'), f })));
         const bf = $('r-filtrar');
-        if (bf) bf.addEventListener('click', () => ir('reportes', { tab, f: {
-            desde: $('r-desde').value || hoyDIA(), hasta: $('r-hasta').value || $('r-desde').value || hoyDIA() } }));
+const rd = $('r-desde');
+        if (rd) rd.addEventListener('change', () => {
+            if (!$('r-hasta').value || $('r-hasta').value < rd.value) $('r-hasta').value = rd.value;
+        });
+        if (bf) bf.addEventListener('click', () => {
+            const desde = $('r-desde').value || hoyDIA();
+            let hasta = $('r-hasta').value || desde;
+            if (hasta < desde) hasta = desde;
+            ir('reportes', { tab, f: { desde, hasta } });
+        });
         $('r-csv').addEventListener('click', async () => {
             try {
                 let texto, nombre;
@@ -859,17 +875,28 @@ function unaSemana(hasta) {
     }
 
     // ── Usuarios ──
-    async function usuarios(ctx) {
+async function usuarios(ctx, params) {
         const { store, sesion, ir } = ctx;
         if (!pudeVer(sesion, ['administrador'])) { ir('inicio'); return; }
         const lista = await G('CFUsers').listar(store);
+        const editId = params && params.edit ? Number(params.edit) : null;
+        const editando = editId ? lista.find(u => u.id === editId) : null;
         vista(`<div class="encabezado"><h1>Usuarios</h1></div>
+        ${editando ? `<div class="tarjeta"><h3>Editar usuario</h3><div id="e-msg"></div>
+            <div class="campo"><label>Nombre</label><input id="e-nom" maxlength="120" value="${esc(editando.nombre)}"></div>
+            <div class="campo"><label>Rol</label><select id="e-rol" ${editando.id === sesion.id ? 'disabled' : ''}>
+                ${['vendedor', 'cajero', 'administrador'].map(r => `<option value="${r}" ${editando.rol === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+            ${editando.id === sesion.id ? '<p class="suave">No puede cambiar su propio rol.</p>' : ''}
+            <div class="grupo-btn"><button class="btn btn-primario" id="e-ok">Guardar</button>
+                <button class="btn btn-claro" id="e-volver">Volver</button></div></div>` : ''}
         <div class="tarjeta"><h3>Lista</h3><div class="contenedor-tabla"><table class="tabla">
             <thead><tr><th>Nombre</th><th>Rol</th><th></th></tr></thead><tbody>
             ${lista.map(u => `<tr><td>${esc(u.nombre)} ${u.activo ? '' : '<span class="insignia ins-gris">inactivo</span>'}</td>
                 <td>${esc(u.rol)}</td>
-                <td><button class="btn btn-claro btn-chico" data-pin="${u.id}">PIN</button>
-                ${u.id !== sesion.id ? `<button class="btn btn-claro btn-chico" data-tog="${u.id}">${u.activo ? 'Desactivar' : 'Activar'}</button>` : ''}</td></tr>`).join('')}
+<td><button class="btn btn-claro btn-chico" data-pin="${u.id}">PIN</button>
+                <button class="btn btn-claro btn-chico" data-editar="${u.id}">Editar</button>
+                ${u.id !== sesion.id ? `<button class="btn btn-claro btn-chico" data-tog="${u.id}">${u.activo ? 'Desactivar' : 'Activar'}</button>
+                <button class="btn btn-peligro btn-chico" data-del="${u.id}">Eliminar</button>` : ''}</td></tr>`).join('')}
             </tbody></table></div></div>
         <div class="tarjeta"><h3>Nuevo usuario</h3><div id="u-msg"></div>
             <div class="campo"><label>Nombre</label><input id="u-nom" maxlength="120"></div>
@@ -893,12 +920,37 @@ function unaSemana(hasta) {
                 try { await G('CFUsers').cambiarPin(store, id, pin); alert('PIN actualizado.'); }
                 catch (e) { alert(e.message); }
             }));
-        document.querySelectorAll('#vista [data-tog]').forEach(b =>
+document.querySelectorAll('#vista [data-tog]').forEach(b =>
             b.addEventListener('click', async () => {
                 const id = Number(b.getAttribute('data-tog'));
-                const u = await store.obtener('usuarios', id);
-                if (u) { await store.actualizar('usuarios', id, { activo: !u.activo }); ir('usuarios'); }
+                const u = lista.find(x => x.id === id);
+                try {
+                    await G('CFUsers').cambiarActivo(store, id, !(u && u.activo), { actorId: sesion.id });
+                    ir('usuarios');
+                } catch (e) { alert(e.message); }
             }));
+        document.querySelectorAll('#vista [data-editar]').forEach(b =>
+            b.addEventListener('click', () => ir('usuarios', { edit: Number(b.getAttribute('data-editar')) })));
+        document.querySelectorAll('#vista [data-del]').forEach(b =>
+            b.addEventListener('click', async () => {
+                const id = Number(b.getAttribute('data-del'));
+                const u = lista.find(x => x.id === id);
+                if (!confirm(`¿Eliminar a ${u ? u.nombre : 'este usuario'}? Sus ventas y turnos se conservan.`)) return;
+                try {
+                    await G('CFUsers').eliminar(store, id, { actorId: sesion.id });
+                    ir('usuarios');
+                } catch (e) { alert(e.message); }
+            }));
+        if (editando) {
+            $('e-volver').addEventListener('click', () => ir('usuarios'));
+            $('e-ok').addEventListener('click', async () => {
+                try {
+                    await G('CFUsers').actualizar(store, editando.id, {
+                        nombre: $('e-nom').value, rol: $('e-rol').value }, { actorId: sesion.id });
+                    ir('usuarios');
+                } catch (e) { $('e-msg').innerHTML = aviso('error', e.message); }
+            });
+        }
     }
 
     // ── Impresora ──
@@ -962,9 +1014,9 @@ function unaSemana(hasta) {
     }
 
     // ── Licencia ──
-    async function licencia(ctx) {
+async function licencia(ctx) {
         const { store, sesion, ir } = ctx;
-        if (!pudeVer(sesion, ['administrador', 'cajero'])) { ir('inicio'); return; }
+        if (!pudeVer(sesion, ['administrador'])) { ir('inicio'); return; }
         const L = G('CFLicencia');
         const e = await L.evaluar(store, { forzar: true });
         const evs = (await store.todos('licencia_eventos')).sort((a, b) => b.id - a.id).slice(0, 40);
@@ -1031,7 +1083,7 @@ function unaSemana(hasta) {
             <p>Puede cerrar el turno abierto, pero no vender ni abrir trabajo nuevo.</p></div>
             ${(e.problemas || []).map(x => `<div class="aviso aviso-error"><span class="mono">[${esc(x.codigo)}]</span> ${esc(x.mensaje)}</div>`).join('')}
             <div class="ayuda">Código de instalación</div><div class="codigo">${esc(e.instalacion.codigo)}</div>
-            <div class="grupo-btn"><button class="btn btn-primario" data-ir="licencia">Ver licencia</button>
+<div class="grupo-btn">${pudeVer(ctx.sesion, ['administrador']) ? '<button class="btn btn-primario" data-ir="licencia">Ver licencia</button>' : ''}
             ${turno ? '<button class="btn btn-claro" data-ir="caja">Cerrar turno</button>' : ''}</div></div>`);
         vistaBindIr(ctx);
     }
@@ -1050,7 +1102,7 @@ function unaSemana(hasta) {
             ${admin ? item('ajustes', 'Ajustes') : ''}
             ${admin ? item('usuarios', 'Usuarios') : ''}
             ${cajaR ? item('impresora', 'Impresora') : ''}
-            ${cajaR ? item('licencia', 'Licencia') : ''}
+${admin ? item('licencia', 'Licencia') : ''}
             ${item('respaldo', 'Respaldo')}
         </div>`);
         vistaBindIr(ctx);

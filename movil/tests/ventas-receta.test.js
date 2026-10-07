@@ -17,13 +17,13 @@ async function escenario() {
         precio_costo: 180, stock_inicial: 5
     });
     const tortilla = await CFProductos.crear(store, {
-        nombre: 'Tortilla', tipo: 'insumo', unidad: 'pza',
+        nombre: 'Tortilla', tipo: 'insumo', unidad: 'U',
         precio_costo: 1.2, stock_inicial: 100
     });
     const taco = await CFProductos.crear(store, {
-        nombre: 'Taco', tipo: 'receta', unidad: 'pza', precio_venta: 25,
+        nombre: 'Taco', tipo: 'receta', unidad: 'U', precio_venta: 25,
         receta: [
-            { insumo_id: tortilla, cantidad: 2, unidad: 'pza' },
+            { insumo_id: tortilla, cantidad: 2, unidad: 'U' },
             { insumo_id: queso, cantidad: 80, unidad: 'g' }
         ]
     });

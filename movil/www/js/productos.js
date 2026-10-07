@@ -30,7 +30,7 @@
 
     function normalizarUnidad(u) {
         const { Unidades } = mods();
-        const cod = String(u || 'pza').trim();
+        const cod = String(u || 'U').trim();
         if (!Unidades.existe(cod)) throw new Error('Unidad no válida.');
         return cod;
     }
@@ -63,7 +63,7 @@
         for (const l of lineas) {
             const iid = parseInt(l && l.insumo_id, 10);
             const cant = Number(l && l.cantidad);
-            const uni = String((l && l.unidad) || '').trim() || 'pza';
+            const uni = String((l && l.unidad) || '').trim() || 'U';
             if (!Number.isInteger(iid) || iid <= 0) throw new Error('Ingrediente no válido.');
             if (!Number.isFinite(cant) || cant <= 0) throw new Error('La cantidad del ingrediente debe ser mayor a 0.');
             const ins = await store.obtener(COL, iid);
@@ -78,9 +78,9 @@
         return norm;
     }
 
-    // Compat: productos viejos se leen como simple/pza.
+    // Compat: productos viejos se leen como simple/U.
     function conDefectos(p) {
-        return { ...p, tipo: p.tipo || 'simple', unidad: p.unidad || 'pza',
+        return { ...p, tipo: p.tipo || 'simple', unidad: p.unidad || 'U',
                  compra_unidad: p.compra_unidad || null, compra_factor: p.compra_factor || null,
                  receta: Array.isArray(p.receta) ? p.receta : [] };
     }
@@ -204,7 +204,7 @@
         const { nom, costo, venta, codigo } = validarBase(datos);
         if (await skuExiste(store, codigo, Number(id))) throw new Error('Ese SKU ya existe.');
         const tipo = datos.tipo !== undefined ? normalizarTipo(datos.tipo) : (actual.tipo || 'simple');
-        const unidad = datos.unidad !== undefined ? normalizarUnidad(datos.unidad) : (actual.unidad || 'pza');
+        const unidad = datos.unidad !== undefined ? normalizarUnidad(datos.unidad) : (actual.unidad || 'U');
         let compra;
         if (datos.compra_unidad !== undefined || datos.compra_factor !== undefined) {
             compra = normalizarCompra({
@@ -251,7 +251,7 @@
             if (!ins || !ins.activo) return 0;
             const stockIns = Number(ins.stock) || 0;
             let enLinea;
-            const uniIns = ins.unidad || 'pza';
+            const uniIns = ins.unidad || 'U';
             if (l.unidad === uniIns) enLinea = stockIns;
             else if (l.unidad === ins.compra_unidad && Number(ins.compra_factor) > 0) {
                 enLinea = stockIns / Number(ins.compra_factor);

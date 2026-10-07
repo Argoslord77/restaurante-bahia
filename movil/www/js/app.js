@@ -23,6 +23,7 @@
             store = CFStore.crear(CFStorage.elegir());
             const r = await store.init();
             await CFAjustes.asegurar(store);
+            await CFMigraciones.migrar(store);
             console.log('[CajaFácil] almacén:', store.backendNombre, '| instalación:', r.instalacion);
             const usuarios = await CFUsers.listar(store);
             if (!usuarios.length) return verCrearAdmin();
@@ -154,7 +155,7 @@
     function pintarAvisoLic(lic) {
         const caja = $('aviso-lic');
         if (!caja) return;
-        if (lic.estado === 'GRACIA' && (sesion.rol === 'administrador' || sesion.rol === 'cajero')) {
+        if (lic.estado === 'GRACIA' && sesion.rol === 'administrador') {
             caja.innerHTML = `<div class="lic-banner gracia">${CFIconos.icono('alerta')}<span><strong>Licencia en gracia</strong>${lic.gracia ? ` — quedan ${lic.gracia.dias_restantes} días` : ''}.</span><a href="#" id="al-ir">Regularizar →</a></div>`;
             $('al-ir').addEventListener('click', ev => { ev.preventDefault(); ir('licencia', {}); });
         } else if (lic.estado === 'NO_CONFIGURADA' && sesion.rol === 'administrador') {
