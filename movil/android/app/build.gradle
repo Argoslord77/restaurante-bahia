@@ -18,10 +18,10 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
     }
-    kotlinOptions { jvmTarget = '17' }
+    kotlinOptions { jvmTarget = '21' }
     buildTypes {
         release {
             minifyEnabled false
@@ -61,3 +61,8 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
+// KGP 2.2 exige jvmTarget == Java target. Capacitor 8.5 impone Java 21 via
+// capacitor.build.gradle (aplicado arriba); esta linea va AL FINAL para que
+// Kotlin quede en 21 pase lo que pase con el orden de los includes.
+android.kotlinOptions.jvmTarget = '21'

@@ -1,0 +1,15 @@
+FIX: jvmTarget 21 en :app (2026-10-07)
+======================================
+ZIP: fix-jvmtarget-2026-10-07.zip (1 archivo: movil/android/app/build.gradle)
+
+CAUSA: KGP 2.2 exige que Kotlin y Java compilen al mismo bytecode
+("Inconsistent JVM Target Compatibility"). El app/build.gradle decia
+17/17, pero capacitor.build.gradle (aplicado al final, Capacitor 8.5)
+sube Java a 21 -> choque javac(21) vs kotlin(17).
+
+FIX: Java 17 -> 21 y jvmTarget '17' -> '21' en el bloque android, mas
+enforcement `android.kotlinOptions.jvmTarget = '21'` AL FINAL del
+archivo para imponerse al include de Capacitor pase lo que pase.
+
+INSTALAR: descomprima sobre ~/WEB_LAB/cajafacil_movil/ (ruta
+movil/android/app/build.gradle), en Android Studio: Sync Now -> Run.
