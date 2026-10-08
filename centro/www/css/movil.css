@@ -1,0 +1,48 @@
+/* CajaFácil móvil — ajustes táctiles sobre el diseño web */
+.movil {
+    max-width: 640px; margin: 0 auto; min-height: 100vh;
+    padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+}
+.cargando { text-align: center; color: var(--suave); margin-top: 40px; }
+.movil-logo { display: block; margin: 8px auto 12px; width: 100%; max-width: 200px; height: auto; }
+.movil .btn { min-height: 48px; font-size: 1rem; }
+.movil .campo input, .movil .campo select { min-height: 48px; font-size: 1.05rem; }
+.pin-pantalla {
+    font-size: 2rem; letter-spacing: .5em; text-align: center;
+    background: #fff; border: 1px solid var(--linea); border-radius: 12px;
+    padding: 10px 0 10px .5em; margin-bottom: 12px;
+}
+.pin-teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pin-teclado button {
+    min-height: 62px; font-size: 1.5rem; font-weight: 800;
+    border: 1px solid var(--linea); border-radius: 12px; background: #fff;
+    cursor: pointer;
+}
+.pin-teclado button:active { background: #f0fdfa; border-color: var(--marca); }
+.pin-teclado button.funcion { font-size: 1rem; color: var(--suave); }
+.centro { text-align: center; }
+/* Navegación inferior */
+#vista { padding-bottom: 76px; }
+.barnav {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: 0; width: 100%; max-width: 640px;
+    display: flex; background: #0f172a;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-top: 1px solid #1e293b; z-index: 50;
+}
+.barnav button {
+    flex: 1; background: none; border: none; color: #94a3b8;
+    font-size: 1.3rem; padding: 8px 0 10px; cursor: pointer;
+}
+.barnav button small { display: block; font-size: .62rem; }
+.barnav button.activo { color: #fff; background: #1e293b; }
+/* Menú "Más" */
+.menu-rejilla { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.menu-item { min-height: 64px; font-size: 1rem; }
+/* POS en una columna */
+.movil .pos-rejilla { grid-template-columns: 1fr; }
+.movil .producto-hit { width: 100%; text-align: left; }
+@media print {
+    .barnav { display: none !important; }
+    #vista { padding-bottom: 0; }
+}

@@ -13,3 +13,4 @@ respaldo_*.sql
 respaldo_*.txt
 backups/
 logs/
+centro/datos.json

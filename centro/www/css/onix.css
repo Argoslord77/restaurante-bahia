@@ -1,0 +1,138 @@
+/* CajaFácil móvil — Tema "Ónix" (oscuro premium + ámbar oro).
+   Se carga DESPUÉS de app.css/movil.css y los re-tonaliza vía variables + overrides. */
+:root {
+    color-scheme: dark;
+    --fondo: #0b0f19;
+    --panel: #141b2c;
+    --tinta: #f4f6fb;
+    --suave: #8b93a7;
+    --linea: rgba(255, 255, 255, .08);
+    --marca: #f5b544;
+    --marca-osc: #d99a26;
+    --aviso: #f5b544;
+    --aviso-fondo: rgba(245, 181, 68, .10);
+    --ok: #34d399;
+    --ok-fondo: rgba(52, 211, 153, .12);
+    --mal: #fb7185;
+    --mal-fondo: rgba(251, 113, 133, .12);
+    --info-fondo: rgba(56, 189, 248, .12);
+}
+body { background: var(--fondo); color: var(--tinta); }
+a { color: var(--marca); }
+.suave { color: var(--suave); }
+.texto-mal { color: var(--mal); }
+.encabezado h1 { font-size: 1.55rem; font-weight: 800; letter-spacing: -.02em; }
+.btn svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
+h1.con-icono svg, h3.con-icono svg { width: 20px; height: 20px; vertical-align: -4px; margin-right: 8px; }
+.btn-primario { background: var(--marca); color: #1a1206; }
+.btn-primario:hover { background: var(--marca-osc); }
+.btn-claro { background: #1c2438; border-color: rgba(255, 255, 255, .10); color: var(--tinta); }
+.btn-claro:hover { background: #232d45; }
+.btn:disabled { opacity: .5; }
+.campo input, .campo select, .campo textarea {
+    background: #0f1524; border-color: rgba(255, 255, 255, .12); color: var(--tinta);
+}
+.campo input::placeholder { color: #5b6478; }
+.campo input:focus, .campo select:focus, .campo textarea:focus { outline: 2px solid var(--marca); border-color: var(--marca); }
+.tabla tbody tr:hover { background: rgba(255, 255, 255, .03); }
+.ins-gris { background: rgba(148, 163, 184, .16); color: #b6c2d2; }
+.ins-azul { background: var(--info-fondo); color: #38bdf8; }
+.aviso-ok { background: var(--ok-fondo); color: #a7f3d0; border: 1px solid rgba(52, 211, 153, .35); }
+.aviso-error { background: var(--mal-fondo); color: #fecdd3; border: 1px solid rgba(251, 113, 133, .35); }
+.aviso-alerta {
+    background: rgba(245, 181, 68, .08); border: 1px solid rgba(245, 181, 68, .35);
+    color: #e8d9b8; border-radius: 10px; padding: 11px 14px; margin-bottom: 14px; font-size: .92rem;
+}
+.login-fondo { background: radial-gradient(1200px 600px at 50% -10%, rgba(245, 181, 68, .12), transparent), #0b0f19; }
+.login-caja { background: var(--panel); border: 1px solid var(--linea); }
+.movil-logo { background: #fff; border-radius: 18px; padding: 10px; }
+.pin-pantalla { background: #0f1524; border-color: var(--linea); color: var(--tinta); }
+.pin-teclado button { background: #1c2438; border-color: rgba(255, 255, 255, .10); color: var(--tinta); }
+.pin-teclado button:active { background: rgba(245, 181, 68, .15); border-color: var(--marca); }
+.pin-teclado button.funcion { color: var(--suave); }
+.pin-teclado button:last-child { background: var(--marca); color: #1a1206; border-color: transparent; font-weight: 800; }
+.pin-teclado button svg { width: 24px; height: 24px; vertical-align: -5px; }
+.producto-hit { background: #0f1524; }
+.producto-hit:hover { border-color: var(--marca); background: rgba(245, 181, 68, .06); }
+.cant-btn { background: #1c2438; border-color: rgba(255, 255, 255, .12); color: var(--tinta); }
+.ticket { background: #fff; color: #0f172a; border-radius: 12px; }
+.ticket h2, .ticket .total { color: #0f172a; }
+.cabecera { display: flex; align-items: center; gap: 12px; padding: 6px 4px 14px; }
+.cab-avatar {
+    width: 46px; height: 46px; border-radius: 16px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px;
+    background: linear-gradient(135deg, #f5b544, #e07820); color: #1a1206;
+}
+.cab-nombre { font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+.cab-sub { font-size: 12px; color: var(--suave); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+.livedot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, .18); flex: none; }
+.lic-banner { border-radius: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 11px; font-size: .85rem; margin-bottom: 14px; line-height: 1.45; }
+.lic-banner svg { flex: none; width: 20px; height: 20px; }
+.lic-banner a { margin-left: auto; font-weight: 800; white-space: nowrap; text-decoration: none; }
+.lic-banner.alerta { background: rgba(245, 181, 68, .08); border: 1px solid rgba(245, 181, 68, .35); color: #e8d9b8; }
+.lic-banner.alerta svg, .lic-banner.alerta a { color: var(--marca); }
+.lic-banner.gracia { background: var(--mal-fondo); border: 1px solid rgba(251, 113, 133, .4); color: #fecdd3; }
+.lic-banner.gracia svg, .lic-banner.gracia a { color: #fda4af; }
+.menu-rejilla { gap: 12px; }
+.menu-tile {
+    background: var(--panel); border: 1px solid var(--linea); border-radius: 20px;
+    padding: 18px 14px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 13px;
+    font: inherit; color: var(--tinta); cursor: pointer; text-align: left; min-height: 118px;
+}
+.menu-tile:active { transform: scale(.98); }
+.tile-ic { width: 48px; height: 48px; border-radius: 15px; display: flex; align-items: center; justify-content: center; }
+.tile-ic svg { width: 25px; height: 25px; }
+.tile-nombre { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.tile-productos .tile-ic { background: rgba(245, 181, 68, .13); color: #f5b544; }
+.tile-inventario .tile-ic { background: rgba(56, 189, 248, .12); color: #38bdf8; }
+.tile-reportes .tile-ic { background: rgba(52, 211, 153, .12); color: #34d399; }
+.tile-ajustes .tile-ic { background: rgba(167, 139, 250, .13); color: #a78bfa; }
+.tile-usuarios .tile-ic { background: rgba(251, 113, 133, .12); color: #fb7185; }
+.tile-impresora .tile-ic { background: rgba(251, 191, 36, .12); color: #fbbf24; }
+.tile-licencia .tile-ic { background: rgba(45, 212, 191, .12); color: #2dd4bf; }
+.tile-respaldo .tile-ic { background: rgba(148, 163, 184, .14); color: #b6c2d2; }
+#vista { padding-bottom: 100px; }
+.barnav {
+    bottom: calc(10px + env(safe-area-inset-bottom)); width: calc(100% - 20px); max-width: 620px;
+    background: rgba(20, 27, 44, .94); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, .08); border-radius: 24px; border-top: 1px solid rgba(255, 255, 255, .08);
+    padding: 8px 6px 10px;
+}
+.barnav button {
+    color: #7d869b; font-size: .62rem; font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 6px 0 2px; border-radius: 14px;
+}
+.barnav button svg { width: 23px; height: 23px; }
+.barnav button small { font-size: .62rem; font-weight: 600; }
+.barnav button.activo { color: var(--marca); background: transparent; }
+
+/* ── Ajustes post-estreno Ónix ── */
+.fila-form > *, .rejilla > * { min-width: 0; }
+.campo input[type="date"] { min-width: 0; padding-left: 8px; padding-right: 6px; }
+.cant-input {
+    width: 64px; min-height: 40px; text-align: center; font-size: 1rem; font-weight: 800;
+    background: #0f1524; border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 8px; color: var(--tinta);
+}
+.cant-input:focus { outline: 2px solid var(--marca); border-color: var(--marca); }
+.cant-uni { color: var(--suave); font-size: .8rem; }
+#vista { padding-bottom: 12px; }
+.pie { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 20px 0 110px; color: var(--suave); font-size: .75rem; }
+.pie img { height: 26px; width: auto; }
+.pie strong { color: var(--tinta); font-weight: 700; }
+@media print { .pie { display: none !important; } }
+
+/* ── Fase 2: panel, recetas, UoM ── */
+.grafico svg { width: 100%; height: auto; display: block; }
+.grafico text { fill: var(--tinta); font-size: 11px; font-family: inherit; }
+.grafico .barra { fill: var(--marca); }
+.grafico .barra-max { fill: var(--ok); }
+.grafico .eje { stroke: rgba(255, 255, 255, .18); stroke-width: 1; }
+.linea-receta { display: grid; grid-template-columns: 1fr 76px 80px 40px; gap: 6px; margin-bottom: 8px; }
+.linea-receta input, .linea-receta select {
+    background: #0f1524; border: 1px solid rgba(255, 255, 255, .12);
+    color: var(--tinta); border-radius: 8px; padding: 9px 6px; font: inherit; min-width: 0;
+}
+.linea-receta .lr-x { padding-left: 0; padding-right: 0; }
