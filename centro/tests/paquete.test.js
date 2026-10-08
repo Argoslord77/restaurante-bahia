@@ -45,9 +45,12 @@ describe('Paquete Android', () => {
         expect(j).not.toMatch('printer');
     });
 
-    test('manifest con INTERNET y sin bluetooth', () => {
+    test('manifest con INTERNET, cleartext y sin bluetooth', () => {
         const m = lee('android/app/src/main/AndroidManifest.xml');
         expect(m).toContain('android.permission.INTERNET');
+        // El servidor se consume por http://IP:3101 (red local): Android 9+
+        // lo bloquea salvo que se declare aquí.
+        expect(m).toContain('android:usesCleartextTraffic="true"');
         expect(m).not.toMatch('BLUETOOTH');
     });
 

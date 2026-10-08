@@ -200,8 +200,19 @@ function crearApp(opts) {
 if (require.main === module) {
     const puerto = parseInt(process.argv[2], 10) || 3101;
     const { app, rutaDatos } = crearApp({});
-    app.listen(puerto, () => {
-        console.log(`[Centro] escuchando en http://localhost:${puerto} — datos: ${rutaDatos}`);
+    // Escucha en todas las interfaces para que los teléfonos de la red local lleguen.
+    app.listen(puerto, '0.0.0.0', () => {
+        console.log(`[Centro] escuchando en puerto ${puerto} — datos: ${rutaDatos}`);
+        try {
+            const os = require('os');
+            for (const nets of Object.values(os.networkInterfaces())) {
+                for (const n of nets || []) {
+                    if (n.family === 'IPv4' && !n.internal) {
+                        console.log(`[Centro] pruebe desde el teléfono: http://${n.address}:${puerto}/salud`);
+                    }
+                }
+            }
+        } catch (_) { /* anuncio best-effort */ }
     });
 }
 
