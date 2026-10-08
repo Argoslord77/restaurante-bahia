@@ -56,3 +56,7 @@ npx cap open android # abre Android Studio → Run
 - Sin impresión ni bluetooth: solo usa Filesystem (JSON local) + INTERNET.
 - El servidor admite URL `http://IP:3101` en Ajustes (use la IP de su PC,
   no localhost, cuando pruebe desde el teléfono).
+
+> **Android Studio:** al importar `centro/android`, si aparece
+> "Please Select Gradle JVM", pulse **Use JVM 21**.
+> (Gradle 8.14.3 no arranca en JVM 25+; el proyecto compila con Java 21.)
