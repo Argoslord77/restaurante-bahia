@@ -79,6 +79,15 @@ function crearApp(opts) {
     let db = cargar(rutaDatos);
     const app = express();
     app.use(express.json({ limit: '512kb' }));
+    // CORS: el WebView de Android aplica same-origin (curl/Termux/Node no).
+    // Sin estas cabeceras la app recibe "failed to fetch" aunque la red esté bien.
+    app.use((req, res, next) => {
+        res.set('Access-Control-Allow-Origin', '*');
+        res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
+        if (req.method === 'OPTIONS') return res.sendStatus(204);
+        next();
+    });
 
     const error = (res, codigo, mensaje) => res.status(codigo).json({ ok: false, error: mensaje });
 

@@ -101,6 +101,14 @@ describe('Centro WS', () => {
         expect(j.productos[0].negocio).toBeTruthy();
     });
 
+    test('CORS habilitado para el WebView', async () => {
+        const r = await fetch(base + '/salud');
+        expect(r.headers.get('access-control-allow-origin')).toBe('*');
+        const pre = await fetch(base + '/api/v1/negocios/n1/productos', { method: 'OPTIONS' });
+        expect(pre.status).toBe(204);
+        expect(pre.headers.get('access-control-allow-headers')).toMatch('X-API-Key');
+    });
+
     test('el JSON persiste en disco', async () => {
         const db = JSON.parse(fs.readFileSync(ruta, 'utf8'));
         expect(db.negocios.length).toBeGreaterThanOrEqual(3);
