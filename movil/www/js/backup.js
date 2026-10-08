@@ -11,7 +11,7 @@
     const APP = 'cajafacil-movil';
     const V = 1;
     const COLECCIONES = ['usuarios', 'categorias', 'productos', 'turnos', 'ventas',
-                         'movimientos', 'caja_movimientos', 'ajustes', 'licencia_eventos'];
+                         'movimientos', 'caja_movimientos', 'ajustes', 'licencia_eventos', 'fusiones'];
     const AUTOS = 7; // respaldos automáticos rotativos
 
     const selloPaquete = (store, datos) =>

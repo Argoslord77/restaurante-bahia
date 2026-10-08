@@ -1115,6 +1115,7 @@ async function licencia(ctx) {
         const { sesion } = ctx;
         const admin = pudeVer(sesion, ['administrador']);
         const cajaR = pudeVer(sesion, ['administrador', 'cajero']);
+        const respR = G('CFFusion').puedeExportar(sesion.rol);
         const item = (v, t) => `<button class="menu-tile tile-${v}" data-ir="${v}"><span class="tile-ic">${I(v)}</span><span class="tile-nombre">${t}</span></button>`;
         vista(`<div class="encabezado"><h1>Más</h1></div>
         <div class="menu-rejilla">
@@ -1125,21 +1126,29 @@ async function licencia(ctx) {
             ${admin ? item('usuarios', 'Usuarios') : ''}
             ${cajaR ? item('impresora', 'Impresora') : ''}
 ${admin ? item('licencia', 'Licencia') : ''}
-            ${item('respaldo', 'Respaldo')}
+            ${respR ? item('respaldo', 'Respaldo') : ''}
         </div>`);
         vistaBindIr(ctx);
     }
 
     // ── Respaldo ──
     async function respaldo(ctx) {
-        const { store } = ctx;
+        const { store, sesion, ir } = ctx;
+        if (!G('CFFusion').puedeExportar(sesion.rol)) { ir('inicio'); return; }
+        const esAdmin = G('CFFusion').puedeRestaurar(sesion.rol);
+        const turno = esAdmin ? await G('CFCaja').abierto(store) : null;
         vista(`<div class="encabezado"><h1>Respaldo</h1></div>
         <div class="tarjeta"><div id="r-msg"></div>
             <button class="btn btn-primario btn-bloque" id="r-gen">Generar y compartir respaldo</button>
             <div class="ayuda">Se crea un JSON con todo: se comparte por WhatsApp, correo o descarga.</div></div>
-        <div class="tarjeta"><h3>Restaurar</h3>
+        ${esAdmin ? `<div class="tarjeta"><h3>Restaurar</h3>
             <div class="campo"><label>Archivo de respaldo (.json)</label><input type="file" id="r-file" accept=".json,application/json"></div>
-            <button class="btn btn-peligro btn-bloque" id="r-res">Restaurar (reemplaza todo)</button></div>`);
+            <button class="btn btn-peligro btn-bloque" id="r-res">Restaurar (reemplaza todo)</button></div>
+        <div class="tarjeta"><h3>Combinar ventas de vendedor</h3>
+            <div class="ayuda">Agrega las ventas de otro equipo SIN borrar nada. Se asignan al turno abierto actual.</div>
+            <div class="ayuda">Turno: <b>${turno ? '#' + turno.id : 'ninguno abierto'}</b></div>
+            <div class="campo"><label>Respaldo del vendedor (.json)</label><input type="file" id="r-file2" accept=".json,application/json"></div>
+            <button class="btn btn-claro btn-bloque" id="r-combina">Combinar respaldo</button></div>` : ''}`);
         $('r-gen').addEventListener('click', async () => {
             try {
                 const paquete = await G('CFBackup').generar(store);
@@ -1147,7 +1156,7 @@ ${admin ? item('licencia', 'Licencia') : ''}
                 $('r-msg').innerHTML = aviso('ok', como === 'share' ? 'Respaldo listo para enviar.' : 'Respaldo descargado.');
             } catch (e) { $('r-msg').innerHTML = aviso('error', e.message); }
         });
-        $('r-res').addEventListener('click', () => {
+        if ($('r-res')) $('r-res').addEventListener('click', () => {
             const f = $('r-file').files[0];
             if (!f) { $('r-msg').innerHTML = aviso('error', 'Elija primero el archivo.'); return; }
             if (!confirm('¿Restaurar? Se reemplazarán TODOS los datos del equipo.')) return;
@@ -1157,6 +1166,30 @@ ${admin ? item('licencia', 'Licencia') : ''}
                     await G('CFBackup').restaurar(store, JSON.parse(lector.result));
                     $('r-msg').innerHTML = aviso('ok', 'Restaurado. La app se reiniciará.');
                     setTimeout(() => location.reload(), 1200);
+                } catch (e) { $('r-msg').innerHTML = aviso('error', e.message); }
+            };
+            lector.readAsText(f);
+        });
+        if ($('r-combina')) $('r-combina').addEventListener('click', () => {
+            const f = $('r-file2').files[0];
+            if (!f) { $('r-msg').innerHTML = aviso('error', 'Elija primero el archivo del vendedor.'); return; }
+            const lector = new FileReader();
+            lector.onload = async () => {
+                try {
+                    const t = await G('CFCaja').abierto(store);
+                    if (!t) { $('r-msg').innerHTML = aviso('error', 'Abra un turno de caja para recibir las ventas.'); return; }
+                    const rep = await G('CFFusion').combinar(store, JSON.parse(lector.result), { usuario_id: sesion.id, turno_id: t.id });
+                    let msg = `Combinado: ${rep.ventas_agregadas} venta(s), ${rep.movimientos_agregados} movimiento(s).`;
+                    if (rep.productos_creados || rep.categorias_creadas) {
+                        msg += ` Nuevos: ${rep.productos_creados} producto(s), ${rep.categorias_creadas} categoría(s).`;
+                    }
+                    if (rep.ventas_omitidas || rep.movimientos_omitidos) {
+                        msg += ` Ya estaban: ${rep.ventas_omitidas} venta(s).`;
+                    }
+                    if (rep.negativos.length) {
+                        msg += ' En negativo: ' + rep.negativos.map(n => `${n.producto} (${n.stock})`).join(', ') + '.';
+                    }
+                    $('r-msg').innerHTML = aviso('ok', msg);
                 } catch (e) { $('r-msg').innerHTML = aviso('error', e.message); }
             };
             lector.readAsText(f);
