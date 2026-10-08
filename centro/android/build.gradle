@@ -1,0 +1,67 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    ext.kotlinVersion = '2.2.10' // alineado con @devlas/capacitor-thermal-printer 0.8.0 (su stdlib es 2.2.10; KGP 2.0.x revienta leyendo esa metadata)
+    
+    repositories {
+        // Espejos primero: dl.google.com / Maven Central pueden estar bloqueados por region.
+        // Son espejos completos; si tienes acceso directo, sube google()/mavenCentral() arriba.
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+        classpath 'com.google.gms:google-services:4.4.4'
+
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        // Espejos primero: dl.google.com / Maven Central pueden estar bloqueados por region.
+        // Son espejos completos; si tienes acceso directo, sube google()/mavenCentral() arriba.
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        google()
+        mavenCentral()
+        // JitPack al final, SOLO com.github.*: usb-serial-for-android:3.11.0
+        // (plugin @devlas 0.8.0, balanza serial) no existe en Central, solo en
+        // JitPack. Va en el root porque Gradle resuelve los transitivos con los
+        // repos del consumidor (:app), no con los del módulo que los declara.
+        maven {
+            url 'https://jitpack.io'
+            content { includeGroupByRegex 'com\\.github\\..*' }
+        }
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+// OVERRIDE Capacitor 8.5.2: su capacitor/build.gradle pinea AGP 8.13.0,
+// versión RETIRADA de Google Maven (404). Como vive en node_modules (se
+// regenera con npm ci), no se parcha ahí: se fuerza 8.13.2 verificado y
+// se inyectan espejos en TODOS los buildscripts (root + subproyectos).
+allprojects {
+    buildscript {
+        repositories {
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/central' }
+        }
+        dependencies {
+            constraints {
+                classpath('com.android.tools.build:gradle:8.13.2') {
+                    because '8.13.0 retirado de Google Maven; alinear todo a 8.13.2 verificado'
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "centro-precios",
+  "version": "0.1.0",
+  "description": "Centro de Productos y Precios: web service JSON + app móvil Android (Capacitor).",
+  "scripts": {
+    "servidor": "node server.js",
+    "test": "jest",
+    "sync": "npx cap sync",
+    "android": "npx cap sync android && npx cap open android"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/filesystem": "^8.1.4",
+    "express": "^5.2.1",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2"
+  }
+}

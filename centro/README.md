@@ -42,3 +42,17 @@ node centro/server.js 3101
 ```sh
 npx jest centro/tests
 ```
+
+## Empaquetar para Android (Capacitor)
+
+```sh
+cd centro
+npm install          # @capacitor/* + express
+npx cap sync         # copia www/ al proyecto Android
+npx cap open android # abre Android Studio → Run
+```
+
+- App ID: `com.argoscore.centroprecios` · nombre: Centro de Precios.
+- Sin impresión ni bluetooth: solo usa Filesystem (JSON local) + INTERNET.
+- El servidor admite URL `http://IP:3101` en Ajustes (use la IP de su PC,
+  no localhost, cuando pruebe desde el teléfono).
