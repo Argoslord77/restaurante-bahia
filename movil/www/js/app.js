@@ -24,7 +24,7 @@
             const r = await store.init();
             await CFAjustes.asegurar(store);
             await CFMigraciones.migrar(store);
-            console.log('[CajaFácil] almacén:', store.backendNombre, '| instalación:', r.instalacion);
+            await CFTema.sincronizar(store, document);            console.log('[CajaFácil] almacén:', store.backendNombre, '| instalación:', r.instalacion);
             const usuarios = await CFUsers.listar(store);
             if (!usuarios.length) return verCrearAdmin();
             verLogin(usuarios.filter(u => u.activo));

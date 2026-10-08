@@ -852,6 +852,12 @@ function unaSemana(hasta) {
             <div class="campo"><label>IVA (%)</label><input id="a-iva" type="number" min="0" max="100" step="0.01" value="${esc(a.iva_pct || '16')}" inputmode="decimal"></div>
             <div class="campo"><label>Pie del ticket</label><input id="a-pie" value="${esc(a.ticket_pie || '')}" maxlength="255"></div>
             <button class="btn btn-primario btn-bloque" id="a-ok">Guardar</button></div>
+        <div class="tarjeta"><h3>Apariencia</h3>
+            <div class="grupo-btn" id="a-tema">
+                <button class="btn btn-claro" style="flex:1" data-tema="onix">${I('luna')} Ónix</button>
+                <button class="btn btn-claro" style="flex:1" data-tema="blanco">${I('sol')} Blanco</button>
+            </div>
+            <p class="suave">Ónix: tema oscuro. Blanco: tema claro empresarial. Se aplica al instante.</p></div>
         <div class="tarjeta"><h3>Datos de ejemplo</h3>
             <p class="suave">Crea 3 categorías y 8 productos con stock. Solo si el catálogo está vacío.</p>
             <button class="btn btn-claro btn-bloque" id="a-demo">Cargar datos de ejemplo</button></div>`);
@@ -865,6 +871,18 @@ function unaSemana(hasta) {
             await G('CFAjustes').set(store, 'ticket_pie', $('a-pie').value || '');
             $('a-msg').innerHTML = aviso('ok', 'Ajustes guardados.');
         });
+        const temaBtns = Array.from(document.querySelectorAll('#a-tema [data-tema]'));
+        function pintarTema(activo) {
+            temaBtns.forEach(b => {
+                const on = b.getAttribute('data-tema') === activo;
+                b.classList.toggle('btn-primario', on);
+                b.classList.toggle('btn-claro', !on);
+            });
+        }
+        pintarTema(await G('CFTema').leer(store));
+        temaBtns.forEach(b => b.addEventListener('click', async () => {
+            pintarTema(await G('CFTema').alternar(store, document, b.getAttribute('data-tema')));
+        }));
         $('a-demo').addEventListener('click', async () => {
             if (!confirm('¿Cargar los datos de ejemplo?')) return;
             try {
