@@ -16,6 +16,9 @@ describe('Paquete Android', () => {
         expect(c.appId).toBe(APPID);
         expect(c.appName).toBe(NOMBRE);
         expect(c.webDir).toBe('www');
+        // Esquema http: la app habla con el servidor por http://IP:3101 (red
+        // local); con https el WebView bloquearía todo por contenido mixto.
+        expect(c.androidScheme).toBe('http');
         expect(fs.existsSync(path.join(RAIZ, 'www', 'index.html'))).toBe(true);
     });
 

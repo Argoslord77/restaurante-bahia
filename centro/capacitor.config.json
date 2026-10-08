@@ -1,5 +1,6 @@
 {
   "appId": "com.argoscore.centroprecios",
   "appName": "Centro de Precios",
-  "webDir": "www"
+  "webDir": "www",
+  "androidScheme": "http"
 }
