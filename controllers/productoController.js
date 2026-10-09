@@ -1,5 +1,14 @@
 const ProductoService = require('../services/productoService');
 
+// Descarga CSV (mismo formato que los reportes: ; + BOM para Excel).
+function responderCSV(res, nombre, csv, filas) {
+    const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.csv"`);
+    if (filas != null) res.setHeader('X-Reporte-Filas', String(filas));
+    return res.send(csv);
+}
+
 /**
  * Renderiza la vista principal del catálogo con productos, categorías y unidades
  */
@@ -20,6 +29,20 @@ exports.renderProductos = async (req, res) => {
         console.error('Error al renderizar catálogo:', error);
         req.flash('error_msg', 'No se pudo cargar el catálogo de productos.');
         res.redirect('/admin/dashboard');
+    }
+};
+
+/**
+ * Exporta el catálogo a CSV (guardar / compartir)
+ */
+exports.exportarProductos = async (req, res) => {
+    try {
+        const productos = await ProductoService.getCatalogoCompleto();
+        return responderCSV(res, 'catalogo_productos',
+            ProductoService.catalogoACSV(productos), productos.length);
+    } catch (error) {
+        console.error('Error al exportar productos:', error);
+        return res.redirect('/admin/productos');
     }
 };
 

@@ -1,5 +1,13 @@
 const MenuModel = require('../models/menuModel');
 
+const csvNum = (v, dec = 2) => Number(v || 0).toFixed(dec).replace('.', ',');
+const csvTexto = (v) => String(v == null ? '' : v).replace(/[;\r\n]+/g, ' ');
+// Estado visible en carta: acepta 1/0, '1'/'0', true/false y 'activo'/'inactivo'.
+function normalizarActivo(v) {
+    if (v === 0 || v === false || v === '0' || v === 'inactivo' || v === 'oculto') return 0;
+    return 1;
+}
+
 class MenuService {
 
     async getAllItems() {
@@ -21,7 +29,7 @@ class MenuService {
             throw new Error('Nombre requerido');
         }
 
-        return await MenuModel.create(data);
+        return await MenuModel.create({ ...data, activo: normalizarActivo(data.activo) });
     }
 
     async updateItem(id, data) {
@@ -30,7 +38,7 @@ class MenuService {
             throw new Error('ID requerido');
         }
 
-        return await MenuModel.update(id, data);
+        return await MenuModel.update(id, { ...data, activo: normalizarActivo(data.activo) });
     }
 
     async deleteItem(id) {
@@ -47,7 +55,7 @@ class MenuService {
         const items = await MenuModel.getAll();
 
         return items.filter(
-            item => item.estado === 'activo'
+            item => Number(item.activo) === 1
         );
     }
 
@@ -64,6 +72,26 @@ class MenuService {
 
     async getActiveCategories() {
         return await MenuModel.getActiveCategories();
+    }
+
+    /** CSV del catálogo de platillos (imprimir / guardar / compartir). */
+    catalogoACSV(platillos) {
+        const filas = [];
+        filas.push('Carta de platillos');
+        filas.push('');
+        filas.push('Nombre;Descripcion;Categoria;Precio CUP;Precio Alt;Precio USD;Estado');
+        for (const p of platillos || []) {
+            filas.push([
+                csvTexto(p.nombre),
+                csvTexto(p.descripcion),
+                csvTexto(p.nombre_categoria || p.categoria),
+                csvNum(p.precio),
+                p.precio_alt == null ? '' : csvNum(p.precio_alt),
+                p.precio_usd == null ? '' : csvNum(p.precio_usd),
+                (Number(p.activo) === 1 || p.activo == null) ? 'En carta' : 'Oculto'
+            ].join(';'));
+        }
+        return '\uFEFF' + filas.join('\r\n') + '\r\n';
     }
 
 }

@@ -42,8 +42,15 @@ router.get('/productos',
     productoController.renderProductos
 );
 
+// Exportar catálogo a CSV (ANTES de /:id para que no lo capture)
+router.get('/productos/exportar',
+    ensureAuthenticated,
+    checkRole(['superadministrador', 'administrador']),
+    productoController.exportarProductos
+);
+
 // Obtener datos de un producto (para el modal de edición)
-router.get('/productos/:id', 
+router.get('/productos/:id',
     ensureAuthenticated, 
     productoController.getProductoJson
 );

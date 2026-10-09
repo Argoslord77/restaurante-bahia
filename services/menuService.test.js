@@ -62,7 +62,7 @@ describe('MenuService', () => {
       const result = await menuService.createItem(itemData);
       
       expect(result).toBeDefined();
-      expect(MenuModel.create).toHaveBeenCalledWith(itemData);
+      expect(MenuModel.create).toHaveBeenCalledWith({ ...itemData, activo: 1 });
     });
 
     it('should throw error if nombre is missing', async () => {
@@ -87,7 +87,7 @@ describe('MenuService', () => {
       const result = await menuService.updateItem(1, itemData);
       
       expect(result).toBeDefined();
-      expect(MenuModel.update).toHaveBeenCalledWith(1, itemData);
+      expect(MenuModel.update).toHaveBeenCalledWith(1, { ...itemData, activo: 1 });
     });
 
     it('should throw error if id is not provided', async () => {
@@ -107,6 +107,39 @@ describe('MenuService', () => {
 
     it('should throw error if id is not provided', async () => {
       await expect(menuService.deleteItem()).rejects.toThrow('ID requerido');
+    });
+  });
+
+  describe('estado visible/oculto', () => {
+    it('normaliza el estado al crear y editar', async () => {
+      MenuModel.create.mockResolvedValue({ insertId: 5 });
+      await menuService.createItem({ nombre: 'X', activo: '0' });
+      expect(MenuModel.create).toHaveBeenCalledWith({ nombre: 'X', activo: 0 });
+
+      MenuModel.update.mockResolvedValue({ affectedRows: 1 });
+      await menuService.updateItem(5, { nombre: 'X', activo: 'inactivo' });
+      expect(MenuModel.update).toHaveBeenCalledWith(5, { nombre: 'X', activo: 0 });
+    });
+
+    it('getActiveItems filtra por activo', async () => {
+      MenuModel.getAll.mockResolvedValue([
+        { id: 1, activo: 1 }, { id: 2, activo: 0 }, { id: 3, activo: 1 }
+      ]);
+      const result = await menuService.getActiveItems();
+      expect(result.map(i => i.id)).toEqual([1, 3]);
+    });
+  });
+
+  describe('catalogoACSV', () => {
+    it('genera CSV con BOM, ; y estado en texto', () => {
+      const csv = menuService.catalogoACSV([
+        { nombre: 'Ropa;Vieja', descripcion: 'A\nB', nombre_categoria: 'Platos', precio: 250, precio_alt: null, precio_usd: 2.5, activo: 1 },
+        { nombre: 'Oculto', precio: 100, activo: 0 }
+      ]);
+      expect(csv.charCodeAt(0)).toBe(0xFEFF);
+      expect(csv).toContain('Nombre;Descripcion;Categoria;Precio CUP;Precio Alt;Precio USD;Estado');
+      expect(csv).toContain('Ropa Vieja;A B;Platos;250,00;;2,50;En carta');
+      expect(csv).toContain('Oculto;;;100,00;;;Oculto');
     });
   });
 });

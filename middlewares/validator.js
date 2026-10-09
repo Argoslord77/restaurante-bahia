@@ -132,7 +132,11 @@ const menuValidationRules = {
         body('categoria')
             .optional()
             .trim()
-            .isLength({ max: 50 }).withMessage('La categoría no puede exceder 50 caracteres')
+            .isLength({ max: 50 }).withMessage('La categoría no puede exceder 50 caracteres'),
+        
+        body('estado')
+            .optional()
+            .isIn(['0', '1', 0, 1]).withMessage('El estado debe ser visible (1) u oculto (0)')
     ],
     
     update: [
@@ -161,7 +165,11 @@ const menuValidationRules = {
         body('categoria')
             .optional()
             .trim()
-            .isLength({ max: 50 }).withMessage('La categoría no puede exceder 50 caracteres')
+            .isLength({ max: 50 }).withMessage('La categoría no puede exceder 50 caracteres'),
+        
+        body('estado')
+            .optional()
+            .isIn(['0', '1', 0, 1]).withMessage('El estado debe ser visible (1) u oculto (0)')
     ],
     
     delete: [

@@ -64,6 +64,10 @@
             box-shadow: 0 6px 20px rgba(13, 110, 253, 0.4);
             transform: translateY(-3px) scale(1.05);
         }
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn, .sticky-search-container, .modal, .btn-scroll-top { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
     </style>
 </head>
 <body>
@@ -101,6 +105,17 @@
                         <span class="text-secondary small fw-semibold text-uppercase font-monospace">Inventario</span>
                         <span id="contadorProductosCatalogo" class="badge bg-dark text-white rounded-pill px-2.5 py-1.5 fs-7"><%= productos.length %></span>
                     </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/admin/productos/exportar" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Guardar el listado como CSV">
+                        <i class="fa-solid fa-file-csv text-success me-1"></i> Guardar CSV
+                    </a>
+                    <button type="button" onclick="window.print()" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Imprimir el listado">
+                        <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                    </button>
+                    <button type="button" id="btnCompartirProductos" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Compartir el listado">
+                        <i class="fa-solid fa-share-nodes text-primary me-1"></i> Compartir
+                    </button>
                 </div>
             </div>
 
@@ -313,6 +328,27 @@
     const bsProductModal = new bootstrap.Modal(productModalElement);
 
     document.addEventListener('DOMContentLoaded', function() {
+        // Compartir listado: hoja del sistema (WhatsApp, correo...) y si el
+        // equipo no puede compartir archivos, descarga directa del CSV.
+        const btnCompartirProd = document.getElementById('btnCompartirProductos');
+        if (btnCompartirProd) {
+            btnCompartirProd.addEventListener('click', async () => {
+                try {
+                    const resp = await fetch('/admin/productos/exportar');
+                    const blob = await resp.blob();
+                    const archivo = new File([blob], 'catalogo_productos.csv', { type: 'text/csv' });
+                    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+                        await navigator.share({ files: [archivo], title: 'Catálogo de productos' });
+                        return;
+                    }
+                    throw new Error('sin-share-archivos');
+                } catch (e) {
+                    if (e && e.name === 'AbortError') return;
+                    window.location.href = '/admin/productos/exportar';
+                }
+            });
+        }
+
         const inputBuscar = document.getElementById('buscarProductoCatalogo');
         const contenedorSticky = document.getElementById('contenedorBuscadorProductos');
         const btnScrollTop = document.getElementById('btnScrollTop');

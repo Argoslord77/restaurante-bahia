@@ -1,6 +1,9 @@
 const ProductoModel = require('../models/productoModel');
 const db = require('../config/db'); // Para consultas auxiliares de catálogos
 
+const csvNum = (v, dec = 2) => Number(v || 0).toFixed(dec).replace('.', ',');
+const csvTexto = (v) => String(v == null ? '' : v).replace(/[;\r\n]+/g, ' ');
+
 class ProductoService {
     /**
      * Obtiene el catálogo completo procesado para la vista
@@ -81,6 +84,27 @@ class ProductoService {
         const producto = await ProductoModel.getById(id);
         if (!producto) throw new Error('Producto no encontrado.');
         return producto;
+    }
+
+    /** CSV del catálogo de productos de inventario. */
+    catalogoACSV(productos) {
+        const filas = [];
+        filas.push('Catalogo de productos');
+        filas.push('');
+        filas.push('Codigo;Nombre;Categoria;U. Inventario;Costo Promedio;Stock Min;Venta Directa;Estado');
+        for (const p of productos || []) {
+            filas.push([
+                csvTexto(p.codigo),
+                csvTexto(p.nombre),
+                csvTexto(p.categoria_nombre),
+                csvTexto(p.unidad_nombre),
+                csvNum(p.costo_promedio),
+                csvNum(p.stock_minimo, 3),
+                Number(p.permitida_venta) === 1 ? 'Si' : 'No',
+                Number(p.activo) === 1 ? 'Activo' : 'Inactivo'
+            ].join(';'));
+        }
+        return '\uFEFF' + filas.join('\r\n') + '\r\n';
     }
 }
 

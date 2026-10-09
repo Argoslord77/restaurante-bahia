@@ -108,8 +108,10 @@ app.use(flash());
 // ==========================================
 // MIDDLEWARE DE RECORDARME AUTOMÁTICO
 // ==========================================
-const { checkRememberMe } = require('./middlewares/auth');
+const { checkRememberMe, deslizarSesion } = require('./middlewares/auth');
 app.use(checkRememberMe);
+// Sesión deslizante: la actividad renueva la vigencia (anti-expulsión).
+app.use(deslizarSesion);
 
 // ==========================================
 // 2. VARIABLES GLOBALES PARA EJS (Justo después de flash)

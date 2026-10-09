@@ -6,6 +6,15 @@ const PrecioControlService = require('../services/precioControlService');
 const fs = require('fs');
 const path = require('path');
 
+// Descarga CSV (mismo formato que los reportes: ; + BOM para Excel).
+function responderCSV(res, nombre, csv, filas) {
+    const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.csv"`);
+    if (filas != null) res.setHeader('X-Reporte-Filas', String(filas));
+    return res.send(csv);
+}
+
 module.exports = {
 
     // 1. LISTAR TODOS LOS PLATILLOS + PLATILLOS DEL DÍA DEL TURNO ACTIVO E HISTÓRICOS
@@ -57,9 +66,21 @@ module.exports = {
         }
     },
 
+    // 1b. EXPORTAR CATÁLOGO A CSV (guardar / compartir)
+    exportarMenu: async (req, res) => {
+        try {
+            const platillos = await menuService.getAllItems();
+            return responderCSV(res, 'carta_platillos',
+                menuService.catalogoACSV(platillos), platillos.length);
+        } catch (error) {
+            console.error('Error al exportar el menú:', error);
+            return res.redirect('/admin/menu');
+        }
+    },
+
     // 2. CREAR PLATILLO REGULAR
     createDish: async (req, res) => {
-        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd } = req.body;
+        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, estado } = req.body;
         const foto = req.file ? req.file.filename : null;
         // Control de precios de cartas (Configuración → Opciones generales):
         // con el control activo solo el usuario designado puede guardar precios.
@@ -85,7 +106,8 @@ module.exports = {
                 categoria: categoria.trim(),
                 precio_alt: finalPrecioAlt,
                 precio_usd: finalPrecioUsd,
-                foto: finalFoto
+                foto: finalFoto,
+                activo: estado
             });
 
             return res.status(201).json({
@@ -105,7 +127,7 @@ module.exports = {
     // 3. EDITAR PLATILLO REGULAR
     updateDish: async (req, res) => {
         const { id } = req.params;
-        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, fotoActual } = req.body;
+        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, fotoActual, estado } = req.body;
         const foto = req.file ? req.file.filename : (fotoActual && fotoActual !== 'null' ? fotoActual.trim() : null);
         // Control de precios de cartas (Configuración → Opciones generales):
         // con el control activo solo el usuario designado puede guardar precios.
@@ -135,7 +157,8 @@ module.exports = {
                 categoria: categoria.trim(),
                 precio_alt: finalPrecioAlt,
                 precio_usd: finalPrecioUsd,
-                foto: foto
+                foto: foto,
+                activo: estado
             });
 
             return res.status(200).json({ success: true, message: `¡El platillo "${nombre.trim()}" se actualizó correctamente!` });

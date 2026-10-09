@@ -156,5 +156,24 @@ module.exports = {
         }
 
         next();
+    },
+
+    // Sesión deslizante: cada operación del usuario autenticado renueva su
+    // vigencia, para no expulsarlo en caliente a mitad del trabajo. Solo se
+    // toca la sesión si pasaron más de 5 minutos desde el último desliz
+    // (así no se escribe en la BD en cada petición): al modificarla,
+    // express-session la guarda, extiende expira_en y reemite la cookie con
+    // su maxAge renovado.
+    deslizarSesion: function(req, res, next) {
+        try {
+            if (req && req.session && typeof req.isAuthenticated === 'function' && req.isAuthenticated()) {
+                const ahora = Date.now();
+                const ultima = Number(req.session.ultima_actividad) || 0;
+                if (ahora - ultima > 5 * 60 * 1000) {
+                    req.session.ultima_actividad = ahora;
+                }
+            }
+        } catch (_) { /* el desliz nunca debe bloquear la petición */ }
+        next();
     }
 };

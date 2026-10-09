@@ -64,6 +64,10 @@
             box-shadow: 0 6px 20px rgba(13, 110, 253, 0.4);
             transform: translateY(-3px) scale(1.05);
         }
+        @media print {
+            #sidebarMenu, .content-header-responsive, .btn, .sticky-search-container, .modal, .btn-scroll-top { display: none !important; }
+            main { width: 100% !important; margin: 0 !important; }
+        }
     </style>
 </head>
 <body>
@@ -212,6 +216,17 @@
                     <div class="text-secondary small fw-semibold">
                         Platillos regulares en catálogo: <span id="contadorPlatillos" class="badge bg-dark text-white rounded-pill px-2.5 py-1.5"><%= locals.platillos ? platillos.length : 0 %></span>
                     </div>
+                    <div class="d-flex gap-2">
+                        <a href="/admin/menu/exportar" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Guardar el listado como CSV">
+                            <i class="fa-solid fa-file-csv text-success me-1"></i> Guardar CSV
+                        </a>
+                        <button type="button" onclick="window.print()" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Imprimir el listado">
+                            <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                        </button>
+                        <button type="button" id="btnCompartirMenu" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Compartir el listado">
+                            <i class="fa-solid fa-share-nodes text-primary me-1"></i> Compartir
+                        </button>
+                    </div>
                 </div>
 
                 <!-- TABLA DE PLATILLOS REGULARES -->
@@ -226,13 +241,14 @@
                                         <th class="py-3">Precio Principal (CUP)</th>
                                         <th class="py-3">Precio Alt.</th>
                                         <th class="py-3">Precio (USD/Zelle)</th>
+                                        <th class="py-3">Estado</th>
                                         <th class="text-center py-3" style="width: 150px;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <% if (!locals.platillos || platillos.length === 0) { %>
                                         <tr>
-                                            <td colspan="6" class="text-center py-5 text-muted">
+                                            <td colspan="7" class="text-center py-5 text-muted">
                                                 <i class="fa-solid fa-utensils d-block fs-2 mb-2 text-secondary"></i> No hay platillos registrados en el menú.
                                             </td>
                                         </tr>
@@ -266,6 +282,13 @@
                                                 <td class="text-success small fw-semibold">
                                                     <%= (platillo.precio_usd) ? '$' + parseFloat(platillo.precio_usd).toFixed(2) : '-' %>
                                                 </td>
+                                                <td>
+                                                    <% if (Number(platillo.activo) !== 0) { %>
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill fs-7">En carta</span>
+                                                    <% } else { %>
+                                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill fs-7">Oculto</span>
+                                                    <% } %>
+                                                </td>
                                                 <td class="text-center">
                                                     <div class="btn-group gap-1">
                                                         <button class="btn btn-sm btn-outline-secondary border-0"
@@ -279,6 +302,7 @@
                                                             data-categoria="<%= platillo.categoria %>"
                                                             data-precio_alt="<%= platillo.precio_alt || '' %>"
                                                             data-precio_usd="<%= platillo.precio_usd || '' %>"
+                                                            data-activo="<%= (platillo.activo == null || Number(platillo.activo) === 1) ? 1 : 0 %>"
                                                             data-foto="<%= platillo.foto || '' %>">
                                                             <i class="fa-solid fa-pen-to-square"></i>
                                                         </button>
@@ -537,6 +561,13 @@
                                 </select>
                             </div>
                             <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Estado en la carta *</label>
+                                <select name="estado" class="form-select" required>
+                                    <option value="1" selected>En carta (visible para el cliente)</option>
+                                    <option value="0">Oculto (no se muestra)</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Foto del Platillo</label>
                                 <input type="file" name="foto" class="form-control" accept="image/*">
                             </div>
@@ -602,6 +633,13 @@
                                 </select>
                             </div>
                             <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Estado en la carta *</label>
+                                <select name="estado" id="edit_estado" class="form-select" required>
+                                    <option value="1">En carta (visible para el cliente)</option>
+                                    <option value="0">Oculto (no se muestra)</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Cambiar Foto del Platillo</label>
                                 <input type="file" name="foto" class="form-control" accept="image/*">
                             </div>
@@ -622,6 +660,27 @@
     
     <script>
     document.addEventListener("DOMContentLoaded", function() {
+
+        // Compartir listado: hoja del sistema (WhatsApp, correo...) y si el
+        // equipo no puede compartir archivos, descarga directa del CSV.
+        const btnCompartirMenu = document.getElementById('btnCompartirMenu');
+        if (btnCompartirMenu) {
+            btnCompartirMenu.addEventListener('click', async () => {
+                try {
+                    const resp = await fetch('/admin/menu/exportar');
+                    const blob = await resp.blob();
+                    const archivo = new File([blob], 'carta_platillos.csv', { type: 'text/csv' });
+                    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+                        await navigator.share({ files: [archivo], title: 'Carta de platillos' });
+                        return;
+                    }
+                    throw new Error('sin-share-archivos');
+                } catch (e) {
+                    if (e && e.name === 'AbortError') return;
+                    window.location.href = '/admin/menu/exportar';
+                }
+            });
+        }
 
         // Buscador catálogo regular
         const inputBuscar = document.getElementById('buscarPlatilloCatalogo');
@@ -855,6 +914,7 @@
                 document.getElementById('edit_categoria').value = button.getAttribute('data-categoria') || '';
                 document.getElementById('edit_precio_alt').value = button.getAttribute('data-precio_alt') || '';
                 document.getElementById('edit_precio_usd').value = button.getAttribute('data-precio_usd') || '';
+                document.getElementById('edit_estado').value = button.getAttribute('data-activo') || '1';
                 const foto = button.getAttribute('data-foto');
                 document.getElementById('edit_foto').value = (foto && foto !== 'null') ? foto : '';
 
