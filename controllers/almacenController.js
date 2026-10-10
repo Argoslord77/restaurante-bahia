@@ -25,6 +25,7 @@ const viewAlmacenes = async (req, res, next) => {
             title: 'Gestión de Almacenes - Restaurante Bahía',
             almacenes: almacenes || [],
             usuarios: usuarios || [],
+            user: req.user || (req.session && req.session.user) || null,
             view: "warehouse"
         });
 

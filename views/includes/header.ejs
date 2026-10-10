@@ -11,10 +11,10 @@
     </div>
     
     <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center justify-content-sm-end gap-2 w-100 w-sm-auto structural-actions-block">
-        <% if (user.rol === 'superadministrador' || user.rol === 'administrador') { %>
+        <% if (user && (user.rol === 'superadministrador' || user.rol === 'administrador')) { %>
             <% if (typeof add_btn !== 'undefined' && add_btn) { %>
                 <button class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 d-flex align-items-center justify-content-center gap-1 text-dark flex-shrink-0" data-bs-toggle="modal" data-bs-target="<% if(typeof modal !== 'undefined' && modal){%>#<%- modal %><% } else { %>#modalWindow<% } %>">
-                    <i class="fa-solid fa-plus text-secondary"></i> <span><% if(btn_label !== 'undefined' && btn_label){%><%- btn_label %><%} else {%>Agregar Elemento<%}%></span>
+                    <i class="fa-solid fa-plus text-secondary"></i> <span><% if(typeof btn_label !== 'undefined' && btn_label){%><%- btn_label %><%} else {%>Agregar Elemento<%}%></span>
                 </button>
             <% } else if(typeof warehouse_menu !== 'undefined' && warehouse_menu) { %>
                 <div class="flex-shrink-0">

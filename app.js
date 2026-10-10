@@ -119,7 +119,11 @@ app.use(deslizarSesion);
 app.use((req, res, next) => {
     res.locals.success_msg = req.flash('success_msg');
     res.locals.error_msg = req.flash('error_msg');
-    res.locals.user = req.session.user || null;
+    // Puente entre los dos sistemas de auth: Passport deja el usuario en
+    // req.user y el login clásico en req.session.user. Si uno falta (p.ej.
+    // sesión creada antes de una actualización), el otro lo cubre para que
+    // ninguna vista se quede con user=null.
+    res.locals.user = (req.session && req.session.user) || req.user || null;
     next();
 });
 
