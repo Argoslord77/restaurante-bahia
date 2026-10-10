@@ -156,3 +156,24 @@ describe('kardexService · tarjetaACSV', () => {
         expect(csv).toContain('Descuadre kardex vs lotes');
     });
 });
+
+describe('kardexService · tarjetaAPDF', () => {
+    it('genera un PDF válido con movimientos, totales y saldos', async () => {
+        const tarjeta = {
+            producto: { id: 7, codigo: 'P007', nombre: 'Ron', unidad: 'ml', stock_actual: 9, valor_stock: 180 },
+            filtros: { desde: '2026-08-01', hasta: '2026-08-31', almacen_id: null, tipo: 'todos' },
+            saldoInicial: { cantidad: 4, valor: 80 },
+            movimientos: [
+                { fecha: new Date('2026-08-10T10:00:00Z'), etiqueta: 'Entrada/Ajuste positivo', documento: 'LOT-2026-001', lote: 'LOT-2026-001', almacen: 'Central', usuario: 'Admin', observaciones: 'Entrada manual', entrada_cantidad: 10, entrada_costo: 20, entrada_valor: 200, salida_cantidad: null, salida_costo: null, salida_valor: null, saldo_cantidad: 14, saldo_valor: 280 },
+                { fecha: new Date('2026-08-20T15:00:00Z'), etiqueta: 'Merma', documento: 'SM-000001', lote: '', almacen: 'Cocina', usuario: 'Chef', observaciones: '', entrada_cantidad: null, entrada_costo: null, entrada_valor: null, salida_cantidad: 5, salida_costo: 20, salida_valor: 100, saldo_cantidad: 9, saldo_valor: 180 }
+            ],
+            totales: { entradas_cantidad: 10, entradas_valor: 200, salidas_cantidad: 5, salidas_valor: 100, saldo_cantidad: 9, saldo_valor: 180 },
+            descuadre: 0
+        };
+        const pdf = await KardexService.tarjetaAPDF(tarjeta, { generadoPor: 'Test' });
+        expect(Buffer.isBuffer(pdf)).toBe(true);
+        expect(pdf.slice(0, 5).toString()).toBe('%PDF-');
+        expect(pdf.length).toBeGreaterThan(1000);
+        expect(pdf.slice(-6).toString()).toContain('%%EOF');
+    });
+});

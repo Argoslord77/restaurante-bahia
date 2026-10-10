@@ -15,6 +15,7 @@ const db = require('../config/db');
 const Costeo = require('./costeoService');
 const CajaService = require('./cajaService');
 const { TIPOS_ENTRADA, TIPOS_SALIDA, ETIQUETAS_MOVIMIENTO } = require('./kardexService');
+const pdfTabla = require('./pdfTabla');
 
 /** Signo de un tipo de movimiento: +1 entrada, -1 salida, 0 informativo. */
 const signoMovimiento = (tipo) => {
@@ -1379,6 +1380,360 @@ function sugeridoCompraACSV(reporte) {
     return '\uFEFF' + filas.join('\r\n') + '\r\n';
 }
 
+/* ── PDF de reportes (misma data que cada CSV, carta apaisada) ── */
+function subtituloPDF(meta, periodo) {
+    const negocio = (meta && meta.negocio) || 'Restaurante Bahía';
+    const autor = (meta && meta.generadoPor) || 'Sistema';
+    return `${negocio} · ${pdfTabla.fmtFecha()} · Generado por ${autor}${periodo ? ` · ${periodo}` : ''}`;
+}
+
+/** PDF del margen real por platillo (gemelo de margenACSV). */
+async function margenAPDF(reporte, meta = {}) {
+    const filas = (reporte.platillos || []).map(p => [
+        p.nombre, csvNum(p.unidades, 0), csvNum(p.ingreso), csvNum(p.costo_unitario, 4),
+        csvNum(p.costo_total), csvNum(p.margen), csvNum(p.margen_unitario),
+        p.food_cost != null ? csvNum(p.food_cost, 1) : ''
+    ]);
+    const t = reporte.totales || {};
+    filas.push({ bold: true, c: [
+        'TOTALES', csvNum(t.unidades, 0), csvNum(t.ingreso), '',
+        csvNum(t.costo), csvNum(t.margen), '', csvNum(t.food_cost, 1)
+    ] });
+    const columnas = [
+        { titulo: 'Platillo', frac: 0.26 }, { titulo: 'Unids', frac: 0.07, alinear: 'right' },
+        { titulo: 'Ingreso', frac: 0.11, alinear: 'right' }, { titulo: 'Costo unit', frac: 0.10, alinear: 'right' },
+        { titulo: 'Costo total', frac: 0.11, alinear: 'right' }, { titulo: 'Margen', frac: 0.11, alinear: 'right' },
+        { titulo: 'Margen unit', frac: 0.11, alinear: 'right' }, { titulo: 'Food cost %', frac: 0.13, alinear: 'right' },
+    ];
+    const sinFicha = (reporte.sinFicha || []).map(p => [p.nombre, csvNum(p.unidades, 0), csvNum(p.ingreso)]);
+    return pdfTabla.documentoPDF({
+        titulo: 'Margen real por platillo',
+        subtitulo: subtituloPDF(meta, `Del ${reporte.desde} al ${reporte.hasta}`),
+        bloques: [
+            { titulo: 'Detalle', columnas, filas },
+            { titulo: 'Sin ficha técnica (fuera del costo)', columnas: [
+                { titulo: 'Platillo', frac: 0.60 }, { titulo: 'Unids', frac: 0.15, alinear: 'right' },
+                { titulo: 'Ingreso', frac: 0.25, alinear: 'right' },
+            ], filas: sinFicha },
+        ],
+        pie: 'Restaurante Bahía — Margen real por platillo',
+    });
+}
+
+/** PDF de ventas por mesero (gemelo de ventasMeseroACSV). */
+async function ventasMeseroAPDF(reporte, meta = {}) {
+    const filas = (reporte.meseros || []).map(m => [
+        m.mesero, m.rol, csvNum(m.cuentas, 0), csvNum(m.cortesias, 0),
+        csvNum(m.ventas), csvNum(m.ticket_promedio), csvNum(m.propinas), csvNum(m.descuentos)
+    ]);
+    const t = reporte.totales || {};
+    filas.push({ bold: true, c: [
+        'TOTALES', '', csvNum(t.cuentas, 0), csvNum(t.cortesias, 0),
+        csvNum(t.ventas), csvNum(t.ticket_promedio), csvNum(t.propinas), csvNum(t.descuentos)
+    ] });
+    return pdfTabla.documentoPDF({
+        titulo: 'Ventas por mesero',
+        subtitulo: subtituloPDF(meta, `Del ${reporte.desde} al ${reporte.hasta}`),
+        bloques: [{ titulo: 'Detalle', columnas: [
+            { titulo: 'Mesero', frac: 0.22 }, { titulo: 'Rol', frac: 0.12 }, { titulo: 'Cuentas', frac: 0.09, alinear: 'right' },
+            { titulo: 'Cortesías', frac: 0.10, alinear: 'right' }, { titulo: 'Ventas', frac: 0.12, alinear: 'right' },
+            { titulo: 'Ticket prom', frac: 0.12, alinear: 'right' }, { titulo: 'Propinas', frac: 0.11, alinear: 'right' },
+            { titulo: 'Descuentos', frac: 0.12, alinear: 'right' },
+        ], filas }],
+        pie: 'Restaurante Bahía — Ventas por mesero',
+    });
+}
+
+/** PDF de consumo por insumo (gemelo de consumoInsumosACSV). */
+async function consumoInsumosAPDF(reporte, meta = {}) {
+    const filas = (reporte.insumos || []).map(i => {
+        const desglose = (i.detalle_salidas || []).map(d => `${d.etiqueta} ${csvNum(d.cantidad, 3)} ($${csvNum(d.valor)})`).join(' | ');
+        return [
+            i.nombre, i.codigo, i.unidad,
+            csvNum(i.entradas_cantidad, 3), csvNum(i.entradas_valor),
+            csvNum(i.salidas_cantidad, 3), csvNum(i.salidas_valor),
+            csvNum(i.venta_valor), csvNum(i.merma_valor), desglose
+        ];
+    });
+    const t = reporte.totales || {};
+    filas.push({ bold: true, c: [
+        'TOTALES', '', '', '', csvNum(t.entradas_valor), '', csvNum(t.salidas_valor),
+        csvNum(t.consumo_venta_valor), csvNum(t.merma_valor), `Insumos: ${csvNum(t.insumos, 0)}`
+    ] });
+    return pdfTabla.documentoPDF({
+        titulo: 'Consumo por insumo',
+        subtitulo: subtituloPDF(meta, `Del ${reporte.desde} al ${reporte.hasta}${reporte.almacen_id ? ` · Almacén ${reporte.almacen_id}` : ''}`),
+        bloques: [{ titulo: 'Detalle', columnas: [
+            { titulo: 'Insumo', frac: 0.13 }, { titulo: 'Código', frac: 0.07 }, { titulo: 'Unidad', frac: 0.05 },
+            { titulo: 'Ent cant', frac: 0.08, alinear: 'right' }, { titulo: 'Ent valor', frac: 0.09, alinear: 'right' },
+            { titulo: 'Sal cant', frac: 0.08, alinear: 'right' }, { titulo: 'Sal valor', frac: 0.09, alinear: 'right' },
+            { titulo: 'Venta', frac: 0.09, alinear: 'right' }, { titulo: 'Merma/ajuste', frac: 0.09, alinear: 'right' },
+            { titulo: 'Desglose', frac: 0.23 },
+        ], filas }],
+        pie: 'Restaurante Bahía — Consumo por insumo',
+    });
+}
+
+/** PDF de ventas por hora y día (gemelo de ventasHorasACSV). */
+async function ventasHorasAPDF(reporte, meta = {}) {
+    const porHora = (reporte.horas || []).map(h => [
+        h.etiqueta, csvNum(h.cuentas, 0), csvNum(h.ventas), csvNum(h.propinas)
+    ]);
+    const porDia = (reporte.dias || []).map(d => [
+        d.nombre, csvNum(d.cuentas, 0), csvNum(d.ventas), csvNum(d.propinas)
+    ]);
+    const t = reporte.totales || {};
+    porDia.push({ bold: true, c: [
+        'TOTALES', csvNum(t.cuentas, 0), csvNum(t.ventas), csvNum(t.propinas)
+    ] });
+    const columnas = [
+        { titulo: 'Período', frac: 0.25 }, { titulo: 'Cuentas', frac: 0.25, alinear: 'right' },
+        { titulo: 'Ventas', frac: 0.25, alinear: 'right' }, { titulo: 'Propinas', frac: 0.25, alinear: 'right' },
+    ];
+    return pdfTabla.documentoPDF({
+        titulo: 'Ventas por hora y día',
+        subtitulo: subtituloPDF(meta, `Del ${reporte.desde} al ${reporte.hasta}`),
+        bloques: [
+            { titulo: 'Por hora', columnas, filas: porHora },
+            { titulo: 'Por día', columnas, filas: porDia },
+        ],
+        pie: 'Restaurante Bahía — Ventas por hora y día',
+    });
+}
+
+/** PDF de salud del inventario (gemelo de saludACSV). */
+async function saludAPDF(salud, meta = {}) {
+    const filas = [
+        ...(salud.bajoMinimo || []).map(p => ['Bajo mínimo', p.nombre, p.codigo, `Mínimo ${csvNum(p.stock_minimo, 3)} / Faltante ${csvNum(p.faltante, 3)}`, csvNum(p.stock_actual, 3), csvNum(p.costo_reposicion)]),
+        ...(salud.vencidos || []).map(l => ['Vencido', l.producto, l.codigo, `Lote ${l.numero_lote} venció ${csvFecha(l.fecha_vencimiento)}`, csvNum(l.cantidad_actual, 3), csvNum(l.valor_perdido)]),
+        ...(salud.porVencer || []).map(l => ['Por vencer', l.producto, l.codigo, `Lote ${l.numero_lote} vence en ${l.dias_restantes} día(s)`, csvNum(l.cantidad_actual, 3), csvNum(l.valor_riesgo)]),
+        ...(salud.sinMovimiento || []).map(p => ['Sin rotación 30 días', p.nombre, p.codigo, 'Sin movimientos', csvNum(p.stock_actual, 3), csvNum(p.valor_detenido)]),
+    ];
+    const t = salud.totales || {};
+    const resumen = [
+        ['Productos bajo mínimo', csvNum(t.bajo_minimo, 0), 'Costo de reposición', csvNum(t.costo_reposicion)],
+        ['Lotes vencidos', csvNum(t.vencidos, 0), 'Pérdida consumada', csvNum(t.valor_perdido)],
+        ['Lotes por vencer', csvNum(t.por_vencer, 0), 'Valor en riesgo', csvNum(t.valor_riesgo)],
+        ['Sin rotación 30 días', csvNum(t.sin_movimiento, 0), 'Capital detenido', csvNum(t.valor_detenido)],
+    ];
+    return pdfTabla.documentoPDF({
+        titulo: 'Salud del inventario',
+        subtitulo: subtituloPDF(meta),
+        bloques: [
+            { titulo: 'Alertas', columnas: [
+                { titulo: 'Sección', frac: 0.15 }, { titulo: 'Producto', frac: 0.25 }, { titulo: 'Código', frac: 0.10 },
+                { titulo: 'Detalle', frac: 0.26 }, { titulo: 'Cantidad', frac: 0.12, alinear: 'right' },
+                { titulo: 'Valor', frac: 0.12, alinear: 'right' },
+            ], filas },
+            { titulo: 'Resumen', columnas: [
+                { titulo: 'Concepto', frac: 0.35 }, { titulo: 'Cantidad', frac: 0.15, alinear: 'right' },
+                { titulo: 'Concepto', frac: 0.35 }, { titulo: 'Valor', frac: 0.15, alinear: 'right' },
+            ], filas: resumen },
+        ],
+        pie: 'Restaurante Bahía — Salud del inventario',
+    });
+}
+
+/** PDF del resumen del turno (gemelo de ventasTurnoACSV). */
+async function ventasTurnoAPDF(reporte, meta = {}) {
+    const t = reporte.turno || {};
+    const to = reporte.totales || {};
+    const periodo = `Turno #${t.id} · ${t.en_curso ? 'En curso' : 'Cerrado'}`;
+    const resumen = [
+        ['Ventas cobradas', csvNum(to.ventas)], ['Cuentas cerradas', csvNum(to.cuentas_cerradas, 0)],
+        ['Ticket promedio', csvNum(to.ticket_promedio)], ['Unidades vendidas', csvNum(to.unidades, 0)],
+        ['Platos/bebidas distintos', csvNum(to.items_distintos, 0)], ['Consumo en curso', csvNum(to.consumo_en_curso)],
+        ['Cuentas abiertas', csvNum(to.cuentas_abiertas, 0)], ['Propinas', csvNum(to.propinas)],
+        ['Descuentos', csvNum(to.descuentos)], ['Cortesías', csvNum(to.cortesias, 0)],
+        ['Valor cortesías', csvNum(to.cortesias_valor)], ['Órdenes canceladas', csvNum(to.ordenes_canceladas, 0)],
+        ['Ítems cancelados', csvNum(to.items_cancelados, 0)], ['Mesas distintas', csvNum(to.mesas_distintas, 0)],
+        ['Rotación (cuentas/mesa)', csvNum(to.rotacion, 1)],
+    ];
+    const ranking = (reporte.ranking || []).map((r, i) => [
+        String(i + 1), r.nombre, r.es_platillo_dia ? 'Sí' : 'No',
+        r.tipo, r.categoria, csvNum(r.cuentas, 0),
+        csvNum(r.unidades, 0), csvNum(r.pct_unidades, 1), csvNum(r.ingreso),
+        csvNum(r.pct_ingreso, 1),
+        r.precio_promedio != null ? csvNum(r.precio_promedio) : '', r.clase_abc
+    ]);
+    const tipos = (reporte.tipos || []).map(tp => [
+        tp.etiqueta, csvNum(tp.items, 0), csvNum(tp.unidades, 0),
+        csvNum(tp.pct_unidades, 1), csvNum(tp.ingreso), csvNum(tp.pct_ingreso, 1)
+    ]);
+    const categoria = (reporte.categorias || []).map(c => [
+        c.categoria, csvNum(c.items, 0), csvNum(c.unidades, 0), csvNum(c.ingreso), csvNum(c.pct_ingreso, 1)
+    ]);
+    const horas = (reporte.horas || []).map(h => [
+        h.etiqueta, csvNum(h.cuentas, 0), csvNum(h.ventas), csvNum(h.pct_ventas, 1)
+    ]);
+    const meseros = (reporte.meseros || []).map(m => [
+        m.mesero, m.rol, csvNum(m.cuentas, 0), csvNum(m.cortesias, 0),
+        csvNum(m.ventas), csvNum(m.ticket_promedio), csvNum(m.propinas), csvNum(m.descuentos)
+    ]);
+    const mesas = (reporte.mesas || []).map(m => [
+        m.numero, csvNum(m.capacidad, 0), csvNum(m.cuentas, 0),
+        csvNum(m.ventas), csvNum(m.comensales, 0), csvNum(m.ticket_promedio)
+    ]);
+    const pagos = (reporte.pagos || []).map(p => [
+        p.metodo_pago, `${p.codigo_moneda} ${p.nombre_moneda || ''}`.trim(),
+        csvNum(p.total_transacciones, 0), csvNum(p.total_origen), csvNum(p.total_local)
+    ]);
+    const abiertas = (reporte.abiertas || []).map(a => [
+        String(a.id), a.mesa, a.mesero, csvNum(a.items, 0), csvNum(a.total),
+        a.antiguedad_min != null ? csvNum(a.antiguedad_min, 0) : ''
+    ]);
+    return pdfTabla.documentoPDF({
+        titulo: 'Resumen del turno',
+        subtitulo: subtituloPDF(meta, periodo),
+        bloques: [
+            { titulo: 'Resumen', columnas: [
+                { titulo: 'Indicador', frac: 0.35 }, { titulo: 'Valor', frac: 0.65, alinear: 'right' },
+            ], filas: resumen },
+            { titulo: 'Ranking de platillos y bebidas', columnas: [
+                { titulo: '#', frac: 0.04, alinear: 'right' }, { titulo: 'Platillo', frac: 0.20 },
+                { titulo: 'Del día', frac: 0.06 }, { titulo: 'Tipo', frac: 0.09 }, { titulo: 'Categoría', frac: 0.10 },
+                { titulo: 'Cuentas', frac: 0.08, alinear: 'right' }, { titulo: 'Unids', frac: 0.07, alinear: 'right' },
+                { titulo: '% unds', frac: 0.06, alinear: 'right' }, { titulo: 'Ingreso', frac: 0.09, alinear: 'right' },
+                { titulo: '% ingr', frac: 0.06, alinear: 'right' }, { titulo: 'Precio prom', frac: 0.09, alinear: 'right' },
+                { titulo: 'Clase ABC', frac: 0.06 },
+            ], filas: ranking },
+            { titulo: 'Comestibles vs bebidas', columnas: [
+                { titulo: 'Tipo', frac: 0.28 }, { titulo: 'Ítems', frac: 0.13, alinear: 'right' },
+                { titulo: 'Unidades', frac: 0.15, alinear: 'right' }, { titulo: '% unds', frac: 0.13, alinear: 'right' },
+                { titulo: 'Ingreso', frac: 0.16, alinear: 'right' }, { titulo: '% ingr', frac: 0.15, alinear: 'right' },
+            ], filas: tipos },
+            { titulo: 'Por categoría', columnas: [
+                { titulo: 'Categoría', frac: 0.32 }, { titulo: 'Ítems', frac: 0.15, alinear: 'right' },
+                { titulo: 'Unidades', frac: 0.17, alinear: 'right' }, { titulo: 'Ingreso', frac: 0.19, alinear: 'right' },
+                { titulo: '% ingr', frac: 0.17, alinear: 'right' },
+            ], filas: categoria },
+            { titulo: 'Por hora', columnas: [
+                { titulo: 'Hora', frac: 0.25 }, { titulo: 'Cuentas', frac: 0.25, alinear: 'right' },
+                { titulo: 'Ventas', frac: 0.25, alinear: 'right' }, { titulo: '% ventas', frac: 0.25, alinear: 'right' },
+            ], filas: horas },
+            { titulo: 'Por mesero', columnas: [
+                { titulo: 'Mesero', frac: 0.20 }, { titulo: 'Rol', frac: 0.10 }, { titulo: 'Cuentas', frac: 0.09, alinear: 'right' },
+                { titulo: 'Cortesías', frac: 0.10, alinear: 'right' }, { titulo: 'Ventas', frac: 0.12, alinear: 'right' },
+                { titulo: 'Ticket prom', frac: 0.11, alinear: 'right' }, { titulo: 'Propinas', frac: 0.14, alinear: 'right' },
+                { titulo: 'Descuentos', frac: 0.14, alinear: 'right' },
+            ], filas: meseros },
+            { titulo: 'Por mesa', columnas: [
+                { titulo: 'Mesa', frac: 0.14 }, { titulo: 'Capacidad', frac: 0.16, alinear: 'right' },
+                { titulo: 'Cuentas', frac: 0.14, alinear: 'right' }, { titulo: 'Ventas', frac: 0.20, alinear: 'right' },
+                { titulo: 'Comensales', frac: 0.16, alinear: 'right' }, { titulo: 'Ticket prom', frac: 0.20, alinear: 'right' },
+            ], filas: mesas },
+            { titulo: 'Métodos de pago', columnas: [
+                { titulo: 'Método', frac: 0.25 }, { titulo: 'Moneda', frac: 0.20 },
+                { titulo: 'Transacciones', frac: 0.19, alinear: 'right' }, { titulo: 'Total origen', frac: 0.18, alinear: 'right' },
+                { titulo: 'Total local', frac: 0.18, alinear: 'right' },
+            ], filas: pagos },
+            { titulo: 'Cuentas abiertas', columnas: [
+                { titulo: 'Pedido', frac: 0.10, alinear: 'right' }, { titulo: 'Mesa', frac: 0.14 },
+                { titulo: 'Mesero', frac: 0.24 }, { titulo: 'Items', frac: 0.12, alinear: 'right' },
+                { titulo: 'Total', frac: 0.18, alinear: 'right' }, { titulo: 'Antig (min)', frac: 0.22, alinear: 'right' },
+            ], filas: abiertas },
+        ],
+        pie: 'Restaurante Bahía — Resumen del turno',
+    });
+}
+
+/** PDF de propinas del turno (gemelo de propinasACSV). */
+async function propinasAPDF(reporte, meta = {}) {
+    const filas = (reporte.meseros || []).map(m => [
+        m.mesero, csvNum(m.cuentas, 0), csvNum(m.ventas),
+        csvNum(m.propinas), csvNum(m.propina_promedio), csvNum(m.pct_pool, 1)
+    ]);
+    const t = reporte.totales || {};
+    filas.push({ bold: true, c: [
+        'TOTALES', csvNum(t.cuentas, 0), csvNum(t.ventas),
+        csvNum(t.propinas), csvNum(t.propina_promedio), '100'
+    ] });
+    const detalle = (reporte.cuentas || []).map(c => [
+        csvNum(c.id, 0), String(c.mesa), c.mesero, csvNum(c.total), csvNum(c.propina),
+        c.estado_pago, c.fecha_cierre ? String(c.fecha_cierre) : ''
+    ]);
+    return pdfTabla.documentoPDF({
+        titulo: 'Propinas del turno',
+        subtitulo: subtituloPDF(meta, `Turno #${(reporte.turno || {}).id || ''}`),
+        bloques: [
+            { titulo: 'Por mesero', columnas: [
+                { titulo: 'Mesero', frac: 0.28 }, { titulo: 'Cuentas', frac: 0.11, alinear: 'right' },
+                { titulo: 'Ventas', frac: 0.17, alinear: 'right' }, { titulo: 'Propinas', frac: 0.17, alinear: 'right' },
+                { titulo: 'Propina prom', frac: 0.16, alinear: 'right' }, { titulo: '% del pool', frac: 0.11, alinear: 'right' },
+            ], filas },
+            { titulo: 'Detalle de cuentas', columnas: [
+                { titulo: 'Cuenta', frac: 0.10, alinear: 'right' }, { titulo: 'Mesa', frac: 0.14 }, { titulo: 'Mesero', frac: 0.20 },
+                { titulo: 'Total', frac: 0.13, alinear: 'right' }, { titulo: 'Propina', frac: 0.13, alinear: 'right' },
+                { titulo: 'Estado', frac: 0.12 }, { titulo: 'Cierre', frac: 0.18 },
+            ], filas: detalle },
+        ],
+        pie: 'Restaurante Bahía — Propinas del turno',
+    });
+}
+
+/** PDF del sugerido de compra (gemelo de sugeridoCompraACSV). */
+async function sugeridoCompraAPDF(reporte, meta = {}) {
+    const filas = (reporte.items || []).map(i => [
+        i.urgencia, i.codigo, i.producto, i.unidad,
+        csvNum(i.stock, 3), csvNum(i.minimo, 3), csvNum(i.consumoDiario, 3),
+        csvNum(i.objetivo, 3), csvNum(i.sugerido, 3), i.proveedor || '—',
+        csvNum(i.precioRef), csvNum(i.costoEst)
+    ]);
+    const tot = (reporte && reporte.totales) || {};
+    filas.push({ bold: true, c: [
+        'TOTALES', '', '', `${csvNum(tot.items || 0, 0)} items`, '', '', '', '', '', '', '', csvNum(tot.monto || 0)
+    ] });
+    const prm = (reporte && reporte.parametros) || {};
+    return pdfTabla.documentoPDF({
+        titulo: 'Sugerido de compra',
+        subtitulo: subtituloPDF(meta, `Consumo ${prm.dias || 30} días · Cobertura ${prm.cobertura || 7} días`),
+        bloques: [{ titulo: 'Detalle', columnas: [
+            { titulo: 'Urgencia', frac: 0.09 }, { titulo: 'Código', frac: 0.07 }, { titulo: 'Producto', frac: 0.16 },
+            { titulo: 'Unidad', frac: 0.05 }, { titulo: 'Stock', frac: 0.08, alinear: 'right' },
+            { titulo: 'Mínimo', frac: 0.08, alinear: 'right' }, { titulo: 'Cons/día', frac: 0.07, alinear: 'right' },
+            { titulo: 'Objetivo', frac: 0.08, alinear: 'right' }, { titulo: 'Sugerido', frac: 0.08, alinear: 'right' },
+            { titulo: 'Proveedor', frac: 0.10 }, { titulo: 'Precio ref', frac: 0.07, alinear: 'right' },
+            { titulo: 'Costo est', frac: 0.07, alinear: 'right' },
+        ], filas }],
+        pie: 'Restaurante Bahía — Sugerido de compra',
+    });
+}
+
+/** PDF de la explosión de insumos (gemelo de explosionInsumosACSV). */
+async function explosionAPDF({ resumenInsumos = [], filas = [], turnoSeleccionado }, meta = {}) {
+    const resumen = resumenInsumos.map(r => [
+        r.insumo, r.codigo, r.unidad, csvNum(r.teorico, 3), csvNum(r.real, 3),
+        csvNum(r.desviacion, 3),
+        r.desviacion_pct != null ? csvNum(r.desviacion_pct, 1) : '', csvNum(r.costo)
+    ]);
+    const detalle = filas.map(f => [
+        f.turno, f.numero_pedido, f.mesa, f.platillo_vendido, csvNum(f.cantidad_platillos_vendidos, 0),
+        f.insumo_descontado, csvNum(f.consumo_total_teorico, 3), csvNum(f.consumo_real_kardex, 3),
+        csvNum(f.costo_total_insumo)
+    ]);
+    const sel = turnoSeleccionado && turnoSeleccionado !== 'todos'
+        ? `Turno ${turnoSeleccionado}` : 'Todos los turnos';
+    return pdfTabla.documentoPDF({
+        titulo: 'Explosión de insumos',
+        subtitulo: subtituloPDF(meta, sel),
+        bloques: [
+            { titulo: 'Resumen por insumo', columnas: [
+                { titulo: 'Insumo', frac: 0.20 }, { titulo: 'Código', frac: 0.11 }, { titulo: 'Unidad', frac: 0.07 },
+                { titulo: 'Teórico', frac: 0.11, alinear: 'right' }, { titulo: 'Real', frac: 0.11, alinear: 'right' },
+                { titulo: 'Desviación', frac: 0.12, alinear: 'right' }, { titulo: 'Desv %', frac: 0.09, alinear: 'right' },
+                { titulo: 'Costo', frac: 0.19, alinear: 'right' },
+            ], filas: resumen },
+            { titulo: 'Detalle por venta', columnas: [
+                { titulo: 'Turno', frac: 0.06 }, { titulo: 'Pedido', frac: 0.09 }, { titulo: 'Mesa', frac: 0.08 },
+                { titulo: 'Platillo vendido', frac: 0.22 }, { titulo: 'Cant', frac: 0.06, alinear: 'right' },
+                { titulo: 'Insumo descontado', frac: 0.20 }, { titulo: 'Teórico', frac: 0.09, alinear: 'right' },
+                { titulo: 'Real kardex', frac: 0.10, alinear: 'right' }, { titulo: 'Costo', frac: 0.10, alinear: 'right' },
+            ], filas: detalle },
+        ],
+        pie: 'Restaurante Bahía — Explosión de insumos',
+    });
+}
+
 module.exports = {
     saludInventario,
     margenPorPlatillo,
@@ -1398,5 +1753,14 @@ module.exports = {
     propinasDelTurno,
     propinasACSV,
     sugeridoCompra,
-    sugeridoCompraACSV
+    sugeridoCompraACSV,
+    margenAPDF,
+    saludAPDF,
+    explosionAPDF,
+    ventasMeseroAPDF,
+    consumoInsumosAPDF,
+    ventasHorasAPDF,
+    ventasTurnoAPDF,
+    propinasAPDF,
+    sugeridoCompraAPDF
 };

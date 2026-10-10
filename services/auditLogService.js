@@ -4,6 +4,7 @@
 
 const db = require('../config/db');
 const logger = require('../config/logger');
+const pdfTabla = require('./pdfTabla');
 
 const CLAVES_SENSIBLES = /password|passwd|pass|secret|token|authorization|cookie|session|csrf|firma|filedata|contenido/i;
 const MAX_TEXTO = 2000;
@@ -371,6 +372,38 @@ async function actualizarRepeticiones(id, repeticiones) {
     }
 }
 
+/** PDF de la bitácora (misma consulta que exportarCSV, columnas resumidas). */
+async function exportarPDF(filtros = {}, limite = 20000, meta = {}) {
+    const { clause, params } = construirFiltros(filtros);
+    const tope = Math.min(50000, Math.max(1, parseInt(limite, 10) || 20000));
+    const [rows] = await db.query(`
+        SELECT a.creado_en, a.usuario_nombre, a.usuario_rol,
+               a.categoria, a.severidad, a.modulo, a.accion,
+               a.metodo_http, a.ruta
+        FROM auditoria_usuarios a
+        ${clause}
+        ORDER BY a.creado_en DESC, a.id DESC
+        LIMIT ?
+    `, [...params, tope]);
+    const negocio = (meta && meta.negocio) || 'Restaurante Bahía';
+    const autor = (meta && meta.generadoPor) || 'Sistema';
+    const filas = rows.map(r => [
+        r.creado_en ? new Date(r.creado_en).toISOString().slice(0, 16).replace('T', ' ') : '',
+        r.usuario_nombre || '', r.usuario_rol || '', r.categoria || '', r.severidad || '',
+        r.modulo || '', r.accion || '', r.metodo_http || '', r.ruta || ''
+    ]);
+    return pdfTabla.documentoPDF({
+        titulo: 'Bitácora de auditoría',
+        subtitulo: `${negocio} · ${pdfTabla.fmtFecha()} · Generado por ${autor} · ${rows.length} fila(s)`,
+        bloques: [{ titulo: 'Asientos', columnas: [
+            { titulo: 'Fecha', frac: 0.14 }, { titulo: 'Usuario', frac: 0.13 }, { titulo: 'Rol', frac: 0.08 },
+            { titulo: 'Categoría', frac: 0.09 }, { titulo: 'Severidad', frac: 0.08 }, { titulo: 'Módulo', frac: 0.08 },
+            { titulo: 'Acción', frac: 0.12 }, { titulo: 'Método', frac: 0.06 }, { titulo: 'Ruta', frac: 0.22 },
+        ], filas }],
+        pie: 'Restaurante Bahía — Bitácora de auditoría',
+    });
+}
+
 module.exports = {
     ensureTable,
     registrar,
@@ -379,6 +412,7 @@ module.exports = {
     construirFiltros,
     estadisticas,
     exportarCSV,
+    exportarPDF,
     purgar,
     opcionesDeFiltro,
     sanitizar,

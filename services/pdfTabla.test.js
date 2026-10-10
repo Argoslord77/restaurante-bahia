@@ -1,5 +1,5 @@
 // services/pdfTabla.test.js — Tablas PDF apaisadas en memoria.
-const { tablaPDF, fmtFecha, nombreUsuario } = require('./pdfTabla');
+const { tablaPDF, documentoPDF, fmtFecha, nombreUsuario } = require('./pdfTabla');
 
 const COLUMNAS = [
     { titulo: 'Nombre', frac: 0.6 },
@@ -38,5 +38,29 @@ describe('pdfTabla', () => {
         expect(nombreUsuario({})).toBe('Sistema');
         expect(nombreUsuario({ user: { nombre: 'Ana' } })).toBe('Ana');
         expect(nombreUsuario({ session: { user: { nombre_usuario: 'ana7' } } })).toBe('ana7');
+    });
+});
+
+describe('pdfTabla · documentoPDF multibloque', () => {
+    test('pinta varios bloques con fila de totales en negrita', async () => {
+        const pdf = await documentoPDF({
+            titulo: 'Reporte', subtitulo: 'Sub', pie: 'Pie',
+            bloques: [
+                { titulo: 'Detalle', columnas: COLUMNAS, filas: [['A', '1,00', 'X']] },
+                { titulo: 'Resumen', columnas: COLUMNAS,
+                  filas: [{ bold: true, c: ['TOTALES', '1,00', ''] }] },
+            ]
+        });
+        expect(pdf.slice(0, 5).toString()).toBe('%PDF-');
+        expect(pdf.length).toBeGreaterThan(1000);
+        expect(pdf.slice(-6).toString()).toContain('%%EOF');
+    });
+
+    test('salta los bloques vacíos y no rompe si todos lo están', async () => {
+        const pdf = await documentoPDF({
+            titulo: 'Vacío', subtitulo: '', pie: '',
+            bloques: [{ titulo: 'Nada', columnas: COLUMNAS, filas: [] }]
+        });
+        expect(pdf.slice(0, 5).toString()).toBe('%PDF-');
     });
 });

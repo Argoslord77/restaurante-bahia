@@ -40,4 +40,16 @@ router.get('/reportes/ventas-turno/exportar', ensureAuthenticated, puedeVer, rep
 router.get('/reportes/propinas/exportar', ensureAuthenticated, puedeVer, reportesController.exportarPropinas);
 router.get('/reportes/sugerido-compra/exportar', ensureAuthenticated, puedeVer, reportesController.exportarSugerido);
 
+// ── Exportaciones a PDF (gemelas del CSV) ───────────────────────────────
+router.get('/kardex/pdf', ensureAuthenticated, puedeVer, kardexController.exportarKardexPDF);
+router.get('/reportes/salud-inventario/pdf', ensureAuthenticated, puedeVer, reportesController.exportarSaludInventarioPDF);
+router.get('/reportes/margen-platillos/pdf', ensureAuthenticated, puedeVer, reportesController.exportarMargenPlatillosPDF);
+router.get('/reportes/explosion-recetas/pdf', ensureAuthenticated, puedeVer, reportesController.exportarExplosionRecetasPDF);
+router.get('/reportes/ventas-mesero/pdf', ensureAuthenticated, puedeVer, reportesController.exportarVentasMeseroPDF);
+router.get('/reportes/consumo-insumos/pdf', ensureAuthenticated, puedeVer, reportesController.exportarConsumoInsumosPDF);
+router.get('/reportes/ventas-horas/pdf', ensureAuthenticated, puedeVer, reportesController.exportarVentasHorasPDF);
+router.get('/reportes/ventas-turno/pdf', ensureAuthenticated, puedeVer, reportesController.exportarVentasTurnoPDF);
+router.get('/reportes/propinas/pdf', ensureAuthenticated, puedeVer, reportesController.exportarPropinasPDF);
+router.get('/reportes/sugerido-compra/pdf', ensureAuthenticated, puedeVer, reportesController.exportarSugeridoPDF);
+
 module.exports = router;

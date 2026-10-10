@@ -6,6 +6,7 @@
 'use strict';
 
 const db = require('../config/db');
+const pdfTabla = require('./pdfTabla');
 
 // Movimientos que SUMAN existencia (entradas) y que RESTAN (salidas).
 // CONTEO_FISICO es informativo: no altera el saldo corrido.
@@ -378,6 +379,68 @@ function tarjetaACSV(tarjeta) {
     return { csv: '\uFEFF' + filas.join('\r\n') + '\r\n', filas: tarjeta.movimientos.length };
 }
 
+/** PDF de la tarjeta kardex (gemelo de tarjetaACSV, carta apaisada). */
+async function tarjetaAPDF(tarjeta, meta = {}) {
+    const p = tarjeta.producto;
+    const negocio = (meta && meta.negocio) || 'Restaurante Bahía';
+    const autor = (meta && meta.generadoPor) || 'Sistema';
+    const fmtFecha = m => m.fecha instanceof Date
+        ? m.fecha.toISOString().slice(0, 16).replace('T', ' ')
+        : String(m.fecha || '').slice(0, 16);
+    const filas = [[
+        '(Saldo inicial)', '', '', '', '', '',
+        '', '', '', '', '', '',
+        csvNum(tarjeta.saldoInicial.cantidad, 3), csvNum(tarjeta.saldoInicial.valor), ''
+    ]];
+    for (const m of tarjeta.movimientos) {
+        filas.push([
+            fmtFecha(m), m.etiqueta, m.documento, m.lote, m.almacen, m.usuario,
+            m.entrada_cantidad != null ? csvNum(m.entrada_cantidad, 3) : '',
+            m.entrada_costo != null ? csvNum(m.entrada_costo, 4) : '',
+            m.entrada_valor != null ? csvNum(m.entrada_valor) : '',
+            m.salida_cantidad != null ? csvNum(m.salida_cantidad, 3) : '',
+            m.salida_costo != null ? csvNum(m.salida_costo, 4) : '',
+            m.salida_valor != null ? csvNum(m.salida_valor) : '',
+            csvNum(m.saldo_cantidad, 3), csvNum(m.saldo_valor),
+            String(m.observaciones || '').replace(/[;\r\n]+/g, ' ')
+        ]);
+    }
+    const t = tarjeta.totales;
+    filas.push({ bold: true, c: [
+        'TOTALES', '', '', '', '',
+        csvNum(t.entradas_cantidad, 3), '', csvNum(t.entradas_valor),
+        csvNum(t.salidas_cantidad, 3), '', csvNum(t.salidas_valor),
+        csvNum(t.saldo_cantidad, 3), csvNum(t.saldo_valor), ''
+    ] });
+    return pdfTabla.documentoPDF({
+        titulo: `Kardex — ${p.codigo || p.id} · ${p.nombre}${p.unidad ? ` (${p.unidad})` : ''}`,
+        subtitulo: `${negocio} · ${pdfTabla.fmtFecha()} · Generado por ${autor} · Del ${tarjeta.filtros.desde} al ${tarjeta.filtros.hasta}`,
+        bloques: [
+            { titulo: 'Movimientos', columnas: [
+                { titulo: 'Fecha', frac: 0.10 }, { titulo: 'Tipo', frac: 0.09 }, { titulo: 'Doc', frac: 0.09 },
+                { titulo: 'Lote', frac: 0.07 }, { titulo: 'Almacén', frac: 0.07 }, { titulo: 'Usuario', frac: 0.08 },
+                { titulo: 'E.cant', frac: 0.055, alinear: 'right' }, { titulo: 'E.c.u.', frac: 0.06, alinear: 'right' },
+                { titulo: 'E.valor', frac: 0.06, alinear: 'right' }, { titulo: 'S.cant', frac: 0.055, alinear: 'right' },
+                { titulo: 'S.c.u.', frac: 0.06, alinear: 'right' }, { titulo: 'S.valor', frac: 0.06, alinear: 'right' },
+                { titulo: 'Saldo', frac: 0.055, alinear: 'right' }, { titulo: 'S.valor', frac: 0.06, alinear: 'right' },
+                { titulo: 'Observaciones', frac: 0.10 },
+            ], filas },
+            { titulo: 'Saldos', columnas: [
+                { titulo: 'Concepto', frac: 0.35 }, { titulo: 'Valor', frac: 0.65, alinear: 'right' },
+            ], filas: [
+                ['Existencia actual (lotes)', csvNum(p.stock_actual, 3)],
+                ['Valor a costo de lote', csvNum(p.valor_stock)],
+                ['Entradas (cantidad)', csvNum(t.entradas_cantidad, 3)],
+                ['Entradas (valor)', csvNum(t.entradas_valor)],
+                ['Salidas (cantidad)', csvNum(t.salidas_cantidad, 3)],
+                ['Salidas (valor)', csvNum(t.salidas_valor)],
+                ['Descuadre kardex vs lotes', csvNum(tarjeta.descuadre, 3)],
+            ] },
+        ],
+        pie: 'Restaurante Bahía — Kardex de inventario',
+    });
+}
+
 module.exports = {
     TIPOS_ENTRADA,
     TIPOS_SALIDA,
@@ -385,5 +448,6 @@ module.exports = {
     normalizarFiltros,
     listarProductos,
     obtenerTarjeta,
-    tarjetaACSV
+    tarjetaACSV,
+    tarjetaAPDF
 };

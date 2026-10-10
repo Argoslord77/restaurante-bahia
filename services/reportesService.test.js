@@ -599,3 +599,123 @@ describe('reportesService · sugeridoCompraACSV (C8)', () => {
         expect(csv).toContain('AGOTADO;ARZ;Arroz;kg;0,000;10,000;2,000;14,000;14,000;Acme;100,00;1400,00');
     });
 });
+
+describe('reportesService · exportaciones PDF (gemelas del CSV)', () => {
+    const esPDF = (pdf) => {
+        expect(Buffer.isBuffer(pdf)).toBe(true);
+        expect(pdf.slice(0, 5).toString()).toBe('%PDF-');
+        expect(pdf.length).toBeGreaterThan(1000);
+    };
+
+    it('margenAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.margenAPDF({
+            desde: '2026-10-01', hasta: '2026-10-10',
+            platillos: [{ nombre: 'Ropa Vieja', unidades: 2, ingreso: 500, costo_unitario: 100,
+                costo_total: 200, margen: 300, margen_unitario: 150, food_cost: 40 }],
+            totales: { unidades: 2, ingreso: 500, costo: 200, margen: 300, food_cost: 40 },
+            sinFicha: [{ nombre: 'Café', unidades: 1, ingreso: 50 }]
+        }, { generadoPor: 'Test' }));
+    });
+
+    it('saludAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.saludAPDF({
+            bajoMinimo: [{ nombre: 'Limón', codigo: 'P1', stock_minimo: 2, faltante: 1.5,
+                stock_actual: 0.5, costo_reposicion: 3 }],
+            vencidos: [{ producto: 'Crema', codigo: 'P3', numero_lote: 'LOT-1',
+                fecha_vencimiento: new Date('2026-08-01'), cantidad_actual: 2, valor_perdido: 10 }],
+            porVencer: [{ producto: 'Leche', codigo: 'P4', numero_lote: 'LOT-2',
+                dias_restantes: 3, cantidad_actual: 1, valor_riesgo: 4 }],
+            sinMovimiento: [{ nombre: 'Vino', codigo: 'P5', stock_actual: 6, valor_detenido: 90 }],
+            totales: { bajo_minimo: 1, costo_reposicion: 3, vencidos: 1, valor_perdido: 10,
+                por_vencer: 1, valor_riesgo: 4, sin_movimiento: 1, valor_detenido: 90 }
+        }));
+    });
+
+    it('explosionAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.explosionAPDF({
+            resumenInsumos: [{ insumo: 'Arroz', codigo: 'ARZ', unidad: 'kg', teorico: 5,
+                real: 5.2, desviacion: 0.2, desviacion_pct: 4, costo: 500 }],
+            filas: [{ turno: 1, numero_pedido: 'P-1', mesa: 'M1', platillo_vendido: 'Arroz',
+                cantidad_platillos_vendidos: 2, insumo_descontado: 'Arroz',
+                consumo_total_teorico: 0.5, consumo_real_kardex: 0.5, costo_total_insumo: 50 }],
+            turnoSeleccionado: 'todos'
+        }));
+    });
+
+    it('ventasMeseroAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.ventasMeseroAPDF({
+            desde: '2026-10-01', hasta: '2026-10-10',
+            meseros: [{ mesero: 'Ana', rol: 'dependienta', cuentas: 3, cortesias: 0,
+                ventas: 900, ticket_promedio: 300, propinas: 90, descuentos: 0 }],
+            totales: { cuentas: 3, cortesias: 0, ventas: 900, ticket_promedio: 300,
+                propinas: 90, descuentos: 0 }
+        }));
+    });
+
+    it('consumoInsumosAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.consumoInsumosAPDF({
+            desde: '2026-10-01', hasta: '2026-10-10', almacen_id: null,
+            insumos: [{ nombre: 'Arroz', codigo: 'ARZ', unidad: 'kg', entradas_cantidad: 10,
+                entradas_valor: 1000, salidas_cantidad: 4, salidas_valor: 400,
+                venta_valor: 350, merma_valor: 50,
+                detalle_salidas: [{ etiqueta: 'Venta', cantidad: 3.5, valor: 350 }] }],
+            totales: { entradas_valor: 1000, salidas_valor: 400, consumo_venta_valor: 350,
+                merma_valor: 50, insumos: 1 }
+        }));
+    });
+
+    it('ventasHorasAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.ventasHorasAPDF({
+            desde: '2026-10-01', hasta: '2026-10-10',
+            horas: [{ etiqueta: '12:00', cuentas: 2, ventas: 600, propinas: 60 }],
+            dias: [{ nombre: 'lunes', cuentas: 2, ventas: 600, propinas: 60 }],
+            totales: { cuentas: 2, ventas: 600, propinas: 60 }
+        }));
+    });
+
+    it('ventasTurnoAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.ventasTurnoAPDF({
+            turno: { id: 7, en_curso: false },
+            totales: { ventas: 1000, cuentas_cerradas: 5, ticket_promedio: 200, unidades: 20,
+                items_distintos: 4, consumo_en_curso: 0, cuentas_abiertas: 0, propinas: 100,
+                descuentos: 10, cortesias: 1, cortesias_valor: 50, ordenes_canceladas: 0,
+                items_cancelados: 0, mesas_distintas: 3, rotacion: 1.7 },
+            ranking: [{ nombre: 'Ropa Vieja', es_platillo_dia: true, tipo: 'Comestible',
+                categoria: 'Fuertes', cuentas: 5, unidades: 10, pct_unidades: 50,
+                ingreso: 800, pct_ingreso: 80, precio_promedio: 80, clase_abc: 'A' }],
+            tipos: [{ etiqueta: 'Comestibles', items: 3, unidades: 15,
+                pct_unidades: 75, ingreso: 900, pct_ingreso: 90 }],
+            categorias: [{ categoria: 'Fuertes', items: 2, unidades: 10,
+                ingreso: 800, pct_ingreso: 80 }],
+            horas: [{ etiqueta: '12:00', cuentas: 5, ventas: 1000, pct_ventas: 100 }],
+            meseros: [{ mesero: 'Ana', rol: 'dependienta', cuentas: 5, cortesias: 1,
+                ventas: 1000, ticket_promedio: 200, propinas: 100, descuentos: 10 }],
+            mesas: [{ numero: 'M1', capacidad: 4, cuentas: 5, ventas: 1000,
+                comensales: 10, ticket_promedio: 200 }],
+            pagos: [{ metodo_pago: 'Efectivo', codigo_moneda: 'CUP', nombre_moneda: 'Peso',
+                total_transacciones: 5, total_origen: 1000, total_local: 1000 }],
+            abiertas: [{ id: 9, mesa: 'M2', mesero: 'Ana', items: 2, total: 300, antiguedad_min: 25 }]
+        }));
+    });
+
+    it('propinasAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.propinasAPDF({
+            turno: { id: 7 },
+            meseros: [{ mesero: 'Ana', cuentas: 5, ventas: 1000, propinas: 100,
+                propina_promedio: 20, pct_pool: 100 }],
+            totales: { cuentas: 5, ventas: 1000, propinas: 100, propina_promedio: 20 },
+            cuentas: [{ id: 9, mesa: 'M2', mesero: 'Ana', total: 300, propina: 30,
+                estado_pago: 'pagado', fecha_cierre: '2026-10-10 14:00' }]
+        }));
+    });
+
+    it('sugeridoCompraAPDF genera un PDF válido', async () => {
+        esPDF(await ReportesService.sugeridoCompraAPDF({
+            parametros: { dias: 30, cobertura: 7 },
+            items: [{ urgencia: 'AGOTADO', codigo: 'ARZ', producto: 'Arroz', unidad: 'kg',
+                stock: 0, minimo: 10, consumoDiario: 2, objetivo: 14, sugerido: 14,
+                proveedor: 'Acme', precioRef: 100, costoEst: 1400 }],
+            totales: { items: 1, monto: 1400 }
+        }));
+    });
+});

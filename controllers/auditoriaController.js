@@ -2,6 +2,7 @@
 const AuditLogService = require('../services/auditLogService');
 const { CATEGORIAS, SEVERIDADES } = require('../config/auditoriaCatalogo');
 const logger = require('../config/logger');
+const { nombreUsuario } = require('../services/pdfTabla');
 
 /** Recoge los filtros admitidos desde la query string. */
 function leerFiltros(query = {}) {
@@ -80,6 +81,22 @@ exports.exportarAuditoria = async (req, res) => {
     } catch (error) {
         logger.error('Error al exportar auditoría:', error);
         if (req.flash) req.flash('error_msg', 'No se pudo exportar el registro de auditoría.');
+        return res.redirect('/admin/auditoria');
+    }
+};
+
+exports.exportarAuditoriaPDF = async (req, res) => {
+    try {
+        const filtros = leerFiltros(req.query);
+        const pdf = await AuditLogService.exportarPDF(filtros, 20000, { generadoPor: nombreUsuario(req) });
+
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="auditoria_${marca}.pdf"`);
+        return res.send(pdf);
+    } catch (error) {
+        logger.error('Error al exportar auditoría a PDF:', error);
+        if (req.flash) req.flash('error_msg', 'No se pudo exportar el registro de auditoría a PDF.');
         return res.redirect('/admin/auditoria');
     }
 };

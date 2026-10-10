@@ -8,6 +8,7 @@
 const ReportesService = require('../services/reportesService');
 const ReporteModel = require('../models/reporteModel');
 const db = require('../config/db');
+const { nombreUsuario } = require('../services/pdfTabla');
 
 // Enlaces del hub: qué es, qué controla y a dónde lleva.
 // `interno: true` son módulos ya existentes que se re-agrupan aquí.
@@ -250,6 +251,14 @@ function responderCSV(req, res, nombre, csv, filas) {
     res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.csv"`);
     if (filas != null) res.setHeader('X-Reporte-Filas', String(filas));
     return res.send(csv);
+}
+
+function responderPDF(req, res, nombre, pdf, filas) {
+    const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.pdf"`);
+    if (filas != null) res.setHeader('X-Reporte-Filas', String(filas));
+    return res.send(pdf);
 }
 
 exports.exportarMargenPlatillos = async (req, res) => {
@@ -546,6 +555,125 @@ exports.exportarVentasTurno = async (req, res) => {
             ReportesService.ventasTurnoACSV(reporte), reporte.ranking.length);
     } catch (error) {
         console.error('Error al exportar las ventas del turno:', error);
+        return res.redirect('/admin/reportes/ventas-turno');
+    }
+};
+
+/* ── Gemelos PDF de cada exportación CSV ── */
+
+exports.exportarMargenPlatillosPDF = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.margenPorPlatillo(rango);
+        const pdf = await ReportesService.margenAPDF(reporte, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, 'margen_por_platillo', pdf, reporte.platillos.length);
+    } catch (error) {
+        console.error('Error al exportar el margen por platillo a PDF:', error);
+        return res.redirect('/admin/reportes/margen-platillos');
+    }
+};
+
+exports.exportarSaludInventarioPDF = async (req, res) => {
+    try {
+        const salud = await ReportesService.saludInventario();
+        const filas = salud.bajoMinimo.length + salud.vencidos.length
+            + salud.porVencer.length + salud.sinMovimiento.length;
+        const pdf = await ReportesService.saludAPDF(salud, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, 'salud_inventario', pdf, filas);
+    } catch (error) {
+        console.error('Error al exportar la salud del inventario a PDF:', error);
+        return res.redirect('/admin/reportes/salud-inventario');
+    }
+};
+
+exports.exportarExplosionRecetasPDF = async (req, res) => {
+    try {
+        const turnoId = parseInt(req.query.turno, 10) || null;
+        const datos = await ReporteModel.getReporteKardexPos(turnoId);
+        const pdf = await ReportesService.explosionAPDF(
+            { filas: datos, turnoSeleccionado: turnoId }, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, 'explosion_recetas', pdf, datos.length);
+    } catch (error) {
+        console.error('Error al exportar la explosión de recetas a PDF:', error);
+        return res.redirect('/admin/reportes/explosion-recetas');
+    }
+};
+
+exports.exportarVentasMeseroPDF = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.ventasPorMesero(rango);
+        const pdf = await ReportesService.ventasMeseroAPDF(reporte, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, 'ventas_por_mesero', pdf, reporte.meseros.length);
+    } catch (error) {
+        console.error('Error al exportar las ventas por mesero a PDF:', error);
+        return res.redirect('/admin/reportes/ventas-mesero');
+    }
+};
+
+exports.exportarConsumoInsumosPDF = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const almacen_id = parseInt(req.query.almacen_id, 10) || null;
+        const reporte = await ReportesService.consumoPorInsumo({ ...rango, almacen_id });
+        const pdf = await ReportesService.consumoInsumosAPDF(reporte, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, 'consumo_por_insumo', pdf, reporte.insumos.length);
+    } catch (error) {
+        console.error('Error al exportar el consumo por insumo a PDF:', error);
+        return res.redirect('/admin/reportes/consumo-insumos');
+    }
+};
+
+exports.exportarVentasHorasPDF = async (req, res) => {
+    try {
+        const rango = ReportesService.normalizarRango(req.query);
+        const reporte = await ReportesService.ventasPorHoras(rango);
+        const pdf = await ReportesService.ventasHorasAPDF(reporte, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, 'ventas_por_hora_y_dia', pdf,
+            reporte.horas.length + reporte.dias.length);
+    } catch (error) {
+        console.error('Error al exportar las ventas por hora a PDF:', error);
+        return res.redirect('/admin/reportes/ventas-horas');
+    }
+};
+
+exports.exportarPropinasPDF = async (req, res) => {
+    try {
+        const { turnoId } = await resolverTurnoSeleccionado(req.query);
+        if (!turnoId) return res.redirect('/admin/reportes/propinas');
+        const reporte = await ReportesService.propinasDelTurno(turnoId);
+        if (!reporte) return res.redirect('/admin/reportes/propinas');
+        const pdf = await ReportesService.propinasAPDF(reporte, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, `propinas_turno_${turnoId}`, pdf, reporte.cuentas.length);
+    } catch (error) {
+        console.error('Error al exportar las propinas del turno a PDF:', error);
+        return res.redirect('/admin/reportes/propinas');
+    }
+};
+
+exports.exportarSugeridoPDF = async (req, res) => {
+    try {
+        const reporte = await ReportesService.sugeridoCompra({
+            dias: req.query.dias, cobertura: req.query.cobertura
+        });
+        const pdf = await ReportesService.sugeridoCompraAPDF(reporte, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, 'sugerido_compra', pdf, reporte.items.length);
+    } catch (error) {
+        console.error('Error al exportar el sugerido de compra a PDF:', error);
+        return res.redirect('/admin/reportes/sugerido-compra');
+    }
+};
+
+exports.exportarVentasTurnoPDF = async (req, res) => {
+    try {
+        const { turnoId } = await resolverTurnoSeleccionado(req.query);
+        if (!turnoId) return res.redirect('/admin/reportes/ventas-turno');
+        const reporte = await ReportesService.ventasDelTurno(turnoId);
+        if (!reporte) return res.redirect('/admin/reportes/ventas-turno');
+        const pdf = await ReportesService.ventasTurnoAPDF(reporte, { generadoPor: nombreUsuario(req) });
+        return responderPDF(req, res, `ventas_turno_${turnoId}`, pdf, reporte.ranking.length);
+    } catch (error) {
+        console.error('Error al exportar las ventas del turno a PDF:', error);
         return res.redirect('/admin/reportes/ventas-turno');
     }
 };

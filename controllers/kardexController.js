@@ -6,6 +6,7 @@
 
 const KardexService = require('../services/kardexService');
 const db = require('../config/db');
+const { nombreUsuario } = require('../services/pdfTabla');
 
 exports.viewKardex = async (req, res) => {
     try {
@@ -86,6 +87,30 @@ exports.exportarKardex = async (req, res) => {
         return res.send(csv);
     } catch (error) {
         console.error('Error al exportar el kardex:', error);
+        return res.redirect('/admin/kardex');
+    }
+};
+
+exports.exportarKardexPDF = async (req, res) => {
+    try {
+        const filtros = KardexService.normalizarFiltros(req.query);
+        const productoId = parseInt(req.query.producto, 10) || null;
+        if (!productoId) {
+            return res.redirect('/admin/kardex');
+        }
+        const tarjeta = await KardexService.obtenerTarjeta(productoId, filtros);
+        const pdf = await KardexService.tarjetaAPDF(tarjeta, { generadoPor: nombreUsuario(req) });
+
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        const slug = String(tarjeta.producto.nombre || 'producto')
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'producto';
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="kardex_${slug}_${marca}.pdf"`);
+        res.setHeader('X-Kardex-Filas', String(tarjeta.movimientos.length));
+        return res.send(pdf);
+    } catch (error) {
+        console.error('Error al exportar el kardex a PDF:', error);
         return res.redirect('/admin/kardex');
     }
 };

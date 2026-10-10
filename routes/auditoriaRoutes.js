@@ -13,6 +13,9 @@ router.get('/api/auditoria', ensureAuthenticated, checkRole(soloAdministradores)
 // Exportación a CSV (queda registrada como operación crítica)
 router.get('/auditoria/exportar', ensureAuthenticated, checkRole(soloAdministradores), auditoriaController.exportarAuditoria);
 
+// Exportación a PDF (gemela del CSV)
+router.get('/auditoria/pdf', ensureAuthenticated, checkRole(soloAdministradores), auditoriaController.exportarAuditoriaPDF);
+
 // Baliza de impresión enviada por el navegador desde las vistas imprimibles.
 // Accesible a cualquier usuario autenticado, porque quien imprime una
 // pre-cuenta es el dependiente, no un administrador.

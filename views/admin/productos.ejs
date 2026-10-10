@@ -28,6 +28,11 @@
             border-color: rgba(13, 110, 253, 0.3) !important;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
         }
+        /* Al hacer scroll la barra se compacta: solo iconos (los title sirven de ayuda). */
+        .sticky-search-container.is-scrolled .btn-txt,
+        .sticky-search-container.is-scrolled .contador-txt { display: none; }
+        .sticky-search-container.is-scrolled .btn { padding-left: .55rem; padding-right: .55rem; }
+        .sticky-search-container.is-scrolled .btn i { margin-right: 0 !important; }
 
         /* Botón flotante para scroll hacia arriba */
         .btn-scroll-top {
@@ -102,22 +107,22 @@
                 <!-- Contador Píldora de alto contraste -->
                 <div class="ms-sm-auto">
                     <div class="bg-light border rounded-pill px-3 py-1 d-flex align-items-center gap-2 shadow-sm">
-                        <span class="text-secondary small fw-semibold text-uppercase font-monospace">Inventario</span>
+                        <span class="text-secondary small fw-semibold text-uppercase font-monospace contador-txt">Inventario</span>
                         <span id="contadorProductosCatalogo" class="badge bg-dark text-white rounded-pill px-2.5 py-1.5 fs-7"><%= productos.length %></span>
                     </div>
                 </div>
                 <div class="d-flex gap-2">
                     <a href="/admin/productos/exportar" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Guardar el listado como CSV">
-                        <i class="fa-solid fa-file-csv text-success me-1"></i> Guardar CSV
+                        <i class="fa-solid fa-file-csv text-success me-1"></i> <span class="btn-txt">Guardar CSV</span>
                     </a>
                     <a href="/admin/productos/exportar/pdf" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Guardar el listado como PDF">
-                        <i class="fa-solid fa-file-pdf text-danger me-1"></i> Guardar PDF
+                        <i class="fa-solid fa-file-pdf text-danger me-1"></i> <span class="btn-txt">Guardar PDF</span>
                     </a>
                     <button type="button" onclick="window.print()" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Imprimir el listado">
-                        <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
+                        <i class="fa-solid fa-print text-secondary me-1"></i> <span class="btn-txt">Imprimir</span>
                     </button>
                     <button type="button" id="btnCompartirProductos" class="btn btn-sm btn-white border shadow-sm fw-semibold text-dark" title="Compartir el listado">
-                        <i class="fa-solid fa-share-nodes text-primary me-1"></i> Compartir
+                        <i class="fa-solid fa-share-nodes text-primary me-1"></i> <span class="btn-txt">Compartir</span>
                     </button>
                 </div>
             </div>

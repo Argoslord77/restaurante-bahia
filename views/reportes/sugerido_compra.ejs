@@ -46,6 +46,9 @@
                             <a href="/admin/reportes/sugerido-compra/exportar?dias=<%= reporte.parametros.dias %>&cobertura=<%= reporte.parametros.cobertura %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
                                 <i class="fa-solid fa-file-csv text-success me-1"></i> Exportar CSV
                             </a>
+                            <a href="/admin/reportes/sugerido-compra/pdf?dias=<%= reporte.parametros.dias %>&cobertura=<%= reporte.parametros.cobertura %>" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
+                                <i class="fa-solid fa-file-pdf text-danger me-1"></i> Guardar PDF
+                            </a>
                             <button type="button" onclick="window.print()" class="btn btn-white border shadow-sm fw-semibold btn-sm py-2 text-dark">
                                 <i class="fa-solid fa-print text-secondary me-1"></i> Imprimir
                             </button>
