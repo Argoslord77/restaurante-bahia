@@ -15,6 +15,15 @@
 const session = require('express-session');
 const logger = require('./logger');
 
+// Detalle defensivo: algunos fallos llegan sin message (pool cerrado,
+// valores rechazados no-Error). Sin esto el log sale vacío y no se puede diagnosticar.
+function detallarError(err) {
+    if (err === null || err === undefined) return '(sin detalle)';
+    if (typeof err === 'string') return err;
+    const codigo = err.code ? `[${err.code}] ` : '';
+    return `${codigo}${err.message || err.sqlMessage || String(err)}`;
+}
+
 // Si falta la tabla, se avisa UNA vez con la solución (las siguientes
 // solo registran el error escueto para no inundar el log).
 let migracionAvisada = false;
@@ -117,7 +126,7 @@ class MysqlSessionStore extends session.Store {
                 const n = await this.limpiarExpiradas();
                 if (n > 0) logger.info(`[sesiones] ${n} expiradas eliminadas`);
             } catch (err) {
-                logger.error(`[sesiones] limpieza: ${err.message}`);
+                logger.error(`[sesiones] limpieza: ${detallarError(err)}`);
                 avisarMigracion(err);
             }
         };
