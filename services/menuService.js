@@ -1,4 +1,5 @@
 const MenuModel = require('../models/menuModel');
+const pdfTabla = require('./pdfTabla');
 
 const csvNum = (v, dec = 2) => Number(v || 0).toFixed(dec).replace('.', ',');
 const csvTexto = (v) => String(v == null ? '' : v).replace(/[;\r\n]+/g, ' ');
@@ -92,6 +93,34 @@ class MenuService {
             ].join(';'));
         }
         return '\uFEFF' + filas.join('\r\n') + '\r\n';
+    }
+
+    /** PDF del catálogo de platillos (se genera y descarga al vuelo). */
+    async catalogoAPDF(platillos, meta = {}) {
+        const filas = (platillos || []).map(p => [
+            p.nombre,
+            p.descripcion,
+            p.nombre_categoria || p.categoria,
+            csvNum(p.precio),
+            p.precio_alt == null ? '' : csvNum(p.precio_alt),
+            p.precio_usd == null ? '' : csvNum(p.precio_usd),
+            (Number(p.activo) === 1 || p.activo == null) ? 'En carta' : 'Oculto'
+        ]);
+        return pdfTabla.tablaPDF({
+            titulo: 'Carta de platillos',
+            subtitulo: `${meta.negocio || 'Restaurante Bahía'} · ${pdfTabla.fmtFecha()} · Generado por ${meta.generadoPor || 'Sistema'} · ${filas.length} platillo(s)`,
+            columnas: [
+                { titulo: 'Nombre', frac: 0.26 },
+                { titulo: 'Descripción', frac: 0.30 },
+                { titulo: 'Categoría', frac: 0.12 },
+                { titulo: 'Precio CUP', frac: 0.09, alinear: 'right' },
+                { titulo: 'Precio Alt.', frac: 0.08, alinear: 'right' },
+                { titulo: 'Precio USD', frac: 0.08, alinear: 'right' },
+                { titulo: 'Estado', frac: 0.07, alinear: 'center' }
+            ],
+            filas,
+            pie: `${meta.negocio || 'Restaurante Bahía'} — Carta de platillos`
+        });
     }
 
 }

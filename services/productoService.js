@@ -1,4 +1,5 @@
 const ProductoModel = require('../models/productoModel');
+const pdfTabla = require('./pdfTabla');
 const db = require('../config/db'); // Para consultas auxiliares de catálogos
 
 const csvNum = (v, dec = 2) => Number(v || 0).toFixed(dec).replace('.', ',');
@@ -105,6 +106,36 @@ class ProductoService {
             ].join(';'));
         }
         return '\uFEFF' + filas.join('\r\n') + '\r\n';
+    }
+
+    /** PDF del catálogo de inventario (se genera y descarga al vuelo). */
+    async catalogoAPDF(productos, meta = {}) {
+        const filas = (productos || []).map(p => [
+            p.codigo,
+            p.nombre,
+            p.categoria_nombre,
+            p.unidad_nombre,
+            csvNum(p.costo_promedio),
+            csvNum(p.stock_minimo, 3),
+            Number(p.permitida_venta) === 1 ? 'Sí' : 'No',
+            Number(p.activo) === 1 ? 'Activo' : 'Inactivo'
+        ]);
+        return pdfTabla.tablaPDF({
+            titulo: 'Catálogo de productos',
+            subtitulo: `${meta.negocio || 'Restaurante Bahía'} · ${pdfTabla.fmtFecha()} · Generado por ${meta.generadoPor || 'Sistema'} · ${filas.length} producto(s)`,
+            columnas: [
+                { titulo: 'Código', frac: 0.09 },
+                { titulo: 'Nombre', frac: 0.26 },
+                { titulo: 'Categoría', frac: 0.14 },
+                { titulo: 'U. Inv.', frac: 0.07, alinear: 'center' },
+                { titulo: 'Costo Prom.', frac: 0.11, alinear: 'right' },
+                { titulo: 'Stock Mín.', frac: 0.10, alinear: 'right' },
+                { titulo: 'Venta', frac: 0.06, alinear: 'center' },
+                { titulo: 'Estado', frac: 0.07, alinear: 'center' }
+            ],
+            filas,
+            pie: `${meta.negocio || 'Restaurante Bahía'} — Catálogo de productos`
+        });
     }
 }
 

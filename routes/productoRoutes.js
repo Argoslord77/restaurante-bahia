@@ -49,6 +49,13 @@ router.get('/productos/exportar',
     productoController.exportarProductos
 );
 
+// Exportar catálogo a PDF (ANTES de /:id para que no lo capture)
+router.get('/productos/exportar/pdf',
+    ensureAuthenticated,
+    checkRole(['superadministrador', 'administrador']),
+    productoController.exportarProductosPDF
+);
+
 // Obtener datos de un producto (para el modal de edición)
 router.get('/productos/:id',
     ensureAuthenticated, 

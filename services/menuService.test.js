@@ -142,4 +142,15 @@ describe('MenuService', () => {
       expect(csv).toContain('Oculto;;;100,00;;;Oculto');
     });
   });
+
+  describe('catalogoAPDF', () => {
+    it('genera un PDF válido en memoria', async () => {
+      const pdf = await menuService.catalogoAPDF([
+        { nombre: 'Ropa Vieja', descripcion: 'Plato', nombre_categoria: 'Platos', precio: 250, precio_alt: null, precio_usd: 2.5, activo: 1 }
+      ], { generadoPor: 'Ana' });
+      expect(Buffer.isBuffer(pdf)).toBe(true);
+      expect(pdf.slice(0, 5).toString()).toBe('%PDF-');
+      expect(pdf.length).toBeGreaterThan(1000);
+    });
+  });
 });

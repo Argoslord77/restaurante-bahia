@@ -1,4 +1,5 @@
 const ProductoService = require('../services/productoService');
+const { nombreUsuario } = require('../services/pdfTabla');
 
 // Descarga CSV (mismo formato que los reportes: ; + BOM para Excel).
 function responderCSV(res, nombre, csv, filas) {
@@ -7,6 +8,15 @@ function responderCSV(res, nombre, csv, filas) {
     res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.csv"`);
     if (filas != null) res.setHeader('X-Reporte-Filas', String(filas));
     return res.send(csv);
+}
+
+// Descarga PDF (se genera en memoria al vuelo).
+function responderPDF(res, nombre, pdf) {
+    const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    return res.send(pdf);
 }
 
 /**
@@ -42,6 +52,20 @@ exports.exportarProductos = async (req, res) => {
             ProductoService.catalogoACSV(productos), productos.length);
     } catch (error) {
         console.error('Error al exportar productos:', error);
+        return res.redirect('/admin/productos');
+    }
+};
+
+/**
+ * Exporta el catálogo a PDF (se crea al momento y se descarga)
+ */
+exports.exportarProductosPDF = async (req, res) => {
+    try {
+        const productos = await ProductoService.getCatalogoCompleto();
+        const pdf = await ProductoService.catalogoAPDF(productos, { generadoPor: nombreUsuario(req) });
+        return responderPDF(res, 'catalogo_productos', pdf);
+    } catch (error) {
+        console.error('Error al exportar productos a PDF:', error);
         return res.redirect('/admin/productos');
     }
 };

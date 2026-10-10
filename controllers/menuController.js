@@ -5,6 +5,7 @@ const turnoService = require('../services/turnoService');
 const PrecioControlService = require('../services/precioControlService');
 const fs = require('fs');
 const path = require('path');
+const { nombreUsuario } = require('../services/pdfTabla');
 
 // Descarga CSV (mismo formato que los reportes: ; + BOM para Excel).
 function responderCSV(res, nombre, csv, filas) {
@@ -13,6 +14,15 @@ function responderCSV(res, nombre, csv, filas) {
     res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.csv"`);
     if (filas != null) res.setHeader('X-Reporte-Filas', String(filas));
     return res.send(csv);
+}
+
+// Descarga PDF (se genera en memoria al vuelo).
+function responderPDF(res, nombre, pdf) {
+    const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}_${marca}.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    return res.send(pdf);
 }
 
 module.exports = {
@@ -74,6 +84,18 @@ module.exports = {
                 menuService.catalogoACSV(platillos), platillos.length);
         } catch (error) {
             console.error('Error al exportar el menú:', error);
+            return res.redirect('/admin/menu');
+        }
+    },
+
+    // 1c. EXPORTAR CATÁLOGO A PDF (se crea al momento y se descarga)
+    exportarMenuPDF: async (req, res) => {
+        try {
+            const platillos = await menuService.getAllItems();
+            const pdf = await menuService.catalogoAPDF(platillos, { generadoPor: nombreUsuario(req) });
+            return responderPDF(res, 'carta_platillos', pdf);
+        } catch (error) {
+            console.error('Error al exportar el menú a PDF:', error);
             return res.redirect('/admin/menu');
         }
     },

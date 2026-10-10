@@ -54,6 +54,7 @@ router.delete('/mesas/eliminar/:id', ensureAuthenticated, checkRole(['superadmin
 // Vista principal del menú (Listar todos los platillos)
 router.get('/menu', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.listMenu);
 router.get('/menu/exportar', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.exportarMenu);
+router.get('/menu/exportar/pdf', ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.exportarMenuPDF);
 
 // Acciones CRUD de Platillos
 router.post('/menu/crear', upload.single('foto'), menuValidationRules.create, handleValidationErrors, ensureAuthenticated, checkRole(['superadministrador', 'administrador']), menuController.createDish);
