@@ -1,6 +1,8 @@
 // controllers/inventarioController.js
 const db = require('../config/db');
 const InventarioService = require('../services/inventarioService');
+const ValorizacionService = require('../services/valorizacionService');
+const { nombreUsuario } = require('../services/pdfTabla');
 
 /**
  * Renderiza la interfaz de monitoreo de stock por almacén con filtrado dinámico
@@ -130,40 +132,8 @@ exports.renderValorizacion = async (req, res, next) => {
         // Higiene previa para que el reporte refleje los vencidos de hoy
         try { await InventarioService.marcarLotesVencidos(); } catch (e) { /* best-effort */ }
 
-        // 1. Resumen por almacén (solo lotes con stock)
-        const [porAlmacen] = await db.query(`
-            SELECT a.id, a.nombre,
-                   COUNT(l.id) AS lotes_con_stock,
-                   COALESCE(SUM(l.cantidad_actual), 0) AS unidades,
-                   COALESCE(SUM(l.cantidad_actual * l.costo_unitario), 0) AS valor
-            FROM almacenes a
-            LEFT JOIN lotes l ON l.almacen_id = a.id AND l.cantidad_actual > 0 AND l.estado = 'ACTIVO'
-            WHERE a.activo = 1
-            GROUP BY a.id, a.nombre
-            ORDER BY valor DESC
-        `);
-
-        // 2. Detalle por lote (top 200 por valor)
-        const [lotes] = await db.query(`
-            SELECT l.id, l.numero_lote, l.estado, l.cantidad_actual, l.costo_unitario,
-                   l.fecha_vencimiento,
-                   (l.cantidad_actual * l.costo_unitario) AS valor_lote,
-                   p.nombre AS producto_nombre, p.codigo AS producto_codigo,
-                   a.nombre AS almacen_nombre
-            FROM lotes l
-            INNER JOIN productos p ON l.producto_id = p.id
-            INNER JOIN almacenes a ON l.almacen_id = a.id
-            WHERE l.cantidad_actual > 0
-            ORDER BY valor_lote DESC
-            LIMIT 200
-        `);
-
-        // 3. Valor inmovilizado en lotes vencidos (riesgo)
-        const [vencidos] = await db.query(`
-            SELECT COUNT(*) AS lotes, COALESCE(SUM(l.cantidad_actual * l.costo_unitario), 0) AS valor
-            FROM lotes l
-            WHERE l.estado = 'VENCIDO' AND l.cantidad_actual > 0
-        `);
+        // Datos compartidos con las exportaciones CSV/PDF
+        const { porAlmacen, lotes, vencidos } = await ValorizacionService.obtenerDatos();
 
         const totalGeneral = porAlmacen.reduce((acc, a) => acc + parseFloat(a.valor || 0), 0);
 
@@ -171,7 +141,7 @@ exports.renderValorizacion = async (req, res, next) => {
             title: 'Valorización de Inventario - Restaurante Bahía',
             porAlmacen,
             lotes,
-            vencidos: vencidos[0] || { lotes: 0, valor: 0 },
+            vencidos,
             totalGeneral,
             user: req.user || req.session?.user || null,
             view: 'valorizacion'
@@ -179,5 +149,47 @@ exports.renderValorizacion = async (req, res, next) => {
     } catch (error) {
         console.error('Error en renderValorizacion:', error);
         return next(error);
+    }
+};
+
+/**
+ * Exporta la valorización a CSV (Excel es-ES).
+ * GET /admin/inventario/valorizacion/exportar
+ */
+exports.exportarValorizacion = async (req, res) => {
+    try {
+        try { await InventarioService.marcarLotesVencidos(); } catch (e) { /* best-effort */ }
+        const datos = await ValorizacionService.obtenerDatos();
+        const { csv, filas } = ValorizacionService.valorizacionACSV(datos);
+
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="valorizacion_${marca}.csv"`);
+        res.setHeader('X-Valorizacion-Filas', String(filas));
+        return res.send(csv);
+    } catch (error) {
+        console.error('Error al exportar la valorización:', error);
+        return res.redirect('/admin/inventario/valorizacion');
+    }
+};
+
+/**
+ * Exporta la valorización a PDF.
+ * GET /admin/inventario/valorizacion/pdf
+ */
+exports.exportarValorizacionPDF = async (req, res) => {
+    try {
+        try { await InventarioService.marcarLotesVencidos(); } catch (e) { /* best-effort */ }
+        const datos = await ValorizacionService.obtenerDatos();
+        const pdf = await ValorizacionService.valorizacionAPDF(datos, { generadoPor: nombreUsuario(req) });
+
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="valorizacion_${marca}.pdf"`);
+        res.setHeader('X-Valorizacion-Filas', String(datos.lotes.length));
+        return res.send(pdf);
+    } catch (error) {
+        console.error('Error al exportar la valorización a PDF:', error);
+        return res.redirect('/admin/inventario/valorizacion');
     }
 };

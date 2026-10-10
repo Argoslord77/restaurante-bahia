@@ -12,6 +12,11 @@ const puedeEditar = checkRole(['superadministrador', 'administrador']);
 // Vistas
 router.get('/fichas-costo', ensureAuthenticated, puedeConsultar, fichaCostoController.viewFichas);
 router.get('/fichas-costo/rentabilidad', ensureAuthenticated, puedeConsultar, fichaCostoController.viewRentabilidad);
+// Exportaciones (antes de :productoId para que no las capture)
+router.get('/fichas-costo/exportar', ensureAuthenticated, puedeConsultar, fichaCostoController.exportarFichas);
+router.get('/fichas-costo/pdf', ensureAuthenticated, puedeConsultar, fichaCostoController.exportarFichasPDF);
+router.get('/fichas-costo/rentabilidad/exportar', ensureAuthenticated, puedeConsultar, fichaCostoController.exportarRentabilidad);
+router.get('/fichas-costo/rentabilidad/pdf', ensureAuthenticated, puedeConsultar, fichaCostoController.exportarRentabilidadPDF);
 router.get('/fichas-costo/:productoId', ensureAuthenticated, puedeConsultar, fichaCostoController.viewFichaProducto);
 
 // API: cálculo en vivo mientras se edita (no persiste nada)

@@ -5,6 +5,8 @@
 
 const FichaCostoService = require('../services/fichaCostoService');
 const Costeo = require('../services/costeoService');
+const FichaExport = require('../services/fichaCostoExport');
+const { nombreUsuario } = require('../services/pdfTabla');
 const logger = require('../config/logger');
 
 /** Listado de productos con el estado de su ficha de costo. */
@@ -163,21 +165,25 @@ exports.apiAplicarPrecios = async (req, res) => {
     }
 };
 
+/** Resumen del panel de rentabilidad (compartido por la vista y las exportaciones). */
+function construirResumenRentabilidad(platillos) {
+    const conPrecio = platillos.filter(p => p.food_cost_porcentaje !== null);
+    return {
+        total: platillos.length,
+        sin_precio: platillos.length - conPrecio.length,
+        incompletos: platillos.filter(p => p.ingredientes_sin_ficha > 0).length,
+        criticos: conPrecio.filter(p => p.evaluacion.nivel === 'critico').length,
+        food_cost_medio: conPrecio.length
+            ? Costeo.redondear(conPrecio.reduce((s, p) => s + p.food_cost_porcentaje, 0) / conPrecio.length, 2)
+            : null
+    };
+}
+
 /** Panel de rentabilidad de la carta completa. */
 exports.viewRentabilidad = async (req, res) => {
     try {
         const { parametros, platillos } = await FichaCostoService.resumenRentabilidad();
-
-        const conPrecio = platillos.filter(p => p.food_cost_porcentaje !== null);
-        const resumen = {
-            total: platillos.length,
-            sin_precio: platillos.length - conPrecio.length,
-            incompletos: platillos.filter(p => p.ingredientes_sin_ficha > 0).length,
-            criticos: conPrecio.filter(p => p.evaluacion.nivel === 'critico').length,
-            food_cost_medio: conPrecio.length
-                ? Costeo.redondear(conPrecio.reduce((s, p) => s + p.food_cost_porcentaje, 0) / conPrecio.length, 2)
-                : null
-        };
+        const resumen = construirResumenRentabilidad(platillos);
 
         return res.render('inventarios/rentabilidad-carta', {
             pageTitle: 'Rentabilidad de la Carta',
@@ -192,5 +198,92 @@ exports.viewRentabilidad = async (req, res) => {
         logger.error('Error al cargar la rentabilidad de la carta:', error);
         if (req.flash) req.flash('error_msg', 'No se pudo cargar el análisis de rentabilidad.');
         return res.redirect('/admin/fichas-costo');
+    }
+};
+
+/** Filtros del listado, iguales que los de la vista (para exportar lo filtrado). */
+function filtrosListado(query) {
+    return { busqueda: query.busqueda || '', sinFicha: query.sinFicha || '' };
+}
+
+/**
+ * Exporta el listado de insumos a CSV (respeta busqueda/sinFicha).
+ * GET /admin/fichas-costo/exportar
+ */
+exports.exportarFichas = async (req, res) => {
+    try {
+        const productos = await FichaCostoService.listarProductosConFicha(filtrosListado(req.query));
+        const { csv, filas } = FichaExport.listadoACSV(productos);
+
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="fichas_costo_${marca}.csv"`);
+        res.setHeader('X-Fichas-Filas', String(filas));
+        return res.send(csv);
+    } catch (error) {
+        logger.error('Error al exportar las fichas de costo:', error);
+        return res.redirect('/admin/fichas-costo');
+    }
+};
+
+/**
+ * Exporta el listado de insumos a PDF.
+ * GET /admin/fichas-costo/pdf
+ */
+exports.exportarFichasPDF = async (req, res) => {
+    try {
+        const productos = await FichaCostoService.listarProductosConFicha(filtrosListado(req.query));
+        const pdf = await FichaExport.listadoAPDF(productos, { generadoPor: nombreUsuario(req) });
+
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="fichas_costo_${marca}.pdf"`);
+        res.setHeader('X-Fichas-Filas', String(productos.length));
+        return res.send(pdf);
+    } catch (error) {
+        logger.error('Error al exportar las fichas de costo a PDF:', error);
+        return res.redirect('/admin/fichas-costo');
+    }
+};
+
+/**
+ * Exporta el panel de rentabilidad a CSV.
+ * GET /admin/fichas-costo/rentabilidad/exportar
+ */
+exports.exportarRentabilidad = async (req, res) => {
+    try {
+        const { parametros, platillos } = await FichaCostoService.resumenRentabilidad();
+        const resumen = construirResumenRentabilidad(platillos);
+        const { csv, filas } = FichaExport.rentabilidadACSV(platillos, resumen, parametros.foodCostObjetivo);
+
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="rentabilidad_carta_${marca}.csv"`);
+        res.setHeader('X-Rentabilidad-Filas', String(filas));
+        return res.send(csv);
+    } catch (error) {
+        logger.error('Error al exportar la rentabilidad:', error);
+        return res.redirect('/admin/fichas-costo/rentabilidad');
+    }
+};
+
+/**
+ * Exporta el panel de rentabilidad a PDF.
+ * GET /admin/fichas-costo/rentabilidad/pdf
+ */
+exports.exportarRentabilidadPDF = async (req, res) => {
+    try {
+        const { parametros, platillos } = await FichaCostoService.resumenRentabilidad();
+        const resumen = construirResumenRentabilidad(platillos);
+        const pdf = await FichaExport.rentabilidadAPDF(platillos, resumen, parametros.foodCostObjetivo, { generadoPor: nombreUsuario(req) });
+
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="rentabilidad_carta_${marca}.pdf"`);
+        res.setHeader('X-Rentabilidad-Filas', String(platillos.length));
+        return res.send(pdf);
+    } catch (error) {
+        logger.error('Error al exportar la rentabilidad a PDF:', error);
+        return res.redirect('/admin/fichas-costo/rentabilidad');
     }
 };

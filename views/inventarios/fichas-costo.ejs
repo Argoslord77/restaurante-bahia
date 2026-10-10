@@ -152,6 +152,12 @@
                                 <a href="/admin/fichas-costo/rentabilidad" class="btn btn-sm btn-outline-primary text-nowrap">
                                     <i class="fa-solid fa-chart-line me-1"></i>Rentabilidad
                                 </a>
+                                <a href="/admin/fichas-costo/exportar?busqueda=<%= encodeURIComponent(filtros.busqueda || '') %><%= filtros.sinFicha ? '&sinFicha=1' : '' %>" class="btn btn-sm btn-outline-secondary text-nowrap" title="Descargar el listado filtrado como CSV (Excel)">
+                                    <i class="fa-solid fa-file-csv me-1"></i>CSV
+                                </a>
+                                <a href="/admin/fichas-costo/pdf?busqueda=<%= encodeURIComponent(filtros.busqueda || '') %><%= filtros.sinFicha ? '&sinFicha=1' : '' %>" class="btn btn-sm btn-outline-danger text-nowrap" title="Descargar el listado filtrado como PDF">
+                                    <i class="fa-solid fa-file-pdf me-1"></i>PDF
+                                </a>
                             </div>
                         </form>
                     </div>

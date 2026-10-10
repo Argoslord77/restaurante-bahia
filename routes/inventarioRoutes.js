@@ -19,6 +19,20 @@ router.get(
     inventarioController.renderValorizacion
 );
 
+// Exportaciones del reporte de valorización (mismos datos, mismos roles)
+router.get(
+    '/inventario/valorizacion/exportar',
+    ensureAuthenticated,
+    checkRole(['superadministrador', 'administrador', 'almacenero', 'economico']),
+    inventarioController.exportarValorizacion
+);
+router.get(
+    '/inventario/valorizacion/pdf',
+    ensureAuthenticated,
+    checkRole(['superadministrador', 'administrador', 'almacenero', 'economico']),
+    inventarioController.exportarValorizacionPDF
+);
+
 // Endpoint API que el Frontend consultará asíncronamente vía fetch()
 router.get('/inventario/api/stock/:almacenId', 
     ensureAuthenticated, 

@@ -1,6 +1,8 @@
 // controllers/cierreDiaController.js
 const db = require('../config/db');
 const turnoService = require('../services/turnoService');
+const CierreExport = require('../services/cierreExport');
+const { nombreUsuario } = require('../services/pdfTabla');
 
 /**
  * Obtiene los datos financieros del cierre (comandas, desglose de pagos y resumen).
@@ -98,6 +100,86 @@ async function obtenerDatosCierre(turnoActivo) {
             total_en_caja_esperado: fondoApertura + total_efectivo_total_caja
         };
     return { pedidos, desglosePagos, resumen };
+}
+
+/**
+ * Obtiene los datos del histórico de cierres (cierres, facturas pendientes
+ * y métricas). Compartido por la vista de histórico y sus exportaciones.
+ */
+async function obtenerDatosHistorial() {
+    const [cierres] = await db.query(`
+        SELECT
+            cs.id,
+            cs.turno_servicio_id,
+            cs.fecha_cierre,
+            cs.fondo_apertura,
+            cs.total_cobrado_caja,
+            cs.total_propinas,
+            cs.total_cxc_facturas,
+            cs.total_pendiente_pago,
+            cs.total_cortesias,
+            cs.monto_esperado_caja,
+            cs.monto_real_entregado,
+            cs.diferencia,
+            cs.balance_estado,
+            cs.total_pedidos,
+            cs.pedidos_pagados,
+            cs.pedidos_facturados,
+            cs.pedidos_pendientes,
+            cs.desglose_monedas,
+            cs.observaciones,
+            ts.fecha_apertura,
+            CONCAT(u_ap.nombre, ' ', u_ap.apellidos) AS usuario_apertura,
+            CONCAT(u_cr.nombre, ' ', u_cr.apellidos) AS usuario_cierre
+        FROM cierres_servicio cs
+        INNER JOIN turnos_servicio ts ON cs.turno_servicio_id = ts.id
+        LEFT JOIN usuarios u_ap ON ts.usuario_apertura_id = u_ap.id
+        LEFT JOIN usuarios u_cr ON cs.usuario_cierre_id = u_cr.id
+        ORDER BY cs.fecha_cierre DESC
+    `);
+
+    const cierresFormateados = cierres.map(c => ({
+        ...c,
+        desglose_monedas: typeof c.desglose_monedas === 'string'
+            ? JSON.parse(c.desglose_monedas || '[]')
+            : (c.desglose_monedas || [])
+    }));
+
+    const [facturasPendientes] = await db.query(`
+        SELECT
+            p.id,
+            p.id_mesa,
+            p.turno_servicio_id,
+            ts.fecha_apertura AS fecha_turno,
+            m.numero AS numero_mesa,
+            CONCAT('Mesa ', m.numero) AS nombre_mesa,
+            p.subtotal,
+            p.impuesto,
+            p.total,
+            p.creado_en AS fecha_pedido,
+            p.fecha_cierre,
+            CONCAT(u.nombre, ' ', u.apellidos) AS mesero
+        FROM pedidos p
+        INNER JOIN turnos_servicio ts ON p.turno_servicio_id = ts.id
+        LEFT JOIN mesas m ON p.id_mesa = m.id
+        LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
+        WHERE p.estado_pago = 'facturado'
+        ORDER BY p.id DESC
+    `);
+
+    const totalHistoricoRecaudado = cierresFormateados.reduce((sum, c) => sum + parseFloat(c.total_cobrado_caja || 0), 0);
+    const totalCxCPendiente = facturasPendientes.reduce((sum, f) => sum + parseFloat(f.total || 0), 0);
+
+    return {
+        cierres: cierresFormateados,
+        facturasPendientes,
+        metricas: {
+            totalCierres: cierresFormateados.length,
+            totalRecaudado: totalHistoricoRecaudado,
+            totalCxCPendiente,
+            cantidadFacturasPendientes: facturasPendientes.length
+        }
+    };
 }
 
 
@@ -282,83 +364,16 @@ const CierreDiaController = {
     renderHistorialCierres: async (req, res) => {
         try {
             const turnoActivo = await turnoService.obtenerTurnoActivo();
-
-            const [cierres] = await db.query(`
-                SELECT 
-                    cs.id,
-                    cs.turno_servicio_id,
-                    cs.fecha_cierre,
-                    cs.fondo_apertura,
-                    cs.total_cobrado_caja,
-                    cs.total_propinas,
-                    cs.total_cxc_facturas,
-                    cs.total_pendiente_pago,
-                    cs.total_cortesias,
-                    cs.monto_esperado_caja,
-                    cs.monto_real_entregado,
-                    cs.diferencia,
-                    cs.balance_estado,
-                    cs.total_pedidos,
-                    cs.pedidos_pagados,
-                    cs.pedidos_facturados,
-                    cs.pedidos_pendientes,
-                    cs.desglose_monedas,
-                    cs.observaciones,
-                    ts.fecha_apertura,
-                    CONCAT(u_ap.nombre, ' ', u_ap.apellidos) AS usuario_apertura,
-                    CONCAT(u_cr.nombre, ' ', u_cr.apellidos) AS usuario_cierre
-                FROM cierres_servicio cs
-                INNER JOIN turnos_servicio ts ON cs.turno_servicio_id = ts.id
-                LEFT JOIN usuarios u_ap ON ts.usuario_apertura_id = u_ap.id
-                LEFT JOIN usuarios u_cr ON cs.usuario_cierre_id = u_cr.id
-                ORDER BY cs.fecha_cierre DESC
-            `);
-
-            const cierresFormateados = cierres.map(c => ({
-                ...c,
-                desglose_monedas: typeof c.desglose_monedas === 'string' 
-                    ? JSON.parse(c.desglose_monedas || '[]') 
-                    : (c.desglose_monedas || [])
-            }));
-
-            const [facturasPendientes] = await db.query(`
-                SELECT 
-                    p.id,
-                    p.id_mesa,
-                    p.turno_servicio_id,
-                    ts.fecha_apertura AS fecha_turno,
-                    m.numero AS numero_mesa,
-                    CONCAT('Mesa ', m.numero) AS nombre_mesa,
-                    p.subtotal,
-                    p.impuesto,
-                    p.total,
-                    p.creado_en AS fecha_pedido,
-                    p.fecha_cierre,
-                    CONCAT(u.nombre, ' ', u.apellidos) AS mesero
-                FROM pedidos p
-                INNER JOIN turnos_servicio ts ON p.turno_servicio_id = ts.id
-                LEFT JOIN mesas m ON p.id_mesa = m.id
-                LEFT JOIN usuarios u ON p.id_usuario_mesero = u.id
-                WHERE p.estado_pago = 'facturado'
-                ORDER BY p.id DESC
-            `);
-
-            const totalHistoricoRecaudado = cierresFormateados.reduce((sum, c) => sum + parseFloat(c.total_cobrado_caja || 0), 0);
-            const totalCxCPendiente = facturasPendientes.reduce((sum, f) => sum + parseFloat(f.total || 0), 0);
+            const { cierres, facturasPendientes, metricas } = await obtenerDatosHistorial();
 
             res.render('caja/cierres_historico', {
                 pageTitle: 'Histórico de Cierres y Cuentas por Cobrar',
                 user: req.user,
                 view: 'cierres-historico',
                 turnoActivo,
-                cierres: cierresFormateados,
+                cierres,
                 facturasPendientes,
-                metricas: {
-                    totalCierres: cierresFormateados.length,
-                    totalRecaudado: totalHistoricoRecaudado,
-                    totalCxCPendiente,
-                    cantidadFacturasPendientes: facturasPendientes.length
-                }
+                metricas
             });
         } catch (error) {
             console.error('Error al listar cierres históricos:', error);
@@ -462,6 +477,96 @@ const CierreDiaController = {
         } catch (err) {
             console.error('Error en viewTicketPedido:', err);
             res.status(500).send('Error al generar el ticket de la orden');
+        }
+    },
+
+    /**
+     * Exporta el cierre del día (turno activo) a CSV.
+     * GET /admin/cierre-dia/exportar
+     */
+    exportarCierre: async (req, res) => {
+        try {
+            const turnoActivo = await turnoService.obtenerTurnoActivo();
+            if (!turnoActivo) {
+                req.flash('error_msg', 'No hay un turno de servicio abierto actualmente.');
+                return res.redirect('/admin/cierre-dia');
+            }
+            const datos = await obtenerDatosCierre(turnoActivo);
+            const { csv, filas } = CierreExport.cierreACSV({ turno: turnoActivo, ...datos });
+
+            const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="cierre_dia_turno${turnoActivo.id}_${marca}.csv"`);
+            res.setHeader('X-Cierre-Filas', String(filas));
+            return res.send(csv);
+        } catch (error) {
+            console.error('Error al exportar el cierre del día:', error);
+            return res.redirect('/admin/cierre-dia');
+        }
+    },
+
+    /**
+     * Exporta el cierre del día (turno activo) a PDF.
+     * GET /admin/cierre-dia/pdf
+     */
+    exportarCierrePDF: async (req, res) => {
+        try {
+            const turnoActivo = await turnoService.obtenerTurnoActivo();
+            if (!turnoActivo) {
+                req.flash('error_msg', 'No hay un turno de servicio abierto actualmente.');
+                return res.redirect('/admin/cierre-dia');
+            }
+            const datos = await obtenerDatosCierre(turnoActivo);
+            const pdf = await CierreExport.cierreAPDF({ turno: turnoActivo, ...datos }, { generadoPor: nombreUsuario(req) });
+
+            const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="cierre_dia_turno${turnoActivo.id}_${marca}.pdf"`);
+            res.setHeader('X-Cierre-Filas', String(datos.pedidos.length));
+            return res.send(pdf);
+        } catch (error) {
+            console.error('Error al exportar el cierre del día a PDF:', error);
+            return res.redirect('/admin/cierre-dia');
+        }
+    },
+
+    /**
+     * Exporta el histórico de cierres a CSV.
+     * GET /admin/cierres-historico/exportar
+     */
+    exportarHistorico: async (req, res) => {
+        try {
+            const datos = await obtenerDatosHistorial();
+            const { csv, filas } = CierreExport.historicoACSV(datos);
+
+            const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="cierres_historico_${marca}.csv"`);
+            res.setHeader('X-Historico-Filas', String(filas));
+            return res.send(csv);
+        } catch (error) {
+            console.error('Error al exportar el histórico de cierres:', error);
+            return res.redirect('/admin/cierres-historico');
+        }
+    },
+
+    /**
+     * Exporta el histórico de cierres a PDF.
+     * GET /admin/cierres-historico/pdf
+     */
+    exportarHistoricoPDF: async (req, res) => {
+        try {
+            const datos = await obtenerDatosHistorial();
+            const pdf = await CierreExport.historicoAPDF(datos, { generadoPor: nombreUsuario(req) });
+
+            const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="cierres_historico_${marca}.pdf"`);
+            res.setHeader('X-Historico-Filas', String(datos.cierres.length));
+            return res.send(pdf);
+        } catch (error) {
+            console.error('Error al exportar el histórico de cierres a PDF:', error);
+            return res.redirect('/admin/cierres-historico');
         }
     }
 };
