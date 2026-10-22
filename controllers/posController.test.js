@@ -15,7 +15,7 @@ jest.mock('../services/precioService', () => ({
 const pool = require('../config/db');
 const SettingService = require('../services/settingService');
 const PrecioService = require('../services/precioService');
-const { viewPOS, initOrderManual, abrirOObtenerPedidoMesa, initOrderQR, apiSaveOrder, obtenerAlertasPendientes, procesarCobroAvanzado, guardarBorrador, obtenerBorrador } = require('./posController');
+const { viewPOS, initOrderManual, abrirOObtenerPedidoMesa, initOrderQR, apiSaveOrder, obtenerAlertasPendientes, procesarCobroAvanzado, guardarBorrador, obtenerBorrador, apiMenuPOS } = require('./posController');
 
 function crearReqRes({ url = '/pos/15', query = {}, params = {} } = {}) {
     const req = { url, query, params, user: { id: 1, rol: 'administrador', nombre: 'Admin' } };
@@ -887,5 +887,60 @@ describe('posController.obtenerAlertasPendientes · borradores (T7)', () => {
         const llamada = pool.query.mock.calls.find(([sql]) => String(sql).includes('FROM borradores_carrito'));
         expect(llamada).toBeUndefined();
         expect(res.json.mock.calls[0][0].alertas.borradores).toEqual([]);
+    });
+});
+
+describe('posController.apiMenuPOS · refresco asíncrono del menú', () => {
+    const CATS = [{ id: 1, nombre: 'Platos' }];
+    const MENU = [{ id: 11, nombre: 'Ropa Vieja', mostrar_a_personal: 1 }];
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        PrecioService.obtenerContextoCobro.mockResolvedValue({ carta: 'CUP' });
+        PrecioService.aplicarPrecios.mockImplementation(items => items);
+    });
+
+    it('devuelve platillos con precio, categorías y carta', async () => {
+        simularPool([
+            ['FROM pedidos', [[{ id_mesa: 3, turno_servicio_id: 7 }]]],
+            ['FROM categorias_platillos', [CATS]],
+            ['FROM platillos_menu', [MENU]],
+            ['FROM platillos_dia', [[{ id: 99, nombre: 'Oferta' }]]]
+        ]);
+        const { req, res } = crearReqResAPI({ query: { id_pedido: '15', id_mesa: '3' } });
+        await apiMenuPOS(req, res);
+
+        expect(res.json).toHaveBeenCalledTimes(1);
+        const body = res.json.mock.calls[0][0];
+        expect(body.success).toBe(true);
+        expect(body.carta).toBe('CUP');
+        expect(body.categorias).toEqual(CATS);
+        expect(body.platillos).toHaveLength(2);
+        expect(PrecioService.obtenerContextoCobro).toHaveBeenCalledWith({ idMesa: 3, turnoId: 7 });
+    });
+
+    it('filtra el menú regular por mostrar_a_personal (no por activo)', async () => {
+        simularPool([
+            ['FROM categorias_platillos', [CATS]],
+            ['FROM platillos_menu', [MENU]],
+            ['FROM platillos_dia', [[]]]
+        ]);
+        const { req, res } = crearReqResAPI({ query: { id_mesa: '3' } });
+        req.turnoServicioId = 7;
+        await apiMenuPOS(req, res);
+
+        const llamada = pool.query.mock.calls.find(([sql]) => String(sql).includes('FROM platillos_menu'));
+        expect(String(llamada[0])).toContain('mostrar_a_personal = 1');
+        expect(String(llamada[0])).not.toContain('pm.activo');
+        expect(res.json.mock.calls[0][0].success).toBe(true);
+    });
+
+    it('responde 500 si la BD falla', async () => {
+        pool.query.mockRejectedValue(new Error('caída'));
+        const { req, res } = crearReqResAPI({ query: {} });
+        await apiMenuPOS(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json.mock.calls[0][0].success).toBe(false);
     });
 });

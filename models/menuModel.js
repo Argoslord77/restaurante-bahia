@@ -16,6 +16,7 @@ class MenuModel {
                 pm.precio_usd,
                 pm.foto,
                 pm.activo,
+                pm.mostrar_a_personal,
                 pm.categoria AS categoria_id,
                 cp.nombre AS nombre_categoria,
                 cp.tipo AS tipo_categoria,
@@ -59,7 +60,8 @@ class MenuModel {
             precio_alt,
             precio_usd,
             foto,
-            activo
+            activo,
+            mostrar_a_personal
         } = data;
 
         const [result] = await db.query(`
@@ -71,9 +73,10 @@ class MenuModel {
                 precio_alt,
                 precio_usd,
                 foto,
-                activo
+                activo,
+                mostrar_a_personal
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             nombre,
             descripcion,
@@ -82,7 +85,8 @@ class MenuModel {
             precio_alt,
             precio_usd,
             foto,
-            activo == null ? 1 : activo
+            activo == null ? 1 : activo,
+            mostrar_a_personal == null ? 1 : mostrar_a_personal
         ]);
 
         return result.insertId;
@@ -101,7 +105,8 @@ class MenuModel {
             precio_alt,
             precio_usd,
             foto,
-            activo
+            activo,
+            mostrar_a_personal
         } = data;
 
         const [result] = await db.query(`
@@ -114,7 +119,8 @@ class MenuModel {
                 precio_alt = ?,
                 precio_usd = ?,
                 foto = ?,
-                activo = ?
+                activo = ?,
+                mostrar_a_personal = ?
             WHERE id = ?
         `, [
             nombre,
@@ -125,6 +131,7 @@ class MenuModel {
             precio_usd,
             foto,
             activo == null ? 1 : activo,
+            mostrar_a_personal == null ? 1 : mostrar_a_personal,
             id
         ]);
 

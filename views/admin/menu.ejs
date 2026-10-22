@@ -250,6 +250,7 @@
                                         <th class="py-3">Precio Alt.</th>
                                         <th class="py-3">Precio (USD/Zelle)</th>
                                         <th class="py-3">Estado</th>
+                                        <th class="py-3">Personal</th>
                                         <th class="text-center py-3" style="width: 150px;">Acciones</th>
                                     </tr>
                                 </thead>
@@ -297,6 +298,13 @@
                                                         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill fs-7">Oculto</span>
                                                     <% } %>
                                                 </td>
+                                                <td>
+                                                    <% if (platillo.mostrar_a_personal == null || Number(platillo.mostrar_a_personal) !== 0) { %>
+                                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill fs-7">Visible</span>
+                                                    <% } else { %>
+                                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill fs-7">Oculto</span>
+                                                    <% } %>
+                                                </td>
                                                 <td class="text-center">
                                                     <div class="btn-group gap-1">
                                                         <button class="btn btn-sm btn-outline-secondary border-0"
@@ -311,6 +319,7 @@
                                                             data-precio_alt="<%= platillo.precio_alt || '' %>"
                                                             data-precio_usd="<%= platillo.precio_usd || '' %>"
                                                             data-activo="<%= (platillo.activo == null || Number(platillo.activo) === 1) ? 1 : 0 %>"
+                                                            data-mostrar="<%= (platillo.mostrar_a_personal == null || Number(platillo.mostrar_a_personal) === 1) ? 1 : 0 %>"
                                                             data-foto="<%= platillo.foto || '' %>">
                                                             <i class="fa-solid fa-pen-to-square"></i>
                                                         </button>
@@ -576,6 +585,13 @@
                                 </select>
                             </div>
                             <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Visible para el personal (POS) *</label>
+                                <select name="mostrar_personal" class="form-select" required>
+                                    <option value="1" selected>Sí (dependiente/capitán lo ven y pueden ordenarlo)</option>
+                                    <option value="0">No (oculto en el POS)</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
                                 <label class="form-label fw-semibold text-secondary small">Foto del Platillo</label>
                                 <input type="file" name="foto" class="form-control" accept="image/*">
                             </div>
@@ -645,6 +661,13 @@
                                 <select name="estado" id="edit_estado" class="form-select" required>
                                     <option value="1">En carta (visible para el cliente)</option>
                                     <option value="0">Oculto (no se muestra)</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small">Visible para el personal (POS) *</label>
+                                <select name="mostrar_personal" id="edit_mostrar_personal" class="form-select" required>
+                                    <option value="1">Sí (dependiente/capitán lo ven y pueden ordenarlo)</option>
+                                    <option value="0">No (oculto en el POS)</option>
                                 </select>
                             </div>
                             <div class="col-12">
@@ -923,6 +946,7 @@
                 document.getElementById('edit_precio_alt').value = button.getAttribute('data-precio_alt') || '';
                 document.getElementById('edit_precio_usd').value = button.getAttribute('data-precio_usd') || '';
                 document.getElementById('edit_estado').value = button.getAttribute('data-activo') || '1';
+                document.getElementById('edit_mostrar_personal').value = button.getAttribute('data-mostrar') || '1';
                 const foto = button.getAttribute('data-foto');
                 document.getElementById('edit_foto').value = (foto && foto !== 'null') ? foto : '';
 

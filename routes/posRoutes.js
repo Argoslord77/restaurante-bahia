@@ -38,6 +38,9 @@ router.get('/api/pos/borrador/:id_pedido', ensureAuthenticated, checkRole(['supe
 // Verificar stock para un platillo específico
 router.get('/api/pos/verify-stock', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.apiVerifyStock);
 
+// Menú del POS en JSON (refresco asíncrono cada 10s en la vista)
+router.get('/api/pos/menu', ensureAuthenticated, checkRole(['superadministrador', 'administrador','dependiente', 'capitan']), asegurarTurnoActivo, posController.apiMenuPOS);
+
 // Consulta asíncrona de comandas según el área (utilizada por el refresco AJAX/Fetch del monitor)
 router.get('/api/monitor/comandas', ensureAuthenticated, asegurarTurnoActivo, checkRole(['superadministrador', 'administrador', 'jefe-cocina', 'bartender', 'cocinero', 'ayudante-cocina', 'luncher', 'porcionador']), monitorController.getComandasAPI);
 

@@ -102,7 +102,7 @@ module.exports = {
 
     // 2. CREAR PLATILLO REGULAR
     createDish: async (req, res) => {
-        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, estado } = req.body;
+        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, estado, mostrar_personal } = req.body;
         const foto = req.file ? req.file.filename : null;
         // Control de precios de cartas (Configuración → Opciones generales):
         // con el control activo solo el usuario designado puede guardar precios.
@@ -129,7 +129,8 @@ module.exports = {
                 precio_alt: finalPrecioAlt,
                 precio_usd: finalPrecioUsd,
                 foto: finalFoto,
-                activo: estado
+                activo: estado,
+                mostrar_a_personal: mostrar_personal
             });
 
             return res.status(201).json({
@@ -149,7 +150,7 @@ module.exports = {
     // 3. EDITAR PLATILLO REGULAR
     updateDish: async (req, res) => {
         const { id } = req.params;
-        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, fotoActual, estado } = req.body;
+        const { nombre, descripcion, precio, categoria, precio_alt, precio_usd, fotoActual, estado, mostrar_personal } = req.body;
         const foto = req.file ? req.file.filename : (fotoActual && fotoActual !== 'null' ? fotoActual.trim() : null);
         // Control de precios de cartas (Configuración → Opciones generales):
         // con el control activo solo el usuario designado puede guardar precios.
@@ -180,7 +181,8 @@ module.exports = {
                 precio_alt: finalPrecioAlt,
                 precio_usd: finalPrecioUsd,
                 foto: foto,
-                activo: estado
+                activo: estado,
+                mostrar_a_personal: mostrar_personal
             });
 
             return res.status(200).json({ success: true, message: `¡El platillo "${nombre.trim()}" se actualizó correctamente!` });

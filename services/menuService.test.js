@@ -62,7 +62,7 @@ describe('MenuService', () => {
       const result = await menuService.createItem(itemData);
       
       expect(result).toBeDefined();
-      expect(MenuModel.create).toHaveBeenCalledWith({ ...itemData, activo: 1 });
+      expect(MenuModel.create).toHaveBeenCalledWith({ ...itemData, activo: 1, mostrar_a_personal: 1 });
     });
 
     it('should throw error if nombre is missing', async () => {
@@ -87,7 +87,7 @@ describe('MenuService', () => {
       const result = await menuService.updateItem(1, itemData);
       
       expect(result).toBeDefined();
-      expect(MenuModel.update).toHaveBeenCalledWith(1, { ...itemData, activo: 1 });
+      expect(MenuModel.update).toHaveBeenCalledWith(1, { ...itemData, activo: 1, mostrar_a_personal: 1 });
     });
 
     it('should throw error if id is not provided', async () => {
@@ -114,11 +114,21 @@ describe('MenuService', () => {
     it('normaliza el estado al crear y editar', async () => {
       MenuModel.create.mockResolvedValue({ insertId: 5 });
       await menuService.createItem({ nombre: 'X', activo: '0' });
-      expect(MenuModel.create).toHaveBeenCalledWith({ nombre: 'X', activo: 0 });
+      expect(MenuModel.create).toHaveBeenCalledWith({ nombre: 'X', activo: 0, mostrar_a_personal: 1 });
 
       MenuModel.update.mockResolvedValue({ affectedRows: 1 });
       await menuService.updateItem(5, { nombre: 'X', activo: 'inactivo' });
-      expect(MenuModel.update).toHaveBeenCalledWith(5, { nombre: 'X', activo: 0 });
+      expect(MenuModel.update).toHaveBeenCalledWith(5, { nombre: 'X', activo: 0, mostrar_a_personal: 1 });
+    });
+
+    it('normaliza la visibilidad al personal al crear y editar', async () => {
+      MenuModel.create.mockResolvedValue({ insertId: 5 });
+      await menuService.createItem({ nombre: 'X', mostrar_a_personal: '0' });
+      expect(MenuModel.create).toHaveBeenCalledWith({ nombre: 'X', activo: 1, mostrar_a_personal: 0 });
+
+      MenuModel.update.mockResolvedValue({ affectedRows: 1 });
+      await menuService.updateItem(5, { nombre: 'X', mostrar_a_personal: 'no' });
+      expect(MenuModel.update).toHaveBeenCalledWith(5, { nombre: 'X', activo: 1, mostrar_a_personal: 0 });
     });
 
     it('getActiveItems filtra por activo', async () => {
@@ -133,13 +143,13 @@ describe('MenuService', () => {
   describe('catalogoACSV', () => {
     it('genera CSV con BOM, ; y estado en texto', () => {
       const csv = menuService.catalogoACSV([
-        { nombre: 'Ropa;Vieja', descripcion: 'A\nB', nombre_categoria: 'Platos', precio: 250, precio_alt: null, precio_usd: 2.5, activo: 1 },
-        { nombre: 'Oculto', precio: 100, activo: 0 }
+        { nombre: 'Ropa;Vieja', descripcion: 'A\nB', nombre_categoria: 'Platos', precio: 250, precio_alt: null, precio_usd: 2.5, activo: 1, mostrar_a_personal: 1 },
+        { nombre: 'Oculto', precio: 100, activo: 0, mostrar_a_personal: 0 }
       ]);
       expect(csv.charCodeAt(0)).toBe(0xFEFF);
-      expect(csv).toContain('Nombre;Descripcion;Categoria;Precio CUP;Precio Alt;Precio USD;Estado');
-      expect(csv).toContain('Ropa Vieja;A B;Platos;250,00;;2,50;En carta');
-      expect(csv).toContain('Oculto;;;100,00;;;Oculto');
+      expect(csv).toContain('Nombre;Descripcion;Categoria;Precio CUP;Precio Alt;Precio USD;Estado;Personal');
+      expect(csv).toContain('Ropa Vieja;A B;Platos;250,00;;2,50;En carta;Sí');
+      expect(csv).toContain('Oculto;;;100,00;;;Oculto;No');
     });
   });
 

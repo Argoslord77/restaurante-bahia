@@ -33,6 +33,43 @@ function rolEmpleado(req) {
 
 const MENSAJE_TOMA_NO_AUTORIZADA = 'Solo los capitanes están autorizados a tomar órdenes según la configuración general (Configuración → Opciones generales).';
 
+/**
+ * Menú del POS (categorías + platillos con precio de carta aplicado).
+ * Compartido por la vista inicial (viewPOS) y el refresco asíncrono
+ * (apiMenuPOS): el personal solo ve platillos con mostrar_a_personal = 1.
+ */
+async function obtenerMenuPOS({ idMesa = null, turnoId = null, pricingContext = null }) {
+    const contexto = pricingContext || await PrecioService.obtenerContextoCobro({ idMesa, turnoId });
+    const [categorias] = await pool.query(
+        'SELECT * FROM categorias_platillos WHERE activo = 1 ORDER BY nombre ASC'
+    );
+    const [menuRegular] = await pool.query(`
+        SELECT pm.*,
+               cp.nombre AS nombre_categoria,
+               cp.tipo AS tipo_categoria,
+               0 AS es_platillo_dia
+        FROM platillos_menu pm
+        LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
+        WHERE pm.mostrar_a_personal = 1
+        ORDER BY pm.nombre ASC
+    `);
+    const [platillosDia] = await pool.query(`
+        SELECT pd.*,
+               'Platillo del Día' AS nombre_categoria,
+               pd.tipo AS tipo_categoria,
+               1 AS es_platillo_dia
+        FROM platillos_dia pd
+        WHERE pd.activo = 1
+          AND (? IS NOT NULL AND pd.turno_servicio_id = ?)
+        ORDER BY pd.nombre ASC
+    `, [turnoId, turnoId]);
+    const platillos = PrecioService.aplicarPrecios(
+        [...platillosDia, ...menuRegular],
+        contexto
+    );
+    return { platillos, categorias, pricingContext: contexto };
+}
+
 module.exports = {
     // Vista Principal del TPV / POS
     viewPOS: async (req, res) => {
@@ -134,36 +171,7 @@ module.exports = {
                 }
             }
 
-            const pricingContext = await PrecioService.obtenerContextoCobro({ idMesa, turnoId });
-            const [categorias] = await pool.query(
-                'SELECT * FROM categorias_platillos WHERE activo = 1 ORDER BY nombre ASC'
-            );
-            const [menuRegular] = await pool.query(`
-                SELECT pm.*,
-                       cp.nombre AS nombre_categoria,
-                       cp.tipo AS tipo_categoria,
-                       0 AS es_platillo_dia
-                FROM platillos_menu pm
-                LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
-                WHERE pm.activo = 1
-                ORDER BY pm.nombre ASC
-            `);
-
-            const [platillosDia] = await pool.query(`
-                SELECT pd.*,
-                       'Platillo del Día' AS nombre_categoria,
-                       pd.tipo AS tipo_categoria,
-                       1 AS es_platillo_dia
-                FROM platillos_dia pd
-                WHERE pd.activo = 1
-                  AND (? IS NOT NULL AND pd.turno_servicio_id = ?)
-                ORDER BY pd.nombre ASC
-            `, [turnoId, turnoId]);
-
-            const platillos = PrecioService.aplicarPrecios(
-                [...platillosDia, ...menuRegular],
-                pricingContext
-            );
+            const { platillos, categorias, pricingContext } = await obtenerMenuPOS({ idMesa, turnoId });
 
             return res.render('pos', {
                 pageTitle: soloVisualizacion
@@ -203,6 +211,39 @@ module.exports = {
     },
 
     // Verificación de stock antes de agregar al carrito
+    /**
+     * Menú del POS en JSON para el refresco asíncrono de la vista
+     * (el dependiente/capitán ve los cambios del admin sin recargar).
+     * GET /api/pos/menu?id_pedido=&id_mesa=
+     */
+    apiMenuPOS: async (req, res) => {
+        try {
+            const pedidoId = parseInt(req.query.id_pedido, 10) || null;
+            let idMesa = req.query.id_mesa || null;
+            let turnoId = req.turnoServicioId || null;
+            if (pedidoId) {
+                const [pedidos] = await pool.query(
+                    'SELECT id_mesa, turno_servicio_id FROM pedidos WHERE id = ? LIMIT 1',
+                    [pedidoId]
+                );
+                if (pedidos.length > 0) {
+                    idMesa = pedidos[0].id_mesa;
+                    turnoId = pedidos[0].turno_servicio_id;
+                }
+            }
+            const { platillos, categorias, pricingContext } = await obtenerMenuPOS({ idMesa, turnoId });
+            return res.json({
+                success: true,
+                platillos,
+                categorias,
+                carta: pricingContext ? pricingContext.carta : null
+            });
+        } catch (error) {
+            console.error('Error al obtener el menú POS:', error);
+            return res.status(500).json({ success: false, message: 'No se pudo actualizar el menú.' });
+        }
+    },
+
     apiVerifyStock: async (req, res) => {
         try {
             // req.body puede ser undefined en GETs sin body (Express 5);
@@ -311,13 +352,13 @@ module.exports = {
                                cp.tipo AS tipo_categoria
                         FROM platillos_menu pm
                         LEFT JOIN categorias_platillos cp ON pm.categoria = cp.id
-                        WHERE pm.id = ? AND pm.activo = 1
+                        WHERE pm.id = ? AND pm.mostrar_a_personal = 1
                         LIMIT 1
                     `, [idPlatillo]);
                     platillo = rows[0];
                 }
                 if (!platillo) {
-                    throw new Error(`El platillo con ID ${idPlatillo} no existe, está inactivo o no pertenece al turno.`);
+                    throw new Error(`El platillo con ID ${idPlatillo} no existe, no está disponible para el personal o no pertenece al turno.`);
                 }
 
                 const precio = PrecioService.validarPrecioConfigurado(platillo, pricingContext);

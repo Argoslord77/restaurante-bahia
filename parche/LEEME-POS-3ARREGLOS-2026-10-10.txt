@@ -1,0 +1,45 @@
+3 ARREGLOS POS + MENÚ — Restaurante Bahía (2026-10-10)
+========================================================
+Zip: parche/bahia-pos-3arreglos-2026-10-10.zip
+Aplica sobre la rama arena/01a08ac3 (cualquier punto reciente).
+
+QUÉ ARREGLA
+-----------
+1. El campo `activo` del platillo ya NO oculta en el POS: ahora solo
+   controla la carta del cliente. Nuevo campo `mostrar_a_personal`
+   (1 = visible en el POS, 0 = oculto al personal), con columna y
+   controles en Admin → Menú (crear/editar + insignia "Personal").
+   Los platillos ocultos al cliente SIGUEN visibles para el
+   dependiente/capitán y se pueden ordenar.
+2. El POS refresca el menú solo (parrilla + categorías) cada 10 s vía
+   GET /api/pos/menu: los cambios del admin (precio, nombre, foto,
+   altas/bajas) aparecen sin recargar. No toca la orden en curso,
+   respeta el filtro/búsqueda actual y no hace nada si no hubo cambios.
+3. En la ventana de cobro, al enfocar Descuento/Recargo/Propina con
+   valor 0.00 la caja queda en blanco para escribir directo; si sale
+   vacía se restaura el 0.00.
+
+INSTALACIÓN
+-----------
+1. Parar el servidor (pm2 stop bahia — o su proceso).
+2. Respaldo: mysqldump restaurante_db > respaldo_antes_3arreglos.sql
+3. Descomprimir el zip en la RAÍZ del proyecto (conserva carpetas).
+4. OBLIGATORIO — migración (idempotente, repetir no hace daño):
+       mysql -u USUARIO -p restaurante_db < scripts/migracion_mostrar_personal_platillos.sql
+   Sin este paso el POS da error 500 (la consulta usa la columna nueva).
+5. Arrancar y Ctrl+F5 en el POS (el JS cambió).
+
+HUMO RÁPIDO (5 minutos)
+-----------------------
+1. Admin → Menú: ocultar un platillo al cliente (Estado=Oculto) →
+   sigue visible en el POS. Poner Personal=No → desaparece del POS.
+2. POS abierto: cambiar un precio en Admin → en ≤10 s cambia en el POS
+   sin recargar (la orden en curso intacta).
+3. POS → Cobrar: clic en Propina (0.00) → queda en blanco; salir sin
+   escribir → vuelve a 0.00.
+
+PRUEBAS
+-------
+Suite: 93/94 OK (761 tests; el único fallo es movil/tests/licencia,
+preexistente y ajeno). Nuevos: apiMenuPOS (3) + normalización (1),
+catálogo CSV/PDF con columna Personal.

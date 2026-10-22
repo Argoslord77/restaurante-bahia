@@ -2668,6 +2668,19 @@
                     const inputRecargo = document.getElementById('swal-recargo');
                     const inputPropina = document.getElementById('swal-propina');
 
+                    // Al enfocar una caja con 0.00 se deja en blanco para que
+                    // el dependiente/cajero escriba sin borrar ceros; si sale
+                    // vacía se restaura el 0.00 (los totales toleran vacío).
+                    [inputDescuento, inputRecargo, inputPropina].forEach(input => {
+                        if (!input) return;
+                        input.addEventListener('focus', () => {
+                            if (parseFloat(input.value) === 0) input.value = '';
+                        });
+                        input.addEventListener('blur', () => {
+                            if (input.value.trim() === '') input.value = '0.00';
+                        });
+                    });
+
                     const lblTotalPagar = document.getElementById('lbl-total-pagar');
                     const lblRestante = document.getElementById('lbl-restante');
                     const lblExcedente = document.getElementById('lbl-excedente');
@@ -3068,10 +3081,138 @@
             }
         }
 
+        // ---------------------------------------------------------------
+        // Refresco asíncrono del menú (cada 10 s)
+        // ---------------------------------------------------------------
+        // Trae categorías + platillos del backend y re-renderiza la parrilla
+        // SOLO si algo cambió (precio, nombre, foto, categoría, altas/bajas
+        // hechas en el admin). No toca la orden en curso (carrito, pagos,
+        // historial) ni el scroll: solo #dishes-grid y #category-filters,
+        // re-aplicando el filtro y la búsqueda actuales del dependiente.
+        let menuPOSTimer = null;
+        let menuPOSFirma = '';
+        let menuPOSConsultando = false;
+
+        function firmaMenuPOS(datos) {
+            try {
+                const platos = (datos.platillos || []).map(p => [
+                    p.id,
+                    (p.es_platillo_dia === true || p.es_platillo_dia === 1 || p.es_platillo_dia === '1') ? 1 : 0,
+                    p.nombre || '', p.descripcion || '', p.precio, p.foto || '',
+                    p.nombre_categoria || '', p.tipo_categoria || '',
+                    (typeof p.disponible === 'undefined' || p.disponible === 1 || p.disponible === true) ? 1 : 0
+                ].join('|')).join('~');
+                const cats = (datos.categorias || []).map(c => c.id + ':' + (c.nombre || '')).join('~');
+                return cats + '#' + platos;
+            } catch (_) { return ''; }
+        }
+
+        function tarjetaPlatilloHTML(p) {
+            const esDisponible = typeof p.disponible === 'undefined' || p.disponible === 1 || p.disponible === true;
+            const esDelDia = p.es_platillo_dia === true || p.es_platillo_dia === 1 || p.es_platillo_dia === '1';
+            const nombre = escapeHtml(p.nombre || '');
+            const nombreLower = String(p.nombre || '').toLowerCase();
+            const desc = String(p.descripcion || '');
+            const categoria = String(p.nombre_categoria || p.categoria || '');
+            const foto = (p.foto && p.foto !== 'null') ? p.foto : null;
+            const precio = isNaN(parseFloat(p.precio)) ? '0.00' : parseFloat(p.precio).toFixed(2);
+            const img = foto
+                ? `<img src="/uploads/${escapeHtml(foto)}" alt="${nombre}" loading="lazy">`
+                : `<div class="text-center text-muted">${p.tipo_categoria === 'BEBIDAS'
+                    ? '<i class="fa-solid fa-wine-glass text-info fa-2x"></i>'
+                    : '<i class="fa-solid fa-bowl-food text-warning fa-2x"></i>'}</div>`;
+            const badge = esDelDia
+                ? '<span class="badge-especial-dia">⭐ Oferta</span>'
+                : (!esDisponible ? '<span class="badge-agotado">Agotado</span>' : '');
+            const descHtml = desc.trim().length > 0
+                ? `<p class="dish-description" title="${escapeHtml(desc)}">${escapeHtml(desc)}</p>` : '';
+            return `<div class="col-6 col-sm-6 col-md-6 col-lg-4 dish-item" data-id="${p.id}" data-name="${escapeHtml(nombreLower)}" data-category="${escapeHtml(categoria.toLowerCase().trim())}" data-es-dia="${esDelDia ? '1' : '0'}" data-available="${esDisponible ? 'true' : 'false'}">`
+                + `<div class="dish-card h-100${esDelDia ? ' dish-card-dia' : ''}${!esDisponible ? ' out-of-stock' : ''}">`
+                + `<div class="dish-img-wrapper">${img}${badge}<span class="price-badge-card price-tag">$${precio}</span></div>`
+                + `<div class="dish-card-body"><div><h3 class="dish-title" title="${nombre}">${nombre}</h3>${descHtml}</div>`
+                + `<div class="d-flex align-items-center justify-content-between pt-1"><span class="dish-category"><i class="fa-solid fa-tag opacity-75 me-1"></i>${escapeHtml(categoria || 'General')}</span></div>`
+                + `</div></div></div>`;
+        }
+
+        function reenlazarBotonesCategoria() {
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    activeCategory = btn.dataset.category;
+                    applyFilters();
+                });
+            });
+        }
+
+        function renderMenuPOS(datos) {
+            const grid = document.getElementById('dishes-grid');
+            if (grid) grid.innerHTML = (datos.platillos || []).map(tarjetaPlatilloHTML).join('');
+            const filtros = document.getElementById('category-filters');
+            if (filtros) {
+                let html = '<button class="btn category-btn" data-category="todos">Todos</button>'
+                    + '<button class="btn category-btn category-btn-dia" data-category="platillos_dia">⭐ Ofertas del Día</button>';
+                for (const c of (datos.categorias || [])) {
+                    html += `<button class="btn category-btn" data-category="${escapeHtml(String(c.nombre || '').toLowerCase().trim())}">${escapeHtml(c.nombre || '')}</button>`;
+                }
+                filtros.innerHTML = html;
+                // Si la categoría activa desapareció, volver a "Todos".
+                const existe = Array.from(filtros.querySelectorAll('.category-btn')).some(b => b.dataset.category === activeCategory);
+                if (!existe) activeCategory = 'todos';
+                filtros.querySelectorAll('.category-btn').forEach(b => {
+                    if (b.dataset.category === activeCategory) b.classList.add('active');
+                });
+                reenlazarBotonesCategoria();
+            }
+            if (typeof applyFilters === 'function') applyFilters();
+        }
+
+        async function actualizarMenuPOS(soloFirma) {
+            if (menuPOSConsultando || document.hidden) return;
+            const grid = document.getElementById('dishes-grid');
+            if (!grid) return;
+            menuPOSConsultando = true;
+            try {
+                const elPedido = document.getElementById('pos_id_pedido');
+                const elMesa = document.getElementById('pos_id_mesa');
+                const idPedido = elPedido ? elPedido.value : '';
+                const idMesa = elMesa ? elMesa.value : '';
+                const resp = await fetch(`/api/pos/menu?id_pedido=${encodeURIComponent(idPedido)}&id_mesa=${encodeURIComponent(idMesa)}`);
+                if (!resp.ok) return;
+                const datos = await resp.json();
+                if (!datos || datos.success !== true) return;
+                const firma = firmaMenuPOS(datos);
+                if (!firma) return;
+                if (soloFirma) { menuPOSFirma = firma; return; }
+                if (firma !== menuPOSFirma) {
+                    menuPOSFirma = firma;
+                    renderMenuPOS(datos);
+                }
+            } catch (err) {
+                console.error('Error al actualizar el menú POS:', err);
+            } finally {
+                menuPOSConsultando = false;
+            }
+        }
+
+        function iniciarPollingMenuPOS() {
+            actualizarMenuPOS(true);
+            if (!menuPOSTimer) menuPOSTimer = setInterval(actualizarMenuPOS, 10000);
+        }
+
+        function detenerPollingMenuPOS() {
+            if (menuPOSTimer) {
+                clearInterval(menuPOSTimer);
+                menuPOSTimer = null;
+            }
+        }
+
         iniciarPollingItemsListos();
         iniciarPollingBorrador();
+        iniciarPollingMenuPOS();
         window.addEventListener('beforeunload', detenerPollingItemsListos);
         window.addEventListener('beforeunload', detenerPollingBorrador);
+        window.addEventListener('beforeunload', detenerPollingMenuPOS);
     </script>
 </body>
 </html>

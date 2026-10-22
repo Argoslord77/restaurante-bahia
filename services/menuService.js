@@ -8,6 +8,11 @@ function normalizarActivo(v) {
     if (v === 0 || v === false || v === '0' || v === 'inactivo' || v === 'oculto') return 0;
     return 1;
 }
+// Visibilidad en el POS del personal: mismas reglas (el formulario manda '1'/'0').
+function normalizarMostrarPersonal(v) {
+    if (v === 0 || v === false || v === '0' || v === 'no' || v === 'oculto') return 0;
+    return 1;
+}
 
 class MenuService {
 
@@ -30,7 +35,7 @@ class MenuService {
             throw new Error('Nombre requerido');
         }
 
-        return await MenuModel.create({ ...data, activo: normalizarActivo(data.activo) });
+        return await MenuModel.create({ ...data, activo: normalizarActivo(data.activo), mostrar_a_personal: normalizarMostrarPersonal(data.mostrar_a_personal) });
     }
 
     async updateItem(id, data) {
@@ -39,7 +44,7 @@ class MenuService {
             throw new Error('ID requerido');
         }
 
-        return await MenuModel.update(id, { ...data, activo: normalizarActivo(data.activo) });
+        return await MenuModel.update(id, { ...data, activo: normalizarActivo(data.activo), mostrar_a_personal: normalizarMostrarPersonal(data.mostrar_a_personal) });
     }
 
     async deleteItem(id) {
@@ -80,7 +85,7 @@ class MenuService {
         const filas = [];
         filas.push('Carta de platillos');
         filas.push('');
-        filas.push('Nombre;Descripcion;Categoria;Precio CUP;Precio Alt;Precio USD;Estado');
+        filas.push('Nombre;Descripcion;Categoria;Precio CUP;Precio Alt;Precio USD;Estado;Personal');
         for (const p of platillos || []) {
             filas.push([
                 csvTexto(p.nombre),
@@ -89,7 +94,8 @@ class MenuService {
                 csvNum(p.precio),
                 p.precio_alt == null ? '' : csvNum(p.precio_alt),
                 p.precio_usd == null ? '' : csvNum(p.precio_usd),
-                (Number(p.activo) === 1 || p.activo == null) ? 'En carta' : 'Oculto'
+                (Number(p.activo) === 1 || p.activo == null) ? 'En carta' : 'Oculto',
+                (Number(p.mostrar_a_personal) === 1 || p.mostrar_a_personal == null) ? 'Sí' : 'No'
             ].join(';'));
         }
         return '\uFEFF' + filas.join('\r\n') + '\r\n';
@@ -104,19 +110,21 @@ class MenuService {
             csvNum(p.precio),
             p.precio_alt == null ? '' : csvNum(p.precio_alt),
             p.precio_usd == null ? '' : csvNum(p.precio_usd),
-            (Number(p.activo) === 1 || p.activo == null) ? 'En carta' : 'Oculto'
+            (Number(p.activo) === 1 || p.activo == null) ? 'En carta' : 'Oculto',
+            (Number(p.mostrar_a_personal) === 1 || p.mostrar_a_personal == null) ? 'Sí' : 'No'
         ]);
         return pdfTabla.tablaPDF({
             titulo: 'Carta de platillos',
             subtitulo: `${meta.negocio || 'Restaurante Bahía'} · ${pdfTabla.fmtFecha()} · Generado por ${meta.generadoPor || 'Sistema'} · ${filas.length} platillo(s)`,
             columnas: [
-                { titulo: 'Nombre', frac: 0.26 },
-                { titulo: 'Descripción', frac: 0.30 },
-                { titulo: 'Categoría', frac: 0.12 },
+                { titulo: 'Nombre', frac: 0.24 },
+                { titulo: 'Descripción', frac: 0.24 },
+                { titulo: 'Categoría', frac: 0.11 },
                 { titulo: 'Precio CUP', frac: 0.09, alinear: 'right' },
                 { titulo: 'Precio Alt.', frac: 0.08, alinear: 'right' },
                 { titulo: 'Precio USD', frac: 0.08, alinear: 'right' },
-                { titulo: 'Estado', frac: 0.07, alinear: 'center' }
+                { titulo: 'Estado', frac: 0.08, alinear: 'center' },
+                { titulo: 'Personal', frac: 0.08, alinear: 'center' }
             ],
             filas,
             pie: `${meta.negocio || 'Restaurante Bahía'} — Carta de platillos`
