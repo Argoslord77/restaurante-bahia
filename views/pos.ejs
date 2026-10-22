@@ -2538,7 +2538,7 @@
                                 <strong class="font-digits fs-6">$${totalBaseCalculado.toFixed(2)}</strong>
                             </div>
                             <div>
-                                <small class="text-muted d-block font-semibold">Total a Pagar</small>
+                                <small class="text-muted d-block font-semibold">Total Orden</small>
                                 <strong class="font-digits fs-6 text-primary" id="lbl-total-pagar">$${totalBaseCalculado.toFixed(2)}</strong>
                             </div>
                             <div>
@@ -2546,10 +2546,15 @@
                                 <strong class="font-digits fs-6 text-danger" id="lbl-restante">$${totalBaseCalculado.toFixed(2)}</strong>
                             </div>
                             <div>
-                                <small class="text-muted d-block font-semibold">Excedente</small>
+                                <small class="text-muted d-block font-semibold">Vuelto</small>
                                 <strong class="font-digits fs-6 text-success" id="lbl-excedente">$0.00</strong>
                                 <small class="text-success d-block" id="lbl-excedente-nota" style="font-size:.65rem"></small>
                             </div>
+                        </div>
+
+                        <div class="form-check bg-light border rounded px-2 py-1.5 mb-3 small" id="row-vuelto-rechazado" style="display:none">
+                            <input class="form-check-input ms-0 me-1" type="checkbox" id="swal-vuelto-rechazado">
+                            <label class="form-check-label" for="swal-vuelto-rechazado">Cliente <b>rechaza el vuelto</b>: queda como <b>ingreso extra</b> del negocio (no es propina).</label>
                         </div>
 
                         <div class="row g-2 mb-3 bg-light p-2 rounded border">
@@ -2563,7 +2568,7 @@
                             </div>
                             <div class="col-6">
                                 <label class="small fw-bold text-success">Propina ($)</label>
-                                <input type="number" id="swal-propina" min="0" step="0.01" value="0.00" class="form-control form-control-sm font-digits text-success">
+                                <input type="number" id="swal-propina" min="0" step="0.01" value="0.00" class="form-control form-control-sm font-digits text-success" title="Se topa en el excedente: si el cliente no paga de más sobre la orden, no hay propina.">
                             </div>
                             <div class="col-6">
                                 <label class="small fw-bold">Motivo</label>
@@ -2689,34 +2694,47 @@
 
                     const listaPagos = [];
 
-                    function calcularTotalNeto() {
+                    function calcularTotalOrden() {
                         if (chkCortesia && chkCortesia.checked) return 0;
                         const desc = Math.max(0, parseFloat(inputDescuento ? inputDescuento.value : 0) || 0);
                         const rec = Math.max(0, parseFloat(inputRecargo ? inputRecargo.value : 0) || 0);
-                        const prop = Math.max(0, parseFloat(inputPropina ? inputPropina.value : 0) || 0);
-                        // La propina se suma al total a pagar: el cliente paga
-                        // órdenes + propina y ambas cantidades entran a caja.
-                        return Math.max(0, (totalBaseCalculado - desc + rec + prop));
+                        // La propina definida NO se suma a lo exigible: solo
+                        // se debe la orden; la propina se topa en el
+                        // excedente (min(definida, abonado - orden)) y el
+                        // resto es vuelto del cliente.
+                        return Math.max(0, (totalBaseCalculado - desc + rec));
                     }
 
                     function updateTabla() {
                         const tbody = document.getElementById('tbl-pagos-body');
-                        const totalRequerido = calcularTotalNeto();
-                        if (lblTotalPagar) lblTotalPagar.textContent = `$${totalRequerido.toFixed(2)}`;
+                        const totalOrden = calcularTotalOrden();
+                        if (lblTotalPagar) lblTotalPagar.textContent = `$${totalOrden.toFixed(2)}`;
 
                         const totalAbonadoLocal = listaPagos.reduce((s, p) => s + p.monto_equivalente_local, 0);
-                        const diferencia = totalAbonadoLocal - totalRequerido;
+                        const diferencia = totalAbonadoLocal - totalOrden;
+                        const propDefinida = Math.max(0, parseFloat(inputPropina ? inputPropina.value : 0) || 0);
+                        const excedente = Math.max(0, diferencia);
+                        const propAplicada = Math.min(propDefinida, excedente);
+                        const vuelto = Math.max(0, excedente - propAplicada);
 
                         const lblExcedenteNota = document.getElementById('lbl-excedente-nota');
                         if (diferencia >= 0) {
                             if (lblRestante) lblRestante.textContent = `$0.00`;
-                            if (lblExcedente) lblExcedente.textContent = `$${diferencia.toFixed(2)}`;
-                            if (lblExcedenteNota) lblExcedenteNota.textContent = diferencia > 0 ? 'Se suma a la propina' : '';
+                            if (lblExcedente) lblExcedente.textContent = `$${vuelto.toFixed(2)}`;
+                            if (lblExcedenteNota) lblExcedenteNota.textContent = listaPagos.length === 0
+                                ? (propDefinida > 0 ? `Propina definida: $${propDefinida.toFixed(2)} (se topa al cobrar)` : '')
+                                : `Propina aplicada: $${propAplicada.toFixed(2)}`;
                         } else {
                             if (lblRestante) lblRestante.textContent = `$${Math.abs(diferencia).toFixed(2)}`;
                             if (lblExcedente) lblExcedente.textContent = `$0.00`;
                             if (lblExcedenteNota) lblExcedenteNota.textContent = '';
                         }
+
+                        // El rechazo del vuelto solo existe si hay vuelto.
+                        const rowRechazo = document.getElementById('row-vuelto-rechazado');
+                        const chkRechazo = document.getElementById('swal-vuelto-rechazado');
+                        if (rowRechazo) rowRechazo.style.display = vuelto > 0 ? 'block' : 'none';
+                        if (chkRechazo && vuelto <= 0) chkRechazo.checked = false;
 
                         if (!tbody) return;
 
@@ -2884,6 +2902,7 @@
                         descuento,
                         recargo,
                         propina,
+                        vuelto_rechazado: document.getElementById('swal-vuelto-rechazado')?.checked || false,
                         motivo_ajuste,
                         cortesia_motivo: motivo_ajuste,
                         autorizacion
@@ -2910,12 +2929,17 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    const excedenteCobro = Number(data.excedente || 0);
+                    const propCobro = Number(data.propina || 0);
+                    const vueltoCobro = Number(data.vuelto || 0);
+                    const rechazadoCobro = Number(data.vuelto_rechazado || 0);
+                    const detalleCobro = (propCobro > 0 || vueltoCobro > 0)
+                        ? `Propina aplicada: $${propCobro.toFixed(2)} · Vuelto: $${vueltoCobro.toFixed(2)}${vueltoCobro > 0 ? (rechazadoCobro > 0 ? ' (ingreso extra: el cliente lo rechazó)' : ' (a devolver)') : ''}`
+                        : undefined;
                     Swal.fire({
                         icon: 'success',
                         title: 'Mesa Cobrada y Liberada',
-                        text: excedenteCobro > 0 ? `Excedente de $${excedenteCobro.toFixed(2)} registrado como propina.` : undefined,
-                        timer: excedenteCobro > 0 ? 3500 : 2000,
+                        text: detalleCobro,
+                        timer: detalleCobro ? 3500 : 2000,
                         showConfirmButton: false
                     }).then(() => {
                         window.location.href = POS_DASHBOARD_URL;

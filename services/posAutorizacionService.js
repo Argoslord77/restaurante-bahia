@@ -222,6 +222,58 @@ const PosAutorizacionService = {
             console.error('No se pudieron asegurar las columnas de cortesía:', err.message);
             return false;
         }
+    },
+
+    /**
+     * Crea (si faltan) las columnas del concepto de VUELTO. Idempotente y
+     * tolerante a fallos: devuelve true solo si las columnas de `pedidos`
+     * quedaron disponibles (las de `cierres_servicio` son best-effort: la
+     * tabla aún puede no existir antes del primer cierre).
+     * (El script scripts/migracion_vuelto_rechazado.sql hace lo mismo para
+     * aplicarlo manualmente en el servidor.)
+     */
+    async asegurarColumnasVuelto() {
+        if (!pool) return false;
+        const porTabla = [
+            {
+                tabla: 'pedidos',
+                columnas: [
+                    { nombre: 'vuelto_rechazado', ddl: 'ADD COLUMN vuelto_rechazado DECIMAL(10,2) NOT NULL DEFAULT 0.00' },
+                    { nombre: 'vuelto_devuelto', ddl: 'ADD COLUMN vuelto_devuelto DECIMAL(10,2) NOT NULL DEFAULT 0.00' }
+                ],
+                obligatoria: true
+            },
+            {
+                tabla: 'cierres_servicio',
+                columnas: [
+                    { nombre: 'total_vuelto_rechazado', ddl: 'ADD COLUMN total_vuelto_rechazado DECIMAL(10,2) NOT NULL DEFAULT 0.00' },
+                    { nombre: 'total_vuelto_devuelto', ddl: 'ADD COLUMN total_vuelto_devuelto DECIMAL(10,2) NOT NULL DEFAULT 0.00' }
+                ],
+                obligatoria: false
+            }
+        ];
+        try {
+            for (const grupo of porTabla) {
+                let existentes;
+                try {
+                    const [actuales] = await pool.query(`SHOW COLUMNS FROM ${grupo.tabla}`);
+                    existentes = new Set((actuales || []).map(c => String(c.Field || c.field || '').toLowerCase()));
+                } catch (errTabla) {
+                    if (grupo.obligatoria) throw errTabla;
+                    continue; // cierres_servicio aún no existe: la crea el cierre
+                }
+                for (const columna of grupo.columnas) {
+                    if (!existentes.has(columna.nombre)) {
+                        await pool.query(`ALTER TABLE ${grupo.tabla} ${columna.ddl}`);
+                        existentes.add(columna.nombre);
+                    }
+                }
+            }
+            return true;
+        } catch (err) {
+            console.error('No se pudieron asegurar las columnas de vuelto:', err.message);
+            return false;
+        }
     }
 };
 

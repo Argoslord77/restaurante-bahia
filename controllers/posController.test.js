@@ -552,41 +552,57 @@ describe('posController.procesarCobroAvanzado · excedente del cobro', () => {
         });
     });
 
-    it('sobrepago sin propina explícita: el excedente queda como propina', async () => {
+    it('sobrepago sin propina explícita: todo el excedente es vuelto (propina 0)', async () => {
         const { req, res } = cobroReqRes({ pagos: [pagoAbono(120)], descuento: 0, recargo: 0, propina: 0 });
 
         await procesarCobroAvanzado(req, res);
 
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 20, propina: 20 }));
-        expect(paramsDe('UPDATE pedidos')[4]).toBe(20); // propina guardada
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: true, excedente: 20, propina: 0, vuelto: 20,
+            vuelto_rechazado: 0, vuelto_devuelto: 20, total: 100
+        }));
+        const params = paramsDe('UPDATE pedidos');
+        expect(params[4]).toBe(0); // propina guardada (topada en lo definido)
+        expect(params[6]).toBe(0); // vuelto_rechazado
+        expect(params[7]).toBe(20); // vuelto_devuelto
         expect(paramsDe('INSERT INTO pagos_pedido').slice(4, 6)).toEqual([120, 120]); // abono íntegro
     });
 
-    it('pago exacto con propina explícita no genera excedente', async () => {
-        const { req, res } = cobroReqRes({ pagos: [pagoAbono(110)], descuento: 0, recargo: 0, propina: 10 });
+    it('pago exacto con propina explícita: se cobra la orden y la propina queda en 0', async () => {
+        const { req, res } = cobroReqRes({ pagos: [pagoAbono(100)], descuento: 0, recargo: 0, propina: 10 });
 
         await procesarCobroAvanzado(req, res);
 
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 0, propina: 10 }));
-        expect(paramsDe('UPDATE pedidos')[4]).toBe(10);
+        // La propina no es exigible: con $100 se cubre la orden y, sin
+        // excedente del cual tomarla, la propina aplicada es 0.
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: true, excedente: 0, propina: 0, vuelto: 0, total: 100
+        }));
+        expect(paramsDe('UPDATE pedidos')[4]).toBe(0);
     });
 
-    it('propina explícita más excedente se acumulan', async () => {
+    it('propina explícita se topa en el excedente y el resto es vuelto', async () => {
         const { req, res } = cobroReqRes({ pagos: [pagoAbono(125)], descuento: 0, recargo: 0, propina: 10 });
 
         await procesarCobroAvanzado(req, res);
 
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 15, propina: 25 }));
-        expect(paramsDe('UPDATE pedidos')[4]).toBe(25);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: true, excedente: 25, propina: 10, vuelto: 15,
+            vuelto_rechazado: 0, vuelto_devuelto: 15, total: 110
+        }));
+        expect(paramsDe('UPDATE pedidos')[4]).toBe(10);
     });
 
-    it('pago insuficiente se rechaza y no toca el pedido', async () => {
-        const { req, res } = cobroReqRes({ pagos: [pagoAbono(90)], descuento: 0, recargo: 0, propina: 0 });
+    it('pago insuficiente se rechaza contra la orden y no toca el pedido', async () => {
+        const { req, res } = cobroReqRes({ pagos: [pagoAbono(90)], descuento: 0, recargo: 0, propina: 10 });
 
         await procesarCobroAvanzado(req, res);
 
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+        // La suficiencia es contra la orden ($100): faltan $10 aunque la
+        // propina definida sea mayor.
+        expect(res.json.mock.calls[0][0].message).toMatch(/orden.*100\.00.*Faltan 10\.00/);
         expect(paramsDe('UPDATE pedidos')).toBeNull();
     });
 
@@ -595,13 +611,18 @@ describe('posController.procesarCobroAvanzado · excedente del cobro', () => {
 
         await procesarCobroAvanzado(req, res);
 
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 0, propina: 5 }));
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: true, excedente: 0, propina: 5, vuelto: 0,
+            vuelto_rechazado: 0, vuelto_devuelto: 0
+        }));
         const params = paramsDe('UPDATE pedidos');
         expect(params[0]).toBe('facturado');
         expect(params[4]).toBe(5);
+        expect(params[6]).toBe(0);
+        expect(params[7]).toBe(0);
     });
 
-    it('en carta ZELLE el excedente se convierte a moneda local', async () => {
+    it('en carta ZELLE el tope se calcula en origen y el vuelto se convierte a local', async () => {
         PrecioService.obtenerContextoCobro.mockResolvedValue({
             carta: 'ZELLE', es_zelle: true, moneda_codigo: 'ZELLE', moneda_id: 2, factor_cambio: 2
         });
@@ -609,8 +630,26 @@ describe('posController.procesarCobroAvanzado · excedente del cobro', () => {
 
         await procesarCobroAvanzado(req, res);
 
-        // Diferencia 10 en origen x tasa 2 = 20 locales de propina.
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, excedente: 20, propina: 20 }));
+        // Excedente 10 en origen x tasa 2 = 20 locales; sin propina definida
+        // todo es vuelto.
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: true, excedente: 20, propina: 0, vuelto: 20, vuelto_devuelto: 20
+        }));
+    });
+
+    it('vuelto rechazado: queda como ingreso extra y no como propina', async () => {
+        const { req, res } = cobroReqRes({ pagos: [pagoAbono(125)], descuento: 0, recargo: 0, propina: 10, vuelto_rechazado: true });
+
+        await procesarCobroAvanzado(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: true, excedente: 25, propina: 10, vuelto: 15,
+            vuelto_rechazado: 15, vuelto_devuelto: 0, total: 125
+        }));
+        const params = paramsDe('UPDATE pedidos');
+        expect(params[4]).toBe(10);
+        expect(params[6]).toBe(15);
+        expect(params[7]).toBe(0);
     });
 });
 

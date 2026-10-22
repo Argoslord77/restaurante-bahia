@@ -73,13 +73,19 @@ function calcularResumenFinanciero(pedidos, desglosePagos, fondoApertura = 0, to
     let totalPendientePago = 0;
     let totalCortesias = 0;
     let totalPropinas = 0;
+    let totalVueltoRechazado = 0;
+    let totalVueltoDevuelto = 0;
 
     (pedidos || []).forEach(pedido => {
         const total = Number(pedido.total || 0);
         if (pedido.estado_pago === 'facturado') totalCxcFacturas += total;
         if (pedido.estado_pago === 'pendiente_pago') totalPendientePago += total;
         if (pedido.estado_pago === 'cortesia') totalCortesias += Number(pedido.subtotal || 0);
-        if (pedido.estado_pago === 'pagado') totalPropinas += Number(pedido.propina || 0);
+        if (pedido.estado_pago === 'pagado') {
+            totalPropinas += Number(pedido.propina || 0);
+            totalVueltoRechazado += Number(pedido.vuelto_rechazado || 0);
+            totalVueltoDevuelto += Number(pedido.vuelto_devuelto || 0);
+        }
     });
 
     const efectivo = (desglosePagos || [])
@@ -97,14 +103,18 @@ function calcularResumenFinanciero(pedidos, desglosePagos, fondoApertura = 0, to
 
     const fondo = Number(fondoApertura || 0);
     const retiros = Math.max(0, Number(totalRetiros || 0));
-    // El efectivo de caja son los abonos en efectivo TAL CUAL: ya traen
-    // dentro las propinas pagadas en efectivo (el cobro exige abonos >=
-    // orden + propina), así que sumar totalPropinas aquí las contaría
-    // doble. Y las propinas con tarjeta/transferencia/ZELLE nunca entran
-    // a la gaveta física: no pertenecen a este esperado.
-    // Invariante del cobro: Σ abonos = total + propina (el excedente
-    // queda registrado como propina en el pedido).
-    const totalEfectivoCaja = efectivo;
+    // El efectivo de caja son los abonos en efectivo TAL CUAL, MENOS el
+    // vuelto devuelto: ya traen dentro las propinas pagadas en efectivo
+    // (sumar totalPropinas aquí las contaría doble), pero también traen
+    // el vuelto que salió de la gaveta de vuelta al cliente (hay que
+    // restarlo). El vuelto RECHAZADO no se resta: nunca salió, quedó
+    // como ingreso extra dentro de esos mismos abonos. Y las propinas
+    // con tarjeta/transferencia/ZELLE nunca entran a la gaveta física:
+    // no pertenecen a este esperado.
+    // Invariante del cobro: Σ abonos = total + propina + vuelto, con
+    // vuelto = devuelto + rechazado (la propina se topa en lo definido:
+    // min(definida, abonado - orden)).
+    const totalEfectivoCaja = efectivo - totalVueltoDevuelto;
     return {
         total_cobrado_caja: efectivo,
         total_efectivo_total_caja: totalEfectivoCaja,
@@ -116,6 +126,8 @@ function calcularResumenFinanciero(pedidos, desglosePagos, fondoApertura = 0, to
         total_pendiente_pago: totalPendientePago,
         total_cortesias: totalCortesias,
         total_propinas: totalPropinas,
+        total_vuelto_rechazado: totalVueltoRechazado,
+        total_vuelto_devuelto: totalVueltoDevuelto,
         total_retiros: retiros,
         total_pedidos: (pedidos || []).length,
         fondo_apertura: fondo,

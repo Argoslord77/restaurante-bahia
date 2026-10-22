@@ -51,16 +51,16 @@
                     <% if (turnoActivo) { %>
                         <!-- TARJETAS DE INDICADORES / MÉTRICAS DEL TURNO -->
                         <div class="row g-3 mb-4">
-                            <!-- Cobrado en Caja (Total: Órdenes + Propinas / Excedente) -->
+                            <!-- Cobrado en Caja (Total: Órdenes + Propinas + Vuelto rechazado) -->
                             <div class="col-sm-6 col-xl-3">
                                 <div class="card card-custom shadow-sm border-0 h-100 p-3 bg-white">
                                     <div class="d-flex align-items-center justify-content-between">
                                         <div class="pe-2">
                                             <span class="text-secondary small fw-bold text-uppercase d-block mb-1">Total Cobrado en Caja</span>
                                             
-                                            <!-- MONTO TOTAL SUMADO (ÓRDENES + EXCEDENTE / PROPINAS) -->
+                                            <!-- MONTO TOTAL SUMADO (ÓRDENES + PROPINA + VUELTO RECHAZADO) -->
                                             <h4 class="fw-bold text-success mb-1 font-monospace fs-4">
-                                                $<%= (resumen.total_efectivo_total_caja || (resumen.total_cobrado_caja + resumen.total_propinas)).toFixed(2) %>
+                                                $<%= (resumen.total_efectivo_total_caja || (resumen.total_cobrado_caja + resumen.total_propinas + (resumen.total_vuelto_rechazado || 0))).toFixed(2) %>
                                             </h4>
 
                                             <!-- DESGLOSE DETALLADO -->
@@ -68,7 +68,12 @@
                                                 <span>Órdenes: <b>$<%= resumen.total_cobrado_caja.toFixed(2) %></b></span>
                                                 <span class="text-secondary opacity-50">•</span>
                                                 <span class="text-success fw-semibold">+ Propina: <b>$<%= resumen.total_propinas.toFixed(2) %></b></span>
+                                                <span class="text-secondary opacity-50">•</span>
+                                                <span class="text-primary fw-semibold">+ Extra (vuelto rechazado): <b>$<%= (resumen.total_vuelto_rechazado || 0).toFixed(2) %></b></span>
                                             </div>
+                                            <% if ((resumen.total_vuelto_devuelto || 0) > 0) { %>
+                                                <div class="text-muted fs-8 mt-1">Vuelto devuelto: <b>$<%= resumen.total_vuelto_devuelto.toFixed(2) %></b> (salió de caja)</div>
+                                            <% } %>
                                         </div>
                                         <div class="rounded-circle bg-success-subtle p-3 text-success flex-shrink-0">
                                             <i class="fa-solid fa-cash-register fs-4"></i>
@@ -194,6 +199,9 @@
                                                 <% }) %>
                                             </div>
                                         <% } %>
+                                        <% if ((resumen.total_vuelto_devuelto || 0) > 0) { %>
+                                            <div class="w-100 text-muted fs-8 mt-1"><i class="fa-solid fa-circle-info me-1"></i>El desglose muestra abonos brutos: incluye <b>$<%= resumen.total_vuelto_devuelto.toFixed(2) %></b> de vuelto que se devolvió al cliente (ya restado del esperado).</div>
+                                        <% } %>
                                     </div>
                                 </div>
                             </div>
@@ -245,6 +253,12 @@
                                                         $<%= parseFloat(p.total).toFixed(2) %>
                                                         <% if (parseFloat(p.propina) > 0) { %>
                                                             <small class="d-block text-success fs-8">+$<%= parseFloat(p.propina).toFixed(2) %> propina</small>
+                                                        <% } %>
+                                                        <% if (parseFloat(p.vuelto_rechazado) > 0) { %>
+                                                            <small class="d-block text-primary fs-8">+$<%= parseFloat(p.vuelto_rechazado).toFixed(2) %> extra (vuelto rechazado)</small>
+                                                        <% } %>
+                                                        <% if (parseFloat(p.vuelto_devuelto) > 0) { %>
+                                                            <small class="d-block text-muted fs-8">-$<%= parseFloat(p.vuelto_devuelto).toFixed(2) %> vuelto devuelto</small>
                                                         <% } %>
                                                     </td>
                                                     <td>

@@ -59,7 +59,7 @@ describe('cierreExport · cierreACSV / cierreAPDF', () => {
         expect(csv).toContain('Cierre del día');
         expect(csv).toContain('Turno;#5');
         expect(csv).toContain('Efectivo esperado en caja;660,50');
-        expect(csv).toContain('Orden;Mesa;Mesero;Monto;Propina;Estado;Hora');
+        expect(csv).toContain('Orden;Mesa;Mesero;Monto;Propina;Vuelto rechazado;Vuelto devuelto;Estado;Hora');
         expect(csv).toContain('Factura (CxC)');
         expect(csv).toContain('Cortesía');
         expect(csv).toContain('Método;Moneda;Transacciones;Total origen;Total (CUP)');
@@ -78,7 +78,7 @@ describe('cierreExport · historicoACSV / historicoAPDF', () => {
         const { csv, filas } = CierreExport.historicoACSV({ cierres, facturasPendientes, metricas });
         expect(csv.charCodeAt(0)).toBe(0xFEFF); // BOM UTF-8
         expect(csv).toContain('Histórico de cierres y cuentas por cobrar');
-        expect(csv).toContain('Turno;Fecha cierre;Abrió;Cerró;Cobrado;Propinas;Real;Esperado;Balance');
+        expect(csv).toContain('Turno;Fecha cierre;Abrió;Cerró;Cobrado;Propinas;Vuelto rechazado;Vuelto devuelto;Real;Esperado;Balance');
         expect(csv).toContain('Cuadrado');
         expect(csv).toContain('Faltante');
         expect(csv).toContain('Orden;Mesa;Mesero;Total;Fecha pedido;Turno origen');

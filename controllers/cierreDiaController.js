@@ -1,5 +1,6 @@
 // controllers/cierreDiaController.js
 const db = require('../config/db');
+const PosAutorizacionService = require('../services/posAutorizacionService');
 const turnoService = require('../services/turnoService');
 const CierreExport = require('../services/cierreExport');
 const { nombreUsuario } = require('../services/pdfTabla');
@@ -10,6 +11,7 @@ const { nombreUsuario } = require('../services/pdfTabla');
  */
 async function obtenerDatosCierre(turnoActivo) {
     const turnoId = turnoActivo.id;
+    await PosAutorizacionService.asegurarColumnasVuelto();
         // 1. Obtener comandas del turno activo
         const [pedidos] = await db.query(`
             SELECT 
@@ -22,6 +24,8 @@ async function obtenerDatosCierre(turnoActivo) {
                 p.impuesto,
                 p.total,
                 p.propina,
+                p.vuelto_rechazado,
+                p.vuelto_devuelto,
                 p.estado_pedido,
                 p.estado_pago,
                 p.creado_en AS fecha_apertura,
@@ -66,7 +70,9 @@ async function obtenerDatosCierre(turnoActivo) {
         let total_cxc_facturas = 0;
         let total_pendiente_pago = 0;
         let total_cortesias = 0;
-        let total_propinas = 0;        // Excedente / Propinas
+        let total_propinas = 0;        // Propina aplicada (topada)
+        let total_vuelto_rechazado = 0; // Ingreso extra: entra al cuadre
+        let total_vuelto_devuelto = 0;  // Salió de caja: solo informativo
 
         pedidos.forEach(p => {
             const total = parseFloat(p.total || 0);
@@ -75,6 +81,8 @@ async function obtenerDatosCierre(turnoActivo) {
             if (p.estado_pago === 'pagado') {
                 total_cobrado_caja += total;
                 total_propinas += propina;
+                total_vuelto_rechazado += parseFloat(p.vuelto_rechazado || 0);
+                total_vuelto_devuelto += parseFloat(p.vuelto_devuelto || 0);
             } else if (p.estado_pago === 'facturado') {
                 total_cxc_facturas += total;
             } else if (p.estado_pago === 'pendiente_pago') {
@@ -84,13 +92,17 @@ async function obtenerDatosCierre(turnoActivo) {
             }
         });
 
-        // Suma total del dinero cobrado en caja (Órdenes + Propinas/Excedente)
-        const total_efectivo_total_caja = total_cobrado_caja + total_propinas;
+        // Suma total del dinero cobrado en caja (Órdenes + Propinas +
+        // Vuelto rechazado como ingreso extra). El vuelto DEVUELTO no suma:
+        // salió de la gaveta; solo sirve para conciliar el desglose bruto.
+        const total_efectivo_total_caja = total_cobrado_caja + total_propinas + total_vuelto_rechazado;
         const fondoApertura = parseFloat(turnoActivo.monto_apertura || 0);
 
         const resumen = {
             total_cobrado_caja,
             total_propinas,
+            total_vuelto_rechazado,
+            total_vuelto_devuelto,
             total_efectivo_total_caja, // <--- TOTAL GENERAL DE CAJA
             total_cxc_facturas,
             total_pendiente_pago,
@@ -107,6 +119,7 @@ async function obtenerDatosCierre(turnoActivo) {
  * y métricas). Compartido por la vista de histórico y sus exportaciones.
  */
 async function obtenerDatosHistorial() {
+    await PosAutorizacionService.asegurarColumnasVuelto();
     const [cierres] = await db.query(`
         SELECT
             cs.id,
@@ -115,6 +128,8 @@ async function obtenerDatosHistorial() {
             cs.fondo_apertura,
             cs.total_cobrado_caja,
             cs.total_propinas,
+            cs.total_vuelto_rechazado,
+            cs.total_vuelto_devuelto,
             cs.total_cxc_facturas,
             cs.total_pendiente_pago,
             cs.total_cortesias,

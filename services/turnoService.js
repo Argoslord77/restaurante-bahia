@@ -2,6 +2,7 @@
 const TurnoModel = require('../models/turnoModel');
 const db = require('../config/db');
 const CajaService = require('./cajaService');
+const PosAutorizacionService = require('./posAutorizacionService');
 
 class TurnoService {
     static async obtenerTurnoActivo() {
@@ -40,6 +41,7 @@ class TurnoService {
         }
 
         const turnoId = turnoActivo.id;
+        await PosAutorizacionService.asegurarColumnasVuelto();
         const connection = await db.getConnection();
 
         try {
@@ -47,9 +49,10 @@ class TurnoService {
 
             // 1. Obtener todas las comandas asignadas a este turno
             const [pedidos] = await connection.query(`
-                SELECT 
-                    id, id_mesa, total, subtotal, descuento, propina, estado_pago, estado_pedido
-                FROM pedidos 
+                SELECT
+                    id, id_mesa, total, subtotal, descuento, propina,
+                    vuelto_rechazado, vuelto_devuelto, estado_pago, estado_pedido
+                FROM pedidos
                 WHERE turno_servicio_id = ?
             `, [turnoId]);
 
@@ -67,6 +70,8 @@ class TurnoService {
 
             const total_cobrado_caja = resumenFinanciero.total_cobrado_caja;
             const total_propinas = resumenFinanciero.total_propinas;
+            const total_vuelto_rechazado = resumenFinanciero.total_vuelto_rechazado;
+            const total_vuelto_devuelto = resumenFinanciero.total_vuelto_devuelto;
             const total_cxc_facturas = resumenFinanciero.total_cxc_facturas;
             const total_pendiente_pago = resumenFinanciero.total_pendiente_pago;
             const total_cortesias = resumenFinanciero.total_cortesias;
@@ -92,6 +97,8 @@ class TurnoService {
                         \`fondo_apertura\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`total_cobrado_caja\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`total_propinas\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`total_vuelto_rechazado\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                        \`total_vuelto_devuelto\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`total_cxc_facturas\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`total_pendiente_pago\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                         \`total_cortesias\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -116,16 +123,19 @@ class TurnoService {
                     INSERT INTO cierres_servicio (
                         turno_servicio_id, usuario_cierre_id, fecha_cierre,
                         fondo_apertura, total_cobrado_caja, total_propinas,
+                        total_vuelto_rechazado, total_vuelto_devuelto,
                         total_cxc_facturas, total_pendiente_pago, total_cortesias, total_retiros,
                         monto_esperado_caja, monto_real_entregado, diferencia, balance_estado,
                         total_pedidos, pedidos_pagados, pedidos_facturados, pedidos_pendientes,
                         desglose_monedas, observaciones
-                    ) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
                         usuario_cierre_id = VALUES(usuario_cierre_id),
                         fondo_apertura = VALUES(fondo_apertura),
                         total_cobrado_caja = VALUES(total_cobrado_caja),
                         total_propinas = VALUES(total_propinas),
+                        total_vuelto_rechazado = VALUES(total_vuelto_rechazado),
+                        total_vuelto_devuelto = VALUES(total_vuelto_devuelto),
                         total_cxc_facturas = VALUES(total_cxc_facturas),
                         total_pendiente_pago = VALUES(total_pendiente_pago),
                         total_cortesias = VALUES(total_cortesias),
@@ -142,6 +152,8 @@ class TurnoService {
                     fondoApertura,
                     total_cobrado_caja,
                     total_propinas,
+                    total_vuelto_rechazado,
+                    total_vuelto_devuelto,
                     total_cxc_facturas,
                     total_pendiente_pago,
                     total_cortesias,

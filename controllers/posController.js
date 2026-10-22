@@ -636,6 +636,7 @@ module.exports = {
             const body = req.body || {};
             const pagos = body.pagos || [];
             const { es_cortesia, es_factura_credito, es_pendiente_pago, descuento, recargo, propina } = body;
+            const rechazaVuelto = Boolean(body.vuelto_rechazado);
             const cajeroId = req.user ? req.user.id : 1;
 
             if (!pedidoId) return res.status(400).json({ success: false, message: 'ID de pedido requerido.' });
@@ -746,17 +747,24 @@ module.exports = {
             // día la suma aparte al efectivo de caja (si se sumara aquí se
             // contaría doble en el cuadre).
             const totalOrden = es_cortesia ? 0 : Number(Math.max(0, subtotal + impuesto - desc + rec).toFixed(2));
-            // Lo que el cliente debe abonar físicamente: orden + propina.
-            const totalFinal = es_cortesia ? 0 : Number((totalOrden + prop).toFixed(2));
+            // Lo que el cliente debe abonar físicamente es SOLO la orden:
+            // la propina definida es voluntaria y nunca se exige (más abajo
+            // se topa en el excedente). Ya no existe totalFinal.
 
             let estadoPago = 'pagado';
             if (es_pendiente_pago) estadoPago = 'pendiente_pago';
             if (es_factura_credito) estadoPago = 'facturado';
             if (es_cortesia) estadoPago = 'cortesia';
-            // Propina final del pedido: la explícita más el excedente del
-            // cobro (si lo hay). Ver cálculo dentro del bloque de pagado.
+            // Propina final del pedido: min(definida, excedente). Lo pagado de
+            // más por encima de ella es VUELTO (se devuelve, o queda como
+            // ingreso extra si el cliente lo rechaza). Ver cálculo dentro
+            // del bloque de pagado. En crédito/cortesía no hay abonos: se
+            // conserva la definida como por-cobrar y el vuelto queda en 0.
             let propFinal = prop;
             let excedente = 0;
+            let vuelto = 0;
+            let vueltoRechazado = 0;
+            let vueltoDevuelto = 0;
 
             const pagosNormalizados = [];
             if (estadoPago === 'pagado') {
@@ -830,26 +838,36 @@ module.exports = {
                 const totalAbonado = pagosNormalizados.reduce((sum, pago) => sum + (
                     pricingContext.es_zelle ? pago.monto_moneda_origen : pago.monto_equivalente_local
                 ), 0);
-                const diferencia = Number((totalAbonado - totalFinal).toFixed(2));
+                // Suficiencia contra la ORDEN (la propina no es exigible).
+                const diferencia = Number((totalAbonado - totalOrden).toFixed(2));
                 if (diferencia < -0.01) {
                     return res.status(400).json({
                         success: false,
-                        message: `El pago es insuficiente. Faltan ${Math.abs(diferencia).toFixed(2)} ${pricingContext.moneda_codigo}.`
+                        message: `El pago es insuficiente para la orden ($${totalOrden.toFixed(2)}). Faltan ${Math.abs(diferencia).toFixed(2)} ${pricingContext.moneda_codigo}.`
                     });
                 }
-                // Excedente del cobro (lo pagado de más sobre orden + propina
-                // explícita): queda registrado como propina en el pedido. Sin
-                // esto el dinero entraba a caja (los abonos se guardan
-                // íntegros) pero ningún reporte lo veía y el cuadre quedaba
-                // por debajo de la gaveta física.
-                // En carta ZELLE la diferencia viene en moneda origen y se
-                // convierte a local con la tasa del contexto de cobro.
-                const excedenteBruto = Math.max(0, diferencia);
-                const factorExcedente = pricingContext.es_zelle
+                // Excedente del cobro: lo pagado de más SOBRE LA ORDEN. La
+                // propina se topa en lo definido: min(definida, excedente).
+                // El resto del excedente es VUELTO del cliente: se devuelve,
+                // salvo que lo rechace (queda como ingreso extra del
+                // negocio, NO como propina, y entra al cuadre de caja).
+                // El tope se calcula en base de cobro (moneda origen en
+                // carta ZELLE) y luego se convierte a local con la tasa del
+                // contexto, igual que antes se convertía el excedente.
+                const excedenteOrigen = Math.max(0, diferencia);
+                const propFinalOrigen = Math.min(prop, excedenteOrigen);
+                const vueltoOrigen = Number((excedenteOrigen - propFinalOrigen).toFixed(2));
+                const factorVuelto = pricingContext.es_zelle
                     ? (Number(pricingContext.factor_cambio) || 1)
                     : 1;
-                excedente = Number((excedenteBruto * factorExcedente).toFixed(2));
-                propFinal = Number((prop + excedente).toFixed(2));
+                excedente = Number((excedenteOrigen * factorVuelto).toFixed(2));
+                propFinal = Number((propFinalOrigen * factorVuelto).toFixed(2));
+                vuelto = Number((vueltoOrigen * factorVuelto).toFixed(2));
+                // Todo o nada: si el cliente rechaza el vuelto, ÍNTEGRO
+                // queda como ingreso extra; si no, ÍNTEGRO se devuelve.
+                vueltoRechazado = (rechazaVuelto && vuelto > 0) ? vuelto : 0;
+                vueltoDevuelto = Number((vuelto - vueltoRechazado).toFixed(2));
+                await PosAutorizacionService.asegurarColumnasVuelto();
             }
 
             connection = await pool.getConnection();
@@ -879,16 +897,18 @@ module.exports = {
                     UPDATE pedidos
                     SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
                         id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?,
-                        cortesia_autorizada_por = ?, cortesia_motivo = ?, cortesia_autorizada_en = NOW()
+                        cortesia_autorizada_por = ?, cortesia_motivo = ?, cortesia_autorizada_en = NOW(),
+                        vuelto_rechazado = ?, vuelto_devuelto = ?
                     WHERE id = ?
-                `, [estadoPago, cajeroId, desc, impuesto, propFinal, totalOrden, cortesiaAutorizadaPor, cortesiaMotivo, pedidoId]);
+                `, [estadoPago, cajeroId, desc, impuesto, propFinal, totalOrden, cortesiaAutorizadaPor, cortesiaMotivo, vueltoRechazado, vueltoDevuelto, pedidoId]);
             } else {
                 await connection.query(`
                     UPDATE pedidos
                     SET estado_pago = ?, estado_pedido = 'entregado', fecha_cierre = NOW(),
-                        id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?
+                        id_usuario_cajero = ?, descuento = ?, impuesto = ?, propina = ?, total = ?,
+                        vuelto_rechazado = ?, vuelto_devuelto = ?
                     WHERE id = ?
-                `, [estadoPago, cajeroId, desc, impuesto, propFinal, totalOrden, pedidoId]);
+                `, [estadoPago, cajeroId, desc, impuesto, propFinal, totalOrden, vueltoRechazado, vueltoDevuelto, pedidoId]);
             }
             await connection.query(`
                 UPDATE detalles_pedido SET estado_item = 'entregado'
@@ -928,10 +948,13 @@ module.exports = {
                 success: true,
                 carta: pricingContext.carta,
                 moneda_codigo: pricingContext.moneda_codigo,
-                total: totalFinal,
+                total: Number((totalOrden + propFinal + vueltoRechazado).toFixed(2)),
                 total_orden: totalOrden,
                 propina: propFinal,
                 excedente,
+                vuelto,
+                vuelto_rechazado: vueltoRechazado,
+                vuelto_devuelto: vueltoDevuelto,
                 cortesia_autorizada_por: es_cortesia ? cortesiaAutorizadaPor : null,
                 message: es_cortesia ? 'Cortesía autorizada: mesa liberada con éxito' : 'Mesa cobrada y liberada con éxito'
             });

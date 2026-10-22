@@ -1,8 +1,9 @@
 // services/cajaService.test.js
-// El esperado de caja es fondo + abonos en efectivo TAL CUAL: las propinas
-// en efectivo ya vienen dentro de los abonos (el cobro exige abonos >=
-// orden + propina) y las de tarjeta/transferencia/ZELLE nunca entran a la
-// gaveta. Sumarlas otra vez las contaría doble (o inflaría el esperado).
+// El esperado de caja es fondo + abonos en efectivo TAL CUAL, MENOS el
+// vuelto devuelto: las propinas en efectivo ya vienen dentro de los abonos
+// (sumarlas otra vez las contaría doble) y el vuelto devuelto salió de la
+// gaveta (hay que restarlo). Las propinas con tarjeta/transferencia/ZELLE
+// nunca entran a la gaveta física.
 jest.mock('../config/db', () => ({ query: jest.fn() }));
 
 const CajaService = require('./cajaService');
@@ -75,6 +76,30 @@ describe('cajaService · calcularResumenFinanciero (esperado sin doble conteo)',
             total_cortesias: 40,
             total_pedidos: 3
         });
+    });
+});
+
+describe('cajaService · vuelto (devuelto resta, rechazado queda)', () => {
+    it('el vuelto devuelto resta del esperado (salió de la gaveta)', () => {
+        // Orden $100, sin propina, cobrada con $120 en efectivo: $20 de vuelto.
+        const pedidos = [{ total: 100, subtotal: 100, propina: 0, vuelto_rechazado: 0, vuelto_devuelto: 20, estado_pago: 'pagado' }];
+        const desglose = [pagoEfectivo(120)];
+
+        const r = CajaService.calcularResumenFinanciero(pedidos, desglose, 50);
+
+        expect(r.total_vuelto_devuelto).toBe(20);
+        expect(r.total_en_caja_esperado).toBe(150); // 50 + 120 - 20
+    });
+
+    it('el vuelto rechazado NO resta (quedó como ingreso extra)', () => {
+        // Orden $100 + propina $10, cobro $125: $15 de vuelto rechazado.
+        const pedidos = [{ total: 100, subtotal: 100, propina: 10, vuelto_rechazado: 15, vuelto_devuelto: 0, estado_pago: 'pagado' }];
+        const desglose = [pagoEfectivo(125)];
+
+        const r = CajaService.calcularResumenFinanciero(pedidos, desglose, 50);
+
+        expect(r.total_vuelto_rechazado).toBe(15);
+        expect(r.total_en_caja_esperado).toBe(175); // 50 + 125, íntegro
     });
 });
 

@@ -70,6 +70,8 @@ function cierreACSV({ turno, pedidos, desglosePagos, resumen }) {
     filas.push('Concepto;Valor');
     filas.push(`Cobrado en caja;${csvNum(resumen.total_cobrado_caja)}`);
     filas.push(`Propinas;${csvNum(resumen.total_propinas)}`);
+    filas.push(`Vuelto rechazado (ingreso extra);${csvNum(resumen.total_vuelto_rechazado)}`);
+    filas.push(`Vuelto devuelto (informativo);${csvNum(resumen.total_vuelto_devuelto)}`);
     filas.push(`Efectivo total en caja;${csvNum(resumen.total_efectivo_total_caja)}`);
     filas.push(`Cuentas por cobrar (facturas);${csvNum(resumen.total_cxc_facturas)}`);
     filas.push(`Pendiente de pago;${csvNum(resumen.total_pendiente_pago)}`);
@@ -79,7 +81,7 @@ function cierreACSV({ turno, pedidos, desglosePagos, resumen }) {
     filas.push(`Efectivo esperado en caja;${csvNum(resumen.total_en_caja_esperado)}`);
     filas.push('');
     filas.push('Pedidos del turno');
-    filas.push('Orden;Mesa;Mesero;Monto;Propina;Estado;Hora');
+    filas.push('Orden;Mesa;Mesero;Monto;Propina;Vuelto rechazado;Vuelto devuelto;Estado;Hora');
     for (const p of pedidos) {
         filas.push([
             `#${p.id}`,
@@ -87,6 +89,8 @@ function cierreACSV({ turno, pedidos, desglosePagos, resumen }) {
             sinPuntoComa(p.mesero),
             csvNum(p.total),
             csvNum(p.propina),
+            csvNum(p.vuelto_rechazado),
+            csvNum(p.vuelto_devuelto),
             estadoPagoLabel(p.estado_pago),
             p.fecha_cierre ? fHora(p.fecha_cierre) : 'En curso'
         ].join(';'));
@@ -116,6 +120,8 @@ async function cierreAPDF({ turno, pedidos, desglosePagos, resumen }, meta = {})
         p.mesero || '—',
         dinero(p.total),
         dinero(p.propina),
+        dinero(p.vuelto_rechazado),
+        dinero(p.vuelto_devuelto),
         estadoPagoLabel(p.estado_pago),
         p.fecha_cierre ? fHora(p.fecha_cierre) : 'En curso'
     ]);
@@ -136,6 +142,8 @@ async function cierreAPDF({ turno, pedidos, desglosePagos, resumen }, meta = {})
             ], filas: [
                 ['Cobrado en caja', dinero(resumen.total_cobrado_caja)],
                 ['Propinas', dinero(resumen.total_propinas)],
+                ['Vuelto rechazado (ingreso extra)', dinero(resumen.total_vuelto_rechazado)],
+                ['Vuelto devuelto (informativo)', dinero(resumen.total_vuelto_devuelto)],
                 ['Efectivo total en caja', dinero(resumen.total_efectivo_total_caja)],
                 ['Cuentas por cobrar (facturas)', dinero(resumen.total_cxc_facturas)],
                 ['Pendiente de pago', dinero(resumen.total_pendiente_pago)],
@@ -145,14 +153,16 @@ async function cierreAPDF({ turno, pedidos, desglosePagos, resumen }, meta = {})
                 ['Efectivo esperado en caja', dinero(resumen.total_en_caja_esperado)],
             ] },
             { titulo: `Pedidos del turno (${pedidos.length})`, columnas: [
-                { titulo: 'Orden', frac: 0.08 },
-                { titulo: 'Mesa', frac: 0.12 },
-                { titulo: 'Mesero', frac: 0.24 },
-                { titulo: 'Monto', frac: 0.13, alinear: 'right' },
-                { titulo: 'Propina', frac: 0.12, alinear: 'right' },
-                { titulo: 'Estado', frac: 0.16, alinear: 'center' },
-                { titulo: 'Hora', frac: 0.15, alinear: 'center' },
-            ], filas: filasPedidos.length ? filasPedidos : [['(Sin pedidos)', '', '', '', '', '', '']] },
+                { titulo: 'Orden', frac: 0.07 },
+                { titulo: 'Mesa', frac: 0.10 },
+                { titulo: 'Mesero', frac: 0.20 },
+                { titulo: 'Monto', frac: 0.11, alinear: 'right' },
+                { titulo: 'Propina', frac: 0.10, alinear: 'right' },
+                { titulo: 'Vuelto rech.', frac: 0.10, alinear: 'right' },
+                { titulo: 'Vuelto dev.', frac: 0.10, alinear: 'right' },
+                { titulo: 'Estado', frac: 0.12, alinear: 'center' },
+                { titulo: 'Hora', frac: 0.10, alinear: 'center' },
+            ], filas: filasPedidos.length ? filasPedidos : [['(Sin pedidos)', '', '', '', '', '', '', '', '']] },
             { titulo: 'Desglose de pagos', columnas: [
                 { titulo: 'Método', frac: 0.24 },
                 { titulo: 'Moneda', frac: 0.24 },
@@ -179,7 +189,7 @@ function historicoACSV({ cierres, facturasPendientes, metricas }) {
     filas.push(`Fecha;${new Date().toLocaleString('es-ES')}`);
     filas.push('');
     filas.push('Cierres');
-    filas.push('Turno;Fecha cierre;Abrió;Cerró;Cobrado;Propinas;Real;Esperado;Balance');
+    filas.push('Turno;Fecha cierre;Abrió;Cerró;Cobrado;Propinas;Vuelto rechazado;Vuelto devuelto;Real;Esperado;Balance');
     for (const c of cierres) {
         filas.push([
             `#${c.turno_servicio_id}`,
@@ -188,6 +198,8 @@ function historicoACSV({ cierres, facturasPendientes, metricas }) {
             sinPuntoComa(c.usuario_cierre),
             csvNum(c.total_cobrado_caja),
             csvNum(c.total_propinas),
+            csvNum(c.total_vuelto_rechazado),
+            csvNum(c.total_vuelto_devuelto),
             csvNum(c.monto_real_entregado),
             csvNum(c.monto_esperado_caja),
             balanceLabel(c.balance_estado)
@@ -227,6 +239,8 @@ async function historicoAPDF({ cierres, facturasPendientes, metricas }, meta = {
             c.usuario_cierre || '—',
             dinero(c.total_cobrado_caja),
             dinero(c.total_propinas),
+            dinero(c.total_vuelto_rechazado),
+            dinero(c.total_vuelto_devuelto),
             dinero(c.monto_real_entregado),
             dinero(c.monto_esperado_caja),
             balanceLabel(c.balance_estado)
@@ -249,12 +263,14 @@ async function historicoAPDF({ cierres, facturasPendientes, metricas }, meta = {
                 { titulo: 'Fecha cierre', frac: 0.15 },
                 { titulo: 'Abrió', frac: 0.12 },
                 { titulo: 'Cerró', frac: 0.12 },
-                { titulo: 'Cobrado', frac: 0.12, alinear: 'right' },
-                { titulo: 'Propinas', frac: 0.09, alinear: 'right' },
-                { titulo: 'Real', frac: 0.11, alinear: 'right' },
-                { titulo: 'Esperado', frac: 0.11, alinear: 'right' },
-                { titulo: 'Balance', frac: 0.11, alinear: 'center' },
-            ], filas: filasCierres.length ? filasCierres : [['(Sin cierres)', '', '', '', '', '', '', '', '']] },
+                { titulo: 'Cobrado', frac: 0.11, alinear: 'right' },
+                { titulo: 'Propinas', frac: 0.08, alinear: 'right' },
+                { titulo: 'Vuelto rech.', frac: 0.08, alinear: 'right' },
+                { titulo: 'Vuelto dev.', frac: 0.08, alinear: 'right' },
+                { titulo: 'Real', frac: 0.09, alinear: 'right' },
+                { titulo: 'Esperado', frac: 0.09, alinear: 'right' },
+                { titulo: 'Balance', frac: 0.08, alinear: 'center' },
+            ], filas: filasCierres.length ? filasCierres : [['(Sin cierres)', '', '', '', '', '', '', '', '', '', '']] },
             { titulo: `Facturas pendientes (${facturasPendientes.length})`, columnas: [
                 { titulo: 'Orden', frac: 0.10 },
                 { titulo: 'Mesa', frac: 0.14 },

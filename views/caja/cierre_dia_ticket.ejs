@@ -187,6 +187,14 @@
                 <span>PROPINAS:</span>
                 <span>$<%= parseFloat(resumen.total_propinas || 0).toFixed(2) %></span>
             </div>
+            <div class="total-row">
+                <span>VUELTO RECHAZ.(EXTRA):</span>
+                <span>$<%= parseFloat(resumen.total_vuelto_rechazado || 0).toFixed(2) %></span>
+            </div>
+            <div class="total-row">
+                <span>VUELTO DEVUELTO:</span>
+                <span>$<%= parseFloat(resumen.total_vuelto_devuelto || 0).toFixed(2) %></span>
+            </div>
             <div class="total-row bold">
                 <span>EFECTIVO EN CAJA:</span>
                 <span>$<%= parseFloat(resumen.total_efectivo_total_caja || 0).toFixed(2) %></span>
