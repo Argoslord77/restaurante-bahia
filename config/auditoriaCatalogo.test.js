@@ -177,7 +177,8 @@ describe('Catálogo de auditoría · control de ruido', () => {
         // métricas del dashboard no son actividad del usuario.
         ['/api/monitor/comandas', '/pos/alertas-pendientes',
          '/api/pos/items-listos/15', '/pos/mesas/3/pre-pedidos',
-         '/admin/turno/estado-actual', '/admin/api/dashboard/metrics'
+         '/admin/turno/estado-actual', '/admin/api/dashboard/metrics',
+         '/api/pos/menu'
         ].forEach(ruta => {
             expect(esSondeoExcluido('GET', ruta)).toBe(true);
         });

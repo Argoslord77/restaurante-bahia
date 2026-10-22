@@ -243,6 +243,7 @@ const EXCLUIDAS = [
 const EXCLUIDAS_SONDEO = [
     /^\/pos\/alertas-pendientes$/,          // tablero del mesero: llamadas/pre-pedidos
     /^\/api\/pos\/items-listos\//,          // POS: ¿hay ítems listos de la orden?
+    /^\/api\/pos\/menu$/,                   // POS: refresco del menú cada 10 s
     /^\/pos\/mesas\/[^/]+\/pre-pedidos$/,   // POS/tablero: pre-pedidos de la mesa
     /^\/api\/monitor\/comandas$/,           // monitores de cocina/bar
     /^\/admin\/turno\/estado-actual$/,      // estado del turno de servicio
